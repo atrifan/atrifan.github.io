@@ -84,7 +84,11 @@ export class LuckPage extends Component<{}, LuckPageState> {
     const random = this.seededRandom(seed);
     const result = Math.floor(random * max) + 1;
     
-    this.setState({ isHolding: false, holdStartTime: null, result, holdDuration: duration });
+    this.setState({ isHolding: false, holdStartTime: null, result, holdDuration: duration }, () => {
+      setTimeout(() => {
+        document.getElementById('luck-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    });
   };
 
   private seededRandom = (seed: number): number => {
@@ -95,10 +99,6 @@ export class LuckPage extends Component<{}, LuckPageState> {
   private handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
     this.setState({ maxValue: value });
-  };
-
-  private reset = () => {
-    this.setState({ result: null, holdDuration: 0 });
   };
 
   render() {
@@ -203,18 +203,12 @@ export class LuckPage extends Component<{}, LuckPageState> {
 
           {/* Result Display */}
           {result !== null && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+            <View id="luck-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
               <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Your lucky number is...</p>
               <p style={{ fontSize: 'clamp(3rem, 12vw, 5rem)', fontWeight: 900, color: '#fff', margin: '0 0 0.5rem 0', wordBreak: 'break-all' }}>{result.toLocaleString()}</p>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0 0 1.5rem 0' }}>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0' }}>
                 Range: 1 - {displayMax.toLocaleString()} • Held for {(holdDuration / 1000).toFixed(2)}s
               </p>
-              <button
-                onClick={this.reset}
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', fontWeight: 700, background: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}
-              >
-                Roll Again 🎲
-              </button>
             </View>
           )}
 

@@ -50,10 +50,10 @@ export class StackPage extends Component<{}, StackPageState> {
   private handleFormSubmit = (input: FullBudgetInput) => {
     const plan = BudgetCalculator.calculatePlan(input);
     this.setState({ plan, currency: input.currency });
-    
+
     // Scroll to results
     setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('stack-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
 
@@ -120,21 +120,22 @@ export class StackPage extends Component<{}, StackPageState> {
               color="#10b981"
             />
 
-            {/* Form or Results */}
+            {/* Form - always visible */}
             <View UNSAFE_style={{ marginTop: '1.5rem' }}>
-              {plan ? (
-                <>
-                  <BudgetResultsDisplay
-                    plan={plan}
-                    currency={currency}
-                    onReset={this.handleReset}
-                  />
-                  <AdBanner slot={ADS_CONFIG.slots.stackResults} format="horizontal" />
-                </>
-              ) : (
-                <BudgetForm onSubmit={this.handleFormSubmit} />
-              )}
+              <BudgetForm onSubmit={this.handleFormSubmit} />
             </View>
+
+            {/* Results */}
+            {plan && (
+              <View id="stack-results" UNSAFE_style={{ marginTop: '1.5rem' }}>
+                <BudgetResultsDisplay
+                  plan={plan}
+                  currency={currency}
+                  onReset={this.handleReset}
+                />
+                <AdBanner slot={ADS_CONFIG.slots.stackResults} format="horizontal" />
+              </View>
+            )}
           </View>
 
           {/* Bottom Ad */}

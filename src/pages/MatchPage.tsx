@@ -58,16 +58,12 @@ export class MatchPage extends Component<{}, MatchPageState> {
     const sign2 = this.getSignFromInput(this.state.person2);
     if (sign1 && sign2) {
       const percentage = getCompatibility(sign1, sign2);
-      this.setState({ result: { percentage, sign1, sign2 } });
+      this.setState({ result: { percentage, sign1, sign2 } }, () => {
+        setTimeout(() => {
+          document.getElementById('match-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      });
     }
-  };
-
-  private handleReset = () => {
-    this.setState({
-      person1: { mode: 'sign', sign: '', birthDate: '' },
-      person2: { mode: 'sign', sign: '', birthDate: '' },
-      result: null,
-    });
   };
 
   private updatePerson = (personKey: 'person1' | 'person2', updates: Partial<PersonInput>) => {
@@ -126,23 +122,21 @@ export class MatchPage extends Component<{}, MatchPageState> {
             <DisclaimerBanner title="Just for Fun!" message="This is astrology-based entertainment only. Please don't base real relationship decisions on zodiac compatibility. Love is complex and unique!" color="#ec4899" />
           </View>
 
-          {/* Input Form */}
-          {!result && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                {this.renderPersonInput('person1', '💜 You')}
-                {this.renderPersonInput('person2', '💛 Your Partner')}
-              </div>
-              <button onClick={this.handleCalculate} disabled={!canCalculate} style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: canCalculate ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)' : 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '12px', cursor: canCalculate ? 'pointer' : 'not-allowed', opacity: canCalculate ? 1 : 0.6 }}>
-                Check Compatibility 💕
-              </button>
-            </View>
-          )}
+          {/* Input Form - always visible */}
+          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              {this.renderPersonInput('person1', '💜 You')}
+              {this.renderPersonInput('person2', '💛 Your Partner')}
+            </div>
+            <button onClick={this.handleCalculate} disabled={!canCalculate} style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: canCalculate ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)' : 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '12px', cursor: canCalculate ? 'pointer' : 'not-allowed', opacity: canCalculate ? 1 : 0.6 }}>
+              {result ? 'Recalculate 💕' : 'Check Compatibility 💕'}
+            </button>
+          </View>
 
           {/* Results */}
           {result && (
             <>
-              <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              <View id="match-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign1).symbol}</span>
@@ -156,10 +150,7 @@ export class MatchPage extends Component<{}, MatchPageState> {
                 </div>
                 <p style={{ fontSize: 'clamp(4rem, 15vw, 6rem)', fontWeight: 900, color: getCompatibilityMessage(result.percentage).color, margin: '0 0 0.5rem 0', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{result.percentage}%</p>
                 <p style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{getCompatibilityMessage(result.percentage).emoji}</p>
-                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', margin: '0 0 1.5rem 0' }}>{getCompatibilityMessage(result.percentage).message}</p>
-                <button onClick={this.handleReset} style={{ padding: '0.75rem 2rem', fontSize: '1rem', fontWeight: 700, background: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                  Try Another Match 💕
-                </button>
+                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', margin: '0' }}>{getCompatibilityMessage(result.percentage).message}</p>
               </View>
               <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
                 <AdBanner slot={ADS_CONFIG.slots.matchResults} format="horizontal" />
