@@ -35,6 +35,11 @@ export const ADS_CONFIG = {
     // TAP page ads
     tapTop: '1791011581',
     tapFooter: '1948947773',
+
+    // LUCK page ads
+    luckTop: '4415329015',
+    luckResults: '4327699107',
+    luckFooter: '3102247343',
   },
 
   // Enable/disable ads (useful for development)

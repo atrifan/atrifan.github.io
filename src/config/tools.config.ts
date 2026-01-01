@@ -55,6 +55,16 @@ export const TOOLS: ToolConfig[] = [
     gradient: 'linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ef4444 100%)',
     available: true,
   },
+  {
+    id: 'luck',
+    name: 'LUCK',
+    description: 'Random number generator - Hold to Roll 🎲',
+    icon: '🎲',
+    path: '/luck',
+    color: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #d946ef 100%)',
+    available: true,
+  },
 ];
 
 export const getToolByPath = (path: string): ToolConfig | undefined => {

@@ -6,6 +6,7 @@ import { CutPage } from './pages/CutPage';
 import { StackPage } from './pages/StackPage';
 import { WhenPage } from './pages/WhenPage';
 import { TapPage } from './pages/TapPage';
+import { LuckPage } from './pages/LuckPage';
 
 /**
  * Main App Component with Routing
@@ -22,6 +23,7 @@ class App extends Component {
             <Route path="/stack" element={<StackPage />} />
             <Route path="/when" element={<WhenPage />} />
             <Route path="/tap" element={<TapPage />} />
+            <Route path="/luck" element={<LuckPage />} />
           </Routes>
         </HashRouter>
       </Provider>
