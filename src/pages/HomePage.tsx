@@ -10,9 +10,11 @@ import { WhenIcon } from '../components/WhenIcon';
 import { TapIcon } from '../components/TapIcon';
 import { LuckIcon } from '../components/LuckIcon';
 import { MatchIcon } from '../components/MatchIcon';
+import { PlanetaryNav } from '../components/PlanetaryNav';
 
 interface HomePageState {
   hoveredTool: string | null;
+  showPlanetaryNav: boolean;
 }
 
 /**
@@ -22,7 +24,8 @@ export class HomePage extends Component<{}, HomePageState> {
   constructor(props: {}) {
     super(props);
     this.state = {
-      hoveredTool: null
+      hoveredTool: null,
+      showPlanetaryNav: false,
     };
   }
 
@@ -190,8 +193,24 @@ export class HomePage extends Component<{}, HomePageState> {
         <View maxWidth="1400px" marginX="auto">
           {/* Hero Section */}
           <View UNSAFE_style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '3rem' }}>
-            {/* SVG Logo */}
-            <div className="animate-float" style={{ marginBottom: '2rem' }}>
+            {/* SVG Logo - Clickable */}
+            <div
+              className="animate-float"
+              style={{
+                marginBottom: '2rem',
+                cursor: 'pointer',
+                display: 'inline-block',
+                transition: 'transform 0.3s ease',
+              }}
+              onClick={() => this.setState({ showPlanetaryNav: true })}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.1) rotate(5deg)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+              }}
+              title="Click to see planetary navigation"
+            >
               <svg
                 width="120"
                 height="120"
@@ -279,6 +298,12 @@ export class HomePage extends Component<{}, HomePageState> {
             <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
           </View>
         </View>
+
+        {/* Planetary Navigation */}
+        <PlanetaryNav
+          isOpen={this.state.showPlanetaryNav}
+          onClose={() => this.setState({ showPlanetaryNav: false })}
+        />
       </View>
     );
   }
