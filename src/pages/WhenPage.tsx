@@ -27,15 +27,18 @@ export class WhenPage extends Component<object, WhenPageState> {
   }
 
   componentDidMount() {
-    document.title = 'WHEN - What Day Is It? | Day of Week Calculator | Tulzo';
-    
+    document.title = 'WHEN - Free Day of Week Calculator | What Day Is My Birthday? | Tulzo';
+
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Find out what day of the week any date falls on. Works for past, present, and future dates. Handles leap years correctly.');
+      metaDesc.setAttribute('content', 'Free day of week calculator: Find what day any date falls on. What day is my birthday? What day was I born? Check past, present, future dates. Leap year calculator included. No signup required.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'WHEN - Day of Week Calculator | Tulzo');
+    if (ogTitle) ogTitle.setAttribute('content', 'WHEN - Free Day of Week & Date Calculator | Tulzo');
+
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free date calculator: Find what day of the week any date falls on. Check birthdays, holidays, historical dates. Handles leap years.');
   }
 
   private handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {

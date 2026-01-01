@@ -31,20 +31,20 @@ export class StackPage extends Component<{}, StackPageState> {
 
   componentDidMount() {
     // Update page title and meta for SEO
-    document.title = 'STACK - Budget & Savings Planner | Stack Your Bread 💰 | Tulzo';
+    document.title = 'STACK - Free Budget Calculator & Savings Planner | Money Goal Tracker | Tulzo';
 
     // Update meta description
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free budget calculator and savings planner. Calculate how much to save monthly, set savings goals, track expenses, and reach your financial goals faster. Simple and advanced modes available.');
+      metaDesc.setAttribute('content', 'Free budget calculator and savings planner: Calculate monthly savings, track expenses, plan for financial goals. See how long to save for a car, house, vacation. Works in any currency. No signup required.');
     }
 
     // Update Open Graph tags
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'STACK - Budget & Savings Planner | Tulzo');
-    
+    if (ogTitle) ogTitle.setAttribute('content', 'STACK - Free Budget & Savings Calculator | Tulzo');
+
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free budget calculator and savings planner. Calculate how much to save monthly and reach your financial goals faster.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free budget calculator: Plan savings, track expenses, reach financial goals. Calculate how long to save for anything.');
   }
 
   private handleFormSubmit = (input: FullBudgetInput) => {

@@ -25,18 +25,18 @@ export class HomePage extends Component<{}, HomePageState> {
 
   componentDidMount() {
     // Reset to default SEO when returning to home
-    document.title = 'Tulzo - Free Tools for Health, Budget & Daily Life';
+    document.title = 'Tulzo - Free Online Calculators: Weight Loss, Budget Planner, Date Calculator';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free tools for everyday life: CUT weight loss calculator with fasting plans, STACK budget & savings planner. Simple, beautiful, and 100% free.');
+      metaDesc.setAttribute('content', 'Free online calculators and tools: Weight loss calculator with fasting plans, budget & savings planner, day of week finder. Calculate calories, plan finances, find dates. 100% free, no signup required.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Tools for Health, Budget & Daily Life');
+    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Online Calculators for Health, Money & Dates');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free tools: CUT weight loss calculator, STACK budget planner. Simple, beautiful, and 100% free.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free calculators: Weight loss & fasting planner, budget & savings calculator, day of week finder. Simple, beautiful, 100% free.');
   }
 
   private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
