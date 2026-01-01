@@ -31,6 +31,10 @@ export const ADS_CONFIG = {
     // WHEN page ads
     whenTop: '2750893556',
     whenFooter: '1433942458',
+
+    // TAP page ads
+    tapTop: '1791011581',
+    tapFooter: '1948947773',
   },
 
   // Enable/disable ads (useful for development)

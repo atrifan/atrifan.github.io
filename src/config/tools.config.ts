@@ -45,6 +45,16 @@ export const TOOLS: ToolConfig[] = [
     gradient: 'linear-gradient(135deg, #3b82f6 0%, #0ea5e9 50%, #06b6d4 100%)',
     available: true,
   },
+  {
+    id: 'tap',
+    name: 'TAP',
+    description: 'Click counter, lap timer & tally tracker 👆',
+    icon: '👆',
+    path: '/tap',
+    color: '#f59e0b',
+    gradient: 'linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ef4444 100%)',
+    available: true,
+  },
 ];
 
 export const getToolByPath = (path: string): ToolConfig | undefined => {

@@ -39,8 +39,10 @@ interface BudgetFormState {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
   padding: '1rem 1.25rem',
-  fontSize: '1.1rem',
+  fontSize: '1rem',
   fontWeight: 600,
   background: 'rgba(255, 255, 255, 0.95)',
   border: '2px solid transparent',

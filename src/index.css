@@ -1,7 +1,18 @@
-* {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* Ensure inputs don't overflow on mobile */
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+  font-family: inherit;
 }
 
 :root {

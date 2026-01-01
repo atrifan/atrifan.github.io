@@ -65,12 +65,14 @@ export class WhenPage extends Component<object, WhenPageState> {
 
     const inputStyle: React.CSSProperties = {
       width: '100%',
-      padding: '1.25rem 1.5rem',
-      fontSize: '1.3rem',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
+      padding: '1rem',
+      fontSize: '1.1rem',
       fontWeight: 600,
       background: 'rgba(255, 255, 255, 0.95)',
-      border: '3px solid transparent',
-      borderRadius: '16px',
+      border: '2px solid transparent',
+      borderRadius: '12px',
       color: '#1e293b',
       textAlign: 'center',
     };

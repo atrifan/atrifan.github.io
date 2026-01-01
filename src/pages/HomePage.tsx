@@ -7,6 +7,7 @@ import { ADS_CONFIG } from '../config/ads.config';
 import { CutIcon } from '../components/CutIcon';
 import { StackIcon } from '../components/StackIcon';
 import { WhenIcon } from '../components/WhenIcon';
+import { TapIcon } from '../components/TapIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -25,18 +26,18 @@ export class HomePage extends Component<{}, HomePageState> {
 
   componentDidMount() {
     // Reset to default SEO when returning to home
-    document.title = 'Tulzo - Free Online Calculators: Weight Loss, Budget Planner, Date Calculator';
+    document.title = 'Tulzo - Free Online Calculators: Weight Loss, Budget, Date & Tally Counter';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free online calculators and tools: Weight loss calculator with fasting plans, budget & savings planner, day of week finder. Calculate calories, plan finances, find dates. 100% free, no signup required.');
+      metaDesc.setAttribute('content', 'Free online calculators and tools: Weight loss calculator, budget planner, day of week finder, click counter & lap timer. Calculate calories, plan finances, count anything. 100% free, no signup.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Online Calculators for Health, Money & Dates');
+    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Online Calculators & Tools');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free calculators: Weight loss & fasting planner, budget & savings calculator, day of week finder. Simple, beautiful, 100% free.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free tools: Weight loss calculator, budget planner, date finder, click counter. Simple, beautiful, 100% free.');
   }
 
   private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
@@ -143,6 +144,8 @@ export class HomePage extends Component<{}, HomePageState> {
               <StackIcon size={120} />
             ) : tool.id === 'when' ? (
               <WhenIcon size={120} />
+            ) : tool.id === 'tap' ? (
+              <TapIcon size={120} />
             ) : (
               <span className="big-icon">{tool.icon}</span>
             )}
