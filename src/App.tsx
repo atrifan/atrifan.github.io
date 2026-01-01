@@ -20,6 +20,7 @@ import { FlipPage } from './pages/FlipPage';
 import { TipPage } from './pages/TipPage';
 import { ZonePage } from './pages/ZonePage';
 import { NamesPage } from './pages/NamesPage';
+import { RankPage } from './pages/RankPage';
 
 /**
  * Main App Component with Routing
@@ -35,6 +36,7 @@ class App extends Component {
             {/* Health */}
             <Route path="/cut" element={<CutPage />} />
             <Route path="/sleep" element={<SleepPage />} />
+            <Route path="/rank" element={<RankPage />} />
             <Route path="/age" element={<AgePage />} />
             {/* Money */}
             <Route path="/stack" element={<StackPage />} />

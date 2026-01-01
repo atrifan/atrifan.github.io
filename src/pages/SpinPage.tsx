@@ -46,12 +46,6 @@ export class SpinPage extends Component<{}, SpinPageState> {
     }
   };
 
-  private handleTap = () => {
-    if (!this.state.isSpinning) {
-      this.spin();
-    }
-  };
-
   private spin = () => {
     const optionList = this.state.options.split('\n').map(o => o.trim()).filter(o => o);
     if (optionList.length < 2) return;
@@ -76,7 +70,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
     const gradient = 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)';
 
     return (
-      <div onTouchEnd={this.handleTap} style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #7f1d1d 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #7f1d1d 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.spinTop} format="horizontal" /></View>
@@ -85,7 +79,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
             <div className="animate-float" style={{ marginBottom: '1rem' }}><SpinIcon size={100} /></div>
             <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>SPIN</h1>
             <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Spin the Wheel 🎡</p>
-            <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>Press SPACE or tap to spin</p>
+            <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>Press SPACE or tap the wheel to spin</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
@@ -94,7 +88,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
             {/* Wheel */}
-            <div style={{ position: 'relative', width: '280px', height: '280px', margin: '0 auto 2rem', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.spin(); }}>
+            <div style={{ position: 'relative', width: '280px', height: '280px', margin: '0 auto 2rem', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.spin(); }} onTouchEnd={(e) => { e.preventDefault(); this.spin(); }}>
               <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
                 <div style={{ width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '25px solid #fff' }} />
               </div>

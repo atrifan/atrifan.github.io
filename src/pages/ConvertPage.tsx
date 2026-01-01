@@ -48,6 +48,10 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
     if (metaDesc) {
       metaDesc.setAttribute('content', 'Convert between common units like lbs/kg, cm/ft, °C/°F instantly.');
     }
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', 'Unit Converter – Free Handy Tool | Tulzo');
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', 'Convert between common units like lbs/kg, cm/ft, °C/°F instantly.');
   }
 
   private convert = () => {

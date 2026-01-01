@@ -52,15 +52,6 @@ export class FlipPage extends Component<{}, FlipPageState> {
     }
   };
 
-  private handleTap = () => {
-    if (this.state.isFlipping) return;
-    if (this.state.mode === 'coin') {
-      this.flipCoin();
-    } else {
-      this.rollDice();
-    }
-  };
-
   private scrollToResult = () => {
     setTimeout(() => {
       this.resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -175,7 +166,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
     const hasResult = coinResult || diceResults.length > 0;
 
     return (
-      <div onTouchEnd={this.handleTap} style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #78350f 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #78350f 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.flipTop} format="horizontal" /></View>
@@ -184,7 +175,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
             <div className="animate-float" style={{ marginBottom: '1rem' }}><FlipIcon size={100} /></div>
             <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>FLIP</h1>
             <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Coin Flip & Dice Roller 🎲</p>
-            <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>Press SPACE or tap to {mode === 'coin' ? 'flip' : 'roll'}</p>
+            <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>Press SPACE or tap the {mode === 'coin' ? 'coin' : 'dice'} to {mode === 'coin' ? 'flip' : 'roll'}</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
@@ -204,7 +195,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem', textAlign: 'center' }}>
               {mode === 'coin' ? (
                 <>
-                  <div style={{ margin: '0 auto 1.5rem', animation: isFlipping ? 'coinFlip 0.15s linear infinite' : 'none', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.flipCoin(); }}>
+                  <div style={{ margin: '0 auto 1.5rem', animation: isFlipping ? 'coinFlip 0.15s linear infinite' : 'none', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.flipCoin(); }} onTouchEnd={(e) => { e.preventDefault(); this.flipCoin(); }}>
                     {coinResult === 'heads' ? this.renderCoinHeads() : coinResult === 'tails' ? this.renderCoinTails() : this.renderCoinUnknown()}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); this.flipCoin(); }} disabled={isFlipping} style={{ padding: '1rem 3rem', fontSize: '1.3rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '50px', cursor: isFlipping ? 'wait' : 'pointer' }}>
@@ -221,7 +212,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
                       {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.5rem', minHeight: '90px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.rollDice(); }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.5rem', minHeight: '90px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.rollDice(); }} onTouchEnd={(e) => { e.preventDefault(); this.rollDice(); }}>
                     {isFlipping
                       ? Array.from({ length: diceCount }, (_, i) => <div key={i}>{this.renderDice(Math.floor(Math.random() * 6) + 1, 80, true)}</div>)
                       : (diceResults.length > 0
