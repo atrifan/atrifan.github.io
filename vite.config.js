@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Base path for GitHub Pages (username.github.io/repo-name)
-  base: '/zip.run.place/',
+  // Base path for GitHub Pages (atrifan.github.io)
+  base: '/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
