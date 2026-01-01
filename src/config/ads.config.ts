@@ -40,6 +40,11 @@ export const ADS_CONFIG = {
     luckTop: '4415329015',
     luckResults: '4327699107',
     luckFooter: '3102247343',
+
+    // MATCH page ads
+    matchTop: '4991889997',
+    matchResults: '2146234808',
+    matchFooter: '9777312817',
   },
 
   // Enable/disable ads (useful for development)

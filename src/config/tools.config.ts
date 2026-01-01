@@ -65,6 +65,16 @@ export const TOOLS: ToolConfig[] = [
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #d946ef 100%)',
     available: true,
   },
+  {
+    id: 'match',
+    name: 'MATCH',
+    description: 'Zodiac compatibility checker - Find your love match 💕',
+    icon: '💕',
+    path: '/match',
+    color: '#ec4899',
+    gradient: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 50%, #fbbf24 100%)',
+    available: true,
+  },
 ];
 
 export const getToolByPath = (path: string): ToolConfig | undefined => {

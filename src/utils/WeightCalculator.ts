@@ -37,11 +37,16 @@ export class WeightCalculator {
   public static calculateIdealWeight(height: number, sex: Sex): number {
     const heightInInches = height / 2.54;
     const baseHeight = 60; // 5 feet
-    
+
     if (sex === 'male') {
       return 50 + 2.3 * (heightInInches - baseHeight);
-    } else {
+    } else if (sex === 'female') {
       return 45.5 + 2.3 * (heightInInches - baseHeight);
+    } else {
+      // Average of male and female for 'other'
+      const male = 50 + 2.3 * (heightInInches - baseHeight);
+      const female = 45.5 + 2.3 * (heightInInches - baseHeight);
+      return (male + female) / 2;
     }
   }
 
@@ -49,7 +54,8 @@ export class WeightCalculator {
    * Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation
    */
   public static calculateBMR(weight: number, height: number, age: number, sex: Sex): number {
-    const s = sex === 'male' ? 5 : -161;
+    // Mifflin-St Jeor: s = +5 for male, -161 for female, average (-78) for other
+    const s = sex === 'male' ? 5 : sex === 'female' ? -161 : -78;
     return 10 * weight + 6.25 * height - 5 * age + s;
   }
 

@@ -412,6 +412,7 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
+                <option value="other">Prefer not to say</option>
               </select>
             </FormField>
           </div>

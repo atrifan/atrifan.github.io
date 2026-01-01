@@ -1,4 +1,4 @@
-export type Sex = 'male' | 'female';
+export type Sex = 'male' | 'female' | 'other';
 
 export interface UserInput {
   age: number;

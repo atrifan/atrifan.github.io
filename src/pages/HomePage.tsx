@@ -9,6 +9,7 @@ import { StackIcon } from '../components/StackIcon';
 import { WhenIcon } from '../components/WhenIcon';
 import { TapIcon } from '../components/TapIcon';
 import { LuckIcon } from '../components/LuckIcon';
+import { MatchIcon } from '../components/MatchIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -149,6 +150,8 @@ export class HomePage extends Component<{}, HomePageState> {
               <TapIcon size={120} />
             ) : tool.id === 'luck' ? (
               <LuckIcon size={120} />
+            ) : tool.id === 'match' ? (
+              <MatchIcon size={120} />
             ) : (
               <span className="big-icon">{tool.icon}</span>
             )}
