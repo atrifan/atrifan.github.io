@@ -60,6 +60,93 @@ export class WhenPage extends Component<object, WhenPageState> {
     return `That was ${absDays} days ago`;
   };
 
+  private getTimeBreakdowns = (days: number): string[] => {
+    const absDays = Math.abs(days);
+    if (days === 0) return [];
+
+    const isPast = days < 0;
+    const suffix = isPast ? 'ago' : 'from now';
+    const breakdowns: string[] = [];
+
+    // Calculate all time units
+    const totalMinutes = absDays * 24 * 60;
+    const totalHours = absDays * 24;
+
+    // Minutes breakdown
+    breakdowns.push(`${totalMinutes.toLocaleString()} minutes ${suffix}`);
+
+    // Hours and minutes breakdown
+    const hours = Math.floor(totalHours);
+    const minutes = Math.round((totalHours - hours) * 60);
+    if (minutes > 0) {
+      breakdowns.push(`${hours.toLocaleString()} hours and ${minutes} minutes ${suffix}`);
+    } else {
+      breakdowns.push(`${hours.toLocaleString()} hours ${suffix}`);
+    }
+
+    // Days, hours, and minutes breakdown
+    const daysOnly = Math.floor(absDays);
+    const remainingHours = Math.floor((absDays - daysOnly) * 24);
+    const remainingMinutes = Math.round(((absDays - daysOnly) * 24 - remainingHours) * 60);
+    if (remainingHours > 0 || remainingMinutes > 0) {
+      breakdowns.push(`${daysOnly} days, ${remainingHours} hours, and ${remainingMinutes} minutes ${suffix}`);
+    } else {
+      breakdowns.push(`${daysOnly} days ${suffix}`);
+    }
+
+    // Weeks and days breakdown
+    const weeks = Math.floor(absDays / 7);
+    const daysAfterWeeks = Math.floor(absDays % 7);
+    if (weeks > 0) {
+      if (daysAfterWeeks > 0) {
+        breakdowns.push(`${weeks} week${weeks !== 1 ? 's' : ''} and ${daysAfterWeeks} day${daysAfterWeeks !== 1 ? 's' : ''} ${suffix}`);
+      } else {
+        breakdowns.push(`${weeks} week${weeks !== 1 ? 's' : ''} ${suffix}`);
+      }
+    }
+
+    // Months, weeks, and days breakdown (approximate: 30.44 days per month)
+    const months = Math.floor(absDays / 30.44);
+    const daysAfterMonths = absDays - (months * 30.44);
+    const weeksAfterMonths = Math.floor(daysAfterMonths / 7);
+    const daysAfterWeeksMonths = Math.floor(daysAfterMonths % 7);
+
+    if (months > 0) {
+      const parts: string[] = [`${months} month${months !== 1 ? 's' : ''}`];
+      if (weeksAfterMonths > 0) {
+        parts.push(`${weeksAfterMonths} week${weeksAfterMonths !== 1 ? 's' : ''}`);
+      }
+      if (daysAfterWeeksMonths > 0) {
+        parts.push(`${daysAfterWeeksMonths} day${daysAfterWeeksMonths !== 1 ? 's' : ''}`);
+      }
+      breakdowns.push(`${parts.join(', ')} ${suffix}`);
+    }
+
+    // Years, months, weeks, and days breakdown (approximate: 365.25 days per year)
+    const years = Math.floor(absDays / 365.25);
+    const daysAfterYears = absDays - (years * 365.25);
+    const monthsAfterYears = Math.floor(daysAfterYears / 30.44);
+    const daysAfterMonthsYears = daysAfterYears - (monthsAfterYears * 30.44);
+    const weeksAfterMonthsYears = Math.floor(daysAfterMonthsYears / 7);
+    const daysAfterAll = Math.floor(daysAfterMonthsYears % 7);
+
+    if (years > 0) {
+      const parts: string[] = [`${years} year${years !== 1 ? 's' : ''}`];
+      if (monthsAfterYears > 0) {
+        parts.push(`${monthsAfterYears} month${monthsAfterYears !== 1 ? 's' : ''}`);
+      }
+      if (weeksAfterMonthsYears > 0) {
+        parts.push(`${weeksAfterMonthsYears} week${weeksAfterMonthsYears !== 1 ? 's' : ''}`);
+      }
+      if (daysAfterAll > 0) {
+        parts.push(`${daysAfterAll} day${daysAfterAll !== 1 ? 's' : ''}`);
+      }
+      breakdowns.push(`${parts.join(', ')} ${suffix}`);
+    }
+
+    return breakdowns;
+  };
+
   render() {
     const { selectedDate, result } = this.state;
 
@@ -216,6 +303,50 @@ export class WhenPage extends Component<object, WhenPageState> {
         }}>
           {this.getDaysText(result.daysFromToday)}
         </div>
+
+        {/* Time Breakdowns */}
+        {result.daysFromToday !== 0 && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{
+              fontSize: '0.9rem',
+              color: 'rgba(255, 255, 255, 0.7)',
+              marginBottom: '1rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}>
+              ⏱️ Time Breakdown
+            </div>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}>
+              {this.getTimeBreakdowns(result.daysFromToday).map((breakdown, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '10px',
+                    color: 'rgba(255, 255, 255, 0.95)',
+                    fontSize: '0.95rem',
+                    fontWeight: 500,
+                    textAlign: 'left',
+                    borderLeft: `3px solid ${colors.border}`,
+                  }}
+                >
+                  {breakdown}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Extra Info Grid */}
         <div style={{
