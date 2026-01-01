@@ -11,6 +11,18 @@ import { TapIcon } from '../components/TapIcon';
 import { LuckIcon } from '../components/LuckIcon';
 import { MatchIcon } from '../components/MatchIcon';
 import { PlanetaryNav } from '../components/PlanetaryNav';
+// New tool icons
+import { SleepIcon } from '../components/SleepIcon';
+import { AgeIcon } from '../components/AgeIcon';
+import { TipIcon } from '../components/TipIcon';
+import { PercentIcon } from '../components/PercentIcon';
+import { DaysIcon } from '../components/DaysIcon';
+import { ZoneIcon } from '../components/ZoneIcon';
+import { ConvertIcon } from '../components/ConvertIcon';
+import { NamesIcon } from '../components/NamesIcon';
+import { FlipIcon } from '../components/FlipIcon';
+import { SpinIcon } from '../components/SpinIcon';
+import { DecideIcon } from '../components/DecideIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -44,6 +56,29 @@ export class HomePage extends Component<{}, HomePageState> {
     const ogDesc = document.querySelector('meta[property="og:description"]');
     if (ogDesc) ogDesc.setAttribute('content', 'Fast, free utilities for health, money, time, and simple decisions — all in one place.');
   }
+
+  private renderToolIcon = (toolId: string, size: number): JSX.Element => {
+    const iconMap: Record<string, JSX.Element> = {
+      cut: <CutIcon size={size} />,
+      stack: <StackIcon size={size} />,
+      when: <WhenIcon size={size} />,
+      tap: <TapIcon size={size} />,
+      luck: <LuckIcon size={size} />,
+      match: <MatchIcon size={size} />,
+      sleep: <SleepIcon size={size} />,
+      age: <AgeIcon size={size} />,
+      tip: <TipIcon size={size} />,
+      percent: <PercentIcon size={size} />,
+      days: <DaysIcon size={size} />,
+      zone: <ZoneIcon size={size} />,
+      convert: <ConvertIcon size={size} />,
+      names: <NamesIcon size={size} />,
+      flip: <FlipIcon size={size} />,
+      spin: <SpinIcon size={size} />,
+      decide: <DecideIcon size={size} />,
+    };
+    return iconMap[toolId] || <span className="big-icon">🔧</span>;
+  };
 
   private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
     const isAvailable = tool.available;
@@ -152,21 +187,7 @@ export class HomePage extends Component<{}, HomePageState> {
 
           {/* Icon */}
           <div className="animate-float" style={{ animationDelay: `${delay}s` }}>
-            {tool.id === 'cut' ? (
-              <CutIcon size={100} />
-            ) : tool.id === 'stack' ? (
-              <StackIcon size={100} />
-            ) : tool.id === 'when' ? (
-              <WhenIcon size={100} />
-            ) : tool.id === 'tap' ? (
-              <TapIcon size={100} />
-            ) : tool.id === 'luck' ? (
-              <LuckIcon size={100} />
-            ) : tool.id === 'match' ? (
-              <MatchIcon size={100} />
-            ) : (
-              <span className="big-icon">{tool.icon}</span>
-            )}
+            {this.renderToolIcon(tool.id, 100)}
           </div>
 
           {/* Brand Name */}

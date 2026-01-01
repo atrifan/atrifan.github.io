@@ -59,3 +59,8 @@ export const DisclaimerBanner: React.FC<DisclaimerBannerProps> = ({
   );
 };
 
+// Alias for backward compatibility
+export const Disclaimer: React.FC<{ text: string; color?: string }> = ({ text, color = '#fbbf24' }) => (
+  <DisclaimerBanner title="Disclaimer" message={text} color={color} />
+);
+

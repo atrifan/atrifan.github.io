@@ -65,6 +65,9 @@ export class CutPage extends Component<{}, CutPageState> {
             <BackToTools />
           </div>
 
+          {/* Top Ad */}
+          <AdBanner slot={ADS_CONFIG.slots.cutTop} format="horizontal" />
+
           {/* Hero Header */}
           <View UNSAFE_style={{ textAlign: 'center', marginBottom: '3rem' }}>
             <div className="animate-float" style={{ marginBottom: '1.5rem' }}>
@@ -94,9 +97,6 @@ export class CutPage extends Component<{}, CutPageState> {
               Your Personal Weight Loss Calculator & Fasting Plan Generator
             </p>
           </View>
-
-          {/* Top Ad */}
-          <AdBanner slot={ADS_CONFIG.slots.cutTop} format="horizontal" />
 
           {/* Disclaimer */}
           <DisclaimerBanner />

@@ -1,24 +1,38 @@
 import { Component } from 'react';
 import { Link } from 'react-router-dom';
-import { TOOLS } from '../config/tools.config';
+import { CATEGORY_LABELS, ToolCategory, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface PlanetaryNavState {
+  activeCategory: ToolCategory | null;
+  isMobile: boolean;
+}
+
 /**
- * Planetary Navigation Component
- * Shows tools as orbiting planets around the logo
+ * Quick Access Navigation Component
+ * Responsive grid menu for fast tool access
  */
-export class PlanetaryNav extends Component<PlanetaryNavProps> {
+export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState> {
+  constructor(props: PlanetaryNavProps) {
+    super(props);
+    this.state = {
+      activeCategory: null,
+      isMobile: window.innerWidth < 768,
+    };
+  }
+
   componentDidMount() {
-    // Close on escape key
     document.addEventListener('keydown', this.handleEscape);
+    window.addEventListener('resize', this.handleResize);
   }
 
   componentWillUnmount() {
     document.removeEventListener('keydown', this.handleEscape);
+    window.removeEventListener('resize', this.handleResize);
   }
 
   private handleEscape = (e: KeyboardEvent) => {
@@ -27,14 +41,18 @@ export class PlanetaryNav extends Component<PlanetaryNavProps> {
     }
   };
 
+  private handleResize = () => {
+    this.setState({ isMobile: window.innerWidth < 768 });
+  };
+
   render() {
     const { isOpen, onClose } = this.props;
+    const { activeCategory, isMobile } = this.state;
 
     if (!isOpen) return null;
 
-    // Calculate positions for planets in orbit
-    const radius = 180; // Distance from center
-    const angleStep = (2 * Math.PI) / TOOLS.length;
+    const toolsByCategory = getToolsByCategory();
+    const categories = getCategoryOrder();
 
     return (
       <>
@@ -47,129 +65,191 @@ export class PlanetaryNav extends Component<PlanetaryNavProps> {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.85)',
+            background: 'rgba(0, 0, 0, 0.9)',
             backdropFilter: 'blur(10px)',
             zIndex: 9998,
-            animation: 'fadeIn 0.3s ease-out',
+            animation: 'fadeIn 0.2s ease-out',
           }}
         />
 
-        {/* Planetary System */}
+        {/* Menu Container */}
         <div
           style={{
             position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             zIndex: 9999,
-            animation: 'scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'auto',
+            padding: isMobile ? '1rem' : '2rem',
+            animation: 'slideIn 0.3s ease-out',
           }}
         >
-          {/* Central Sun (Logo) */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              animation: 'rotate 20s linear infinite',
-            }}
-          >
-            <svg
-              width="100"
-              height="100"
-              viewBox="0 0 120 120"
-              style={{ filter: 'drop-shadow(0 0 30px rgba(102, 126, 234, 0.8))' }}
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1.5rem',
+            flexShrink: 0,
+          }}>
+            <Link to="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <svg width="40" height="40" viewBox="0 0 120 120">
+                <defs>
+                  <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#667eea" />
+                    <stop offset="50%" stopColor="#764ba2" />
+                    <stop offset="100%" stopColor="#f472b6" />
+                  </linearGradient>
+                </defs>
+                <circle cx="60" cy="60" r="56" fill="url(#navLogoGrad)" />
+                <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
+              </svg>
+              <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800 }}>TULZO</span>
+            </Link>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '44px',
+                height: '44px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.5rem',
+                color: '#fff',
+              }}
             >
-              <defs>
-                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#667eea" />
-                  <stop offset="50%" stopColor="#764ba2" />
-                  <stop offset="100%" stopColor="#f472b6" />
-                </linearGradient>
-                <linearGradient id="boltGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#fbbf24" />
-                  <stop offset="100%" stopColor="#f59e0b" />
-                </linearGradient>
-              </defs>
-              <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" />
-              <path
-                d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z"
-                fill="url(#boltGradient)"
-                stroke="#fff"
-                strokeWidth="2"
-              />
-            </svg>
+              ✕
+            </button>
           </div>
 
-          {/* Orbit Ring */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: radius * 2,
-              height: radius * 2,
-              border: '2px dashed rgba(255, 255, 255, 0.2)',
-              borderRadius: '50%',
-              animation: 'rotate 30s linear infinite reverse',
-            }}
-          />
-
-          {/* Planet Tools */}
-          {TOOLS.map((tool, index) => {
-            const angle = index * angleStep - Math.PI / 2; // Start from top
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            const delay = index * 0.1;
-
-            return (
-              <Link
-                key={tool.id}
-                to={tool.path}
-                onClick={onClose}
+          {/* Category Tabs - Desktop */}
+          {!isMobile && (
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              marginBottom: '1.5rem',
+              flexWrap: 'wrap',
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={() => this.setState({ activeCategory: null })}
                 style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-                  textDecoration: 'none',
-                  animation: `planetAppear 0.5s ease-out ${delay}s both`,
+                  padding: '0.5rem 1rem',
+                  borderRadius: '20px',
+                  border: 'none',
+                  background: activeCategory === null ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
                 }}
               >
-                <div
+                All Tools
+              </button>
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => this.setState({ activeCategory: cat })}
                   style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: '50%',
-                    background: tool.gradient,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: activeCategory === cat ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                    color: '#fff',
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    boxShadow: `0 8px 32px ${tool.color}66`,
-                    border: '3px solid rgba(255, 255, 255, 0.3)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.2)';
-                    e.currentTarget.style.boxShadow = `0 12px 48px ${tool.color}99`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = `0 8px 32px ${tool.color}66`;
                   }}
                 >
-                  <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>{tool.icon}</div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fff' }}>
-                    {tool.name}
-                  </div>
+                  {CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Tools Grid */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {(activeCategory ? [activeCategory] : categories).map(category => (
+              <div key={category} style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '0.75rem',
+                }}>
+                  {CATEGORY_LABELS[category]}
+                </h3>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(auto-fill, minmax(100px, 1fr))',
+                  gap: isMobile ? '0.5rem' : '0.75rem',
+                }}>
+                  {toolsByCategory[category].map((tool, index) => (
+                    <Link
+                      key={tool.id}
+                      to={tool.path}
+                      onClick={onClose}
+                      style={{
+                        textDecoration: 'none',
+                        animation: `toolAppear 0.3s ease-out ${index * 0.03}s both`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: tool.gradient,
+                          borderRadius: '12px',
+                          padding: isMobile ? '0.75rem 0.5rem' : '1rem',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                          boxShadow: `0 4px 16px ${tool.color}33`,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
+                          e.currentTarget.style.boxShadow = `0 8px 24px ${tool.color}66`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                          e.currentTarget.style.boxShadow = `0 4px 16px ${tool.color}33`;
+                        }}
+                      >
+                        <div style={{ fontSize: isMobile ? '1.5rem' : '2rem', marginBottom: '0.25rem' }}>
+                          {tool.icon}
+                        </div>
+                        <div style={{
+                          fontSize: isMobile ? '0.65rem' : '0.75rem',
+                          fontWeight: 700,
+                          color: '#fff',
+                          textTransform: 'uppercase',
+                        }}>
+                          {tool.name}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-              </Link>
-            );
-          })}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer hint */}
+          <div style={{
+            textAlign: 'center',
+            color: 'rgba(255,255,255,0.4)',
+            fontSize: '0.8rem',
+            paddingTop: '1rem',
+            flexShrink: 0,
+          }}>
+            Press ESC or tap outside to close
+          </div>
         </div>
 
         <style>{`
@@ -177,17 +257,13 @@ export class PlanetaryNav extends Component<PlanetaryNavProps> {
             from { opacity: 0; }
             to { opacity: 1; }
           }
-          @keyframes scaleIn {
-            from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-            to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+          @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
           }
-          @keyframes rotate {
-            from { transform: translate(-50%, -50%) rotate(0deg); }
-            to { transform: translate(-50%, -50%) rotate(360deg); }
-          }
-          @keyframes planetAppear {
-            from { transform: translate(calc(-50% + ${0}px), calc(-50% + ${0}px)) scale(0); opacity: 0; }
-            to { opacity: 1; }
+          @keyframes toolAppear {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
           }
         `}</style>
       </>
