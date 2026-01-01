@@ -28,7 +28,7 @@ export class CutPage extends Component<{}, CutPageState> {
 
   componentDidMount() {
     // Update page title and meta for SEO
-    document.title = 'CUT - Weight Loss Calculator & Fasting Plan Generator | ZIP.run';
+    document.title = 'CUT - Weight Loss Calculator & Fasting Plan Generator | Tulzo';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
@@ -36,7 +36,7 @@ export class CutPage extends Component<{}, CutPageState> {
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'CUT - Weight Loss Calculator & Fasting Plan | ZIP.run');
+    if (ogTitle) ogTitle.setAttribute('content', 'CUT - Weight Loss Calculator & Fasting Plan | Tulzo');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
     if (ogDesc) ogDesc.setAttribute('content', 'Free weight loss calculator with personalized fasting plans. Calculate your ideal calorie deficit and reach your goal weight.');

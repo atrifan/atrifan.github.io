@@ -24,7 +24,7 @@ export class HomePage extends Component<{}, HomePageState> {
 
   componentDidMount() {
     // Reset to default SEO when returning to home
-    document.title = 'ZIP.run - Free Tools for Health, Budget & Daily Life';
+    document.title = 'Tulzo - Free Tools for Health, Budget & Daily Life';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
@@ -32,7 +32,7 @@ export class HomePage extends Component<{}, HomePageState> {
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'ZIP.run - Free Tools for Health, Budget & Daily Life');
+    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Tools for Health, Budget & Daily Life');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
     if (ogDesc) ogDesc.setAttribute('content', 'Free tools: CUT weight loss calculator, STACK budget planner. Simple, beautiful, and 100% free.');
@@ -209,7 +209,7 @@ export class HomePage extends Component<{}, HomePageState> {
               </svg>
             </div>
 
-            {/* Title - ZIP */}
+            {/* Title - Tulzo */}
             <h1 style={{
               fontSize: 'clamp(4rem, 12vw, 7rem)',
               fontWeight: 900,
@@ -219,7 +219,7 @@ export class HomePage extends Component<{}, HomePageState> {
               marginBottom: '1rem',
               letterSpacing: '0.1em',
             }}>
-              ZIP
+              TULZO
             </h1>
 
             {/* Motto */}
@@ -230,7 +230,7 @@ export class HomePage extends Component<{}, HomePageState> {
               fontStyle: 'italic',
               margin: '0 auto 3rem',
             }}>
-              Zip through your day.
+              Tools for your day.
             </p>
           </View>
 

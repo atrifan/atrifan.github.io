@@ -1,7 +1,7 @@
 {
-  "name": "zip-run-place-cut",
+  "name": "tulzo",
   "version": "1.0.0",
-  "description": "Weight management calculator with fasting plans",
+  "description": "Free tools for health, budget & daily life",
   "type": "module",
   "scripts": {
     "dev": "vite",
