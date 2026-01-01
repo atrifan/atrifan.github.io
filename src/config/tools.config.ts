@@ -25,19 +25,19 @@ export const TOOLS: ToolConfig[] = [
     gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
     available: true,
   },
-  // Coming soon placeholders - blurred on homepage
+  {
+    id: 'stack',
+    name: 'STACK',
+    description: 'Budget & Savings Planner - Stack Your Bread 💰',
+    icon: '💰',
+    path: '/stack',
+    color: '#10b981',
+    gradient: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+    available: true,
+  },
+  // Coming soon placeholder
   {
     id: 'coming-1',
-    name: '',
-    description: '',
-    icon: '',
-    path: '#',
-    color: '#888',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    available: false,
-  },
-  {
-    id: 'coming-2',
     name: '',
     description: '',
     icon: '',

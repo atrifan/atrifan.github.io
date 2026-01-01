@@ -16,11 +16,12 @@ interface WeightFormState {
   heightInches: string;
   currentWeight: string;
   desiredWeight: string;
-  timeToWeight: string;
-  useCustomTime: boolean;
+  targetDate: string;
+  useTargetDate: boolean;
   unitSystem: UnitSystem;
   showWarning: boolean;
   warningMessage: string;
+  dateError: string;
 }
 
 // Safe weight loss is 0.5-1 kg per week (CDC guidelines)
@@ -86,18 +87,19 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
     const defaultUnit = this.detectUnitSystem();
 
     this.state = {
-      age: '30',
+      age: '',
       sex: 'male',
-      height: defaultUnit === 'metric' ? '175' : '',
-      heightFeet: defaultUnit === 'imperial' ? '5' : '',
-      heightInches: defaultUnit === 'imperial' ? '9' : '',
-      currentWeight: defaultUnit === 'metric' ? '80' : '176',
-      desiredWeight: defaultUnit === 'metric' ? '70' : '154',
-      timeToWeight: '12',
-      useCustomTime: false,
+      height: '',
+      heightFeet: '',
+      heightInches: '',
+      currentWeight: '',
+      desiredWeight: '',
+      targetDate: '',
+      useTargetDate: false,
       unitSystem: defaultUnit,
       showWarning: false,
-      warningMessage: ''
+      warningMessage: '',
+      dateError: ''
     };
   }
 
@@ -138,29 +140,29 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       // Convert metric to imperial
       const heightCm = parseFloat(height) || 175;
       const { feet, inches } = this.cmToFeetInches(heightCm);
-      const currentLbs = this.kgToLbs(parseFloat(currentWeight) || 80);
-      const desiredLbs = this.kgToLbs(parseFloat(desiredWeight) || 70);
+      const currentLbs = currentWeight ? this.kgToLbs(parseFloat(currentWeight)) : 0;
+      const desiredLbs = desiredWeight ? this.kgToLbs(parseFloat(desiredWeight)) : 0;
 
       this.setState({
         unitSystem: 'imperial',
-        heightFeet: feet.toString(),
-        heightInches: inches.toString(),
-        currentWeight: Math.round(currentLbs).toString(),
-        desiredWeight: Math.round(desiredLbs).toString()
+        heightFeet: heightCm ? feet.toString() : '',
+        heightInches: heightCm ? inches.toString() : '',
+        currentWeight: currentLbs ? Math.round(currentLbs).toString() : '',
+        desiredWeight: desiredLbs ? Math.round(desiredLbs).toString() : ''
       });
     } else {
       // Convert imperial to metric
-      const feet = parseFloat(heightFeet) || 5;
-      const inches = parseFloat(heightInches) || 9;
-      const heightCm = this.feetInchesToCm(feet, inches);
-      const currentKg = this.lbsToKg(parseFloat(currentWeight) || 176);
-      const desiredKg = this.lbsToKg(parseFloat(desiredWeight) || 154);
+      const feet = parseFloat(heightFeet) || 0;
+      const inches = parseFloat(heightInches) || 0;
+      const heightCm = (feet || inches) ? this.feetInchesToCm(feet, inches) : 0;
+      const currentKg = currentWeight ? this.lbsToKg(parseFloat(currentWeight)) : 0;
+      const desiredKg = desiredWeight ? this.lbsToKg(parseFloat(desiredWeight)) : 0;
 
       this.setState({
         unitSystem: 'metric',
-        height: Math.round(heightCm).toString(),
-        currentWeight: Math.round(currentKg).toString(),
-        desiredWeight: Math.round(desiredKg).toString()
+        height: heightCm ? Math.round(heightCm).toString() : '',
+        currentWeight: currentKg ? Math.round(currentKg).toString() : '',
+        desiredWeight: desiredKg ? Math.round(desiredKg).toString() : ''
       });
     }
   };
@@ -182,9 +184,41 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
     return { isAggressive: false, message: '' };
   };
 
+  private calculateWeeksFromDate = (targetDate: string): number => {
+    const [year, month, day] = targetDate.split('-').map(Number);
+    const target = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return Math.round(diffDays / 7 * 10) / 10; // Round to 1 decimal
+  };
+
+  private isDateInPast = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const target = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return target < today;
+  };
+
+  private handleDateChange = (dateStr: string) => {
+    if (this.isDateInPast(dateStr)) {
+      this.setState({ targetDate: dateStr, dateError: '⚠️ Please select a future date' });
+    } else {
+      this.setState({ targetDate: dateStr, dateError: '' });
+    }
+  };
+
   private handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, timeToWeight, useCustomTime, unitSystem } = this.state;
+    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, targetDate, useTargetDate, unitSystem, dateError } = this.state;
+
+    // Don't submit if there's a date error
+    if (useTargetDate && dateError) {
+      return;
+    }
 
     // Convert to metric for calculations
     let heightCm: number;
@@ -201,8 +235,10 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       desiredKg = parseFloat(desiredWeight) || 0;
     }
 
-    // Calculate weeks if auto
-    const weeks = useCustomTime ? (parseFloat(timeToWeight) || 12) : Math.ceil((currentKg - desiredKg) / MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG);
+    // Calculate weeks: from target date or auto-calculate based on safe weight loss
+    const weeks = useTargetDate && targetDate
+      ? this.calculateWeeksFromDate(targetDate)
+      : Math.ceil((currentKg - desiredKg) / MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG);
 
     // Check for aggressive weight loss
     const { isAggressive, message } = this.checkAggressiveWeightLoss(currentKg, desiredKg, weeks);
@@ -213,14 +249,15 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       this.setState({ showWarning: false, warningMessage: '' });
     }
 
-    // Submit with metric values
+    // Submit with metric values - pass targetDate directly if user selected one
     this.props.onSubmit({
       age: parseInt(age) || 0,
       sex,
       height: Math.round(heightCm),
       currentWeight: Math.round(currentKg * 10) / 10,
       desiredWeight: Math.round(desiredKg * 10) / 10,
-      timeToWeight: useCustomTime ? weeks : undefined
+      timeToWeight: weeks,
+      targetDate: useTargetDate && targetDate ? targetDate : undefined
     });
   };
 
@@ -229,7 +266,7 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
   };
 
   render() {
-    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, timeToWeight, useCustomTime, unitSystem, showWarning, warningMessage } = this.state;
+    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, targetDate, useTargetDate, unitSystem, showWarning, warningMessage, dateError } = this.state;
     const isMetric = unitSystem === 'metric';
     const weightUnit = isMetric ? 'kg' : 'lbs';
     const heightLabel = isMetric ? 'Height (cm)' : 'Height';
@@ -451,28 +488,38 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
           {/* Timeline */}
           <FormField icon="📅" label="Timeline">
             <select
-              value={useCustomTime ? 'custom' : 'auto'}
-              onChange={(e) => this.setState({ useCustomTime: e.target.value === 'custom' })}
+              value={useTargetDate ? 'custom' : 'auto'}
+              onChange={(e) => this.setState({ useTargetDate: e.target.value === 'custom' })}
               style={selectStyle}
             >
               <option value="auto">🤖 Calculate for me (Recommended)</option>
-              <option value="custom">⏱️ I'll set my own timeline</option>
+              <option value="custom">📆 I have a target date</option>
             </select>
           </FormField>
 
-          {useCustomTime && (
-            <FormField icon="⏳" label="Weeks to Goal">
+          {useTargetDate && (
+            <FormField icon="🗓️" label="Target Date">
               <input
-                type="number"
-                value={timeToWeight}
-                onChange={(e) => this.setState({ timeToWeight: e.target.value })}
-                min={1}
-                max={104}
-                step="0.5"
+                type="date"
+                value={targetDate}
+                onChange={(e) => this.handleDateChange(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
                 required
-                style={inputStyle}
-                placeholder="Number of weeks"
+                style={{
+                  ...inputStyle,
+                  borderColor: dateError ? '#ef4444' : 'transparent',
+                }}
               />
+              {dateError && (
+                <p style={{ color: '#ef4444', fontSize: '0.9rem', margin: '0.5rem 0 0 0', fontWeight: 600 }}>
+                  {dateError}
+                </p>
+              )}
+              {targetDate && !dateError && (
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', margin: '0.5rem 0 0 0' }}>
+                  ⏱️ That's {this.calculateWeeksFromDate(targetDate)} weeks from now
+                </p>
+              )}
             </FormField>
           )}
 

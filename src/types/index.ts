@@ -6,7 +6,8 @@ export interface UserInput {
   height: number; // in cm
   currentWeight: number; // in kg
   desiredWeight: number; // in kg
-  timeToWeight?: number; // in weeks
+  timeToWeight?: number; // in weeks (calculated)
+  targetDate?: string; // ISO date string if user selected a specific date
 }
 
 export interface BMIResult {

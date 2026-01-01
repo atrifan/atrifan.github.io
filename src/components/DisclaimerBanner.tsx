@@ -1,18 +1,28 @@
 import React from 'react';
 import { View } from '@adobe/react-spectrum';
 
+interface DisclaimerBannerProps {
+  title?: string;
+  message?: string;
+  color?: string;
+}
+
 /**
- * Medical Disclaimer Banner Component - Beautiful Glass Design
+ * Disclaimer Banner Component - Beautiful Glass Design
  */
-export const DisclaimerBanner: React.FC = () => {
+export const DisclaimerBanner: React.FC<DisclaimerBannerProps> = ({
+  title = 'Medical Disclaimer',
+  message = 'This calculator is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult with a qualified healthcare provider before starting any diet, exercise, or fasting program. Individual results may vary.',
+  color = '#fbbf24'
+}) => {
   return (
     <View
       marginBottom="size-500"
       UNSAFE_style={{
-        background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%)',
+        background: `linear-gradient(135deg, ${color}26 0%, ${color}1a 100%)`,
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
-        border: '1px solid rgba(251, 191, 36, 0.3)',
+        border: `1px solid ${color}4d`,
         borderRadius: '20px',
         padding: '1.5rem 2rem',
       }}
@@ -27,13 +37,13 @@ export const DisclaimerBanner: React.FC = () => {
         </span>
         <div>
           <h3 style={{
-            color: '#fbbf24',
+            color: color,
             fontSize: '1.3rem',
             fontWeight: 700,
             marginBottom: '0.5rem',
             margin: 0,
           }}>
-            Medical Disclaimer
+            {title}
           </h3>
           <p style={{
             color: 'rgba(255, 255, 255, 0.85)',
@@ -41,10 +51,7 @@ export const DisclaimerBanner: React.FC = () => {
             lineHeight: 1.6,
             margin: 0,
           }}>
-            This calculator is for <strong>informational purposes only</strong> and is not a substitute for
-            professional medical advice, diagnosis, or treatment. Always consult with a
-            qualified healthcare provider before starting any diet, exercise, or fasting program.
-            Individual results may vary.
+            {message}
           </p>
         </div>
       </div>

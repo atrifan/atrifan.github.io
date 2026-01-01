@@ -5,6 +5,7 @@ import { TOOLS, ToolConfig } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
 import { CutIcon } from '../components/CutIcon';
+import { StackIcon } from '../components/StackIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -19,6 +20,22 @@ export class HomePage extends Component<{}, HomePageState> {
     this.state = {
       hoveredTool: null
     };
+  }
+
+  componentDidMount() {
+    // Reset to default SEO when returning to home
+    document.title = 'ZIP.run - Free Tools for Health, Budget & Daily Life';
+
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute('content', 'Free tools for everyday life: CUT weight loss calculator with fasting plans, STACK budget & savings planner. Simple, beautiful, and 100% free.');
+    }
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', 'ZIP.run - Free Tools for Health, Budget & Daily Life');
+
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free tools: CUT weight loss calculator, STACK budget planner. Simple, beautiful, and 100% free.');
   }
 
   private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
@@ -121,6 +138,8 @@ export class HomePage extends Component<{}, HomePageState> {
           <div className="animate-float" style={{ animationDelay: `${delay}s` }}>
             {tool.id === 'cut' ? (
               <CutIcon size={120} />
+            ) : tool.id === 'stack' ? (
+              <StackIcon size={120} />
             ) : (
               <span className="big-icon">{tool.icon}</span>
             )}

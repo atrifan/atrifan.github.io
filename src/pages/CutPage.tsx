@@ -1,10 +1,11 @@
 import { Component } from 'react';
-import { Link } from 'react-router-dom';
 import { View, Flex } from '@adobe/react-spectrum';
 import { WeightForm } from '../components/WeightForm';
 import { ResultsDisplay } from '../components/ResultsDisplay';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { BackToTools } from '../components/BackToTools';
+import { Footer } from '../components/Footer';
 import { CutIcon } from '../components/CutIcon';
 import { WeightCalculator } from '../utils/WeightCalculator';
 import { UserInput, WeightLossPlan } from '../types';
@@ -23,6 +24,22 @@ export class CutPage extends Component<{}, CutPageState> {
     this.state = {
       plan: null
     };
+  }
+
+  componentDidMount() {
+    // Update page title and meta for SEO
+    document.title = 'CUT - Weight Loss Calculator & Fasting Plan Generator | ZIP.run';
+
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute('content', 'Free weight loss calculator with personalized fasting plans. Calculate your ideal calorie deficit, get intermittent fasting schedules, and track your progress to your goal weight.');
+    }
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', 'CUT - Weight Loss Calculator & Fasting Plan | ZIP.run');
+
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', 'Free weight loss calculator with personalized fasting plans. Calculate your ideal calorie deficit and reach your goal weight.');
   }
 
   private handleFormSubmit = (input: UserInput): void => {
@@ -44,23 +61,9 @@ export class CutPage extends Component<{}, CutPageState> {
       <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
         <View maxWidth="1200px" marginX="auto">
           {/* Back Button */}
-          <Link to="/" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: 'rgba(255, 255, 255, 0.8)',
-              fontSize: '1.1rem',
-              marginBottom: '2rem',
-              padding: '0.75rem 1.5rem',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '50px',
-              transition: 'all 0.3s ease',
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>←</span>
-              <span>Back to Tools</span>
-            </div>
-          </Link>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
 
           {/* Hero Header */}
           <View UNSAFE_style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -126,19 +129,11 @@ export class CutPage extends Component<{}, CutPageState> {
             </View>
           )}
 
-          {/* Footer */}
-          <View UNSAFE_style={{ textAlign: 'center', padding: '4rem 0 2rem' }}>
-            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>
-              © 2025 ZIP Tools | CUT - Weight Loss Calculator
-            </p>
-            <p style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-              This tool provides estimates based on general medical formulas. 
-              Always consult healthcare professionals for personalized advice.
-            </p>
-          </View>
-
           {/* Bottom Ad */}
           <AdBanner slot={ADS_CONFIG.slots.footerBanner} format="horizontal" />
+
+          {/* Footer */}
+          <Footer />
         </View>
       </View>
     );

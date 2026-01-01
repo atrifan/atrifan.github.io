@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { HomePage } from './pages/HomePage';
 import { CutPage } from './pages/CutPage';
+import { StackPage } from './pages/StackPage';
 
 /**
  * Main App Component with Routing
@@ -16,7 +17,7 @@ class App extends Component {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/cut" element={<CutPage />} />
-            {/* Add more routes here as tools are developed */}
+            <Route path="/stack" element={<StackPage />} />
           </Routes>
         </HashRouter>
       </Provider>

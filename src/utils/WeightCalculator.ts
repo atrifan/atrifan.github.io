@@ -130,7 +130,7 @@ export class WeightCalculator {
    * Generate complete weight loss plan
    */
   public static generatePlan(input: UserInput): WeightLossPlan {
-    const { age, sex, height, currentWeight, desiredWeight, timeToWeight } = input;
+    const { age, sex, height, currentWeight, desiredWeight, timeToWeight, targetDate: inputTargetDate } = input;
 
     // Calculate BMI values
     const currentBMI = this.getBMIResult(this.calculateBMI(currentWeight, height));
@@ -153,8 +153,15 @@ export class WeightCalculator {
     // Get fasting plan
     const fastingPlan = this.getFastingPlan(dailyDeficit);
 
-    // Calculate target date
-    const targetDate = this.calculateTargetDate(weeksToGoal);
+    // Use user's selected target date if provided, otherwise calculate from weeks
+    let targetDate: Date;
+    if (inputTargetDate) {
+      // Parse the date string and create date at noon to avoid timezone issues
+      const [year, month, day] = inputTargetDate.split('-').map(Number);
+      targetDate = new Date(year, month - 1, day, 12, 0, 0);
+    } else {
+      targetDate = this.calculateTargetDate(weeksToGoal);
+    }
 
     return {
       currentBMI,

@@ -17,17 +17,20 @@ export const ADS_CONFIG = {
   slots: {
     // Top banner ad (horizontal, appears at top of pages)
     topBanner: '1234567890',
-    
+
+    // Bottom banner ad (horizontal, appears at bottom of pages)
+    bottomBanner: '6677889900',
+
     // Side banner ad (vertical, appears on desktop sidebar)
     sideBanner: '0987654321',
-    
+
     // In-content ads (horizontal, appears between content sections)
     inContent1: '1122334455',
     inContent2: '5544332211',
-    
+
     // Footer banner ad (horizontal, appears at bottom)
     footerBanner: '9988776655',
-    
+
     // Home page specific ads
     homeHero: '1111111111',
     homeTools: '2222222222',
