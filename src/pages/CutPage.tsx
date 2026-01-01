@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { View, Flex } from '@adobe/react-spectrum';
+import { View } from '@adobe/react-spectrum';
 import { WeightForm } from '../components/WeightForm';
 import { ResultsDisplay } from '../components/ResultsDisplay';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
@@ -96,41 +96,27 @@ export class CutPage extends Component<{}, CutPageState> {
           </View>
 
           {/* Top Ad */}
-          <AdBanner slot={ADS_CONFIG.slots.topBanner} format="horizontal" />
+          <AdBanner slot={ADS_CONFIG.slots.cutTop} format="horizontal" />
 
           {/* Disclaimer */}
           <DisclaimerBanner />
 
           {/* Main Content */}
-          <Flex
-            direction={{ base: 'column', L: 'row' }}
-            gap="size-400"
-            marginBottom="size-400"
-          >
+          <View marginBottom="size-400">
             {/* Form Section */}
-            <View flex={{ L: 1 }}>
-              <WeightForm onSubmit={this.handleFormSubmit} />
-            </View>
-
-            {/* Side Ad */}
-            <View flex={{ L: 0 }} width={{ L: '320px' }} UNSAFE_style={{ display: 'none' }}>
-              <div className="hide-mobile">
-                <AdBanner slot={ADS_CONFIG.slots.sideBanner} format="vertical" style={{ minHeight: '600px' }} />
-              </div>
-            </View>
-          </Flex>
+            <WeightForm onSubmit={this.handleFormSubmit} />
+          </View>
 
           {/* Results Section */}
           {plan && (
             <View id="results">
-              <AdBanner slot={ADS_CONFIG.slots.inContent1} format="horizontal" />
               <ResultsDisplay plan={plan} />
-              <AdBanner slot={ADS_CONFIG.slots.inContent2} format="horizontal" />
+              <AdBanner slot={ADS_CONFIG.slots.cutResults} format="horizontal" />
             </View>
           )}
 
           {/* Bottom Ad */}
-          <AdBanner slot={ADS_CONFIG.slots.footerBanner} format="horizontal" />
+          <AdBanner slot={ADS_CONFIG.slots.cutFooter} format="horizontal" />
 
           {/* Footer */}
           <Footer />

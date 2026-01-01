@@ -234,7 +234,7 @@ export class HomePage extends Component<{}, HomePageState> {
             </p>
           </View>
 
-          {/* Ad Banner */}
+          {/* Ad Banner - Home Hero */}
           <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
 
           {/* Tools Grid */}
@@ -260,8 +260,8 @@ export class HomePage extends Component<{}, HomePageState> {
             </div>
           </View>
 
-          {/* Bottom Ad */}
-          <AdBanner slot={ADS_CONFIG.slots.homeTools} format="horizontal" />
+          {/* Bottom Ad - Home Footer */}
+          <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
         </View>
       </View>
     );

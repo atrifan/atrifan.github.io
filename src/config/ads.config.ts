@@ -12,28 +12,21 @@ export const ADS_CONFIG = {
   // Your Google AdSense Publisher ID
   publisherId: 'ca-pub-7299057534028491',
 
-  // Ad Unit Slot IDs
-  // Create these in your AdSense dashboard and replace with actual IDs
+  // Ad Unit Slot IDs - Created in AdSense dashboard
   slots: {
-    // Top banner ad (horizontal, appears at top of pages)
-    topBanner: '1234567890',
+    // Homepage ads
+    homeHero: '3908062551',
+    homeFooter: '2008657523',
 
-    // Bottom banner ad (horizontal, appears at bottom of pages)
-    bottomBanner: '6677889900',
+    // CUT page ads
+    cutTop: '1990322133',
+    cutResults: '7655735873',
+    cutFooter: '3517180317',
 
-    // Side banner ad (vertical, appears on desktop sidebar)
-    sideBanner: '0987654321',
-
-    // In-content ads (horizontal, appears between content sections)
-    inContent1: '1122334455',
-    inContent2: '5544332211',
-
-    // Footer banner ad (horizontal, appears at bottom)
-    footerBanner: '9988776655',
-
-    // Home page specific ads
-    homeHero: '1111111111',
-    homeTools: '2222222222',
+    // STACK page ads
+    stackTop: '8364158792',
+    stackResults: '9878558629',
+    stackFooter: '7679786607',
   },
 
   // Enable/disable ads (useful for development)

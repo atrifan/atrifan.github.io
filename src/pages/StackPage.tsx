@@ -79,11 +79,9 @@ export class StackPage extends Component<{}, StackPageState> {
           </View>
 
           {/* Top Ad */}
-          {ADS_CONFIG.enabled && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
-              <AdBanner slot={ADS_CONFIG.slots.topBanner} format="horizontal" />
-            </View>
-          )}
+          <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
+            <AdBanner slot={ADS_CONFIG.slots.stackTop} format="horizontal" />
+          </View>
 
           {/* Main Content */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
@@ -125,11 +123,14 @@ export class StackPage extends Component<{}, StackPageState> {
             {/* Form or Results */}
             <View UNSAFE_style={{ marginTop: '1.5rem' }}>
               {plan ? (
-                <BudgetResultsDisplay 
-                  plan={plan} 
-                  currency={currency}
-                  onReset={this.handleReset} 
-                />
+                <>
+                  <BudgetResultsDisplay
+                    plan={plan}
+                    currency={currency}
+                    onReset={this.handleReset}
+                  />
+                  <AdBanner slot={ADS_CONFIG.slots.stackResults} format="horizontal" />
+                </>
               ) : (
                 <BudgetForm onSubmit={this.handleFormSubmit} />
               )}
@@ -137,11 +138,9 @@ export class StackPage extends Component<{}, StackPageState> {
           </View>
 
           {/* Bottom Ad */}
-          {ADS_CONFIG.enabled && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '800px', marginTop: '2rem' }}>
-              <AdBanner slot={ADS_CONFIG.slots.bottomBanner} format="horizontal" />
-            </View>
-          )}
+          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', marginTop: '2rem' }}>
+            <AdBanner slot={ADS_CONFIG.slots.stackFooter} format="horizontal" />
+          </View>
 
           {/* Footer */}
           <Footer />
