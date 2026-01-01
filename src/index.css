@@ -15,6 +15,14 @@ button {
   font-family: inherit;
 }
 
+/* Date inputs need special handling on mobile */
+input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 :root {
   --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);

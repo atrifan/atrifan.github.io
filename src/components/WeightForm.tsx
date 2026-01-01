@@ -37,14 +37,15 @@ const FormField: React.FC<FormFieldProps> = ({ icon, label, children }) => (
   <div style={{
     background: 'rgba(255, 255, 255, 0.08)',
     borderRadius: '16px',
-    padding: '1.25rem 1.5rem',
-    marginBottom: '1rem',
+    padding: '1rem',
+    marginBottom: '0.75rem',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     transition: 'all 0.3s ease',
+    overflow: 'hidden',
   }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-      <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-      <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '1.1rem', fontWeight: 600 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+      <span style={{ fontSize: '1.25rem' }}>{icon}</span>
+      <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '1rem', fontWeight: 600 }}>
         {label}
       </label>
     </div>

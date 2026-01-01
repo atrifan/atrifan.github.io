@@ -72,9 +72,10 @@ const FormField: React.FC<FormFieldProps> = ({ icon, label, children }) => (
   <div style={{
     background: 'rgba(255, 255, 255, 0.08)',
     borderRadius: '16px',
-    padding: '1rem 1.25rem',
+    padding: '1rem',
     marginBottom: '0.75rem',
     border: '1px solid rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
   }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
       <span style={{ fontSize: '1.25rem' }}>{icon}</span>
