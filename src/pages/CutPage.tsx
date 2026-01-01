@@ -133,7 +133,7 @@ export class CutPage extends Component<{}, CutPageState> {
           {/* Footer */}
           <View UNSAFE_style={{ textAlign: 'center', padding: '4rem 0 2rem' }}>
             <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>
-              © 2025 zip.run.place | CUT - Weight Loss Calculator
+              © 2025 ZIP Tools | CUT - Weight Loss Calculator
             </p>
             <p style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
               This tool provides estimates based on general medical formulas. 
