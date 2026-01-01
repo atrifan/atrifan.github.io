@@ -4,6 +4,7 @@ import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { HomePage } from './pages/HomePage';
 import { CutPage } from './pages/CutPage';
 import { StackPage } from './pages/StackPage';
+import { WhenPage } from './pages/WhenPage';
 
 /**
  * Main App Component with Routing
@@ -18,6 +19,7 @@ class App extends Component {
             <Route path="/" element={<HomePage />} />
             <Route path="/cut" element={<CutPage />} />
             <Route path="/stack" element={<StackPage />} />
+            <Route path="/when" element={<WhenPage />} />
           </Routes>
         </HashRouter>
       </Provider>

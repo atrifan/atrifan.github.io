@@ -27,6 +27,10 @@ export const ADS_CONFIG = {
     stackTop: '8364158792',
     stackResults: '9878558629',
     stackFooter: '7679786607',
+
+    // WHEN page ads
+    whenTop: '2750893556',
+    whenFooter: '1433942458',
   },
 
   // Enable/disable ads (useful for development)

@@ -6,6 +6,7 @@ import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
 import { CutIcon } from '../components/CutIcon';
 import { StackIcon } from '../components/StackIcon';
+import { WhenIcon } from '../components/WhenIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -140,6 +141,8 @@ export class HomePage extends Component<{}, HomePageState> {
               <CutIcon size={120} />
             ) : tool.id === 'stack' ? (
               <StackIcon size={120} />
+            ) : tool.id === 'when' ? (
+              <WhenIcon size={120} />
             ) : (
               <span className="big-icon">{tool.icon}</span>
             )}
@@ -235,7 +238,9 @@ export class HomePage extends Component<{}, HomePageState> {
           </View>
 
           {/* Ad Banner - Home Hero */}
-          <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
+          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+            <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
+          </View>
 
           {/* Tools Grid */}
           <View marginTop="size-600" marginBottom="size-600">
@@ -261,7 +266,9 @@ export class HomePage extends Component<{}, HomePageState> {
           </View>
 
           {/* Bottom Ad - Home Footer */}
-          <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
+          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+            <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
+          </View>
         </View>
       </View>
     );

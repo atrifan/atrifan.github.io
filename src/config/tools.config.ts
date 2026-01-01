@@ -35,16 +35,15 @@ export const TOOLS: ToolConfig[] = [
     gradient: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
     available: true,
   },
-  // Coming soon placeholder
   {
-    id: 'coming-1',
-    name: '',
-    description: '',
-    icon: '',
-    path: '#',
-    color: '#888',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    available: false,
+    id: 'when',
+    name: 'WHEN',
+    description: 'What day is it? Find the day of week for any date 📅',
+    icon: '📅',
+    path: '/when',
+    color: '#3b82f6',
+    gradient: 'linear-gradient(135deg, #3b82f6 0%, #0ea5e9 50%, #06b6d4 100%)',
+    available: true,
   },
 ];
 
