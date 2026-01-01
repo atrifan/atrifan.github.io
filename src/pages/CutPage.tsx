@@ -28,18 +28,18 @@ export class CutPage extends Component<{}, CutPageState> {
 
   componentDidMount() {
     // Update page title and meta for SEO
-    document.title = 'CUT - Free Weight Loss Calculator | Calorie Deficit & Fasting Plan Generator | Tulzo';
+    document.title = 'Weight Loss & Fasting Tool – Free Handy Tool | Tulzo';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free weight loss calculator: Calculate BMR, TDEE, calorie deficit, and get personalized intermittent fasting schedules. See how long to reach your goal weight. Works in kg/lbs. No signup required.');
+      metaDesc.setAttribute('content', 'Plan weight loss and fasting schedules with this fast, free handy tool. Calculate calories, set goals, and track progress.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'CUT - Free Weight Loss & Calorie Calculator | Tulzo');
+    if (ogTitle) ogTitle.setAttribute('content', 'Weight Loss & Fasting Tool – Free Handy Tool | Tulzo');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free weight loss calculator with BMR, TDEE, calorie deficit calculations and personalized fasting plans. Reach your goal weight faster.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Plan weight loss and fasting schedules with this fast, free handy tool.');
   }
 
   private handleFormSubmit = (input: UserInput): void => {

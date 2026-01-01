@@ -37,18 +37,18 @@ export class TapPage extends Component<object, TapPageState> {
   }
 
   componentDidMount() {
-    document.title = 'TAP - Free Click Counter & Lap Timer | Tally Counter Online | Tulzo';
+    document.title = 'Click Counter & Tally Tool – Free Handy Tool | Tulzo';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free online tally counter and lap timer. Count clicks, taps, or spacebar presses. Track laps, measure intervals, compare times. Works on mobile and desktop. No signup required.');
+      metaDesc.setAttribute('content', 'Count clicks, reps, or events effortlessly with this fast, free handy tool. Track anything with ease.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'TAP - Free Click Counter & Lap Timer | Tulzo');
+    if (ogTitle) ogTitle.setAttribute('content', 'Click Counter & Tally Tool – Free Handy Tool | Tulzo');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free tally counter: Count clicks, track laps, measure intervals. Works on mobile and desktop.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Count clicks, reps, or events effortlessly with this fast, free handy tool.');
 
     document.addEventListener('keydown', this.handleKeyDown);
   }

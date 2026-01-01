@@ -33,15 +33,15 @@ export class MatchPage extends Component<{}, MatchPageState> {
   }
 
   componentDidMount() {
-    document.title = 'MATCH - Zodiac Compatibility Checker | Love Match Calculator | Tulzo';
+    document.title = 'Zodiac Match Tool – Free Handy Tool | Tulzo';
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free zodiac compatibility checker: Find your love match percentage based on astrology signs. Enter your sign or birth date to see compatibility. Fun tool for couples!');
+      metaDesc.setAttribute('content', 'Check zodiac compatibility at a glance with this fast, free handy tool. See your love match percentage.');
     }
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'MATCH - Zodiac Love Compatibility Calculator | Tulzo');
+    if (ogTitle) ogTitle.setAttribute('content', 'Zodiac Match Tool – Free Handy Tool | Tulzo');
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Check your zodiac compatibility! Enter signs or birth dates to see your love match percentage.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Check zodiac compatibility at a glance with this fast, free handy tool.');
   }
 
   private getSignFromInput = (person: PersonInput): ZodiacSign | null => {

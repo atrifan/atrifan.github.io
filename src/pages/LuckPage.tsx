@@ -31,11 +31,15 @@ export class LuckPage extends Component<{}, LuckPageState> {
   }
 
   componentDidMount() {
-    document.title = 'LUCK - Random Number Generator | Hold to Roll | Tulzo';
+    document.title = 'Random Number Tool – Free Handy Tool | Tulzo';
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free random number generator: Hold to generate truly random numbers. Your hold duration becomes the seed. Set max value or use max int. No signup required.');
+      metaDesc.setAttribute('content', 'Generate random numbers instantly with this fast, free handy tool. Set your range and roll.');
     }
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', 'Random Number Tool – Free Handy Tool | Tulzo');
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', 'Generate random numbers instantly with this fast, free handy tool.');
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
   }

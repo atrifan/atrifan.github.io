@@ -1,7 +1,7 @@
 import { Component } from 'react';
 import { Link } from 'react-router-dom';
-import { View, Heading } from '@adobe/react-spectrum';
-import { TOOLS, ToolConfig } from '../config/tools.config';
+import { View } from '@adobe/react-spectrum';
+import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
 import { CutIcon } from '../components/CutIcon';
@@ -31,18 +31,18 @@ export class HomePage extends Component<{}, HomePageState> {
 
   componentDidMount() {
     // Reset to default SEO when returning to home
-    document.title = 'Tulzo - Free Online Calculators: Weight Loss, Budget, Date & Tally Counter';
+    document.title = 'Tulzo – Handy Tools for Everyday Tasks | Free Online Utilities';
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute('content', 'Free online calculators and tools: Weight loss calculator, budget planner, day of week finder, click counter & lap timer. Calculate calories, plan finances, count anything. 100% free, no signup.');
+      metaDesc.setAttribute('content', 'Fast, free utilities for health, money, time, and simple decisions — all in one place. No sign-ups, instant results, works on any device.');
     }
 
     const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo - Free Online Calculators & Tools');
+    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo – Handy Tools for Everyday Tasks');
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Free tools: Weight loss calculator, budget planner, date finder, click counter. Simple, beautiful, 100% free.');
+    if (ogDesc) ogDesc.setAttribute('content', 'Fast, free utilities for health, money, time, and simple decisions — all in one place.');
   }
 
   private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
@@ -110,24 +110,33 @@ export class HomePage extends Component<{}, HomePageState> {
           className="hover-lift fade-in-up"
           style={{
             background: tool.gradient,
-            borderRadius: '32px',
-            padding: '3rem 2rem',
+            borderRadius: '24px',
+            padding: '2rem 1.5rem',
             textAlign: 'center',
             cursor: 'pointer',
-            minHeight: '280px',
+            minHeight: '260px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '1.5rem',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            gap: '1rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
             animationDelay: `${delay}s`,
             position: 'relative',
             overflow: 'hidden',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
           }}
-          onMouseEnter={() => this.setState({ hoveredTool: tool.id })}
-          onMouseLeave={() => this.setState({ hoveredTool: null })}
+          onMouseEnter={(e) => {
+            this.setState({ hoveredTool: tool.id });
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.35)';
+          }}
+          onMouseLeave={(e) => {
+            this.setState({ hoveredTool: null });
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.25)';
+          }}
         >
           {/* Glow effect */}
           <div style={{
@@ -144,25 +153,25 @@ export class HomePage extends Component<{}, HomePageState> {
           {/* Icon */}
           <div className="animate-float" style={{ animationDelay: `${delay}s` }}>
             {tool.id === 'cut' ? (
-              <CutIcon size={120} />
+              <CutIcon size={100} />
             ) : tool.id === 'stack' ? (
-              <StackIcon size={120} />
+              <StackIcon size={100} />
             ) : tool.id === 'when' ? (
-              <WhenIcon size={120} />
+              <WhenIcon size={100} />
             ) : tool.id === 'tap' ? (
-              <TapIcon size={120} />
+              <TapIcon size={100} />
             ) : tool.id === 'luck' ? (
-              <LuckIcon size={120} />
+              <LuckIcon size={100} />
             ) : tool.id === 'match' ? (
-              <MatchIcon size={120} />
+              <MatchIcon size={100} />
             ) : (
               <span className="big-icon">{tool.icon}</span>
             )}
           </div>
 
-          {/* Name */}
+          {/* Brand Name */}
           <h2 style={{
-            fontSize: '2.5rem',
+            fontSize: '2rem',
             fontWeight: 800,
             color: '#ffffff',
             margin: 0,
@@ -172,15 +181,25 @@ export class HomePage extends Component<{}, HomePageState> {
             {tool.name}
           </h2>
 
-          {/* Description */}
-          <p style={{
+          {/* Descriptive Name - SEO visible */}
+          <h3 style={{
             fontSize: '1.1rem',
-            color: 'rgba(255, 255, 255, 0.9)',
+            fontWeight: 600,
+            color: 'rgba(255, 255, 255, 0.95)',
+            margin: 0,
+          }}>
+            {tool.descriptiveName}
+          </h3>
+
+          {/* Short Description */}
+          <p style={{
+            fontSize: '0.95rem',
+            color: 'rgba(255, 255, 255, 0.8)',
             margin: 0,
             maxWidth: '250px',
-            lineHeight: 1.5,
+            lineHeight: 1.4,
           }}>
-            {tool.description}
+            {tool.shortDescription}
           </p>
         </div>
       </Link>
@@ -240,28 +259,50 @@ export class HomePage extends Component<{}, HomePageState> {
               </svg>
             </div>
 
-            {/* Title - Tulzo */}
-            <h1 style={{
-              fontSize: 'clamp(4rem, 12vw, 7rem)',
+            {/* Brand - Tulzo */}
+            <div style={{
+              fontSize: 'clamp(2.5rem, 8vw, 4rem)',
               fontWeight: 900,
               background: 'linear-gradient(135deg, #fff 0%, #a78bfa 50%, #f472b6 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              marginBottom: '1rem',
+              marginBottom: '1.5rem',
               letterSpacing: '0.1em',
             }}>
               TULZO
+            </div>
+
+            {/* H1 - Main headline */}
+            <h1 style={{
+              fontSize: 'clamp(1.8rem, 5vw, 3rem)',
+              fontWeight: 700,
+              color: '#fff',
+              margin: '0 0 1rem 0',
+              lineHeight: 1.2,
+            }}>
+              Handy Tools for Everyday Tasks
             </h1>
 
-            {/* Motto */}
+            {/* Sub-headline */}
             <p style={{
-              fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
-              color: 'rgba(255, 255, 255, 0.95)',
-              fontWeight: 600,
-              fontStyle: 'italic',
-              margin: '0 auto 3rem',
+              fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)',
+              color: 'rgba(255, 255, 255, 0.9)',
+              fontWeight: 400,
+              margin: '0 auto 1.5rem',
+              maxWidth: '600px',
+              lineHeight: 1.5,
             }}>
-              Tools for your day.
+              Fast, free utilities for health, money, time, and simple decisions — all in one place.
+            </p>
+
+            {/* Micro-line */}
+            <p style={{
+              fontSize: 'clamp(0.85rem, 2vw, 1rem)',
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontWeight: 500,
+              margin: '0 auto 2rem',
+            }}>
+              No sign-ups • Instant results • Works on any device
             </p>
           </View>
 
@@ -270,27 +311,70 @@ export class HomePage extends Component<{}, HomePageState> {
             <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
           </View>
 
-          {/* Tools Grid */}
+          {/* Tools Grid - Grouped by Category */}
           <View marginTop="size-600" marginBottom="size-600">
-            <Heading level={2} UNSAFE_style={{
-              textAlign: 'center',
-              color: '#fff',
-              marginBottom: '3rem',
-              fontSize: '1.8rem',
-              fontWeight: 600,
-              opacity: 0.9,
-            }}>
-              Your day to day tools
-            </Heading>
+            {getCategoryOrder().map((category) => {
+              const toolsInCategory = getToolsByCategory()[category];
+              if (toolsInCategory.length === 0) return null;
 
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '2rem',
-              padding: '0 1rem',
+              return (
+                <div key={category} style={{ marginBottom: '3rem' }}>
+                  {/* Category Header */}
+                  <h2 style={{
+                    fontSize: '1.4rem',
+                    fontWeight: 600,
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    marginBottom: '1.5rem',
+                    paddingLeft: '1rem',
+                    borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
+                  }}>
+                    {CATEGORY_LABELS[category]}
+                  </h2>
+
+                  {/* Tools in this category */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: '1.5rem',
+                    padding: '0 1rem',
+                  }}>
+                    {toolsInCategory.map((tool, index) => this.renderToolCard(tool, index))}
+                  </div>
+                </div>
+              );
+            })}
+          </View>
+
+          {/* About Tulzo - SEO Context Block */}
+          <View UNSAFE_style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: '16px',
+            padding: '2rem',
+            marginBottom: '2rem',
+            maxWidth: '800px',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            <h2 style={{
+              fontSize: '1.3rem',
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.9)',
+              marginBottom: '1rem',
             }}>
-              {TOOLS.map((tool, index) => this.renderToolCard(tool, index))}
-            </div>
+              About Tulzo
+            </h2>
+            <p style={{
+              fontSize: '1rem',
+              color: 'rgba(255, 255, 255, 0.7)',
+              lineHeight: 1.7,
+              margin: 0,
+            }}>
+              Tulzo is a collection of fast, free handy tools designed for everyday tasks. Whether you're planning
+              weight loss goals, tracking your budget, finding what day a date falls on, counting clicks or reps,
+              generating random numbers, or checking zodiac compatibility — we've got you covered. Each tool is
+              built to be simple, instant, and accessible on any device. No accounts, no sign-ups, no hassle.
+              Just open and use. We believe useful tools should be free and easy to access for everyone.
+            </p>
           </View>
 
           {/* Bottom Ad - Home Footer */}
