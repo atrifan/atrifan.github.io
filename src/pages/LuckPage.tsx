@@ -201,6 +201,13 @@ export class LuckPage extends Component<{}, LuckPageState> {
             </button>
           </View>
 
+          {/* Results Ad - between form and results */}
+          {result !== null && (
+            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+              <AdBanner slot={ADS_CONFIG.slots.luckResults} format="horizontal" />
+            </View>
+          )}
+
           {/* Result Display */}
           {result !== null && (
             <View id="luck-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
@@ -209,12 +216,6 @@ export class LuckPage extends Component<{}, LuckPageState> {
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0' }}>
                 Range: 1 - {displayMax.toLocaleString()} • Held for {(holdDuration / 1000).toFixed(2)}s
               </p>
-            </View>
-          )}
-
-          {result !== null && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
-              <AdBanner slot={ADS_CONFIG.slots.luckResults} format="horizontal" />
             </View>
           )}
 

@@ -107,11 +107,15 @@ export class CutPage extends Component<{}, CutPageState> {
             <WeightForm onSubmit={this.handleFormSubmit} />
           </View>
 
+          {/* Results Ad - between form and results */}
+          {plan && (
+            <AdBanner slot={ADS_CONFIG.slots.cutResults} format="horizontal" />
+          )}
+
           {/* Results Section */}
           {plan && (
             <View id="results">
               <ResultsDisplay plan={plan} />
-              <AdBanner slot={ADS_CONFIG.slots.cutResults} format="horizontal" />
             </View>
           )}
 

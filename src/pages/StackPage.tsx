@@ -125,6 +125,13 @@ export class StackPage extends Component<{}, StackPageState> {
               <BudgetForm onSubmit={this.handleFormSubmit} />
             </View>
 
+            {/* Results Ad - between form and results */}
+            {plan && (
+              <View UNSAFE_style={{ marginTop: '1.5rem' }}>
+                <AdBanner slot={ADS_CONFIG.slots.stackResults} format="horizontal" />
+              </View>
+            )}
+
             {/* Results */}
             {plan && (
               <View id="stack-results" UNSAFE_style={{ marginTop: '1.5rem' }}>
@@ -133,7 +140,6 @@ export class StackPage extends Component<{}, StackPageState> {
                   currency={currency}
                   onReset={this.handleReset}
                 />
-                <AdBanner slot={ADS_CONFIG.slots.stackResults} format="horizontal" />
               </View>
             )}
           </View>
