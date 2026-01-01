@@ -4,6 +4,7 @@ import { View, Heading } from '@adobe/react-spectrum';
 import { TOOLS, ToolConfig } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
+import { CutIcon } from '../components/CutIcon';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -117,9 +118,13 @@ export class HomePage extends Component<{}, HomePageState> {
           }} />
 
           {/* Icon */}
-          <span className="big-icon animate-float" style={{ animationDelay: `${delay}s` }}>
-            {tool.icon}
-          </span>
+          <div className="animate-float" style={{ animationDelay: `${delay}s` }}>
+            {tool.id === 'cut' ? (
+              <CutIcon size={120} />
+            ) : (
+              <span className="big-icon">{tool.icon}</span>
+            )}
+          </div>
 
           {/* Name */}
           <h2 style={{

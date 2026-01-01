@@ -5,6 +5,7 @@ import { WeightForm } from '../components/WeightForm';
 import { ResultsDisplay } from '../components/ResultsDisplay';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { CutIcon } from '../components/CutIcon';
 import { WeightCalculator } from '../utils/WeightCalculator';
 import { UserInput, WeightLossPlan } from '../types';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -64,38 +65,7 @@ export class CutPage extends Component<{}, CutPageState> {
           {/* Hero Header */}
           <View UNSAFE_style={{ textAlign: 'center', marginBottom: '3rem' }}>
             <div className="animate-float" style={{ marginBottom: '1.5rem' }}>
-              <svg
-                width="120"
-                height="120"
-                viewBox="0 0 120 120"
-                style={{ filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))' }}
-              >
-                <defs>
-                  <linearGradient id="cutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#667eea"/>
-                    <stop offset="50%" stopColor="#764ba2"/>
-                    <stop offset="100%" stopColor="#f472b6"/>
-                  </linearGradient>
-                  <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#4ade80"/>
-                    <stop offset="100%" stopColor="#22c55e"/>
-                  </linearGradient>
-                </defs>
-                {/* Background circle */}
-                <circle cx="60" cy="60" r="56" fill="url(#cutGradient)"/>
-                {/* Scale base */}
-                <rect x="30" y="75" width="60" height="8" rx="4" fill="#fff" opacity="0.9"/>
-                {/* Scale platform */}
-                <ellipse cx="60" cy="70" rx="25" ry="6" fill="#fff" opacity="0.8"/>
-                {/* Body silhouette (before - larger) */}
-                <ellipse cx="45" cy="50" rx="12" ry="18" fill="#fff" opacity="0.4"/>
-                <circle cx="45" cy="30" r="8" fill="#fff" opacity="0.4"/>
-                {/* Arrow pointing right */}
-                <path d="M55 45 L65 45 L65 40 L75 50 L65 60 L65 55 L55 55 Z" fill="url(#arrowGradient)"/>
-                {/* Body silhouette (after - slimmer) */}
-                <ellipse cx="85" cy="50" rx="8" ry="18" fill="#fff" opacity="0.95"/>
-                <circle cx="85" cy="30" r="7" fill="#fff" opacity="0.95"/>
-              </svg>
+              <CutIcon size={160} />
             </div>
 
             <h1 style={{

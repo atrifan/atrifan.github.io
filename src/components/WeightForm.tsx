@@ -102,17 +102,8 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
   }
 
   private detectUnitSystem(): UnitSystem {
-    try {
-      // Get user's locale
-      const locale = navigator.language || 'en-US';
-      // US, UK (partially), Liberia, Myanmar use imperial
-      const imperialCountries = ['en-US', 'en-LR', 'my-MM'];
-      return imperialCountries.some(c => locale.startsWith(c.split('-')[0]) && locale.includes(c.split('-')[1] || ''))
-        ? 'imperial'
-        : 'metric';
-    } catch {
-      return 'metric';
-    }
+    // Default to metric system
+    return 'metric';
   }
 
   // Convert feet/inches to cm

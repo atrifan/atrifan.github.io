@@ -19,10 +19,10 @@ export const TOOLS: ToolConfig[] = [
     id: 'cut',
     name: 'CUT',
     description: 'Weight Loss Calculator & Fasting Plan Generator',
-    icon: '⚖️',
+    icon: '📉',
     path: '/cut',
     color: '#667eea',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
     available: true,
   },
   // Coming soon placeholders - blurred on homepage
