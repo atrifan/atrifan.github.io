@@ -99,7 +99,7 @@ export class TipPage extends Component<{}, TipPageState> {
               ))}
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem' }}>
               <label style={{ color: '#fff', display: 'block', marginBottom: '0.5rem' }}>Bill Amount</label>
               <input type="number" value={billAmount} onChange={(e) => this.setState({ billAmount: e.target.value })}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', textAlign: 'center', marginBottom: '1rem', boxSizing: 'border-box' }} />
@@ -143,26 +143,23 @@ export class TipPage extends Component<{}, TipPageState> {
                   )}
                 </>
               )}
+
+              {/* Results directly under input */}
+              <div ref={this.resultRef} id="tip-results" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                  <div><div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Tip Amount</div><div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>${tipAmount.toFixed(2)}</div></div>
+                  <div><div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Total</div><div style={{ color: '#f59e0b', fontSize: '1.5rem', fontWeight: 700 }}>${total.toFixed(2)}</div></div>
+                </div>
+                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#fff' }}>Split by:</span>
+                  <select value={splitCount} onChange={(e) => this.setState({ splitCount: parseInt(e.target.value) })} style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(30,30,50,0.9)', color: '#fff', cursor: 'pointer' }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  {splitCount > 1 && <span style={{ color: '#f59e0b', fontWeight: 700 }}>${perPerson.toFixed(2)} each</span>}
+                </div>
+              </div>
             </div>
           </View>
-
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
-            <AdBanner slot={ADS_CONFIG.slots.tipResults} format="horizontal" />
-          </View>
-
-          <div ref={this.resultRef} id="tip-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-              <div><div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Tip Amount</div><div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>${tipAmount.toFixed(2)}</div></div>
-              <div><div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Total</div><div style={{ color: '#f59e0b', fontSize: '1.5rem', fontWeight: 700 }}>${total.toFixed(2)}</div></div>
-            </div>
-            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <span style={{ color: '#fff' }}>Split by:</span>
-              <select value={splitCount} onChange={(e) => this.setState({ splitCount: parseInt(e.target.value) })} style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(30,30,50,0.9)', color: '#fff', cursor: 'pointer' }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              {splitCount > 1 && <span style={{ color: '#f59e0b', fontWeight: 700 }}>${perPerson.toFixed(2)} each</span>}
-            </div>
-          </div>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.tipFooter} format="horizontal" />
