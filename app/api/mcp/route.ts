@@ -19,7 +19,15 @@ interface MCPResponse {
   error?: { code: number; message: string; data?: unknown };
 }
 
-// Tool definitions for MCP
+// Standard annotations for read-only tools (all our calculators are read-only)
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+
+// Tool definitions for MCP with inputSchema, outputSchema, and annotations
 const TOOLS = [
   {
     name: 'calculate_bmi',
@@ -32,6 +40,16 @@ const TOOLS = [
       },
       required: ['weight', 'height'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        bmi: { type: 'number', description: 'Calculated BMI value' },
+        category: { type: 'string', enum: ['Underweight', 'Normal', 'Overweight', 'Obese'], description: 'BMI category' },
+        weight: { type: 'number', description: 'Input weight in kg' },
+        height: { type: 'number', description: 'Input height in cm' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_ideal_weight',
@@ -44,10 +62,20 @@ const TOOLS = [
       },
       required: ['height', 'sex'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        idealWeight: { type: 'number', description: 'Ideal weight in kg' },
+        formula: { type: 'string', description: 'Formula used (Devine)' },
+        height: { type: 'number' },
+        gender: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_bmr',
-    description: 'Calculate Basal Metabolic Rate using Mifflin-St Jeor equation',
+    description: 'Calculate Basal Metabolic Rate using Mifflin-St Jeor equation and TDEE',
     inputSchema: {
       type: 'object',
       properties: {
@@ -55,9 +83,19 @@ const TOOLS = [
         height: { type: 'number', description: 'Height in centimeters' },
         age: { type: 'number', description: 'Age in years' },
         sex: { type: 'string', enum: ['male', 'female', 'other'], description: 'Biological sex' },
+        activityLevel: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'active', 'veryActive'], description: 'Activity level (default: sedentary)' },
       },
       required: ['weight', 'height', 'age', 'sex'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        bmr: { type: 'number', description: 'Basal Metabolic Rate in calories/day' },
+        tdee: { type: 'number', description: 'Total Daily Energy Expenditure' },
+        activityLevel: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'generate_weight_loss_plan',
@@ -70,10 +108,24 @@ const TOOLS = [
         height: { type: 'number', description: 'Height in centimeters' },
         currentWeight: { type: 'number', description: 'Current weight in kg' },
         desiredWeight: { type: 'number', description: 'Target weight in kg' },
-        timeToWeight: { type: 'number', description: 'Weeks to reach goal (optional)' },
+        timeToWeight: { type: 'number', description: 'Weeks to reach goal (optional, auto-calculated if not provided)' },
+        activityLevel: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'active', 'veryActive'], description: 'Activity level' },
       },
       required: ['age', 'sex', 'height', 'currentWeight', 'desiredWeight'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        currentWeight: { type: 'number' },
+        targetWeight: { type: 'number' },
+        weeksToGoal: { type: 'number' },
+        dailyCalories: { type: 'number' },
+        weeklyWeightLoss: { type: 'number' },
+        bmr: { type: 'number' },
+        tdee: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_savings_plan',
@@ -87,14 +139,25 @@ const TOOLS = [
         currentSavings: { type: 'number', description: 'Current savings amount' },
         savingsGoal: { type: 'number', description: 'Target savings amount' },
         intensity: { type: 'string', enum: ['light', 'medium', 'aggressive'], description: 'Savings intensity' },
-        currency: { type: 'string', description: 'Currency code (EUR, USD, etc.)' },
+        currency: { type: 'string', enum: ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF'], description: 'Currency code' },
       },
       required: ['monthlyIncome', 'monthlyTaxes', 'monthlyFixedExpenses', 'currentSavings', 'savingsGoal', 'intensity', 'currency'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        monthlySavings: { type: 'number' },
+        monthsToGoal: { type: 'number' },
+        totalSaved: { type: 'number' },
+        disposableIncome: { type: 'number' },
+        savingsRate: { type: 'number', description: 'Percentage of income saved' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_date_info',
-    description: 'Get information about a specific date (day of week, leap year, etc.)',
+    description: 'Get information about a specific date (day of week, leap year, week number, etc.)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -102,10 +165,23 @@ const TOOLS = [
       },
       required: ['date'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        formatted: { type: 'string' },
+        dayOfWeek: { type: 'string' },
+        dayOfYear: { type: 'number' },
+        weekNumber: { type: 'number' },
+        quarter: { type: 'number' },
+        isLeapYear: { type: 'boolean' },
+        daysInMonth: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'days_between_dates',
-    description: 'Calculate the number of days between two dates',
+    description: 'Calculate the number of days, weeks, and months between two dates',
     inputSchema: {
       type: 'object',
       properties: {
@@ -114,65 +190,125 @@ const TOOLS = [
       },
       required: ['date1', 'date2'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'number' },
+        weeks: { type: 'number' },
+        months: { type: 'number' },
+        years: { type: 'number' },
+        businessDays: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'random_number',
-    description: 'Generate a random number between min and max (inclusive)',
+    description: 'Generate a random integer between min and max (inclusive)',
     inputSchema: {
       type: 'object',
       properties: {
-        min: { type: 'number', description: 'Minimum value' },
-        max: { type: 'number', description: 'Maximum value' },
+        min: { type: 'integer', description: 'Minimum value (inclusive)' },
+        max: { type: 'integer', description: 'Maximum value (inclusive)' },
       },
       required: ['min', 'max'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'integer' },
+        min: { type: 'integer' },
+        max: { type: 'integer' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'coin_flip',
     description: 'Flip a coin and get heads or tails',
     inputSchema: { type: 'object', properties: {} },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'string', enum: ['heads', 'tails'] },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'pick_random',
-    description: 'Pick a random item from a list',
+    description: 'Pick a random item from a list of options',
     inputSchema: {
       type: 'object',
       properties: {
-        items: { type: 'array', items: { type: 'string' }, description: 'List of items to choose from' },
+        items: { type: 'array', items: { type: 'string' }, description: 'List of items to choose from', minItems: 2 },
       },
       required: ['items'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        selected: { type: 'string', description: 'The randomly selected item' },
+        totalItems: { type: 'number' },
+        index: { type: 'number', description: 'Index of selected item (0-based)' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_tip',
-    description: 'Calculate tip amount and total bill',
+    description: 'Calculate tip amount, total bill, and per-person split. Can also suggest tip based on service quality.',
     inputSchema: {
       type: 'object',
       properties: {
         billAmount: { type: 'number', description: 'Bill amount before tip' },
-        tipPercent: { type: 'number', description: 'Tip percentage (e.g., 15, 18, 20)' },
-        splitWays: { type: 'number', description: 'Number of people to split the bill (optional)' },
+        tipPercent: { type: 'number', description: 'Tip percentage (e.g., 15, 18, 20). If not provided, use suggestTip mode.' },
+        splitWays: { type: 'integer', description: 'Number of people to split the bill (default: 1)', minimum: 1, maximum: 20 },
+        serviceQuality: { type: 'integer', description: 'Service quality 1-5 for tip suggestion (1=terrible, 5=amazing)', minimum: 1, maximum: 5 },
+        mood: { type: 'integer', description: 'Your mood 1-5 for tip suggestion (1=awful, 5=great)', minimum: 1, maximum: 5 },
+        budget: { type: 'integer', description: 'Budget situation 1-5 for tip suggestion (1=very tight, 5=generous)', minimum: 1, maximum: 5 },
       },
-      required: ['billAmount', 'tipPercent'],
+      required: ['billAmount'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        billAmount: { type: 'number' },
+        tipPercent: { type: 'number' },
+        tipAmount: { type: 'number' },
+        total: { type: 'number' },
+        splitWays: { type: 'number' },
+        perPerson: { type: 'number' },
+        suggested: { type: 'boolean', description: 'Whether tip was auto-suggested' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'calculate_percentage',
-    description: 'Calculate percentage of a number or percentage change',
+    description: 'Calculate percentage of a number, percentage change, or increase/decrease by percentage',
     inputSchema: {
       type: 'object',
       properties: {
-        operation: { type: 'string', enum: ['of', 'change', 'increase', 'decrease'], description: 'Type of calculation' },
+        operation: { type: 'string', enum: ['of', 'change', 'increase', 'decrease'], description: 'of: X% of Y, change: % change from X to Y, increase/decrease: X increased/decreased by Y%' },
         value: { type: 'number', description: 'The main value' },
-        percent: { type: 'number', description: 'The percentage' },
+        percent: { type: 'number', description: 'The percentage (for of/increase/decrease) or second value (for change)' },
       },
       required: ['operation', 'value', 'percent'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'number' },
+        operation: { type: 'string' },
+        formula: { type: 'string', description: 'Human-readable formula used' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // AGE - Calculate age from birth date
   {
     name: 'calculate_age',
-    description: 'Calculate exact age from birth date including years, months, days, and days until next birthday',
+    description: 'Calculate exact age from birth date including years, months, days, total days lived, and days until next birthday',
     inputSchema: {
       type: 'object',
       properties: {
@@ -180,36 +316,72 @@ const TOOLS = [
       },
       required: ['birthDate'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        years: { type: 'number' },
+        months: { type: 'number' },
+        days: { type: 'number' },
+        totalDays: { type: 'number', description: 'Total days lived' },
+        totalWeeks: { type: 'number' },
+        totalMonths: { type: 'number' },
+        daysUntilNextBirthday: { type: 'number' },
+        nextBirthdayAge: { type: 'number' },
+        zodiacSign: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // CONVERT - Unit conversion
   {
     name: 'convert_units',
-    description: 'Convert between units (weight, length, temperature)',
+    description: 'Convert between units of weight, length, or temperature',
     inputSchema: {
       type: 'object',
       properties: {
         value: { type: 'number', description: 'Value to convert' },
-        from: { type: 'string', description: 'Source unit (kg, lbs, oz, cm, in, m, ft, km, mi, C, F, K)' },
-        to: { type: 'string', description: 'Target unit' },
+        from: { type: 'string', enum: ['kg', 'lbs', 'oz', 'g', 'cm', 'in', 'm', 'ft', 'km', 'mi', 'C', 'F', 'K'], description: 'Source unit' },
+        to: { type: 'string', enum: ['kg', 'lbs', 'oz', 'g', 'cm', 'in', 'm', 'ft', 'km', 'mi', 'C', 'F', 'K'], description: 'Target unit' },
       },
       required: ['value', 'from', 'to'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'number' },
+        fromValue: { type: 'number' },
+        fromUnit: { type: 'string' },
+        toUnit: { type: 'string' },
+        formula: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // CYCLE - Menstrual cycle calculator
   {
     name: 'calculate_cycle',
-    description: 'Calculate menstrual cycle predictions including next period, fertile window, and ovulation date',
+    description: 'Calculate menstrual cycle predictions including next period, fertile window, ovulation date, and current phase',
     inputSchema: {
       type: 'object',
       properties: {
         lastPeriodDate: { type: 'string', description: 'Last period start date in YYYY-MM-DD format' },
-        cycleLength: { type: 'number', description: 'Average cycle length in days (default: 28)' },
-        periodLength: { type: 'number', description: 'Average period length in days (default: 5)' },
+        cycleLength: { type: 'integer', description: 'Average cycle length in days (default: 28)', minimum: 21, maximum: 35 },
+        periodLength: { type: 'integer', description: 'Average period length in days (default: 5)', minimum: 2, maximum: 10 },
       },
       required: ['lastPeriodDate'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        nextPeriod: { type: 'string', description: 'Next period start date' },
+        ovulationDate: { type: 'string' },
+        fertileStart: { type: 'string' },
+        fertileEnd: { type: 'string' },
+        currentDay: { type: 'number', description: 'Current day of cycle' },
+        phase: { type: 'string', enum: ['menstrual', 'follicular', 'ovulation', 'luteal'] },
+        daysUntilNextPeriod: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // DAYS - Countdown calculator
   {
     name: 'calculate_countdown',
     description: 'Calculate days, weeks, months until or since a date',
@@ -217,41 +389,72 @@ const TOOLS = [
       type: 'object',
       properties: {
         eventDate: { type: 'string', description: 'Event date in YYYY-MM-DD format' },
-        eventName: { type: 'string', description: 'Name of the event (optional)' },
+        eventName: { type: 'string', description: 'Name of the event (optional, default: "Event")' },
       },
       required: ['eventDate'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        eventName: { type: 'string' },
+        days: { type: 'number', description: 'Days until/since (negative if past)' },
+        weeks: { type: 'number' },
+        months: { type: 'number' },
+        isPast: { type: 'boolean' },
+        isToday: { type: 'boolean' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // DECIDE - Decision maker
   {
     name: 'make_decision',
     description: 'Make a random decision - yes/no or pick from custom options',
     inputSchema: {
       type: 'object',
       properties: {
-        mode: { type: 'string', enum: ['yesNo', 'custom'], description: 'Decision mode' },
-        options: { type: 'array', items: { type: 'string' }, description: 'Custom options (required if mode is custom)' },
+        mode: { type: 'string', enum: ['yesNo', 'custom'], description: 'yesNo: random yes/no, custom: pick from provided options' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Custom options (required if mode is custom)', minItems: 2 },
+        question: { type: 'string', description: 'The question being decided (optional)' },
       },
       required: ['mode'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        decision: { type: 'string' },
+        mode: { type: 'string' },
+        options: { type: 'array', items: { type: 'string' } },
+        question: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // MATCH - Zodiac compatibility
   {
     name: 'zodiac_compatibility',
-    description: 'Calculate zodiac sign compatibility between two people',
+    description: 'Calculate zodiac sign compatibility between two people with detailed analysis',
     inputSchema: {
       type: 'object',
       properties: {
-        person1: { type: 'string', description: 'First person zodiac sign or birth date (YYYY-MM-DD)' },
-        person2: { type: 'string', description: 'Second person zodiac sign or birth date (YYYY-MM-DD)' },
+        person1: { type: 'string', description: 'First person: zodiac sign name (e.g., "aries") or birth date (YYYY-MM-DD)' },
+        person2: { type: 'string', description: 'Second person: zodiac sign name or birth date' },
       },
       required: ['person1', 'person2'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        person1: { type: 'object', properties: { sign: { type: 'string' }, name: { type: 'string' }, symbol: { type: 'string' }, element: { type: 'string' } } },
+        person2: { type: 'object', properties: { sign: { type: 'string' }, name: { type: 'string' }, symbol: { type: 'string' }, element: { type: 'string' } } },
+        compatibility: { type: 'number', description: 'Compatibility percentage 0-100' },
+        level: { type: 'string', enum: ['Soulmates', 'Excellent', 'Good', 'Moderate', 'Challenging'] },
+        description: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // MATCH - Get zodiac sign from date
   {
     name: 'get_zodiac_sign',
-    description: 'Get zodiac sign from a birth date',
+    description: 'Get zodiac sign details from a birth date',
     inputSchema: {
       type: 'object',
       properties: {
@@ -259,166 +462,290 @@ const TOOLS = [
       },
       required: ['birthDate'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        sign: { type: 'string' },
+        name: { type: 'string' },
+        symbol: { type: 'string' },
+        element: { type: 'string', enum: ['Fire', 'Earth', 'Air', 'Water'] },
+        dates: { type: 'string', description: 'Date range for this sign' },
+        traits: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // NAMES - Generate random names
   {
     name: 'generate_names',
-    description: 'Generate random names (human first names, full names, fantasy names, or pet names)',
+    description: 'Generate random names: human first names, full names, fantasy names, or pet names',
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['first', 'full', 'fantasy', 'pet'], description: 'Type of name to generate' },
-        gender: { type: 'string', enum: ['male', 'female', 'any'], description: 'Gender preference' },
-        petType: { type: 'string', enum: ['dog', 'cat'], description: 'Pet type (only for pet names)' },
-        count: { type: 'number', description: 'Number of names to generate (default: 5)' },
+        category: { type: 'string', enum: ['human', 'pet'], description: 'Name category' },
+        type: { type: 'string', enum: ['first', 'full', 'fantasy'], description: 'Type of human name (for category=human)' },
+        petType: { type: 'string', enum: ['dog', 'cat', 'other'], description: 'Pet type (for category=pet)' },
+        gender: { type: 'string', enum: ['male', 'female', 'any'], description: 'Gender preference (default: any)' },
+        count: { type: 'integer', description: 'Number of names to generate (default: 5)', minimum: 1, maximum: 20 },
       },
-      required: ['type'],
+      required: ['category'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        names: { type: 'array', items: { type: 'string' } },
+        category: { type: 'string' },
+        type: { type: 'string' },
+        gender: { type: 'string' },
+        count: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // RISK - Trading position size calculator
   {
     name: 'calculate_position_size',
-    description: 'Calculate trading position size based on risk management',
+    description: 'Calculate trading position size based on risk management. Supports multiple calculation modes.',
     inputSchema: {
       type: 'object',
       properties: {
+        mode: { type: 'string', enum: ['riskAndSL', 'riskOnly'], description: 'riskAndSL: calculate quantity from risk% and stop loss, riskOnly: suggest multiple SL/quantity combinations' },
         capital: { type: 'number', description: 'Total trading capital' },
         entryPrice: { type: 'number', description: 'Entry price' },
-        stopLossPrice: { type: 'number', description: 'Stop loss price' },
-        riskPercent: { type: 'number', description: 'Risk percentage of capital (e.g., 1 for 1%)' },
+        stopLossPrice: { type: 'number', description: 'Stop loss price (required for riskAndSL mode)' },
+        riskPercent: { type: 'number', description: 'Risk percentage of capital (e.g., 1 for 1%)', minimum: 0.1, maximum: 10 },
         direction: { type: 'string', enum: ['long', 'short'], description: 'Trade direction' },
       },
-      required: ['capital', 'entryPrice', 'stopLossPrice', 'riskPercent', 'direction'],
+      required: ['capital', 'entryPrice', 'riskPercent', 'direction'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        positionSize: { type: 'number', description: 'Position size in currency' },
+        shares: { type: 'number', description: 'Number of shares/units' },
+        riskAmount: { type: 'number', description: 'Amount at risk in currency' },
+        riskPercent: { type: 'number' },
+        stopLoss: { type: 'number' },
+        stopLossPercent: { type: 'number' },
+        takeProfits: { type: 'array', items: { type: 'object', properties: { ratio: { type: 'string' }, price: { type: 'number' }, profit: { type: 'number' } } } },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // SLEEP - Sleep cycle calculator
   {
     name: 'calculate_sleep_times',
-    description: 'Calculate optimal sleep/wake times based on sleep cycles',
+    description: 'Calculate optimal sleep/wake times based on 90-minute sleep cycles',
     inputSchema: {
       type: 'object',
       properties: {
-        mode: { type: 'string', enum: ['wakeAt', 'sleepAt', 'sleepNow'], description: 'Calculation mode' },
-        time: { type: 'string', description: 'Time in HH:MM format (for wakeAt or sleepAt modes)' },
-        ageGroup: { type: 'string', enum: ['adult', 'teen', 'child', 'toddler', 'infant'], description: 'Age group (default: adult)' },
+        mode: { type: 'string', enum: ['wakeAt', 'sleepAt', 'sleepNow'], description: 'wakeAt: when to sleep to wake at X, sleepAt: when to wake if sleeping at X, sleepNow: when to wake if sleeping now' },
+        time: { type: 'string', description: 'Time in HH:MM format (required for wakeAt and sleepAt modes)' },
+        ageGroup: { type: 'string', enum: ['adult', 'teen', 'child', 'toddler', 'infant'], description: 'Age group affects recommended sleep duration (default: adult)' },
       },
       required: ['mode'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        times: { type: 'array', items: { type: 'object', properties: { time: { type: 'string' }, cycles: { type: 'number' }, hours: { type: 'number' }, quality: { type: 'string' } } } },
+        recommendation: { type: 'string' },
+        ageGroup: { type: 'string' },
+        fallAsleepMinutes: { type: 'number', description: 'Minutes assumed to fall asleep' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // SPIN - Wheel spinner
   {
     name: 'spin_wheel',
     description: 'Spin a wheel with custom options and get a random result',
     inputSchema: {
       type: 'object',
       properties: {
-        options: { type: 'array', items: { type: 'string' }, description: 'Options on the wheel' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Options on the wheel', minItems: 2 },
       },
       required: ['options'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'string' },
+        index: { type: 'number' },
+        totalOptions: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // ZONE - Timezone converter
   {
     name: 'convert_timezone',
     description: 'Convert time between timezones',
     inputSchema: {
       type: 'object',
       properties: {
-        time: { type: 'string', description: 'Time in HH:MM format' },
-        fromTimezone: { type: 'string', description: 'Source timezone (e.g., UTC, UTC+2, America/New_York)' },
-        toTimezones: { type: 'array', items: { type: 'string' }, description: 'Target timezones' },
+        time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
+        fromTimezone: { type: 'string', description: 'Source timezone (e.g., UTC, UTC+2, UTC-5, America/New_York, Europe/London)' },
+        toTimezones: { type: 'array', items: { type: 'string' }, description: 'Target timezones to convert to' },
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (optional, for DST accuracy)' },
       },
       required: ['time', 'fromTimezone', 'toTimezones'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        originalTime: { type: 'string' },
+        fromTimezone: { type: 'string' },
+        conversions: { type: 'array', items: { type: 'object', properties: { timezone: { type: 'string' }, time: { type: 'string' }, date: { type: 'string' }, offset: { type: 'string' } } } },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // UNIQUE - UUID/ID generator
   {
     name: 'generate_unique_id',
-    description: 'Generate unique identifiers (UUID, short ID, numeric ID)',
+    description: 'Generate unique identifiers (UUID v4, short ID, numeric ID, or alphanumeric)',
     inputSchema: {
       type: 'object',
       properties: {
         type: { type: 'string', enum: ['uuid', 'short', 'numeric', 'alphanumeric'], description: 'Type of ID to generate' },
-        count: { type: 'number', description: 'Number of IDs to generate (default: 1)' },
-        length: { type: 'number', description: 'Length for short/numeric/alphanumeric IDs (default: 8)' },
+        count: { type: 'integer', description: 'Number of IDs to generate (default: 1)', minimum: 1, maximum: 100 },
+        length: { type: 'integer', description: 'Length for short/numeric/alphanumeric IDs (default: 8)', minimum: 4, maximum: 32 },
+        prefix: { type: 'string', description: 'Optional prefix to add to each ID' },
       },
       required: ['type'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'string' } },
+        type: { type: 'string' },
+        count: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // LUCK - Random number with optional max
   {
     name: 'lucky_number',
     description: 'Generate a lucky random number',
     inputSchema: {
       type: 'object',
       properties: {
-        max: { type: 'number', description: 'Maximum value (default: 2147483647)' },
+        max: { type: 'integer', description: 'Maximum value (default: 2147483647)', minimum: 1 },
+        min: { type: 'integer', description: 'Minimum value (default: 1)', minimum: 0 },
       },
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        luckyNumber: { type: 'integer' },
+        max: { type: 'integer' },
+        min: { type: 'integer' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // DICE - Roll dice
   {
     name: 'roll_dice',
-    description: 'Roll dice with customizable sides and count',
+    description: 'Roll dice with customizable number of sides and dice count',
     inputSchema: {
       type: 'object',
       properties: {
-        sides: { type: 'number', description: 'Number of sides on each die (default: 6)' },
-        count: { type: 'number', description: 'Number of dice to roll (default: 1)' },
+        sides: { type: 'integer', enum: [4, 6, 8, 10, 12, 20, 100], description: 'Number of sides on each die (default: 6)' },
+        count: { type: 'integer', description: 'Number of dice to roll (default: 1)', minimum: 1, maximum: 10 },
       },
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        rolls: { type: 'array', items: { type: 'integer' }, description: 'Individual roll results' },
+        total: { type: 'integer', description: 'Sum of all rolls' },
+        sides: { type: 'integer' },
+        count: { type: 'integer' },
+        average: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // VIBE - Cat vs Dog personality check
   {
     name: 'vibe_check',
-    description: 'Determine if someone is more of a cat person or dog person based on personality traits. Provide answers to 10 questions.',
+    description: 'Determine if someone is more of a cat person or dog person based on 10 personality questions',
     inputSchema: {
       type: 'object',
       properties: {
         answers: {
           type: 'array',
           items: { type: 'string', enum: ['A', 'B'] },
-          description: 'Array of 10 answers (A=cat-leaning, B=dog-leaning) for questions about: 1) Saturday preference, 2) Meeting people, 3) Living space, 4) Stress handling, 5) Exercise, 6) Routines, 7) Communication, 8) Affection, 9) Sleep, 10) Conflict',
+          description: 'Array of 10 answers. A=cat-leaning, B=dog-leaning. Questions: 1) Saturday: A=cozy home, B=outdoor adventure, 2) Meeting people: A=small groups, B=big parties, 3) Space: A=quiet corner, B=open areas, 4) Stress: A=alone time, B=social support, 5) Exercise: A=gentle yoga, B=team sports, 6) Routines: A=flexible, B=structured, 7) Communication: A=subtle hints, B=direct, 8) Affection: A=on my terms, B=always welcome, 9) Sleep: A=naps anytime, B=regular schedule, 10) Conflict: A=avoid, B=address directly',
+          minItems: 10,
+          maxItems: 10,
         },
       },
       required: ['answers'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: { type: 'string', enum: ['cat', 'dog'] },
+        catScore: { type: 'number' },
+        dogScore: { type: 'number' },
+        percentage: { type: 'number', description: 'How strongly they lean (50-100%)' },
+        emoji: { type: 'string' },
+        description: { type: 'string' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // BRAIN - IQ test score calculator
   {
     name: 'calculate_iq_score',
     description: 'Calculate estimated IQ score based on correct answers to logic/pattern questions',
     inputSchema: {
       type: 'object',
       properties: {
-        correctAnswers: { type: 'number', description: 'Number of correct answers (out of 15)' },
-        totalQuestions: { type: 'number', description: 'Total questions answered (default: 15)' },
-        timeTakenSeconds: { type: 'number', description: 'Time taken in seconds (optional, affects score)' },
+        correctAnswers: { type: 'integer', description: 'Number of correct answers', minimum: 0, maximum: 15 },
+        totalQuestions: { type: 'integer', description: 'Total questions answered (default: 15)', minimum: 5, maximum: 50 },
+        timeTakenSeconds: { type: 'integer', description: 'Time taken in seconds (optional, faster = higher score)', minimum: 60 },
       },
       required: ['correctAnswers'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        iqScore: { type: 'integer' },
+        category: { type: 'string', enum: ['Genius', 'Gifted', 'Above Average', 'Average', 'Below Average'] },
+        percentile: { type: 'number', description: 'Percentile rank in population' },
+        rarity: { type: 'string', description: 'How rare this IQ is (e.g., "1 in 100")' },
+        accuracy: { type: 'number', description: 'Percentage of correct answers' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // UNIQUE/RANK - Calculate uniqueness based on physical traits
   {
     name: 'calculate_uniqueness',
     description: 'Calculate how unique/rare a person is based on their physical characteristics compared to world population',
     inputSchema: {
       type: 'object',
       properties: {
-        age: { type: 'number', description: 'Age in years' },
-        gender: { type: 'string', enum: ['male', 'female'], description: 'Gender' },
-        heightCm: { type: 'number', description: 'Height in centimeters' },
-        weightKg: { type: 'number', description: 'Weight in kilograms' },
-        eyeColor: { type: 'string', enum: ['brown', 'blue', 'hazel', 'green', 'gray', 'amber'], description: 'Eye color (optional)' },
-        hairColor: { type: 'string', enum: ['black', 'brown', 'blonde', 'red', 'gray', 'white'], description: 'Hair color (optional)' },
+        age: { type: 'integer', description: 'Age in years', minimum: 0, maximum: 120 },
+        gender: { type: 'string', enum: ['male', 'female'] },
+        heightCm: { type: 'number', description: 'Height in centimeters', minimum: 50, maximum: 250 },
+        weightKg: { type: 'number', description: 'Weight in kilograms', minimum: 20, maximum: 300 },
+        eyeColor: { type: 'string', enum: ['brown', 'blue', 'hazel', 'green', 'gray', 'amber'] },
+        hairColor: { type: 'string', enum: ['black', 'brown', 'blonde', 'red', 'gray', 'white'] },
+        handedness: { type: 'string', enum: ['right', 'left', 'ambidextrous'] },
+        bloodType: { type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
       },
       required: ['age', 'gender'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        uniquenessScore: { type: 'number', description: 'Uniqueness percentage 0-100' },
+        category: { type: 'string', enum: ['Extremely Rare', 'Very Rare', 'Rare', 'Uncommon', 'Common'] },
+        rarity: { type: 'string', description: 'e.g., "1 in 10,000"' },
+        estimatedPeopleWithTraits: { type: 'number' },
+        traitBreakdown: { type: 'object', description: 'Rarity of each individual trait' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
-  // WHEN - Extended date information
   {
     name: 'when_date_info',
-    description: 'Get comprehensive information about a date including day of week, week number, zodiac, holidays, and time breakdowns',
+    description: 'Get comprehensive information about a date including day of week, week number, zodiac, and time calculations from today',
     inputSchema: {
       type: 'object',
       properties: {
@@ -426,6 +753,26 @@ const TOOLS = [
       },
       required: ['date'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string' },
+        dayOfWeek: { type: 'string' },
+        dayOfYear: { type: 'number' },
+        weekNumber: { type: 'number' },
+        quarter: { type: 'number' },
+        isLeapYear: { type: 'boolean' },
+        zodiacSign: { type: 'string' },
+        daysFromToday: { type: 'number' },
+        isPast: { type: 'boolean' },
+        isFuture: { type: 'boolean' },
+        isToday: { type: 'boolean' },
+        totalHours: { type: 'number' },
+        totalMinutes: { type: 'number' },
+        weeks: { type: 'number' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
 ];
 
@@ -529,8 +876,21 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
     }
     case 'calculate_tip': {
       const bill = args.billAmount as number;
-      const tipPercent = args.tipPercent as number;
+      let tipPercent = args.tipPercent as number | undefined;
       const splitWays = (args.splitWays as number) || 1;
+      let suggested = false;
+
+      // If tipPercent not provided, calculate from serviceQuality, mood, budget
+      if (tipPercent === undefined || tipPercent === null) {
+        const serviceQuality = (args.serviceQuality as number) || 3;
+        const mood = (args.mood as number) || 3;
+        const budget = (args.budget as number) || 3;
+        // Calculate suggested tip: base 10% + adjustments
+        const avgScore = (serviceQuality + mood + budget) / 3;
+        tipPercent = Math.round(5 + avgScore * 4); // 9% to 25% range
+        suggested = true;
+      }
+
       const tipAmount = bill * (tipPercent / 100);
       const total = bill + tipAmount;
       const perPerson = total / splitWays;
@@ -541,6 +901,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         total: Math.round(total * 100) / 100,
         perPerson: Math.round(perPerson * 100) / 100,
         splitWays,
+        suggested,
       };
     }
     case 'calculate_percentage': {
