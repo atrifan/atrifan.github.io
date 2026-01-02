@@ -27,6 +27,7 @@ import { DecideIcon } from '../components/DecideIcon';
 import { RankIcon } from '../components/RankIcon';
 import { BrainIcon } from '../components/BrainIcon';
 import { VibeIcon } from '../components/VibeIcon';
+import { CycleIcon } from '../components/CycleIcon';
 import { WeatherTimeCard } from '../components/WeatherTimeCard';
 
 interface HomePageState {
@@ -60,6 +61,7 @@ export class HomePage extends Component<{}, HomePageState> {
       match: <MatchIcon size={size} />,
       sleep: <SleepIcon size={size} />,
       unique: <RankIcon size={size} />,
+      cycle: <CycleIcon size={size} />,
       age: <AgeIcon size={size} />,
       tip: <TipIcon size={size} />,
       percent: <PercentIcon size={size} />,

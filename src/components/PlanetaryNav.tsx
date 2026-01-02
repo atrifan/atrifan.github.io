@@ -22,6 +22,7 @@ import { DecideIcon } from './DecideIcon';
 import { RankIcon } from './RankIcon';
 import { BrainIcon } from './BrainIcon';
 import { VibeIcon } from './VibeIcon';
+import { CycleIcon } from './CycleIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -76,6 +77,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
       match: <MatchIcon size={size} />,
       sleep: <SleepIcon size={size} />,
       unique: <RankIcon size={size} />,
+      cycle: <CycleIcon size={size} />,
       age: <AgeIcon size={size} />,
       brain: <BrainIcon size={size} />,
       vibe: <VibeIcon size={size} />,

@@ -115,6 +115,11 @@ export const ADS_CONFIG = {
     vibeTop: '1730274161',
     vibeResults: '8087798954',
     vibeFooter: '1254797299',
+
+    // CYCLE page ads (Period & Fertility Calculator)
+    cycleTop: '7896227263',
+    cycleResults: '8705572595',
+    cycleFooter: '8952984604',
   },
 
   // Enable/disable ads (useful for development)

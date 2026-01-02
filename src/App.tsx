@@ -23,6 +23,7 @@ import { NamesPage } from './pages/NamesPage';
 import { RankPage as UniquePage } from './pages/RankPage';
 import { BrainPage } from './pages/BrainPage';
 import { VibePage } from './pages/VibePage';
+import { CyclePage } from './pages/CyclePage';
 
 /**
  * Main App Component with Routing
@@ -39,6 +40,7 @@ class App extends Component {
             <Route path="/cut" element={<CutPage />} />
             <Route path="/sleep" element={<SleepPage />} />
             <Route path="/unique" element={<UniquePage />} />
+            <Route path="/cycle" element={<CyclePage />} />
             <Route path="/age" element={<AgePage />} />
             {/* Money */}
             <Route path="/stack" element={<StackPage />} />
