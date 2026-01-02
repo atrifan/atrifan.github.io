@@ -30,6 +30,7 @@ import { VibeIcon } from '../components/VibeIcon';
 import { CycleIcon } from '../components/CycleIcon';
 import { RiskIcon } from '../components/RiskIcon';
 import { WeatherTimeCard } from '../components/WeatherTimeCard';
+import { Footer } from '../components/Footer';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -410,6 +411,8 @@ export class HomePage extends Component<{}, HomePageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
             <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
           </View>
+
+          <Footer />
         </View>
 
         {/* Planetary Navigation */}
