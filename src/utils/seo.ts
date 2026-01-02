@@ -12,9 +12,9 @@ export interface SEOConfig {
 
 export const SEO_DATA: Record<string, SEOConfig> = {
   home: {
-    title: 'Tulzo - Free Online Tools & Calculators | Health, Finance, Utilities',
-    description: 'Free online tools: Sleep calculator, body percentile rank, tip calculator, coin flip, wheel spinner, age calculator, timezone converter & more. 100% free, no signup required.',
-    keywords: ['free online tools', 'calculators', 'sleep calculator', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter', 'body percentile', 'decision maker'],
+    title: 'Tulzo - Free Online Tools & Calculators | Health, Finance, Utilities, Quizzes',
+    description: 'Free online tools: IQ test, cat or dog person quiz, sleep calculator, tip calculator, coin flip, wheel spinner, age calculator, timezone converter & more. 100% free, no signup required.',
+    keywords: ['free online tools', 'calculators', 'IQ test', 'cat or dog person quiz', 'sleep calculator', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter', 'body percentile', 'decision maker', 'personality quiz'],
   },
   sleep: {
     title: 'Sleep Cycle Calculator - Find Best Bedtime & Wake Time | Tulzo',
@@ -105,6 +105,16 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     title: 'Weight Loss Calculator - Calorie Deficit & Goal Planner | Tulzo',
     description: 'Free weight loss calculator. Calculate daily calories, calorie deficit, and time to reach your goal weight. Includes fasting plans and BMI.',
     keywords: ['weight loss calculator', 'calorie calculator', 'calorie deficit', 'BMI calculator', 'diet calculator', 'how many calories'],
+  },
+  brain: {
+    title: 'Free IQ Test - Quick Intelligence Quiz with Score & Percentile | Tulzo',
+    description: 'Take a free quick IQ test online! 15 questions covering pattern recognition, logic, math, and verbal reasoning. Get your estimated IQ score and percentile instantly. For entertainment only.',
+    keywords: ['IQ test', 'free IQ test', 'intelligence test', 'IQ quiz', 'brain test', 'logic test', 'pattern recognition', 'IQ score', 'IQ percentile', 'cognitive test'],
+  },
+  vibe: {
+    title: 'Cat or Dog Person Quiz - Personality Test | Tulzo',
+    description: 'Are you a cat person or dog person? Take this fun 10-question personality quiz to find out! Discover your pet personality type with instant results.',
+    keywords: ['cat or dog person', 'cat person quiz', 'dog person quiz', 'pet personality test', 'cat vs dog', 'personality quiz', 'which pet am I', 'animal personality'],
   },
 };
 

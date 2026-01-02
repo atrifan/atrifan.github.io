@@ -21,6 +21,8 @@ import { TipPage } from './pages/TipPage';
 import { ZonePage } from './pages/ZonePage';
 import { NamesPage } from './pages/NamesPage';
 import { RankPage as UniquePage } from './pages/RankPage';
+import { BrainPage } from './pages/BrainPage';
+import { VibePage } from './pages/VibePage';
 
 /**
  * Main App Component with Routing
@@ -56,6 +58,8 @@ class App extends Component {
             <Route path="/spin" element={<SpinPage />} />
             <Route path="/decide" element={<DecidePage />} />
             <Route path="/match" element={<MatchPage />} />
+            <Route path="/brain" element={<BrainPage />} />
+            <Route path="/vibe" element={<VibePage />} />
           </Routes>
         </HashRouter>
       </Provider>

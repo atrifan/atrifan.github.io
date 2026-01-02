@@ -20,6 +20,8 @@ import { FlipIcon } from './FlipIcon';
 import { SpinIcon } from './SpinIcon';
 import { DecideIcon } from './DecideIcon';
 import { RankIcon } from './RankIcon';
+import { BrainIcon } from './BrainIcon';
+import { VibeIcon } from './VibeIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -73,8 +75,10 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
       luck: <LuckIcon size={size} />,
       match: <MatchIcon size={size} />,
       sleep: <SleepIcon size={size} />,
-      rank: <RankIcon size={size} />,
+      unique: <RankIcon size={size} />,
       age: <AgeIcon size={size} />,
+      brain: <BrainIcon size={size} />,
+      vibe: <VibeIcon size={size} />,
       tip: <TipIcon size={size} />,
       percent: <PercentIcon size={size} />,
       days: <DaysIcon size={size} />,

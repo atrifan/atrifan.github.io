@@ -25,6 +25,9 @@ import { FlipIcon } from '../components/FlipIcon';
 import { SpinIcon } from '../components/SpinIcon';
 import { DecideIcon } from '../components/DecideIcon';
 import { RankIcon } from '../components/RankIcon';
+import { BrainIcon } from '../components/BrainIcon';
+import { VibeIcon } from '../components/VibeIcon';
+import { WeatherTimeCard } from '../components/WeatherTimeCard';
 
 interface HomePageState {
   hoveredTool: string | null;
@@ -67,6 +70,8 @@ export class HomePage extends Component<{}, HomePageState> {
       flip: <FlipIcon size={size} />,
       spin: <SpinIcon size={size} />,
       decide: <DecideIcon size={size} />,
+      brain: <BrainIcon size={size} />,
+      vibe: <VibeIcon size={size} />,
     };
     return iconMap[toolId] || <span className="big-icon">🔧</span>;
   };
@@ -322,6 +327,9 @@ export class HomePage extends Component<{}, HomePageState> {
               No sign-ups • Instant results • Works on any device
             </p>
           </View>
+
+          {/* Weather & Time Card */}
+          <WeatherTimeCard />
 
           {/* Ad Banner - Home Hero */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>

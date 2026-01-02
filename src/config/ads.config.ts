@@ -105,6 +105,16 @@ export const ADS_CONFIG = {
     rankTop: '8760578767',
     rankResults: '5178564580',
     rankFooter: '2895182025',
+
+    // BRAIN page ads (IQ Test)
+    brainTop: '7831474627',
+    brainResults: '3836389298',
+    brainFooter: '6377958007',
+
+    // VIBE page ads (Cat/Dog Quiz)
+    vibeTop: '1730274161',
+    vibeResults: '8087798954',
+    vibeFooter: '1254797299',
   },
 
   // Enable/disable ads (useful for development)
