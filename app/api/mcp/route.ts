@@ -926,10 +926,23 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
-// Base URL for widgets
-const BASE_URL = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : 'https://tulzo.vercel.app';
+// Base URL for widgets - supports localhost, Vercel preview, and production
+function getBaseUrl(request?: NextRequest): string {
+  // If we have a request, use its host
+  if (request) {
+    const host = request.headers.get('host');
+    if (host) {
+      const protocol = host.startsWith('localhost') ? 'http' : 'https';
+      return `${protocol}://${host}`;
+    }
+  }
+  // Fallback to environment variables
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Default to production
+  return 'https://tulzo.vercel.app';
+}
 
 // Map tool names to widget types for embed page
 function getWidgetType(toolName: string): string | null {
@@ -951,11 +964,11 @@ function getWidgetType(toolName: string): string | null {
 }
 
 // Generate embed URL with query params (for Claude artifacts)
-function getEmbedUrl(toolName: string, data: Record<string, unknown>): string | null {
+function getEmbedUrl(baseUrl: string, toolName: string, data: Record<string, unknown>): string | null {
   const widgetType = getWidgetType(toolName);
   if (!widgetType) return null;
   const encodedData = encodeURIComponent(JSON.stringify(data));
-  return `${BASE_URL}/embed?tool=${widgetType}&data=${encodedData}`;
+  return `${baseUrl}/embed?tool=${widgetType}&data=${encodedData}`;
 }
 
 // Format result as human-readable text
@@ -992,8 +1005,9 @@ function formatResultText(toolName: string, result: unknown): string {
 }
 
 // Handle MCP requests
-function handleMCPRequest(request: MCPRequest): MCPResponse {
-  const { id, method, params } = request;
+function handleMCPRequest(mcpRequest: MCPRequest, httpRequest: NextRequest): MCPResponse {
+  const { id, method, params } = mcpRequest;
+  const baseUrl = getBaseUrl(httpRequest);
 
   try {
     switch (method) {
@@ -1024,7 +1038,7 @@ function handleMCPRequest(request: MCPRequest): MCPResponse {
         const responseText = formatResultText(toolName, result);
 
         // Get embed URL with query params
-        const embedUrl = getEmbedUrl(toolName, widgetData);
+        const embedUrl = getEmbedUrl(baseUrl, toolName, widgetData);
 
         // Build content array
         const content: Array<{ type: string; text: string }> = [
@@ -1075,7 +1089,7 @@ This component is fully functional and ready for immediate use.`;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const response = handleMCPRequest(body as MCPRequest);
+    const response = handleMCPRequest(body as MCPRequest, request);
     return NextResponse.json(response);
   } catch {
     return NextResponse.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 });
