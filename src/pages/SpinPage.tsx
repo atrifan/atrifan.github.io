@@ -69,10 +69,10 @@ export class SpinPage extends Component<{}, SpinPageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.spinTop} format="horizontal" /></View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '1rem' }}><SpinIcon size={100} /></div>
-            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>SPIN</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Spin the Wheel 🎡</p>
-            <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>Press SPACE or tap the wheel to spin</p>
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}><SpinIcon size={70} /></div>
+            <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>SPIN</h1>
+            <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Spin the Wheel 🎡</p>
+            <p style={{ fontSize: 'clamp(0.75rem, 2vw, 0.9rem)', color: 'rgba(255,255,255,0.5)', marginTop: '0.15rem' }}>Press SPACE or tap the wheel to spin</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>

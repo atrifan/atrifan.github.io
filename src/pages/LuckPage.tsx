@@ -151,11 +151,11 @@ export class LuckPage extends Component<{}, LuckPageState> {
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '1rem' }}>
-              <LuckIcon size={120} />
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+              <LuckIcon size={80} />
             </div>
-            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a855f7 0%, #d946ef 50%, #f0abfc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>LUCK</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Hold to Roll 🎲</p>
+            <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a855f7 0%, #d946ef 50%, #f0abfc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>LUCK</h1>
+            <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Hold to Roll 🎲</p>
           </View>
 
           {/* Instructions */}

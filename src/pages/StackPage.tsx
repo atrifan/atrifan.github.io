@@ -73,13 +73,13 @@ export class StackPage extends Component<{}, StackPageState> {
           {/* Main Content */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
             {/* Hero Header */}
-            <View UNSAFE_style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <div className="animate-float" style={{ marginBottom: '1.5rem' }}>
-                <StackIcon size={140} />
+            <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+              <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+                <StackIcon size={90} />
               </div>
 
               <h1 style={{
-                fontSize: 'clamp(2.5rem, 8vw, 5rem)',
+                fontSize: 'clamp(1.75rem, 6vw, 3.5rem)',
                 fontWeight: 900,
                 background: 'linear-gradient(135deg, #10b981 0%, #34d399 50%, #6ee7b7 100%)',
                 WebkitBackgroundClip: 'text',
@@ -91,9 +91,9 @@ export class StackPage extends Component<{}, StackPageState> {
                 STACK
               </h1>
               <p style={{
-                fontSize: 'clamp(1.1rem, 3vw, 1.4rem)',
+                fontSize: 'clamp(0.85rem, 2.5vw, 1.2rem)',
                 color: 'rgba(255, 255, 255, 0.8)',
-                marginTop: '0.5rem',
+                marginTop: '0.25rem',
                 fontWeight: 500,
               }}>
                 Budget & Savings Planner 💰

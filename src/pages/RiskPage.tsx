@@ -259,9 +259,9 @@ export class RiskPage extends Component<object, RiskPageState> {
 
           {/* Header */}
           <View UNSAFE_style={{ textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '0.5rem' }}><RiskIcon size={80} /></div>
-            <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>RISK</h1>
-            <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.5rem' }}>Trading Risk Management Calculator</p>
+            <div className="animate-float" style={{ marginBottom: '0.25rem' }}><RiskIcon size={60} /></div>
+            <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>RISK</h1>
+            <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem', fontSize: 'clamp(0.8rem, 2.5vw, 1rem)' }}>Trading Risk Management Calculator</p>
           </View>
 
           {/* Disclaimer */}

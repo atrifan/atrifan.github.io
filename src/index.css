@@ -108,6 +108,18 @@ body {
   animation: float 3s ease-in-out infinite;
 }
 
+/* Reduce animation on mobile for less distraction */
+@media (max-width: 768px) {
+  .animate-float {
+    animation: none;
+  }
+
+  /* Make tool icons smaller on mobile */
+  .animate-float svg {
+    transform: scale(0.6);
+  }
+}
+
 .animate-pulse {
   animation: pulse 2s ease-in-out infinite;
 }

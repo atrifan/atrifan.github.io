@@ -54,25 +54,25 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     return (
       <View
         borderRadius="medium"
-        marginY="size-400"
+        marginY="size-200"
         UNSAFE_style={{
-          minHeight: format === 'vertical' ? '600px' : '100px',
+          minHeight: format === 'vertical' ? '250px' : '50px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)',
           border: '2px dashed rgba(255, 255, 255, 0.2)',
-          borderRadius: '16px',
+          borderRadius: '12px',
           ...style
         }}
       >
         <div style={{
           textAlign: 'center',
           color: 'rgba(255, 255, 255, 0.4)',
-          padding: '1rem'
+          padding: '0.5rem'
         }}>
-          <span style={{ fontSize: '1.5rem', display: 'block', marginBottom: '0.25rem' }}>📢</span>
-          <span style={{ fontSize: '0.8rem' }}>Ad: {slot}</span>
+          <span style={{ fontSize: '1rem', display: 'block', marginBottom: '0.15rem' }}>📢</span>
+          <span style={{ fontSize: '0.7rem' }}>Ad: {slot}</span>
         </div>
       </View>
     );
@@ -81,9 +81,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   // Production ad - matches AdSense code structure exactly
   return (
     <View
-      marginY="size-400"
+      marginY="size-200"
       UNSAFE_style={{
-        minHeight: format === 'vertical' ? '600px' : '100px',
+        minHeight: format === 'vertical' ? '250px' : '50px',
         overflow: 'hidden',
         ...style
       }}

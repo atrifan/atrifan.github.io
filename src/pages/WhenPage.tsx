@@ -172,13 +172,13 @@ export class WhenPage extends Component<object, WhenPageState> {
           <AdBanner slot={ADS_CONFIG.slots.whenTop} format="horizontal" />
 
           {/* Hero Header */}
-          <View UNSAFE_style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <div className="animate-float" style={{ marginBottom: '1.5rem' }}>
-              <WhenIcon size={140} />
+          <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+              <WhenIcon size={90} />
             </div>
 
             <h1 style={{
-              fontSize: 'clamp(2.5rem, 8vw, 5rem)',
+              fontSize: 'clamp(1.75rem, 6vw, 3.5rem)',
               fontWeight: 900,
               background: 'linear-gradient(135deg, #3b82f6 0%, #0ea5e9 50%, #06b6d4 100%)',
               WebkitBackgroundClip: 'text',
@@ -190,9 +190,9 @@ export class WhenPage extends Component<object, WhenPageState> {
               WHEN
             </h1>
             <p style={{
-              fontSize: 'clamp(1.1rem, 3vw, 1.4rem)',
+              fontSize: 'clamp(0.85rem, 2.5vw, 1.2rem)',
               color: 'rgba(255, 255, 255, 0.8)',
-              marginTop: '0.5rem',
+              marginTop: '0.25rem',
               fontWeight: 500,
             }}>
               What day is it? 📅

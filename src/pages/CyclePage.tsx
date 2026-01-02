@@ -170,9 +170,9 @@ export class CyclePage extends Component<object, CyclePageState> {
 
           {/* Header */}
           <View UNSAFE_style={{ textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '0.5rem' }}><CycleIcon size={80} /></div>
-            <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>CYCLE</h1>
-            <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.5rem' }}>Period & Fertility Calculator</p>
+            <div className="animate-float" style={{ marginBottom: '0.25rem' }}><CycleIcon size={60} /></div>
+            <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>CYCLE</h1>
+            <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem', fontSize: 'clamp(0.8rem, 2.5vw, 1rem)' }}>Period & Fertility Calculator</p>
           </View>
 
           {/* Disclaimer */}

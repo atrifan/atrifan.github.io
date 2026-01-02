@@ -58,29 +58,29 @@ export class CutPage extends Component<{}, CutPageState> {
           <AdBanner slot={ADS_CONFIG.slots.cutTop} format="horizontal" />
 
           {/* Hero Header */}
-          <View UNSAFE_style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <div className="animate-float" style={{ marginBottom: '1.5rem' }}>
-              <CutIcon size={160} />
+          <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 3rem)' }}>
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+              <CutIcon size={100} />
             </div>
 
             <h1 style={{
-              fontSize: 'clamp(3rem, 10vw, 6rem)',
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
               fontWeight: 900,
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              marginBottom: '1rem',
+              marginBottom: '0.5rem',
               letterSpacing: '-0.02em',
             }}>
               CUT
             </h1>
 
             <p style={{
-              fontSize: 'clamp(1.2rem, 3vw, 1.8rem)',
+              fontSize: 'clamp(0.9rem, 2.5vw, 1.4rem)',
               color: 'rgba(255, 255, 255, 0.9)',
               maxWidth: '700px',
               margin: '0 auto',
-              lineHeight: 1.5,
+              lineHeight: 1.4,
               fontWeight: 300,
             }}>
               Your Personal Weight Loss Calculator & Fasting Plan Generator

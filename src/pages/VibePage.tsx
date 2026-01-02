@@ -95,9 +95,9 @@ export class VibePage extends Component<{}, VibePageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.vibeTop} format="horizontal" /></View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '1rem' }}><VibeIcon size={120} /></div>
-            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a78bfa 0%, #f472b6 50%, #fbbf24 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>VIBE</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.5rem' }}>Are You a Cat or Dog Person? 🐱🐕</p>
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}><VibeIcon size={80} /></div>
+            <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a78bfa 0%, #f472b6 50%, #fbbf24 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>VIBE</h1>
+            <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.9)', marginTop: '0.25rem' }}>Are You a Cat or Dog Person? 🐱🐕</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>

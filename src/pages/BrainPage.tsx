@@ -130,9 +130,9 @@ export class BrainPage extends Component<{}, BrainPageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}><AdBanner slot={ADS_CONFIG.slots.brainTop} format="horizontal" /></View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '700px', textAlign: 'center' }}>
-            <div className="animate-float" style={{ marginBottom: '1rem' }}><BrainIcon size={120} /></div>
-            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>BRAIN</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Quick IQ Assessment 🧠</p>
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}><BrainIcon size={80} /></div>
+            <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>BRAIN</h1>
+            <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Quick IQ Assessment 🧠</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
