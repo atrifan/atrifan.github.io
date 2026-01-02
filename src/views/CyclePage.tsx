@@ -25,6 +25,8 @@ interface CyclePageState {
   cycleLength: number;
   periodLength: number;
   result: CycleResult | null;
+  simplified: boolean;
+  isFirstDay: boolean;
 }
 
 // Medical research constants
@@ -44,6 +46,8 @@ export class CyclePage extends Component<object, CyclePageState> {
       cycleLength: 28,
       periodLength: 5,
       result: null,
+      simplified: false,
+      isFirstDay: true,
     };
   }
 
@@ -63,9 +67,21 @@ export class CyclePage extends Component<object, CyclePageState> {
   };
 
   private calculateCycle = () => {
-    const { lastPeriodDate, cycleLength, periodLength } = this.state;
-    const lastPeriod = new Date(lastPeriodDate);
-    lastPeriod.setHours(0, 0, 0, 0);
+    const { lastPeriodDate, simplified, isFirstDay } = this.state;
+    // In simplified mode, use average values
+    const cycleLength = simplified ? 28 : this.state.cycleLength;
+    const periodLength = simplified ? 5 : this.state.periodLength;
+
+    // Calculate the actual period start date
+    let periodStartDate = new Date(lastPeriodDate);
+    periodStartDate.setHours(0, 0, 0, 0);
+
+    // If user entered last day of bleeding, calculate first day
+    if (!isFirstDay) {
+      periodStartDate.setDate(periodStartDate.getDate() - (periodLength - 1));
+    }
+
+    const lastPeriod = periodStartDate;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -159,10 +175,12 @@ export class CyclePage extends Component<object, CyclePageState> {
   };
 
   render() {
-    const { lastPeriodDate, cycleLength, periodLength, result } = this.state;
+    const { lastPeriodDate, cycleLength, periodLength, result, simplified, isFirstDay } = this.state;
     const gradient = 'linear-gradient(135deg, #ec4899 0%, #f472b6 50%, #fb7185 100%)';
     const inputStyle = { width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '0.5rem', textAlign: 'center' as const, colorScheme: 'dark' as const, boxSizing: 'border-box' as const };
     const labelStyle = { color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', marginBottom: '0.25rem', display: 'block' };
+    const checkboxStyle = { width: '20px', height: '20px', accentColor: '#ec4899', cursor: 'pointer' };
+    const checkboxLabelStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem', cursor: 'pointer', padding: '0.5rem 0' };
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #4c1d4d 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
@@ -188,22 +206,51 @@ export class CyclePage extends Component<object, CyclePageState> {
 
           {/* Input Form */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.15)' }}>
+            {/* Simplified Mode Toggle */}
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(236,72,153,0.15)', borderRadius: '12px', border: '1px solid rgba(236,72,153,0.3)' }}>
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={simplified}
+                  onChange={(e) => this.setState({ simplified: e.target.checked })}
+                  style={checkboxStyle}
+                />
+                <span>✨ Simplified Mode</span>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginLeft: 'auto' }}>Uses average 28-day cycle</span>
+              </label>
+            </div>
+
+            {/* Date Input with First/Last Day Toggle */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={labelStyle}>First Day of Last Period</label>
+              <label style={labelStyle}>{isFirstDay ? 'First Day of Bleeding' : 'Last Day of Bleeding'}</label>
               <input type="date" value={lastPeriodDate} onChange={(e) => this.setState({ lastPeriodDate: e.target.value })} style={inputStyle} />
+              <label style={{ ...checkboxLabelStyle, marginTop: '0.25rem' }}>
+                <input
+                  type="checkbox"
+                  checked={!isFirstDay}
+                  onChange={(e) => this.setState({ isFirstDay: !e.target.checked })}
+                  style={checkboxStyle}
+                />
+                <span style={{ fontSize: '0.85rem' }}>This is the <strong>last day</strong> of my period (bleeding ended)</span>
+              </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={labelStyle}>Cycle Length (days)</label>
-                <input type="number" min={21} max={40} value={cycleLength} onChange={(e) => this.setState({ cycleLength: parseInt(e.target.value) || 28 })} style={inputStyle} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Typical: 21-35 days</span>
+
+            {/* Advanced Options - Hidden in Simplified Mode */}
+            {!simplified && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Cycle Length (days)</label>
+                  <input type="number" min={21} max={40} value={cycleLength} onChange={(e) => this.setState({ cycleLength: parseInt(e.target.value) || 28 })} style={inputStyle} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Typical: 21-35 days</span>
+                </div>
+                <div>
+                  <label style={labelStyle}>Period Length (days)</label>
+                  <input type="number" min={2} max={10} value={periodLength} onChange={(e) => this.setState({ periodLength: parseInt(e.target.value) || 5 })} style={inputStyle} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Typical: 3-7 days</span>
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>Period Length (days)</label>
-                <input type="number" min={2} max={10} value={periodLength} onChange={(e) => this.setState({ periodLength: parseInt(e.target.value) || 5 })} style={inputStyle} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Typical: 3-7 days</span>
-              </div>
-            </div>
+            )}
+
             <button onClick={this.calculateCycle} style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
               Calculate My Cycle
             </button>

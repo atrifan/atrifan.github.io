@@ -76,6 +76,7 @@ function generateToolMeta(toolName: string) {
   const messages = TOOL_INVOCATION_MESSAGES[toolName] || { invoking: 'Processing...', invoked: 'Complete' };
   return {
     'openai/outputTemplate': `ui://widget/${toolName}.html`,
+    'openai/mimeType': 'text/html+skybridge',
     'openai/toolInvocation/invoking': messages.invoking,
     'openai/toolInvocation/invoked': messages.invoked,
     'openai/widgetAccessible': true,
@@ -429,15 +430,18 @@ const TOOLS = [
   },
   {
     name: 'calculate_cycle',
-    description: 'Calculate menstrual cycle predictions including next period, fertile window, ovulation date, and current phase',
+    description: 'Calculate menstrual cycle predictions including next period, fertile window, ovulation date, and current phase. Supports simplified mode where only a date is needed (uses average 28-day cycle and 5-day period).',
     inputSchema: {
       type: 'object',
       properties: {
-        lastPeriodDate: { type: 'string', description: 'Last period start date in YYYY-MM-DD format' },
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format. In simplified mode, this is the only required field.' },
+        isFirstDay: { type: 'boolean', description: 'If true, date is first day of period (bleeding started). If false, date is last day of period (bleeding ended). Default: true (first day).' },
+        simplified: { type: 'boolean', description: 'If true, uses simplified mode with average cycle (28 days) and period (5 days) lengths. Default: false.' },
+        lastPeriodDate: { type: 'string', description: 'Last period start date in YYYY-MM-DD format (used in advanced mode, or as alias for date+isFirstDay=true)' },
         cycleLength: { type: 'integer', description: 'Average cycle length in days (default: 28)', minimum: 21, maximum: 35 },
         periodLength: { type: 'integer', description: 'Average period length in days (default: 5)', minimum: 2, maximum: 10 },
       },
-      required: ['lastPeriodDate'],
+      required: [],
     },
     outputSchema: {
       type: 'object',
@@ -449,6 +453,7 @@ const TOOLS = [
         currentDay: { type: 'number', description: 'Current day of cycle' },
         phase: { type: 'string', enum: ['menstrual', 'follicular', 'ovulation', 'luteal'] },
         daysUntilNextPeriod: { type: 'number' },
+        mode: { type: 'string', enum: ['simplified', 'advanced'], description: 'Which mode was used for calculation' },
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
@@ -1055,22 +1060,82 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { value: val, from, to, result: Math.round(converter(val) * 10000) / 10000 };
     }
     case 'calculate_cycle': {
-      const [y, m, d] = (args.lastPeriodDate as string).split('-').map(Number);
+      const isSimplified = args.simplified === true;
+      const cycleLength = isSimplified ? 28 : ((args.cycleLength as number) || 28);
+      const periodLength = isSimplified ? 5 : ((args.periodLength as number) || 5);
+
+      // Determine the period start date
+      let periodStartDate: string;
+
+      if (args.date) {
+        // New simplified/flexible input
+        const isFirstDay = args.isFirstDay !== false; // default true
+        if (isFirstDay) {
+          // Date is first day of bleeding
+          periodStartDate = args.date as string;
+        } else {
+          // Date is last day of bleeding - calculate first day by subtracting period length
+          const [y, m, d] = (args.date as string).split('-').map(Number);
+          const lastDayDate = new Date(y, m - 1, d);
+          const firstDayDate = new Date(lastDayDate.getTime() - (periodLength - 1) * 24 * 60 * 60 * 1000);
+          periodStartDate = firstDayDate.toISOString().split('T')[0];
+        }
+      } else if (args.lastPeriodDate) {
+        // Legacy input - lastPeriodDate is always first day
+        periodStartDate = args.lastPeriodDate as string;
+      } else {
+        throw new Error('Either date or lastPeriodDate is required');
+      }
+
+      const [y, m, d] = periodStartDate.split('-').map(Number);
       const lastPeriod = new Date(y, m - 1, d);
-      const cycleLength = (args.cycleLength as number) || 28;
-      const periodLength = (args.periodLength as number) || 5;
-      const nextPeriod = new Date(lastPeriod.getTime() + cycleLength * 24 * 60 * 60 * 1000);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Calculate next period (find the next one after today)
+      let nextPeriod = new Date(lastPeriod.getTime() + cycleLength * 24 * 60 * 60 * 1000);
+      while (nextPeriod <= today) {
+        nextPeriod = new Date(nextPeriod.getTime() + cycleLength * 24 * 60 * 60 * 1000);
+      }
+
+      // Ovulation is ~14 days before next period (luteal phase)
       const ovulationDate = new Date(nextPeriod.getTime() - 14 * 24 * 60 * 60 * 1000);
+      // Fertile window: 5 days before ovulation + ovulation day + 1 day after
       const fertileStart = new Date(ovulationDate.getTime() - 5 * 24 * 60 * 60 * 1000);
       const fertileEnd = new Date(ovulationDate.getTime() + 1 * 24 * 60 * 60 * 1000);
       const periodEnd = new Date(nextPeriod.getTime() + periodLength * 24 * 60 * 60 * 1000);
+
+      // Calculate current cycle day and phase
+      const daysSinceLastPeriod = Math.floor((today.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
+      const currentDay = (daysSinceLastPeriod % cycleLength) + 1;
+
+      let phase: string;
+      if (currentDay <= periodLength) {
+        phase = 'menstrual';
+      } else if (currentDay <= cycleLength - 14 - 1) {
+        phase = 'follicular';
+      } else if (currentDay <= cycleLength - 14 + 1) {
+        phase = 'ovulation';
+      } else {
+        phase = 'luteal';
+      }
+
+      const daysUntilNextPeriod = Math.ceil((nextPeriod.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
       return {
         nextPeriodStart: nextPeriod.toISOString().split('T')[0],
         nextPeriodEnd: periodEnd.toISOString().split('T')[0],
         ovulationDate: ovulationDate.toISOString().split('T')[0],
         fertileWindowStart: fertileStart.toISOString().split('T')[0],
         fertileWindowEnd: fertileEnd.toISOString().split('T')[0],
-        cycleLength, periodLength,
+        currentDay,
+        phase,
+        daysUntilNextPeriod,
+        cycleLength,
+        periodLength,
+        mode: isSimplified ? 'simplified' : 'advanced',
+        inputDate: periodStartDate,
+        isFirstDayInput: args.date ? (args.isFirstDay !== false) : true,
       };
     }
     case 'calculate_countdown': {
@@ -1754,14 +1819,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'cycle': {
+      const phaseColors: Record<string, string> = { menstrual: '#ef4444', follicular: '#22c55e', ovulation: '#f59e0b', luteal: '#8b5cf6' };
+      const phaseEmojis: Record<string, string> = { menstrual: '🩸', follicular: '🌱', ovulation: '🥚', luteal: '🌙' };
+      const phaseColor = phaseColors[data.phase as string] || '#f472b6';
+      const phaseEmoji = phaseEmojis[data.phase as string] || '🌸';
+      const modeLabel = data.mode === 'simplified' ? '(Simplified)' : '';
       content = `
-        <div class="header">🌸 Cycle Tracker</div>
-        <div class="big-number" style="color:#f472b6;font-size:1.5rem">${data.nextPeriod}</div>
-        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period</div>
+        <div class="header">🌸 Cycle Tracker ${modeLabel}</div>
+        <div class="big-number" style="color:#f472b6;font-size:1.5rem">${data.nextPeriodStart || data.nextPeriod}</div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period${data.daysUntilNextPeriod ? ` (in ${data.daysUntilNextPeriod} days)` : ''}</div>
         <div class="stats">
-          <div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">${data.currentDay}</div></div>
-          <div class="stat-box"><div class="stat-label">Phase</div><div class="stat-value">${data.phase}</div></div>
-          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">Fertile Window</div><div class="stat-value">${data.fertileStart} - ${data.fertileEnd}</div></div>
+          <div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">${data.currentDay || '—'}</div></div>
+          <div class="stat-box"><div class="stat-label">Phase ${phaseEmoji}</div><div class="stat-value" style="color:${phaseColor}">${data.phase || '—'}</div></div>
+          <div class="stat-box"><div class="stat-label">🥚 Ovulation</div><div class="stat-value">${data.ovulationDate || '—'}</div></div>
+          <div class="stat-box"><div class="stat-label">💚 Fertile Window</div><div class="stat-value">${data.fertileWindowStart || data.fertileStart || '—'} - ${data.fertileWindowEnd || data.fertileEnd || '—'}</div></div>
         </div>`;
       break;
     }
@@ -1893,6 +1964,7 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
   <script>
     // Embedded data for Claude (fallback)
     const embeddedData = ${JSON.stringify({ tool: toolName, data })};
+    const widgetType = "${widgetType}";
     let widgetData = embeddedData;
 
     // OpenAI SDK integration - listen for set_globals event
@@ -1914,9 +1986,79 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
     }
 
     function updateWidget(wd) {
-      // For now, just log - the static HTML is already rendered
-      // In future, this could re-render the widget with new data
       console.log("🔄 Widget data:", wd);
+      const container = document.getElementById('widget-container');
+      if (!container) return;
+
+      const data = wd.data;
+      let html = renderWidgetContent(widgetType, data);
+      container.innerHTML = html + '<div class="footer">tulzo.vercel.app</div>';
+    }
+
+    function renderWidgetContent(type, data) {
+      switch(type) {
+        case 'bmi': {
+          const bmi = Number(data.bmi).toFixed(1);
+          const category = data.category || '';
+          const colorMap = { underweight: '#60a5fa', normal: '#10b981', overweight: '#f59e0b', obese: '#ef4444' };
+          const color = colorMap[category.toLowerCase()] || '#fff';
+          return '<div class="header">📏 BMI Calculator</div>' +
+            '<div class="big-number" style="color:' + color + '">' + bmi + '</div>' +
+            '<div class="label" style="background:' + color + '33;color:' + color + '">' + category + '</div>' +
+            (data.weight || data.height ? '<div class="stats">' +
+              (data.weight ? '<div class="stat-box"><div class="stat-label">Weight</div><div class="stat-value">' + data.weight + ' kg</div></div>' : '') +
+              (data.height ? '<div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">' + data.height + ' cm</div></div>' : '') +
+            '</div>' : '');
+        }
+        case 'age': {
+          return '<div class="header">🎂 Age Calculator</div>' +
+            '<div class="big-number" style="color:#f472b6">' + data.years + '</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">years old</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">' + data.months + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Days</div><div class="stat-value">' + data.days + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Total Days</div><div class="stat-value">' + Number(data.totalDays).toLocaleString() + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Next Birthday</div><div class="stat-value">' + data.daysUntilNextBirthday + ' days</div></div>' +
+            '</div>';
+        }
+        case 'coin_flip': {
+          const result = String(data.result || 'heads');
+          const isHeads = result === 'heads';
+          return '<div class="header">🪙 Coin Flip</div>' +
+            '<div style="text-align:center;font-size:5rem;margin:1rem 0">' + (isHeads ? '👑' : '🦅') + '</div>' +
+            '<div class="big-number" style="color:' + (isHeads ? '#fbbf24' : '#94a3b8') + ';font-size:2rem">' + result.toUpperCase() + '</div>';
+        }
+        case 'dice': {
+          const rolls = data.rolls || [];
+          return '<div class="header">🎲 Dice Roll</div>' +
+            '<div class="big-number" style="color:#60a5fa">' + data.total + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Total</div>' +
+            '<div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:0.5rem">' +
+              rolls.map(function(r) { return '<span style="background:rgba(96,165,250,0.3);padding:0.5rem 1rem;border-radius:8px;font-weight:700;color:#fff">' + r + '</span>'; }).join('') +
+            '</div>';
+        }
+        case 'tip': {
+          return '<div class="header">💵 Tip Calculator</div>' +
+            '<div class="big-number" style="color:#10b981">$' + Number(data.total).toFixed(2) + '</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Total with ' + data.tipPercent + '% tip</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Bill</div><div class="stat-value">$' + data.billAmount + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Tip</div><div class="stat-value">$' + Number(data.tipAmount).toFixed(2) + '</div></div>' +
+              (Number(data.splitWays) > 1 ? '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">Per Person (' + data.splitWays + ' ways)</div><div class="stat-value">$' + Number(data.perPerson).toFixed(2) + '</div></div>' : '') +
+            '</div>';
+        }
+        default: {
+          // Generic widget - display key-value pairs
+          const entries = Object.entries(data).slice(0, 6);
+          return '<div class="header">🔧 Result</div>' +
+            '<div class="stats" style="grid-template-columns:1fr">' +
+              entries.map(function(e) {
+                const k = e[0], v = e[1];
+                return '<div class="stat-box"><div class="stat-label">' + k.replace(/([A-Z])/g, ' $1').trim() + '</div><div class="stat-value">' + (typeof v === 'object' ? JSON.stringify(v) : v) + '</div></div>';
+              }).join('') +
+            '</div>';
+        }
+      }
     }
   </script>
 </body>
@@ -1981,7 +2123,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_percentage: { result: 25, operation: 'percentage_of', value: 100, percentage: 25 },
     calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilBirthday: 180 },
     convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
-    calculate_cycle: { nextPeriod: '2026-01-28', fertileStart: '2026-01-10', fertileEnd: '2026-01-16', ovulationDate: '2026-01-14', currentPhase: 'Follicular' },
+    calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified' },
     calculate_countdown: { days: 100, weeks: 14, months: 3, targetDate: '2026-04-11', direction: 'until' },
     make_decision: { decision: 'Yes', options: ['Yes', 'No'] },
     zodiac_compatibility: {
