@@ -101,10 +101,10 @@ export const ADS_CONFIG = {
     matchResults: '2146234808',
     matchFooter: '9777312817',
 
-    // RANK page ads (placeholder - need IDs from user)
-    rankTop: 'PLACEHOLDER_RANK_TOP',
-    rankResults: 'PLACEHOLDER_RANK_RESULTS',
-    rankFooter: 'PLACEHOLDER_RANK_FOOTER',
+    // RANK page ads
+    rankTop: '8760578767',
+    rankResults: '5178564580',
+    rankFooter: '2895182025',
   },
 
   // Enable/disable ads (useful for development)

@@ -1,6 +1,25 @@
 import { Component } from 'react';
 import { Link } from 'react-router-dom';
 import { CATEGORY_LABELS, ToolCategory, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
+// Tool icons
+import { CutIcon } from './CutIcon';
+import { StackIcon } from './StackIcon';
+import { WhenIcon } from './WhenIcon';
+import { TapIcon } from './TapIcon';
+import { LuckIcon } from './LuckIcon';
+import { MatchIcon } from './MatchIcon';
+import { SleepIcon } from './SleepIcon';
+import { AgeIcon } from './AgeIcon';
+import { TipIcon } from './TipIcon';
+import { PercentIcon } from './PercentIcon';
+import { DaysIcon } from './DaysIcon';
+import { ZoneIcon } from './ZoneIcon';
+import { ConvertIcon } from './ConvertIcon';
+import { NamesIcon } from './NamesIcon';
+import { FlipIcon } from './FlipIcon';
+import { SpinIcon } from './SpinIcon';
+import { DecideIcon } from './DecideIcon';
+import { RankIcon } from './RankIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -43,6 +62,30 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
 
   private handleResize = () => {
     this.setState({ isMobile: window.innerWidth < 768 });
+  };
+
+  private renderToolIcon = (toolId: string, size: number): JSX.Element => {
+    const iconMap: Record<string, JSX.Element> = {
+      cut: <CutIcon size={size} />,
+      stack: <StackIcon size={size} />,
+      when: <WhenIcon size={size} />,
+      tap: <TapIcon size={size} />,
+      luck: <LuckIcon size={size} />,
+      match: <MatchIcon size={size} />,
+      sleep: <SleepIcon size={size} />,
+      rank: <RankIcon size={size} />,
+      age: <AgeIcon size={size} />,
+      tip: <TipIcon size={size} />,
+      percent: <PercentIcon size={size} />,
+      days: <DaysIcon size={size} />,
+      zone: <ZoneIcon size={size} />,
+      convert: <ConvertIcon size={size} />,
+      names: <NamesIcon size={size} />,
+      flip: <FlipIcon size={size} />,
+      spin: <SpinIcon size={size} />,
+      decide: <DecideIcon size={size} />,
+    };
+    return iconMap[toolId] || <span style={{ fontSize: `${size}px` }}>🔧</span>;
   };
 
   render() {
@@ -221,8 +264,8 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                           e.currentTarget.style.boxShadow = `0 4px 16px ${tool.color}33`;
                         }}
                       >
-                        <div style={{ fontSize: isMobile ? '1.5rem' : '2rem', marginBottom: '0.25rem' }}>
-                          {tool.icon}
+                        <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          {this.renderToolIcon(tool.id, isMobile ? 28 : 36)}
                         </div>
                         <div style={{
                           fontSize: isMobile ? '0.65rem' : '0.75rem',

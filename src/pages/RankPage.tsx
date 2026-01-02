@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
-import { getPercentiles, PercentileResult, DATA_SOURCE } from '../data/percentiles';
+import { calculateFunnel, FunnelStep, DATA_SOURCE, WORLD_POPULATION } from '../data/percentiles';
 
 interface RankPageState {
   age: string;
@@ -15,8 +15,7 @@ interface RankPageState {
   weight: string;
   heightUnit: 'cm' | 'ft';
   weightUnit: 'kg' | 'lbs';
-  results: PercentileResult[];
-  chartType: 'bar' | 'gauge' | 'bell';
+  funnelSteps: FunnelStep[];
 }
 
 export class RankPage extends Component<{}, RankPageState> {
@@ -31,8 +30,7 @@ export class RankPage extends Component<{}, RankPageState> {
       weight: '',
       heightUnit: 'cm',
       weightUnit: 'kg',
-      results: [],
-      chartType: 'bar',
+      funnelSteps: [],
     };
   }
 
@@ -71,78 +69,191 @@ export class RankPage extends Component<{}, RankPageState> {
     const ageNum = age ? parseInt(age) : null;
     const heightCm = this.convertHeight();
     const weightKg = this.convertWeight();
-    
-    if (!gender) {
-      alert('Please select a gender to calculate percentiles.');
-      return;
-    }
-    if (!heightCm && !weightKg) {
-      alert('Please enter at least height or weight.');
+
+    // Need at least one input beyond world population
+    if (ageNum === null && gender === null && heightCm === null && weightKg === null) {
+      alert('Please enter at least one value (age, gender, height, or weight) to see your rarity.');
       return;
     }
 
-    const results = getPercentiles(ageNum, gender, heightCm, weightKg);
-    this.setState({ results }, this.scrollToResults);
+    const funnelSteps = calculateFunnel(ageNum, gender, heightCm, weightKg);
+    this.setState({ funnelSteps }, this.scrollToResults);
   };
 
-  private renderBarChart = (result: PercentileResult) => {
-    const color = result.dimension === 'height' ? '#10b981' : '#3b82f6';
-    return (
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{result.label}</span>
-          <span style={{ color, fontWeight: 700, fontSize: '1.2rem' }}>{result.percentile}th</span>
-        </div>
-        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '12px', height: '24px', overflow: 'hidden', position: 'relative' }}>
-          <div style={{ width: `${result.percentile}%`, height: '100%', background: `linear-gradient(90deg, ${color}88, ${color})`, borderRadius: '12px', transition: 'width 0.8s ease-out' }} />
-          {[25, 50, 75].map(p => (
-            <div key={p} style={{ position: 'absolute', left: `${p}%`, top: 0, bottom: 0, width: '1px', background: 'rgba(255,255,255,0.3)' }} />
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.25rem' }}>
-          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
-        </div>
-      </div>
-    );
+  private formatNumber = (num: number): string => {
+    if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(0)}K`;
+    return num.toLocaleString();
   };
 
-  private renderGaugeChart = (result: PercentileResult) => {
-    const color = result.dimension === 'height' ? '#10b981' : '#3b82f6';
-    const angle = (result.percentile / 100) * 180 - 90;
-    return (
-      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <div style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600, marginBottom: '0.5rem' }}>{result.label}</div>
-        <svg width="200" height="120" viewBox="0 0 200 120" style={{ maxWidth: '100%' }}>
-          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="16" strokeLinecap="round" />
-          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke={color} strokeWidth="16" strokeLinecap="round"
-            strokeDasharray={`${(result.percentile / 100) * 251.2} 251.2`} style={{ transition: 'stroke-dasharray 0.8s ease-out' }} />
-          <line x1="100" y1="100" x2="100" y2="40" stroke="#fff" strokeWidth="4" strokeLinecap="round"
-            transform={`rotate(${angle} 100 100)`} style={{ transition: 'transform 0.8s ease-out' }} />
-          <circle cx="100" cy="100" r="8" fill="#fff" />
-          <text x="100" y="85" textAnchor="middle" fill={color} fontSize="24" fontWeight="bold">{result.percentile}th</text>
-        </svg>
-      </div>
-    );
+  private getStepColor = (dimension: string): string => {
+    switch (dimension) {
+      case 'world': return '#6366f1';
+      case 'age': return '#f59e0b';
+      case 'gender': return '#ec4899';
+      case 'height': return '#10b981';
+      case 'weight': return '#3b82f6';
+      default: return '#10b981';
+    }
   };
 
-  private renderBellCurve = (result: PercentileResult) => {
-    const color = result.dimension === 'height' ? '#10b981' : '#3b82f6';
-    const xPos = 20 + (result.percentile / 100) * 160;
+  private getStepIcon = (dimension: string): string => {
+    switch (dimension) {
+      case 'world': return '🌍';
+      case 'age': return '🎂';
+      case 'gender': return '👤';
+      case 'height': return '📏';
+      case 'weight': return '⚖️';
+      default: return '📊';
+    }
+  };
+
+  private renderFunnel = () => {
+    const { funnelSteps } = this.state;
+    if (funnelSteps.length === 0) return null;
+
+    const maxWidth = 100; // percentage
+    const minWidth = 20; // minimum width for smallest step
+
     return (
-      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <div style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600, marginBottom: '0.5rem' }}>{result.label}</div>
-        <svg width="200" height="100" viewBox="0 0 200 100" style={{ maxWidth: '100%' }}>
-          <path d="M 20 90 Q 60 90 80 60 Q 100 10 120 60 Q 140 90 180 90" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-          <line x1={xPos} y1="10" x2={xPos} y2="95" stroke={color} strokeWidth="3" strokeDasharray="5,3" style={{ transition: 'x1 0.8s, x2 0.8s' }} />
-          <circle cx={xPos} cy="20" r="6" fill={color} style={{ transition: 'cx 0.8s' }} />
-          <text x={xPos} y="15" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold">{result.percentile}th</text>
-        </svg>
+      <div style={{ padding: '1rem 0' }}>
+        {funnelSteps.map((step, index) => {
+          const widthPercent = index === 0
+            ? maxWidth
+            : Math.max(minWidth, (step.percentage / 100) * maxWidth + minWidth);
+          const color = this.getStepColor(step.dimension);
+          const icon = this.getStepIcon(step.dimension);
+          const isLast = index === funnelSteps.length - 1;
+
+          return (
+            <div key={index} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginBottom: index < funnelSteps.length - 1 ? '0' : '0',
+            }}>
+              {/* Funnel segment */}
+              <div style={{
+                width: `${widthPercent}%`,
+                background: `linear-gradient(135deg, ${color}dd, ${color}99)`,
+                padding: '1rem',
+                borderRadius: index === 0 ? '16px 16px 0 0' : isLast ? '0 0 16px 16px' : '0',
+                position: 'relative',
+                transition: 'all 0.5s ease-out',
+                transitionDelay: `${index * 0.1}s`,
+                border: `2px solid ${color}`,
+                borderBottom: isLast ? `2px solid ${color}` : 'none',
+                marginTop: index > 0 ? '-2px' : '0',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1.5rem' }}>{icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#fff', fontSize: '1rem' }}>{step.label}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>{step.description}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, color: '#fff', fontSize: '1.2rem' }}>{this.formatNumber(step.population)}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>
+                      {step.percentage >= 1 ? `${step.percentage.toFixed(1)}%` : `${step.percentage.toFixed(3)}%`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Connector arrow */}
+              {index < funnelSteps.length - 1 && (
+                <div style={{
+                  width: '0',
+                  height: '0',
+                  borderLeft: '20px solid transparent',
+                  borderRight: '20px solid transparent',
+                  borderTop: `15px solid ${color}`,
+                  marginTop: '-2px',
+                  zIndex: 1,
+                }} />
+              )}
+            </div>
+          );
+        })}
+
+        {/* Summary */}
+        {funnelSteps.length > 1 && (() => {
+          const finalStep = funnelSteps[funnelSteps.length - 1];
+          const rarityRatio = Math.round(WORLD_POPULATION / finalStep.population);
+          // Calculate percentile: what % of people are MORE common than you
+          // If 1 in 100, you're rarer than 99% of combinations
+          const percentile = Math.min(99.99, Math.max(0.01, 100 - (finalStep.percentage)));
+
+          return (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '1.5rem',
+              padding: '1.5rem',
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: '16px',
+              border: '2px solid rgba(255,255,255,0.2)',
+            }}>
+              <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>
+                Your unique combination
+              </div>
+              <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#10b981' }}>
+                1 in {this.formatNumber(rarityRatio)}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                ~{this.formatNumber(finalStep.population)} people worldwide share your profile
+              </div>
+
+              {/* Percentile bar */}
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                marginTop: '0.5rem',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Rarity Percentile</span>
+                  <span style={{ color: '#10b981', fontWeight: 800, fontSize: '1.3rem' }}>
+                    Top {percentile >= 99 ? percentile.toFixed(2) : percentile.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  height: '12px',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}>
+                  <div style={{
+                    width: `${Math.min(100, percentile)}%`,
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #10b981, #059669)',
+                    borderRadius: '8px',
+                    transition: 'width 0.8s ease-out',
+                  }} />
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.7rem',
+                  color: 'rgba(255,255,255,0.4)',
+                  marginTop: '0.25rem'
+                }}>
+                  <span>Common</span>
+                  <span>Rare</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   };
 
   render() {
-    const { age, gender, height, weight, heightUnit, weightUnit, results, chartType } = this.state;
+    const { age, gender, height, weight, heightUnit, weightUnit, funnelSteps } = this.state;
     const gradient = 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)';
     const inputStyle = { width: '100%', padding: '1rem', fontSize: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', boxSizing: 'border-box' as const };
     const selectStyle = { ...inputStyle, cursor: 'pointer' };
@@ -156,35 +267,36 @@ export class RankPage extends Component<{}, RankPageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '1rem' }}><RankIcon size={120} /></div>
             <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>RANK</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>Body Percentile Calculator 📊</p>
+            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>How Rare Are You? 🌍</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
-            <DisclaimerBanner title="Health Information" message={`This tool provides percentile rankings based on ${DATA_SOURCE}. For medical advice, consult a healthcare professional.`} color="#10b981" />
+            <DisclaimerBanner title="Health Information" message={`This tool provides rarity estimates based on ${DATA_SOURCE}. For medical advice, consult a healthcare professional.`} color="#10b981" />
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.5rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Age (optional)</label>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Age</label>
                   <input type="number" placeholder="e.g. 25" value={age} onChange={(e) => this.setState({ age: e.target.value })} min="2" max="80" style={inputStyle} />
                 </div>
                 <div>
-                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Gender *</label>
-                  <select value={gender || ''} onChange={(e) => this.setState({ gender: e.target.value as 'male' | 'female' | null })} style={selectStyle}>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Gender</label>
+                  <select value={gender || ''} onChange={(e) => this.setState({ gender: e.target.value ? e.target.value as 'male' | 'female' : null })} style={selectStyle}>
                     <option value="">Select...</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                   </select>
                 </div>
               </div>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1rem 0', textAlign: 'center' }}>Add more details to see how unique your combination is</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Height</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="number" placeholder={heightUnit === 'cm' ? '170' : '5.7'} value={height} onChange={(e) => this.setState({ height: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
-                    <select value={heightUnit} onChange={(e) => this.setState({ heightUnit: e.target.value as 'cm' | 'ft' })} style={{ ...selectStyle, width: '70px', flex: 'none' }}>
+                    <input type="number" placeholder={heightUnit === 'cm' ? '170' : '5.7'} value={height} onChange={(e) => this.setState({ height: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                    <select value={heightUnit} onChange={(e) => this.setState({ heightUnit: e.target.value as 'cm' | 'ft' })} style={{ ...selectStyle, width: 'auto', minWidth: '60px', flex: 'none', padding: '0.75rem 0.5rem' }}>
                       <option value="cm">cm</option>
                       <option value="ft">ft</option>
                     </select>
@@ -193,8 +305,8 @@ export class RankPage extends Component<{}, RankPageState> {
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Weight</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="number" placeholder={weightUnit === 'kg' ? '70' : '154'} value={weight} onChange={(e) => this.setState({ weight: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
-                    <select value={weightUnit} onChange={(e) => this.setState({ weightUnit: e.target.value as 'kg' | 'lbs' })} style={{ ...selectStyle, width: '70px', flex: 'none' }}>
+                    <input type="number" placeholder={weightUnit === 'kg' ? '70' : '154'} value={weight} onChange={(e) => this.setState({ weight: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                    <select value={weightUnit} onChange={(e) => this.setState({ weightUnit: e.target.value as 'kg' | 'lbs' })} style={{ ...selectStyle, width: 'auto', minWidth: '60px', flex: 'none', padding: '0.75rem 0.5rem' }}>
                       <option value="kg">kg</option>
                       <option value="lbs">lbs</option>
                     </select>
@@ -202,35 +314,19 @@ export class RankPage extends Component<{}, RankPageState> {
                 </div>
               </div>
               <button onClick={this.calculate} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                Calculate Percentile 📊
+                Calculate Rarity 🔍
               </button>
             </div>
           </View>
 
-          {results.length > 0 && <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.rankResults} format="horizontal" /></View>}
+          {funnelSteps.length > 0 && <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.rankResults} format="horizontal" /></View>}
 
-          {results.length > 0 && (
-            <div ref={this.resultsRef} id="rank-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%)', borderRadius: '24px', padding: '1.5rem', border: '2px solid rgba(255,255,255,0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-                {(['bar', 'gauge', 'bell'] as const).map((type) => (
-                  <button key={type} onClick={() => this.setState({ chartType: type })}
-                    style={{ padding: '0.5rem 1rem', borderRadius: '20px', border: 'none', cursor: 'pointer', background: chartType === type ? gradient : 'rgba(255,255,255,0.1)', color: '#fff', fontWeight: 600, fontSize: '0.85rem', textTransform: 'capitalize' }}>
-                    {type === 'bar' ? '📊 Bar' : type === 'gauge' ? '🎯 Gauge' : '📈 Bell Curve'}
-                  </button>
-                ))}
-              </div>
-              {results.map((r, i) => (
-                <div key={i}>
-                  {chartType === 'bar' && this.renderBarChart(r)}
-                  {chartType === 'gauge' && this.renderGaugeChart(r)}
-                  {chartType === 'bell' && this.renderBellCurve(r)}
-                </div>
-              ))}
-              <div style={{ textAlign: 'center', marginTop: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>
-                  {results.map(r => `Your ${r.dimension} is higher than ${r.percentile}% of ${gender === 'male' ? 'men' : 'women'}${age ? ` around age ${age}` : ''}.`).join(' ')}
-                </p>
-              </div>
+          {funnelSteps.length > 0 && (
+            <div ref={this.resultsRef} id="rank-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)', borderRadius: '24px', padding: '1.5rem', border: '2px solid rgba(255,255,255,0.2)' }}>
+              <h2 style={{ textAlign: 'center', color: '#fff', fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 700 }}>
+                🔬 Your Rarity Funnel
+              </h2>
+              {this.renderFunnel()}
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textAlign: 'center', marginTop: '1rem' }}>Data source: {DATA_SOURCE}</p>
             </div>
           )}

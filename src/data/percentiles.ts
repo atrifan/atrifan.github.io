@@ -149,14 +149,79 @@ export const calculatePercentile = (value: number, data: PercentileData): number
 };
 
 export interface PercentileResult {
-  dimension: 'height' | 'weight';
-  value: number;
+  dimension: 'height' | 'weight' | 'age' | 'gender';
+  value: number | string;
   percentile: number;
   label: string;
 }
 
 /**
+ * World Population Age Distribution (2025)
+ * Source: UN World Population Prospects 2024 via StatisticsTimes.com
+ *
+ * Cumulative percentage of world population younger than each age group
+ * Total world population: 8,231,613,070
+ */
+const AGE_CUMULATIVE_PERCENTAGES: { maxAge: number; cumulativePercent: number }[] = [
+  { maxAge: 4, cumulativePercent: 7.8 },
+  { maxAge: 9, cumulativePercent: 16.0 },
+  { maxAge: 14, cumulativePercent: 24.4 },
+  { maxAge: 19, cumulativePercent: 32.4 },
+  { maxAge: 24, cumulativePercent: 40.0 },
+  { maxAge: 29, cumulativePercent: 47.3 },
+  { maxAge: 34, cumulativePercent: 54.6 },
+  { maxAge: 39, cumulativePercent: 61.9 },
+  { maxAge: 44, cumulativePercent: 68.5 },
+  { maxAge: 49, cumulativePercent: 74.4 },
+  { maxAge: 54, cumulativePercent: 80.0 },
+  { maxAge: 59, cumulativePercent: 85.2 },
+  { maxAge: 64, cumulativePercent: 89.6 },
+  { maxAge: 69, cumulativePercent: 93.2 },
+  { maxAge: 74, cumulativePercent: 96.1 },
+  { maxAge: 79, cumulativePercent: 98.0 },
+  { maxAge: 84, cumulativePercent: 99.1 },
+  { maxAge: 89, cumulativePercent: 99.7 },
+  { maxAge: 94, cumulativePercent: 99.95 },
+  { maxAge: 99, cumulativePercent: 99.99 },
+  { maxAge: 120, cumulativePercent: 100 },
+];
+
+/**
+ * Calculate age percentile - what % of world population is younger than you
+ */
+export const calculateAgePercentile = (age: number): number => {
+  if (age <= 0) return 1;
+  if (age >= 100) return 99;
+
+  // Find the bracket
+  for (let i = 0; i < AGE_CUMULATIVE_PERCENTAGES.length; i++) {
+    const bracket = AGE_CUMULATIVE_PERCENTAGES[i];
+    if (age <= bracket.maxAge) {
+      const prevPercent = i === 0 ? 0 : AGE_CUMULATIVE_PERCENTAGES[i - 1].cumulativePercent;
+      const prevMaxAge = i === 0 ? 0 : AGE_CUMULATIVE_PERCENTAGES[i - 1].maxAge;
+      const bracketRange = bracket.maxAge - prevMaxAge;
+      const ageInBracket = age - prevMaxAge;
+      const percentRange = bracket.cumulativePercent - prevPercent;
+      const percentile = prevPercent + (ageInBracket / bracketRange) * percentRange;
+      return Math.round(percentile);
+    }
+  }
+  return 99;
+};
+
+/**
+ * Gender distribution in world population (2025)
+ * Source: UN World Population Prospects 2024 via StatisticsTimes.com
+ * Males: 50.27%, Females: 49.73%
+ */
+export const GENDER_PERCENTAGES = {
+  male: 50.27,
+  female: 49.73,
+};
+
+/**
  * Get percentile results for given inputs
+ * Now supports: age-only, gender-only, weight-only, height-only, or any combination
  */
 export const getPercentiles = (
   age: number | null,
@@ -166,37 +231,255 @@ export const getPercentiles = (
 ): PercentileResult[] => {
   const results: PercentileResult[] = [];
 
-  // Need at least gender to calculate percentiles
-  if (!gender) return results;
-
-  const ageToUse = age ? getClosestAge(age) : 30; // Default to 30 if no age
-  const genderData = PERCENTILE_DATA[gender];
-  const ageData = genderData[ageToUse];
-
-  if (!ageData) return results;
-
-  if (heightCm !== null) {
-    const percentile = calculatePercentile(heightCm, ageData.height);
+  // Age percentile - what % of world population is younger than you
+  if (age !== null) {
+    const agePercentile = calculateAgePercentile(age);
     results.push({
-      dimension: 'height',
-      value: heightCm,
-      percentile,
-      label: `Height: ${heightCm} cm`,
+      dimension: 'age',
+      value: age,
+      percentile: agePercentile,
+      label: `Age: ${age} years`,
     });
   }
 
-  if (weightKg !== null) {
-    const percentile = calculatePercentile(weightKg, ageData.weight);
+  // Gender percentile - what % of world population shares your gender
+  if (gender !== null) {
+    const genderPercent = Math.round(GENDER_PERCENTAGES[gender]);
     results.push({
-      dimension: 'weight',
-      value: weightKg,
-      percentile,
-      label: `Weight: ${weightKg} kg`,
+      dimension: 'gender',
+      value: gender,
+      percentile: genderPercent,
+      label: `Gender: ${gender === 'male' ? 'Male' : 'Female'}`,
     });
+  }
+
+  // Height and weight percentiles (need gender for comparison)
+  if (gender) {
+    const ageToUse = age ? getClosestAge(age) : 30; // Default to 30 if no age
+    const genderData = PERCENTILE_DATA[gender];
+    const ageData = genderData[ageToUse];
+
+    if (ageData) {
+      if (heightCm !== null) {
+        const percentile = calculatePercentile(heightCm, ageData.height);
+        results.push({
+          dimension: 'height',
+          value: heightCm,
+          percentile,
+          label: `Height: ${heightCm} cm`,
+        });
+      }
+
+      if (weightKg !== null) {
+        const percentile = calculatePercentile(weightKg, ageData.weight);
+        results.push({
+          dimension: 'weight',
+          value: weightKg,
+          percentile,
+          label: `Weight: ${weightKg} kg`,
+        });
+      }
+    }
+  } else {
+    // Without gender, show weight/height for both genders
+    if (heightCm !== null || weightKg !== null) {
+      const ageToUse = age ? getClosestAge(age) : 30;
+
+      for (const g of ['male', 'female'] as const) {
+        const genderData = PERCENTILE_DATA[g];
+        const ageData = genderData[ageToUse];
+
+        if (ageData) {
+          if (heightCm !== null) {
+            const percentile = calculatePercentile(heightCm, ageData.height);
+            results.push({
+              dimension: 'height',
+              value: heightCm,
+              percentile,
+              label: `Height: ${heightCm} cm (vs ${g === 'male' ? 'men' : 'women'})`,
+            });
+          }
+
+          if (weightKg !== null) {
+            const percentile = calculatePercentile(weightKg, ageData.weight);
+            results.push({
+              dimension: 'weight',
+              value: weightKg,
+              percentile,
+              label: `Weight: ${weightKg} kg (vs ${g === 'male' ? 'men' : 'women'})`,
+            });
+          }
+        }
+      }
+    }
   }
 
   return results;
 };
 
-export const DATA_SOURCE = 'CDC Growth Charts & WHO Global Health Observatory (2025)';
+export const DATA_SOURCE = 'CDC Growth Charts, WHO & UN World Population Prospects (2025)';
+
+/**
+ * World population constant (2025)
+ */
+export const WORLD_POPULATION = 8_231_613_070;
+
+/**
+ * Funnel step representing cumulative filtering of population
+ */
+export interface FunnelStep {
+  dimension: 'world' | 'age' | 'gender' | 'height' | 'weight';
+  label: string;
+  description: string;
+  population: number;
+  percentage: number; // percentage of world population
+}
+
+/**
+ * Calculate funnel data - progressive narrowing of population
+ * Each step shows how many people match all criteria up to that point
+ */
+export const calculateFunnel = (
+  age: number | null,
+  gender: 'male' | 'female' | null,
+  heightCm: number | null,
+  weightKg: number | null
+): FunnelStep[] => {
+  const steps: FunnelStep[] = [];
+  let currentPopulation = WORLD_POPULATION;
+
+  // Step 0: World population (always shown)
+  steps.push({
+    dimension: 'world',
+    label: 'World Population',
+    description: 'Everyone on Earth',
+    population: currentPopulation,
+    percentage: 100,
+  });
+
+  // Step 1: Filter by age (people in same age bracket ±2 years)
+  if (age !== null) {
+    // Find the age bracket population percentage
+    // We use a ±2 year window for "same age"
+    const ageWindowPercent = getAgeWindowPercentage(age, 2);
+    currentPopulation = Math.round(currentPopulation * (ageWindowPercent / 100));
+    steps.push({
+      dimension: 'age',
+      label: `Age ${age}`,
+      description: `People aged ${Math.max(0, age - 2)}-${age + 2}`,
+      population: currentPopulation,
+      percentage: (currentPopulation / WORLD_POPULATION) * 100,
+    });
+  }
+
+  // Step 2: Filter by gender
+  if (gender !== null) {
+    const genderPercent = GENDER_PERCENTAGES[gender];
+    currentPopulation = Math.round(currentPopulation * (genderPercent / 100));
+    steps.push({
+      dimension: 'gender',
+      label: gender === 'male' ? 'Male' : 'Female',
+      description: `${gender === 'male' ? 'Men' : 'Women'}${age !== null ? ` aged ~${age}` : ''}`,
+      population: currentPopulation,
+      percentage: (currentPopulation / WORLD_POPULATION) * 100,
+    });
+  }
+
+  // Step 3: Filter by height (within ±2cm)
+  if (heightCm !== null && gender !== null) {
+    const heightPercentile = getHeightRangePercentage(heightCm, age, gender, 2);
+    currentPopulation = Math.round(currentPopulation * (heightPercentile / 100));
+    steps.push({
+      dimension: 'height',
+      label: `${heightCm} cm tall`,
+      description: `Height ${heightCm - 2}-${heightCm + 2} cm`,
+      population: currentPopulation,
+      percentage: (currentPopulation / WORLD_POPULATION) * 100,
+    });
+  }
+
+  // Step 4: Filter by weight (within ±3kg)
+  if (weightKg !== null && gender !== null) {
+    const weightPercentile = getWeightRangePercentage(weightKg, age, gender, 3);
+    currentPopulation = Math.round(currentPopulation * (weightPercentile / 100));
+    steps.push({
+      dimension: 'weight',
+      label: `${weightKg} kg`,
+      description: `Weight ${weightKg - 3}-${weightKg + 3} kg`,
+      population: currentPopulation,
+      percentage: (currentPopulation / WORLD_POPULATION) * 100,
+    });
+  }
+
+  return steps;
+};
+
+/**
+ * Get percentage of population in an age window (±years around target age)
+ */
+const getAgeWindowPercentage = (age: number, windowYears: number): number => {
+  const minAge = Math.max(0, age - windowYears);
+  const maxAge = age + windowYears;
+
+  // Get cumulative percentages for the window bounds
+  const getCumulativePercent = (targetAge: number): number => {
+    if (targetAge <= 0) return 0;
+    for (let i = 0; i < AGE_CUMULATIVE_PERCENTAGES.length; i++) {
+      const bracket = AGE_CUMULATIVE_PERCENTAGES[i];
+      if (targetAge <= bracket.maxAge) {
+        const prevPercent = i === 0 ? 0 : AGE_CUMULATIVE_PERCENTAGES[i - 1].cumulativePercent;
+        const prevMaxAge = i === 0 ? 0 : AGE_CUMULATIVE_PERCENTAGES[i - 1].maxAge;
+        const bracketRange = bracket.maxAge - prevMaxAge;
+        const ageInBracket = targetAge - prevMaxAge;
+        const percentRange = bracket.cumulativePercent - prevPercent;
+        return prevPercent + (ageInBracket / bracketRange) * percentRange;
+      }
+    }
+    return 100;
+  };
+
+  const lowerPercent = getCumulativePercent(minAge);
+  const upperPercent = getCumulativePercent(maxAge);
+  return upperPercent - lowerPercent;
+};
+
+/**
+ * Get percentage of population within a height range
+ * Uses normal distribution approximation based on percentile data
+ */
+const getHeightRangePercentage = (
+  heightCm: number,
+  age: number | null,
+  gender: 'male' | 'female',
+  rangeCm: number
+): number => {
+  const ageToUse = age ? getClosestAge(age) : 30;
+  const data = PERCENTILE_DATA[gender][ageToUse]?.height;
+  if (!data) return 10; // fallback
+
+  // Calculate percentile for height-range and height+range
+  const lowerPercentile = calculatePercentile(heightCm - rangeCm, data);
+  const upperPercentile = calculatePercentile(heightCm + rangeCm, data);
+
+  return upperPercentile - lowerPercentile;
+};
+
+/**
+ * Get percentage of population within a weight range
+ */
+const getWeightRangePercentage = (
+  weightKg: number,
+  age: number | null,
+  gender: 'male' | 'female',
+  rangeKg: number
+): number => {
+  const ageToUse = age ? getClosestAge(age) : 30;
+  const data = PERCENTILE_DATA[gender][ageToUse]?.weight;
+  if (!data) return 10; // fallback
+
+  const lowerPercentile = calculatePercentile(weightKg - rangeKg, data);
+  const upperPercentile = calculatePercentile(weightKg + rangeKg, data);
+
+  return upperPercentile - lowerPercentile;
+};
 

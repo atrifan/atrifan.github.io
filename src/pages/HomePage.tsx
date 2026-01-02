@@ -151,12 +151,12 @@ export class HomePage extends Component<{}, HomePageState> {
             padding: '2rem 1.5rem',
             textAlign: 'center',
             cursor: 'pointer',
-            minHeight: '260px',
+            height: '280px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '1rem',
+            justifyContent: 'flex-start',
+            gap: '0.75rem',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.15)',
             animationDelay: `${delay}s`,
@@ -188,39 +188,44 @@ export class HomePage extends Component<{}, HomePageState> {
           }} />
 
           {/* Icon */}
-          <div className="animate-float" style={{ animationDelay: `${delay}s` }}>
-            {this.renderToolIcon(tool.id, 100)}
+          <div className="animate-float" style={{ animationDelay: `${delay}s`, flexShrink: 0 }}>
+            {this.renderToolIcon(tool.id, 80)}
           </div>
 
           {/* Brand Name */}
           <h2 style={{
-            fontSize: '2rem',
+            fontSize: '1.8rem',
             fontWeight: 800,
             color: '#ffffff',
             margin: 0,
             textShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             letterSpacing: '0.05em',
+            flexShrink: 0,
           }}>
             {tool.name}
           </h2>
 
           {/* Descriptive Name - SEO visible */}
           <h3 style={{
-            fontSize: '1.1rem',
+            fontSize: '1rem',
             fontWeight: 600,
             color: 'rgba(255, 255, 255, 0.95)',
             margin: 0,
+            flexShrink: 0,
           }}>
             {tool.descriptiveName}
           </h3>
 
-          {/* Short Description */}
+          {/* Short Description - takes remaining space */}
           <p style={{
-            fontSize: '0.95rem',
+            fontSize: '0.9rem',
             color: 'rgba(255, 255, 255, 0.8)',
             margin: 0,
             maxWidth: '250px',
             lineHeight: 1.4,
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
           }}>
             {tool.shortDescription}
           </p>
