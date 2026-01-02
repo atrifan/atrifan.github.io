@@ -131,7 +131,7 @@ export const ADS_CONFIG = {
   enabled: true,
 
   // Test mode - shows placeholder ads instead of real ones
-  testMode: import.meta.env.DEV,
+  testMode: process.env.NODE_ENV === 'development',
 };
 
 /**

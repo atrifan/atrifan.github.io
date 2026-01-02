@@ -1,0 +1,15 @@
+# Robots.txt for Tulzo
+# https://tulzo.vercel.app
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://tulzo.vercel.app/sitemap.xml
+
+# Crawl-delay (optional, for polite crawling)
+Crawl-delay: 1
+
+# Disallow API routes
+Disallow: /api/
+

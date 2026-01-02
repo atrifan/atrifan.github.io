@@ -38,12 +38,9 @@ export class CyclePage extends Component<object, CyclePageState> {
 
   constructor(props: object) {
     super(props);
-    const today = new Date();
-    const twoWeeksAgo = new Date(today);
-    twoWeeksAgo.setDate(today.getDate() - 14);
-    
+    // Use empty date for SSR, will be set in componentDidMount
     this.state = {
-      lastPeriodDate: twoWeeksAgo.toISOString().split('T')[0],
+      lastPeriodDate: '',
       cycleLength: 28,
       periodLength: 5,
       result: null,
@@ -52,6 +49,11 @@ export class CyclePage extends Component<object, CyclePageState> {
 
   componentDidMount() {
     applySEO('cycle');
+    // Set date on client side to avoid hydration mismatch
+    const today = new Date();
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    this.setState({ lastPeriodDate: twoWeeksAgo.toISOString().split('T')[0] });
   }
 
   private scrollToResults = () => {
@@ -169,7 +171,7 @@ export class CyclePage extends Component<object, CyclePageState> {
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.cycleTop} format="horizontal" /></View>
 
           {/* Header */}
-          <View UNSAFE_style={{ textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.25rem' }}><CycleIcon size={60} /></div>
             <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>CYCLE</h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem', fontSize: 'clamp(0.8rem, 2.5vw, 1rem)' }}>Period & Fertility Calculator</p>

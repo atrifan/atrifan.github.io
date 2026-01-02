@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { TulzoLogo } from './TulzoLogo';
 
 /**
@@ -7,12 +7,12 @@ import { TulzoLogo } from './TulzoLogo';
  */
 export const BackToTools: React.FC = () => {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
       {/* Clickable Logo */}
       <TulzoLogo />
 
       {/* Back to Home Link */}
-      <Link to="/" style={{ textDecoration: 'none' }}>
+      <Link href="/" style={{ textDecoration: 'none' }}>
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',

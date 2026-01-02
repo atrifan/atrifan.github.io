@@ -16,19 +16,23 @@ interface WhenPageState {
 export class WhenPage extends Component<object, WhenPageState> {
   constructor(props: object) {
     super(props);
-    
-    // Default to today's date
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
+
+    // Use a fixed date for SSR, will be updated in componentDidMount
     this.state = {
-      selectedDate: todayStr,
-      result: DateCalculator.calculate(todayStr),
+      selectedDate: '',
+      result: null,
     };
   }
 
   componentDidMount() {
     applySEO('when');
+    // Set today's date on client side to avoid hydration mismatch
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    this.setState({
+      selectedDate: todayStr,
+      result: DateCalculator.calculate(todayStr),
+    });
   }
 
   private handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {

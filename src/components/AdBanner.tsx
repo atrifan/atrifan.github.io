@@ -49,7 +49,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
 
   useEffect(() => {
     // Only load ads in production, when enabled, ready, and only once per component
-    if (!import.meta.env.PROD || !shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
+    if (process.env.NODE_ENV !== 'production' || !shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
       return;
     }
 
@@ -75,13 +75,16 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   }
 
   // Show placeholder in development/test mode
-  if (ADS_CONFIG.testMode || !import.meta.env.PROD) {
+  if (ADS_CONFIG.testMode || process.env.NODE_ENV !== 'production') {
     if (!isReady) return null;
     return (
       <View
         borderRadius="medium"
         marginY="size-200"
         UNSAFE_style={{
+          width: '100%',
+          maxWidth: '600px',
+          margin: '0 auto',
           minHeight: format === 'vertical' ? '250px' : '50px',
           display: 'flex',
           alignItems: 'center',
@@ -114,6 +117,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     <View
       marginY="size-200"
       UNSAFE_style={{
+        width: '100%',
+        maxWidth: '600px',
+        margin: '0 auto',
         minHeight: format === 'vertical' ? '250px' : '50px',
         overflow: 'hidden',
         ...style

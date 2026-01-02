@@ -1,5 +1,5 @@
 import { View, Flex } from '@adobe/react-spectrum';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 /**
  * 404 Not Found Page
@@ -48,7 +48,7 @@ export const NotFoundPage = () => {
         </View>
 
         <Link
-          to="/"
+          href="/"
           style={{
             display: 'inline-flex',
             alignItems: 'center',

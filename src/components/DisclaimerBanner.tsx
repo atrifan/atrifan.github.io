@@ -19,12 +19,16 @@ export const DisclaimerBanner: React.FC<DisclaimerBannerProps> = ({
     <View
       marginBottom="size-500"
       UNSAFE_style={{
+        width: '100%',
+        maxWidth: '600px',
+        margin: '0 auto',
         background: `linear-gradient(135deg, ${color}26 0%, ${color}1a 100%)`,
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
         border: `1px solid ${color}4d`,
         borderRadius: '20px',
         padding: '1.5rem 2rem',
+        boxSizing: 'border-box',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>

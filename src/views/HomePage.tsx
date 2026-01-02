@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
 import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
@@ -139,7 +139,7 @@ export class HomePage extends Component<{}, HomePageState> {
     return (
       <Link
         key={tool.id}
-        to={tool.path}
+        href={tool.path}
         style={{ textDecoration: 'none' }}
       >
         <div

@@ -10,11 +10,12 @@ interface WeatherData {
 }
 
 interface WeatherTimeCardState {
-  currentTime: Date;
+  currentTime: Date | null;
   location: string;
   weather: WeatherData | null;
   loading: boolean;
   error: boolean;
+  mounted: boolean;
 }
 
 export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
@@ -23,15 +24,19 @@ export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
   constructor(props: {}) {
     super(props);
     this.state = {
-      currentTime: new Date(),
+      currentTime: null, // Don't set time in constructor to avoid hydration mismatch
       location: 'Loading...',
       weather: null,
       loading: true,
       error: false,
+      mounted: false,
     };
   }
 
   componentDidMount() {
+    // Set initial time only on client side
+    this.setState({ currentTime: new Date(), mounted: true });
+
     this.timerInterval = window.setInterval(() => {
       this.setState({ currentTime: new Date() });
     }, 1000);
@@ -157,7 +162,29 @@ export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
   };
 
   render() {
-    const { currentTime, location, weather, loading } = this.state;
+    const { currentTime, location, weather, loading, mounted } = this.state;
+
+    // Show loading skeleton until mounted on client
+    if (!mounted || !currentTime) {
+      return (
+        <View UNSAFE_style={{ width: '100%', maxWidth: '600px', margin: '0 auto 2rem' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #374151 0%, #1f2937 100%)',
+            borderRadius: '24px',
+            padding: '1.5rem 2rem',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            minHeight: '150px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1rem' }}>⏳ Loading...</p>
+          </div>
+        </View>
+      );
+    }
+
     const hour = currentTime.getHours();
     const { phase, emoji, gradient } = this.getDayPhase(hour);
     const greeting = this.getGreeting(hour);

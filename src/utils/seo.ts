@@ -116,6 +116,16 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Are you a cat person or dog person? Take this fun 10-question personality quiz to find out! Discover your pet personality type with instant results.',
     keywords: ['cat or dog person', 'cat person quiz', 'dog person quiz', 'pet personality test', 'cat vs dog', 'personality quiz', 'which pet am I', 'animal personality'],
   },
+  cycle: {
+    title: 'Period Calculator - Menstrual Cycle & Fertility Tracker | Tulzo',
+    description: 'Free period calculator. Track your menstrual cycle, predict next period, and estimate fertile window. Simple cycle tracking for women.',
+    keywords: ['period calculator', 'menstrual cycle calculator', 'fertility calculator', 'ovulation calculator', 'period tracker', 'cycle tracker', 'next period'],
+  },
+  risk: {
+    title: 'Position Size Calculator - Trading Risk Management | Tulzo',
+    description: 'Free position size calculator for traders. Calculate optimal position size based on risk percentage, stop loss, and account size. Manage trading risk effectively.',
+    keywords: ['position size calculator', 'trading calculator', 'risk management', 'stop loss calculator', 'forex calculator', 'stock position size', 'risk reward'],
+  },
 };
 
 /**

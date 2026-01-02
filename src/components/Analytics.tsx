@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 // Declare gtag on window
 declare global {
@@ -10,19 +12,21 @@ declare global {
 
 /**
  * Analytics component that tracks page views on route changes
- * Must be placed inside a Router component
+ * Uses Next.js navigation hooks
  */
 export function Analytics() {
-  const location = useLocation();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     // Send page view to Google Analytics on route change
     if (window.gtag) {
+      const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : '');
       window.gtag('config', 'G-QSNTL3PGRJ', {
-        page_path: location.pathname + location.hash,
+        page_path: url,
       });
     }
-  }, [location]);
+  }, [pathname, searchParams]);
 
   return null;
 }

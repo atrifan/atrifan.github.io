@@ -87,17 +87,22 @@ export class ZonePage extends Component<{}, ZonePageState> {
 
   constructor(props: {}) {
     super(props);
-    const now = new Date();
+    // Use fixed time for SSR, will be updated in componentDidMount
     this.state = {
       fromZone: 'UTC',
       targetZones: ['America/New_York', 'Europe/London', 'Asia/Tokyo'],
-      inputTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+      inputTime: '12:00',
       hasConverted: false
     };
   }
 
   componentDidMount() {
     applySEO('zone');
+    // Set current time on client side to avoid hydration mismatch
+    const now = new Date();
+    this.setState({
+      inputTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+    });
   }
 
   private convertTime = (fromOffset: number, toOffset: number, hours: number, minutes: number) => {

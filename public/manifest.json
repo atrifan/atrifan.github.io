@@ -1,0 +1,22 @@
+{
+  "name": "Tulzo - Free Online Tools & Calculators",
+  "short_name": "Tulzo",
+  "description": "Free online tools: IQ test, sleep calculator, tip calculator, coin flip, wheel spinner, age calculator & more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/tulzo-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr"
+}
+

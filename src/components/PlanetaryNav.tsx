@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { CATEGORY_LABELS, ToolCategory, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 // Tool icons
 import { CutIcon } from './CutIcon';
@@ -44,11 +44,13 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
     super(props);
     this.state = {
       activeCategory: null,
-      isMobile: window.innerWidth < 768,
+      isMobile: false, // Default for SSR, will be updated in componentDidMount
     };
   }
 
   componentDidMount() {
+    // Set isMobile on client side to avoid hydration mismatch
+    this.setState({ isMobile: window.innerWidth < 768 });
     document.addEventListener('keydown', this.handleEscape);
     window.addEventListener('resize', this.handleResize);
   }
@@ -147,7 +149,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             marginBottom: '1.5rem',
             flexShrink: 0,
           }}>
-            <Link to="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <svg width="40" height="40" viewBox="0 0 120 120">
                 <defs>
                   <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -246,7 +248,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                   {toolsByCategory[category].map((tool, index) => (
                     <Link
                       key={tool.id}
-                      to={tool.path}
+                      href={tool.path}
                       onClick={onClose}
                       style={{
                         textDecoration: 'none',
