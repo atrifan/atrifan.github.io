@@ -1884,7 +1884,7 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         // Return list of widget template resources
         const resources = TOOLS.map(tool => ({
           uri: `ui://widget/${tool.name}.html`,
-          name: tool.name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          name: tool.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
           description: tool.description,
           mimeType: 'text/html',
         }));
@@ -1953,7 +1953,7 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
             uri: `ui://widget/${toolName}.html`,
             mimeType: 'text/html',
             text: widgetHtmlContent,
-            title: toolName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            title: toolName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
           }
         };
 
