@@ -1029,26 +1029,21 @@ function handleMCPRequest(request: MCPRequest): MCPResponse {
         // Generate widget URL if available
         const widgetUrl = generateWidgetUrl(toolName, result, toolArgs);
 
-        // Build content array with text and optional widget
-        const content: Array<{ type: string; text?: string; url?: string; mimeType?: string }> = [
-          { type: 'text', text: formatResultText(toolName, result) },
-        ];
+        // Build response text - Claude Desktop only supports text type
+        let responseText = formatResultText(toolName, result);
+        responseText += `\n\n📋 Raw data:\n${JSON.stringify(result, null, 2)}`;
 
-        // Add JSON data as secondary text content
-        content.push({ type: 'text', text: `\n\nRaw data:\n${JSON.stringify(result, null, 2)}` });
-
-        // Add widget URL as resource if available (for clients that support it)
         if (widgetUrl) {
-          content.push({
-            type: 'resource',
-            url: widgetUrl,
-            mimeType: 'text/html',
-          });
-          // Also add as text for clients that don't support resources
-          content.push({ type: 'text', text: `\n\n📊 Interactive widget: ${widgetUrl}` });
+          responseText += `\n\n📊 Interactive widget: ${widgetUrl}`;
         }
 
-        return { jsonrpc: '2.0', id, result: { content } };
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [{ type: 'text', text: responseText }]
+          }
+        };
       }
       default:
         return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
