@@ -926,25 +926,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
-// Base URL for widgets - supports localhost, Vercel preview, and production
-function getBaseUrl(request?: NextRequest): string {
-  // If we have a request, use its host
-  if (request) {
-    const host = request.headers.get('host');
-    if (host) {
-      const protocol = host.startsWith('localhost') ? 'http' : 'https';
-      return `${protocol}://${host}`;
-    }
-  }
-  // Fallback to environment variables
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  // Default to production
-  return 'https://tulzo.vercel.app';
-}
-
-// Map tool names to widget types for embed page
+// Map tool names to widget types
 function getWidgetType(toolName: string): string | null {
   const widgetMap: Record<string, string> = {
     'calculate_bmi': 'bmi',
@@ -963,12 +945,212 @@ function getWidgetType(toolName: string): string | null {
   return widgetMap[toolName] || null;
 }
 
-// Generate embed URL with query params (for Claude artifacts)
-function getEmbedUrl(baseUrl: string, toolName: string, data: Record<string, unknown>): string | null {
+// Common CSS styles for widgets
+const WIDGET_STYLES = `
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.card {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 320px;
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: #fff;
+  font-weight: 600;
+}
+.big-number {
+  font-size: 3.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+.label {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.stat-box {
+  background: rgba(255,255,255,0.1);
+  padding: 0.75rem;
+  border-radius: 8px;
+  text-align: center;
+}
+.stat-label { color: rgba(255,255,255,0.7); font-size: 0.75rem; }
+.stat-value { color: #fff; font-weight: 600; font-size: 1rem; }
+.footer {
+  margin-top: 1rem;
+  text-align: center;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.7rem;
+}
+`;
+
+// Generate self-contained widget HTML
+function generateWidgetHtml(toolName: string, data: Record<string, unknown>): string | null {
   const widgetType = getWidgetType(toolName);
   if (!widgetType) return null;
-  const encodedData = encodeURIComponent(JSON.stringify(data));
-  return `${baseUrl}/embed?tool=${widgetType}&data=${encodedData}`;
+
+  let content = '';
+
+  switch (widgetType) {
+    case 'bmi': {
+      const bmi = Number(data.bmi).toFixed(1);
+      const category = data.category as string;
+      const colorMap: Record<string, string> = { underweight: '#60a5fa', normal: '#10b981', overweight: '#f59e0b', obese: '#ef4444' };
+      const color = colorMap[category?.toLowerCase()] || '#fff';
+      content = `
+        <div class="header">📏 BMI Calculator</div>
+        <div class="big-number" style="color:${color}">${bmi}</div>
+        <div class="label" style="background:${color}33;color:${color}">${category}</div>
+        ${data.weight || data.height ? `<div class="stats">
+          ${data.weight ? `<div class="stat-box"><div class="stat-label">Weight</div><div class="stat-value">${data.weight} kg</div></div>` : ''}
+          ${data.height ? `<div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">${data.height} cm</div></div>` : ''}
+        </div>` : ''}`;
+      break;
+    }
+    case 'tip': {
+      content = `
+        <div class="header">💵 Tip Calculator</div>
+        <div class="big-number" style="color:#10b981">$${Number(data.total).toFixed(2)}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Total with ${data.tipPercent}% tip</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Bill</div><div class="stat-value">$${data.billAmount}</div></div>
+          <div class="stat-box"><div class="stat-label">Tip</div><div class="stat-value">$${Number(data.tipAmount).toFixed(2)}</div></div>
+          ${(data.splitWays as number) > 1 ? `<div class="stat-box" style="grid-column:span 2"><div class="stat-label">Per Person (${data.splitWays} ways)</div><div class="stat-value">$${Number(data.perPerson).toFixed(2)}</div></div>` : ''}
+        </div>`;
+      break;
+    }
+    case 'coin_flip': {
+      const isHeads = data.result === 'heads';
+      content = `
+        <div class="header">🪙 Coin Flip</div>
+        <div style="text-align:center;font-size:5rem;margin:1rem 0">${isHeads ? '👑' : '🦅'}</div>
+        <div class="big-number" style="color:${isHeads ? '#fbbf24' : '#94a3b8'};font-size:2rem">${(data.result as string).toUpperCase()}</div>`;
+      break;
+    }
+    case 'dice': {
+      const rolls = data.rolls as number[];
+      const diceEmoji = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+      content = `
+        <div class="header">🎲 Dice Roll</div>
+        <div style="text-align:center;font-size:3rem;margin:1rem 0">${rolls.map(r => (data.sides === 6 && r <= 6) ? diceEmoji[r] : r).join(' ')}</div>
+        <div class="big-number" style="color:#a78bfa">${data.total}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">Total from ${rolls.length} ${data.sides}-sided dice</div>`;
+      break;
+    }
+    case 'age': {
+      content = `
+        <div class="header">🎂 Age Calculator</div>
+        <div class="big-number" style="color:#f472b6">${data.years}</div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Years Old</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">${data.months}</div></div>
+          <div class="stat-box"><div class="stat-label">Days</div><div class="stat-value">${data.days}</div></div>
+          <div class="stat-box"><div class="stat-label">Total Days</div><div class="stat-value">${Number(data.totalDays).toLocaleString()}</div></div>
+          <div class="stat-box"><div class="stat-label">Next Birthday</div><div class="stat-value">${data.daysUntilNextBirthday} days</div></div>
+        </div>`;
+      break;
+    }
+    case 'zodiac': {
+      const p1 = data.person1 as { sign: string; name: string; symbol: string };
+      const p2 = data.person2 as { sign: string; name: string; symbol: string };
+      const compat = data.compatibility as number;
+      const color = compat >= 80 ? '#10b981' : compat >= 60 ? '#fbbf24' : '#ef4444';
+      content = `
+        <div class="header">💕 Zodiac Compatibility</div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:1rem;margin:1rem 0">
+          <div style="text-align:center"><div style="font-size:2.5rem">${p1.symbol}</div><div style="color:#fff;font-size:0.8rem">${p1.name}</div></div>
+          <div style="font-size:2rem">❤️</div>
+          <div style="text-align:center"><div style="font-size:2.5rem">${p2.symbol}</div><div style="color:#fff;font-size:0.8rem">${p2.name}</div></div>
+        </div>
+        <div class="big-number" style="color:${color}">${compat}%</div>
+        <div class="label" style="background:${color}33;color:${color}">${data.level}</div>`;
+      break;
+    }
+    case 'countdown': {
+      const isPast = data.isPast as boolean;
+      const isToday = data.isToday as boolean;
+      content = `
+        <div class="header">📅 Countdown</div>
+        <div style="text-align:center;color:#fff;font-size:1.1rem;margin-bottom:0.5rem">${data.eventName}</div>
+        ${isToday ? `<div class="big-number" style="color:#10b981">🎉</div><div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Today!</div>` : `
+          <div class="big-number" style="color:${isPast ? '#94a3b8' : '#60a5fa'}">${Math.abs(data.days as number)}</div>
+          <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">days ${isPast ? 'ago' : 'to go'}</div>
+          <div class="stats">
+            <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${Math.abs(data.weeks as number)}</div></div>
+            <div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">${Math.abs(data.months as number)}</div></div>
+          </div>`}`;
+      break;
+    }
+    case 'decision': {
+      content = `
+        <div class="header">🎱 Decision Maker</div>
+        <div style="text-align:center;font-size:4rem;margin:1rem 0">🎱</div>
+        <div class="big-number" style="color:#a78bfa;font-size:1.8rem">${data.decision}</div>`;
+      break;
+    }
+    case 'random_number': {
+      content = `
+        <div class="header">🔢 Random Number</div>
+        <div class="big-number" style="color:#60a5fa">${data.result}</div>
+        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Range: ${data.min} - ${data.max}</div>`;
+      break;
+    }
+    case 'lucky_number': {
+      content = `
+        <div class="header">🍀 Lucky Number</div>
+        <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🍀</div>
+        <div class="big-number" style="color:#10b981">${data.luckyNumber}</div>`;
+      break;
+    }
+    case 'pick_random': {
+      const selected = data.selected || data.result;
+      content = `
+        <div class="header">🎯 Random Pick</div>
+        <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🎯</div>
+        <div class="big-number" style="color:#f472b6;font-size:1.8rem">${selected}</div>
+        ${data.totalItems ? `<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Selected from ${data.totalItems} items</div>` : ''}`;
+      break;
+    }
+    default:
+      return null;
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${WIDGET_STYLES}</style>
+</head>
+<body>
+  <div class="card">${content}<div class="footer">tulzo.vercel.app</div></div>
+</body>
+</html>`;
 }
 
 // Format result as human-readable text
@@ -1005,9 +1187,8 @@ function formatResultText(toolName: string, result: unknown): string {
 }
 
 // Handle MCP requests
-function handleMCPRequest(mcpRequest: MCPRequest, httpRequest: NextRequest): MCPResponse {
+function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
   const { id, method, params } = mcpRequest;
-  const baseUrl = getBaseUrl(httpRequest);
 
   try {
     switch (method) {
@@ -1037,33 +1218,19 @@ function handleMCPRequest(mcpRequest: MCPRequest, httpRequest: NextRequest): MCP
         // Build response text
         const responseText = formatResultText(toolName, result);
 
-        // Get embed URL with query params
-        const embedUrl = getEmbedUrl(baseUrl, toolName, widgetData);
+        // Generate self-contained widget HTML
+        const widgetHtmlContent = generateWidgetHtml(toolName, widgetData);
 
         // Build content array
         const content: Array<{ type: string; text: string }> = [
           { type: 'text', text: responseText },
         ];
 
-        // Add widget HTML for Claude artifact rendering (iframe to embed page)
-        if (embedUrl) {
+        // Add widget HTML for Claude artifact rendering
+        if (widgetHtmlContent) {
           const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
 \`\`\`html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { min-height: 100vh; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); }
-    iframe { width: 100%; height: 100vh; border: none; }
-  </style>
-</head>
-<body>
-  <iframe src="${embedUrl}" allow="clipboard-write"></iframe>
-</body>
-</html>
+${widgetHtmlContent}
 \`\`\`
 This component is fully functional and ready for immediate use.`;
           content.push({ type: 'text', text: widgetHtml });
@@ -1089,7 +1256,7 @@ This component is fully functional and ready for immediate use.`;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const response = handleMCPRequest(body as MCPRequest, request);
+    const response = handleMCPRequest(body as MCPRequest);
     return NextResponse.json(response);
   } catch {
     return NextResponse.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 });
