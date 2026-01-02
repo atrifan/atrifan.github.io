@@ -27,6 +27,50 @@ const READ_ONLY_ANNOTATIONS = {
   openWorldHint: false,
 };
 
+// OpenAI widget metadata for tool definitions
+const OPENAI_WIDGET_META = {
+  'openai/toolInvocation/invoking': 'Calculating...',
+  'openai/toolInvocation/invoked': 'Calculation complete',
+  'openai/widgetAccessible': true,
+  'openai/resultCanProduceWidget': true,
+  'openai/widgetPrefersBorder': true,
+};
+
+// Tool-specific invoking/invoked messages
+const TOOL_INVOCATION_MESSAGES: Record<string, { invoking: string; invoked: string }> = {
+  calculate_bmi: { invoking: 'Calculating BMI...', invoked: 'BMI calculated' },
+  calculate_ideal_weight: { invoking: 'Calculating ideal weight...', invoked: 'Ideal weight calculated' },
+  calculate_bmr: { invoking: 'Calculating metabolic rate...', invoked: 'BMR calculated' },
+  generate_weight_loss_plan: { invoking: 'Generating weight loss plan...', invoked: 'Plan generated' },
+  calculate_savings_plan: { invoking: 'Calculating savings plan...', invoked: 'Savings plan ready' },
+  calculate_date_info: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
+  days_between_dates: { invoking: 'Calculating days...', invoked: 'Days calculated' },
+  random_number: { invoking: 'Generating random number...', invoked: 'Number generated' },
+  coin_flip: { invoking: 'Flipping coin...', invoked: 'Coin flipped' },
+  pick_random: { invoking: 'Picking random item...', invoked: 'Item selected' },
+  calculate_tip: { invoking: 'Calculating tip...', invoked: 'Tip calculated' },
+  calculate_percentage: { invoking: 'Calculating percentage...', invoked: 'Percentage calculated' },
+  calculate_age: { invoking: 'Calculating age...', invoked: 'Age calculated' },
+  convert_units: { invoking: 'Converting units...', invoked: 'Conversion complete' },
+  calculate_cycle: { invoking: 'Calculating cycle...', invoked: 'Cycle predictions ready' },
+  calculate_countdown: { invoking: 'Calculating countdown...', invoked: 'Countdown ready' },
+  make_decision: { invoking: 'Making decision...', invoked: 'Decision made' },
+  zodiac_compatibility: { invoking: 'Checking compatibility...', invoked: 'Compatibility calculated' },
+  get_zodiac_sign: { invoking: 'Looking up zodiac...', invoked: 'Zodiac found' },
+  generate_names: { invoking: 'Generating names...', invoked: 'Names generated' },
+  calculate_position_size: { invoking: 'Calculating position size...', invoked: 'Position size ready' },
+  calculate_sleep_times: { invoking: 'Calculating sleep times...', invoked: 'Sleep times ready' },
+  spin_wheel: { invoking: 'Spinning wheel...', invoked: 'Wheel stopped' },
+  convert_timezone: { invoking: 'Converting timezone...', invoked: 'Timezone converted' },
+  generate_unique_id: { invoking: 'Generating ID...', invoked: 'ID generated' },
+  lucky_number: { invoking: 'Finding lucky number...', invoked: 'Lucky number found' },
+  roll_dice: { invoking: 'Rolling dice...', invoked: 'Dice rolled' },
+  vibe_check: { invoking: 'Checking vibe...', invoked: 'Vibe checked' },
+  calculate_iq_score: { invoking: 'Calculating IQ...', invoked: 'IQ estimated' },
+  calculate_uniqueness: { invoking: 'Calculating uniqueness...', invoked: 'Uniqueness calculated' },
+  when_date_info: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
+};
+
 // Tool definitions for MCP with inputSchema, outputSchema, and annotations
 const TOOLS = [
   {
@@ -1807,8 +1851,35 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         // Generate self-contained widget HTML
         const widgetHtmlContent = generateWidgetHtml(toolName, widgetData);
 
-        // Build content array
-        const content: Array<{ type: string; text: string }> = [
+        // Get tool-specific invocation messages
+        const invocationMessages = TOOL_INVOCATION_MESSAGES[toolName] || {
+          invoking: 'Processing...',
+          invoked: 'Complete'
+        };
+
+        // Build OpenAI widget resource (EmbeddedResource style)
+        const widgetResource = {
+          type: 'resource',
+          resource: {
+            uri: `ui://widget/${toolName}.html`,
+            mimeType: 'text/html',
+            text: widgetHtmlContent,
+            title: toolName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          }
+        };
+
+        // Build _meta with OpenAI widget hints
+        const meta = {
+          'openai.com/widget': widgetResource,
+          'openai/toolInvocation/invoking': invocationMessages.invoking,
+          'openai/toolInvocation/invoked': invocationMessages.invoked,
+          'openai/widgetAccessible': true,
+          'openai/resultCanProduceWidget': true,
+          'openai/widgetPrefersBorder': true,
+        };
+
+        // Build content array with text result
+        const content: Array<{ type: string; text?: string; resource?: unknown }> = [
           { type: 'text', text: responseText },
         ];
 
@@ -1820,19 +1891,27 @@ ${widgetHtmlContent}
 This component is fully functional and ready for immediate use.`;
         content.push({ type: 'text', text: widgetHtml });
 
+        // Add embedded resource for OpenAI widget rendering
+        content.push({
+          type: 'resource',
+          resource: widgetResource.resource
+        });
+
         return {
           jsonrpc: '2.0',
           id,
           result: {
             content,
-            // For GPT: structuredContent with display HTML
+            // structuredContent with query args and result data
             structuredContent: {
+              query: toolArgs,
               result: widgetData,
               display: {
                 type: 'html',
                 content: widgetHtmlContent,
               }
             },
+            _meta: meta,
           }
         };
       }
