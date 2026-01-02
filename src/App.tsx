@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
+import { Analytics } from './components/Analytics';
 import { HomePage } from './pages/HomePage';
 import { CutPage } from './pages/CutPage';
 import { StackPage } from './pages/StackPage';
@@ -35,6 +36,7 @@ class App extends Component {
     return (
       <Provider theme={defaultTheme} colorScheme="dark">
         <HashRouter>
+          <Analytics />
           <Routes>
             <Route path="/" element={<HomePage />} />
             {/* Health */}
