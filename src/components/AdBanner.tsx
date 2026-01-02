@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { ADS_CONFIG, getAdClient, shouldShowAds } from '../config/ads.config';
 
@@ -6,6 +6,10 @@ interface AdBannerProps {
   slot: string;
   format?: 'auto' | 'horizontal' | 'vertical';
   style?: React.CSSProperties;
+  /** Delay in ms before showing ad - ensures content loads first */
+  delay?: number;
+  /** Only show ad when this condition is true (e.g., when results are available) */
+  showWhen?: boolean;
 }
 
 /**
@@ -13,18 +17,39 @@ interface AdBannerProps {
  * Matches AdSense's expected code structure:
  * - <ins> element with required data attributes
  * - Push call to initialize the ad
+ *
+ * AdSense Policy Compliance:
+ * - Delays ad loading to ensure content is present (2s default)
+ * - Can conditionally show ads only when meaningful content exists
  */
 export const AdBanner: React.FC<AdBannerProps> = ({
   slot,
   format = 'auto',
-  style = {}
+  style = {},
+  delay = 2000,
+  showWhen = true
 }) => {
   const adRef = useRef<HTMLModElement>(null);
   const isAdLoaded = useRef(false);
+  const [isReady, setIsReady] = useState(false);
+
+  // Delay ad rendering to ensure page content loads first
+  useEffect(() => {
+    if (!showWhen) {
+      setIsReady(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay, showWhen]);
 
   useEffect(() => {
-    // Only load ads in production, when enabled, and only once per component
-    if (!import.meta.env.PROD || !shouldShowAds() || ADS_CONFIG.testMode) {
+    // Only load ads in production, when enabled, ready, and only once per component
+    if (!import.meta.env.PROD || !shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
       return;
     }
 
@@ -42,15 +67,16 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     } catch (err) {
       console.error('AdSense error:', err);
     }
-  }, [slot]);
+  }, [slot, isReady]);
 
-  // Don't render if ads are disabled
-  if (!shouldShowAds()) {
+  // Don't render if ads are disabled or showWhen condition is false
+  if (!shouldShowAds() || !showWhen) {
     return null;
   }
 
   // Show placeholder in development/test mode
   if (ADS_CONFIG.testMode || !import.meta.env.PROD) {
+    if (!isReady) return null;
     return (
       <View
         borderRadius="medium"
@@ -76,6 +102,11 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         </div>
       </View>
     );
+  }
+
+  // Don't render production ad until ready (content has loaded)
+  if (!isReady) {
+    return null;
   }
 
   // Production ad - matches AdSense code structure exactly

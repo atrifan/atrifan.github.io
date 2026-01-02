@@ -9,6 +9,7 @@ import { WhenPage } from './pages/WhenPage';
 import { TapPage } from './pages/TapPage';
 import { LuckPage } from './pages/LuckPage';
 import { MatchPage } from './pages/MatchPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 // New tools
 import { AgePage } from './pages/AgePage';
 import { DaysPage } from './pages/DaysPage';
@@ -66,6 +67,8 @@ class App extends Component {
             <Route path="/match" element={<MatchPage />} />
             <Route path="/brain" element={<BrainPage />} />
             <Route path="/vibe" element={<VibePage />} />
+            {/* 404 - No ads on this page */}
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </HashRouter>
       </Provider>
