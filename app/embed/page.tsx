@@ -1,13 +1,13 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { 
-  BmiWidget, 
-  TipWidget, 
-  CoinFlipWidget, 
-  DiceWidget, 
-  AgeWidget, 
+import { Suspense, useState, useEffect } from 'react';
+import {
+  BmiWidget,
+  TipWidget,
+  CoinFlipWidget,
+  DiceWidget,
+  AgeWidget,
   ZodiacWidget,
   CountdownWidget,
   DecisionWidget,
@@ -16,122 +16,183 @@ import {
   PickRandomWidget,
 } from '@/src/components/widgets';
 
+// Extend window for OpenAI
+declare global {
+  interface Window {
+    openai?: {
+      toolOutput?: {
+        result?: Record<string, unknown>;
+      };
+    };
+  }
+}
+
+interface WidgetData {
+  tool: string;
+  data: Record<string, unknown>;
+}
+
 function EmbedContent() {
   const searchParams = useSearchParams();
-  const tool = searchParams.get('tool');
-  const data = searchParams.get('data');
-  
-  if (!tool || !data) {
-    return (
-      <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
-        Missing tool or data parameter
-      </div>
-    );
-  }
+  const [widgetData, setWidgetData] = useState<WidgetData | null>(null);
 
-  let parsedData: Record<string, unknown>;
-  try {
-    parsedData = JSON.parse(decodeURIComponent(data));
-  } catch {
-    return (
-      <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
-        Invalid data format
-      </div>
-    );
-  }
+  useEffect(() => {
+    // Try to get data from OpenAI first
+    const tryOpenAI = () => {
+      if (window.openai?.toolOutput?.result) {
+        const result = window.openai.toolOutput.result;
+        const tool = searchParams.get('tool') || detectToolFromData(result);
+        if (tool) {
+          setWidgetData({ tool, data: result });
+          return true;
+        }
+      }
+      return false;
+    };
 
-  const renderWidget = () => {
-    switch (tool) {
-      case 'bmi':
-        return <BmiWidget 
-          bmi={parsedData.bmi as number} 
-          category={parsedData.category as string}
-          weight={parsedData.weight as number}
-          height={parsedData.height as number}
-        />;
-      case 'tip':
-        return <TipWidget 
-          billAmount={parsedData.billAmount as number}
-          tipPercent={parsedData.tipPercent as number}
-          tipAmount={parsedData.tipAmount as number}
-          total={parsedData.total as number}
-          perPerson={parsedData.perPerson as number}
-          splitWays={parsedData.splitWays as number}
-        />;
-      case 'coin_flip':
-        return <CoinFlipWidget result={parsedData.result as 'heads' | 'tails'} />;
-      case 'dice':
-        return <DiceWidget 
-          rolls={parsedData.rolls as number[]} 
-          total={parsedData.total as number}
-          sides={parsedData.sides as number}
-        />;
-      case 'age':
-        return <AgeWidget 
-          years={parsedData.years as number}
-          months={parsedData.months as number}
-          days={parsedData.days as number}
-          totalDays={parsedData.totalDays as number}
-          daysUntilNextBirthday={parsedData.daysUntilNextBirthday as number}
-        />;
-      case 'zodiac':
-        return <ZodiacWidget 
-          person1={parsedData.person1 as { sign: string; name: string; symbol: string }}
-          person2={parsedData.person2 as { sign: string; name: string; symbol: string }}
-          compatibility={parsedData.compatibility as number}
-        />;
-      case 'countdown':
-        return <CountdownWidget 
-          eventName={parsedData.eventName as string}
-          days={parsedData.days as number}
-          weeks={parsedData.weeks as number}
-          months={parsedData.months as number}
-          isPast={parsedData.isPast as boolean}
-          isToday={parsedData.isToday as boolean}
-        />;
-      case 'decision':
-        return <DecisionWidget 
-          decision={parsedData.decision as string}
-          mode={parsedData.mode as 'yesNo' | 'custom'}
-          options={parsedData.options as string[]}
-        />;
-      case 'random_number':
-        return <RandomNumberWidget 
-          result={parsedData.result as number}
-          min={parsedData.min as number}
-          max={parsedData.max as number}
-        />;
-      case 'lucky_number':
-        return <LuckyNumberWidget 
-          luckyNumber={parsedData.luckyNumber as number}
-          max={parsedData.max as number}
-        />;
-      case 'pick_random':
-        return <PickRandomWidget 
-          selected={parsedData.selected as string}
-          totalItems={parsedData.totalItems as number}
-        />;
-      default:
-        return (
-          <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
-            Unknown widget: {tool}
-          </div>
-        );
+    // Listen for OpenAI set_globals event
+    const handleOpenAI = () => tryOpenAI();
+    window.addEventListener('openai:set_globals', handleOpenAI);
+
+    // Try immediately in case data is already there
+    if (tryOpenAI()) {
+      return () => window.removeEventListener('openai:set_globals', handleOpenAI);
     }
-  };
+
+    // Fall back to query params
+    const tool = searchParams.get('tool');
+    const dataParam = searchParams.get('data');
+
+    if (tool && dataParam) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(dataParam));
+        setWidgetData({ tool, data: parsed });
+      } catch {
+        // Invalid data format
+      }
+    }
+
+    return () => window.removeEventListener('openai:set_globals', handleOpenAI);
+  }, [searchParams]);
+
+  if (!widgetData) {
+    return (
+      <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
+        Waiting for data...
+      </div>
+    );
+  }
+
+  const { tool, data } = widgetData;
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
       justifyContent: 'center',
       padding: '1rem',
       background: 'transparent',
     }}>
-      {renderWidget()}
+      {renderWidget(tool, data)}
     </div>
   );
+}
+
+// Detect tool type from data structure
+function detectToolFromData(data: Record<string, unknown>): string | null {
+  if ('bmi' in data && 'category' in data) return 'bmi';
+  if ('tipAmount' in data && 'billAmount' in data) return 'tip';
+  if ('result' in data && (data.result === 'heads' || data.result === 'tails')) return 'coin_flip';
+  if ('rolls' in data && Array.isArray(data.rolls)) return 'dice';
+  if ('years' in data && 'daysUntilNextBirthday' in data) return 'age';
+  if ('person1' in data && 'person2' in data && 'compatibility' in data) return 'zodiac';
+  if ('eventName' in data && 'days' in data) return 'countdown';
+  if ('decision' in data) return 'decision';
+  if ('luckyNumber' in data) return 'lucky_number';
+  if ('selected' in data || ('result' in data && 'totalItems' in data)) return 'pick_random';
+  if ('result' in data && 'min' in data && 'max' in data) return 'random_number';
+  return null;
+}
+
+function renderWidget(tool: string, data: Record<string, unknown>) {
+  switch (tool) {
+    case 'bmi':
+      return <BmiWidget
+        bmi={data.bmi as number}
+        category={data.category as string}
+        weight={data.weight as number}
+        height={data.height as number}
+      />;
+    case 'tip':
+      return <TipWidget
+        billAmount={data.billAmount as number}
+        tipPercent={data.tipPercent as number}
+        tipAmount={data.tipAmount as number}
+        total={data.total as number}
+        perPerson={data.perPerson as number}
+        splitWays={data.splitWays as number}
+      />;
+    case 'coin_flip':
+      return <CoinFlipWidget result={data.result as 'heads' | 'tails'} />;
+    case 'dice':
+      return <DiceWidget
+        rolls={data.rolls as number[]}
+        total={data.total as number}
+        sides={data.sides as number}
+      />;
+    case 'age':
+      return <AgeWidget
+        years={data.years as number}
+        months={data.months as number}
+        days={data.days as number}
+        totalDays={data.totalDays as number}
+        daysUntilNextBirthday={data.daysUntilNextBirthday as number}
+      />;
+    case 'zodiac':
+      return <ZodiacWidget
+        person1={data.person1 as { sign: string; name: string; symbol: string }}
+        person2={data.person2 as { sign: string; name: string; symbol: string }}
+        compatibility={data.compatibility as number}
+      />;
+    case 'countdown':
+      return <CountdownWidget
+        eventName={data.eventName as string}
+        days={data.days as number}
+        weeks={data.weeks as number}
+        months={data.months as number}
+        isPast={data.isPast as boolean}
+        isToday={data.isToday as boolean}
+      />;
+    case 'decision':
+      return <DecisionWidget
+        decision={data.decision as string}
+        mode={data.mode as 'yesNo' | 'custom'}
+        options={data.options as string[]}
+      />;
+    case 'random_number':
+      return <RandomNumberWidget
+        result={data.result as number}
+        min={data.min as number}
+        max={data.max as number}
+      />;
+    case 'lucky_number':
+      return <LuckyNumberWidget
+        luckyNumber={data.luckyNumber as number}
+        max={data.max as number}
+      />;
+    case 'pick_random':
+      return <PickRandomWidget
+        selected={(data.selected || data.result) as string}
+        totalItems={data.totalItems as number}
+      />;
+    default:
+      return (
+        <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
+          Unknown widget: {tool}
+        </div>
+      );
+  }
 }
 
 export default function EmbedPage() {

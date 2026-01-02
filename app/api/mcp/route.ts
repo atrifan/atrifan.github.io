@@ -931,30 +931,31 @@ const BASE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : 'https://tulzo.vercel.app';
 
-// Map tool names to widget HTML files
-function getWidgetFile(toolName: string): string | null {
+// Map tool names to widget types for embed page
+function getWidgetType(toolName: string): string | null {
   const widgetMap: Record<string, string> = {
     'calculate_bmi': 'bmi',
     'calculate_tip': 'tip',
-    'coin_flip': 'coin',
+    'coin_flip': 'coin_flip',
     'roll_dice': 'dice',
     'calculate_age': 'age',
     'zodiac_compatibility': 'zodiac',
     'calculate_countdown': 'countdown',
     'make_decision': 'decision',
-    'random_number': 'random',
-    'lucky_number': 'random',
-    'pick_random': 'pick',
-    'spin_wheel': 'pick',
+    'random_number': 'random_number',
+    'lucky_number': 'lucky_number',
+    'pick_random': 'pick_random',
+    'spin_wheel': 'pick_random',
   };
   return widgetMap[toolName] || null;
 }
 
-// Get widget URL for GPT
-function getWidgetUrl(toolName: string): string | null {
-  const widgetFile = getWidgetFile(toolName);
-  if (!widgetFile) return null;
-  return `${BASE_URL}/widgets/${widgetFile}.html`;
+// Generate embed URL with query params (for Claude artifacts)
+function getEmbedUrl(toolName: string, data: Record<string, unknown>): string | null {
+  const widgetType = getWidgetType(toolName);
+  if (!widgetType) return null;
+  const encodedData = encodeURIComponent(JSON.stringify(data));
+  return `${BASE_URL}/embed?tool=${widgetType}&data=${encodedData}`;
 }
 
 // Format result as human-readable text
@@ -1022,34 +1023,31 @@ function handleMCPRequest(request: MCPRequest): MCPResponse {
         // Build response text
         const responseText = formatResultText(toolName, result);
 
-        // Get widget URL for GPT
-        const widgetUrl = getWidgetUrl(toolName);
+        // Get embed URL with query params
+        const embedUrl = getEmbedUrl(toolName, widgetData);
 
         // Build content array
         const content: Array<{ type: string; text: string }> = [
           { type: 'text', text: responseText },
         ];
 
-        // Add widget HTML for Claude artifact rendering
-        if (widgetUrl) {
+        // Add widget HTML for Claude artifact rendering (iframe to embed page)
+        if (embedUrl) {
           const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
 \`\`\`html
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <script>window.__WIDGET_DATA__ = ${JSON.stringify(widgetData)};</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { min-height: 100vh; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); }
+    iframe { width: 100%; height: 100vh; border: none; }
+  </style>
 </head>
 <body>
-  <script>
-    fetch('${widgetUrl}')
-      .then(r => r.text())
-      .then(html => {
-        document.open();
-        document.write(html.replace('</head>', '<script>window.__WIDGET_DATA__ = ' + JSON.stringify(${JSON.stringify(widgetData)}) + ';<\\/script></head>'));
-        document.close();
-      });
-  </script>
+  <iframe src="${embedUrl}" allow="clipboard-write"></iframe>
 </body>
 </html>
 \`\`\`
