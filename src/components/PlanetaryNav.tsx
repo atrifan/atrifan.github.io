@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import Link from 'next/link';
+import { SignedIn } from '@clerk/nextjs';
 import { CATEGORY_LABELS, ToolCategory, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 // Tool icons
 import { CutIcon } from './CutIcon';
@@ -149,20 +150,34 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             marginBottom: '1.5rem',
             flexShrink: 0,
           }}>
-            <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <svg width="40" height="40" viewBox="0 0 120 120">
-                <defs>
-                  <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#667eea" />
-                    <stop offset="50%" stopColor="#764ba2" />
-                    <stop offset="100%" stopColor="#f472b6" />
-                  </linearGradient>
-                </defs>
-                <circle cx="60" cy="60" r="56" fill="url(#navLogoGrad)" />
-                <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
-              </svg>
-              <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800 }}>TULZO</span>
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <svg width="40" height="40" viewBox="0 0 120 120">
+                  <defs>
+                    <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#667eea" />
+                      <stop offset="50%" stopColor="#764ba2" />
+                      <stop offset="100%" stopColor="#f472b6" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="60" cy="60" r="56" fill="url(#navLogoGrad)" />
+                  <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
+                </svg>
+                <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800 }}>TULZO</span>
+              </Link>
+              <SignedIn>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.5rem', fontWeight: 300 }}>|</span>
+                <Link href="/dashboard" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#667eea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                  <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 600 }}>Dashboard</span>
+                </Link>
+              </SignedIn>
+            </div>
             <button
               onClick={onClose}
               style={{

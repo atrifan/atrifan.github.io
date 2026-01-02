@@ -9,6 +9,10 @@ interface WeatherData {
   windSpeed: number;
 }
 
+interface WeatherTimeCardProps {
+  userName?: string | null;
+}
+
 interface WeatherTimeCardState {
   currentTime: Date | null;
   location: string;
@@ -18,10 +22,10 @@ interface WeatherTimeCardState {
   mounted: boolean;
 }
 
-export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
+export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTimeCardState> {
   private timerInterval: number | null = null;
 
-  constructor(props: {}) {
+  constructor(props: WeatherTimeCardProps) {
     super(props);
     this.state = {
       currentTime: null, // Don't set time in constructor to avoid hydration mismatch
@@ -198,7 +202,7 @@ export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {emoji} {greeting}!
+                {emoji} {greeting}{this.props.userName ? `, ${this.props.userName}` : ''}!
               </p>
               <p style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.8)', margin: '0.25rem 0 0' }}>📍 {location}</p>
             </div>

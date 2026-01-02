@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@adobe/react-spectrum": "^3.36.0",
+    "@clerk/nextjs": "^6.36.5",
+    "@clerk/themes": "^2.4.46",
     "@spectrum-icons/illustrations": "^3.6.14",
     "@spectrum-icons/workflow": "^4.2.13",
     "next": "^14.2.21",

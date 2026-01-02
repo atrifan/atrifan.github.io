@@ -125,6 +125,14 @@ export const ADS_CONFIG = {
     riskTop: '7912539132',
     riskResults: '4846218639',
     riskFooter: '6186386313',
+
+    // PRICING page ads
+    pricingTop: '6996372276',
+    pricingFooter: '2643367756',
+
+    // DASHBOARD page ads
+    dashboardTop: '2779099121',
+    dashboardFooter: '5852835087',
   },
 
   // Enable/disable ads (useful for development)

@@ -29,7 +29,7 @@ import { BrainIcon } from '../components/BrainIcon';
 import { VibeIcon } from '../components/VibeIcon';
 import { CycleIcon } from '../components/CycleIcon';
 import { RiskIcon } from '../components/RiskIcon';
-import { WeatherTimeCard } from '../components/WeatherTimeCard';
+import { WeatherTimeCardWrapper } from '../components/WeatherTimeCardWrapper';
 import { Footer } from '../components/Footer';
 
 interface HomePageState {
@@ -334,7 +334,7 @@ export class HomePage extends Component<{}, HomePageState> {
           </View>
 
           {/* Weather & Time Card */}
-          <WeatherTimeCard />
+          <WeatherTimeCardWrapper />
 
           {/* Ad Banner - Home Hero */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>

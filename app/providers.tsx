@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { Analytics } from '@/src/components/Analytics';
+import { Header } from '@/src/components/Header';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -52,7 +53,10 @@ export function Providers({ children }: ProvidersProps) {
       <Suspense fallback={null}>
         <Analytics />
       </Suspense>
-      {children}
+      <Header />
+      <main style={{ paddingTop: '60px' }}>
+        {children}
+      </main>
     </Provider>
   );
 }

@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
+import { dark } from '@clerk/themes';
 import { Providers } from './providers';
 import '@/styles/globals.css';
 
@@ -119,7 +121,19 @@ export default function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        <Providers>{children}</Providers>
+        <ClerkProvider
+          appearance={{
+            baseTheme: dark,
+            variables: {
+              colorPrimary: '#667eea',
+              colorBackground: '#1e293b',
+              colorInputBackground: '#0f172a',
+              colorText: '#ffffff',
+            },
+          }}
+        >
+          <Providers>{children}</Providers>
+        </ClerkProvider>
       </body>
     </html>
   );
