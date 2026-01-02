@@ -27,10 +27,20 @@ export interface AgeGenderData {
 // Height percentiles by age and gender (in cm)
 // Weight percentiles by age and gender (in kg)
 // Data represents US/Global averages from CDC/WHO 2025 data
+// For babies (0-2 years), ages are stored as decimals (e.g., 0.5 = 6 months)
 
 export const PERCENTILE_DATA: Record<string, Record<number, AgeGenderData>> = {
   male: {
-    // Children and teens
+    // Babies (0-23 months) - WHO Child Growth Standards
+    0: { height: { p5: 46.3, p10: 47.5, p25: 49.1, p50: 50.5, p75: 51.8, p90: 53.4, p95: 54.4 }, weight: { p5: 2.5, p10: 2.8, p25: 3.1, p50: 3.5, p75: 3.9, p90: 4.3, p95: 4.6 } },
+    0.25: { height: { p5: 53.4, p10: 54.7, p25: 56.5, p50: 58.4, p75: 60.2, p90: 62.0, p95: 63.2 }, weight: { p5: 4.1, p10: 4.5, p25: 5.0, p50: 5.6, p75: 6.2, p90: 6.9, p95: 7.4 } },
+    0.5: { height: { p5: 61.1, p10: 62.5, p25: 64.4, p50: 66.4, p75: 68.4, p90: 70.3, p95: 71.6 }, weight: { p5: 5.9, p10: 6.4, p25: 7.1, p50: 7.9, p75: 8.8, p90: 9.7, p95: 10.3 } },
+    0.75: { height: { p5: 65.5, p10: 66.9, p25: 68.9, p50: 71.0, p75: 73.1, p90: 75.1, p95: 76.5 }, weight: { p5: 7.0, p10: 7.5, p25: 8.3, p50: 9.2, p75: 10.2, p90: 11.2, p95: 11.9 } },
+    1: { height: { p5: 69.5, p10: 71.0, p25: 73.1, p50: 75.2, p75: 77.4, p90: 79.5, p95: 80.9 }, weight: { p5: 7.8, p10: 8.4, p25: 9.2, p50: 10.2, p75: 11.3, p90: 12.4, p95: 13.1 } },
+    1.25: { height: { p5: 72.3, p10: 73.8, p25: 76.0, p50: 78.3, p75: 80.5, p90: 82.7, p95: 84.2 }, weight: { p5: 8.5, p10: 9.1, p25: 10.0, p50: 11.0, p75: 12.1, p90: 13.3, p95: 14.1 } },
+    1.5: { height: { p5: 75.0, p10: 76.6, p25: 78.9, p50: 81.2, p75: 83.5, p90: 85.8, p95: 87.3 }, weight: { p5: 9.1, p10: 9.7, p25: 10.7, p50: 11.8, p75: 12.9, p90: 14.2, p95: 15.0 } },
+    1.75: { height: { p5: 77.5, p10: 79.1, p25: 81.5, p50: 83.9, p75: 86.3, p90: 88.7, p95: 90.2 }, weight: { p5: 9.6, p10: 10.3, p25: 11.3, p50: 12.4, p75: 13.7, p90: 15.0, p95: 15.9 } },
+    // Children and teens (2+ years)
     2: { height: { p5: 82.5, p10: 84.0, p25: 86.5, p50: 89.0, p75: 91.5, p90: 94.0, p95: 95.5 }, weight: { p5: 10.5, p10: 11.0, p25: 12.0, p50: 13.0, p75: 14.2, p90: 15.5, p95: 16.5 } },
     3: { height: { p5: 89.0, p10: 91.0, p25: 94.0, p50: 97.0, p75: 100.0, p90: 103.0, p95: 105.0 }, weight: { p5: 12.0, p10: 12.8, p25: 14.0, p50: 15.5, p75: 17.0, p90: 18.5, p95: 19.5 } },
     4: { height: { p5: 95.5, p10: 97.5, p25: 101.0, p50: 104.5, p75: 108.0, p90: 111.0, p95: 113.0 }, weight: { p5: 13.5, p10: 14.5, p25: 16.0, p50: 17.5, p75: 19.5, p90: 21.5, p95: 23.0 } },
@@ -64,7 +74,16 @@ export const PERCENTILE_DATA: Record<string, Record<number, AgeGenderData>> = {
     80: { height: { p5: 156.0, p10: 160.0, p25: 166.0, p50: 172.0, p75: 178.0, p90: 183.0, p95: 186.0 }, weight: { p5: 56.0, p10: 62.0, p25: 71.0, p50: 81.5, p75: 94.0, p90: 108.0, p95: 118.0 } },
   },
   female: {
-    // Children and teens
+    // Babies (0-23 months) - WHO Child Growth Standards
+    0: { height: { p5: 45.6, p10: 46.6, p25: 48.2, p50: 49.5, p75: 50.8, p90: 52.3, p95: 53.3 }, weight: { p5: 2.4, p10: 2.6, p25: 2.9, p50: 3.3, p75: 3.7, p90: 4.0, p95: 4.3 } },
+    0.25: { height: { p5: 52.2, p10: 53.4, p25: 55.1, p50: 56.9, p75: 58.7, p90: 60.4, p95: 61.5 }, weight: { p5: 3.8, p10: 4.1, p25: 4.6, p50: 5.1, p75: 5.7, p90: 6.3, p95: 6.7 } },
+    0.5: { height: { p5: 59.5, p10: 60.8, p25: 62.7, p50: 64.7, p75: 66.6, p90: 68.5, p95: 69.7 }, weight: { p5: 5.4, p10: 5.8, p25: 6.5, p50: 7.3, p75: 8.1, p90: 8.9, p95: 9.5 } },
+    0.75: { height: { p5: 63.7, p10: 65.1, p25: 67.1, p50: 69.2, p75: 71.2, p90: 73.2, p95: 74.5 }, weight: { p5: 6.4, p10: 6.9, p25: 7.6, p50: 8.5, p75: 9.4, p90: 10.4, p95: 11.0 } },
+    1: { height: { p5: 67.5, p10: 68.9, p25: 71.0, p50: 73.2, p75: 75.3, p90: 77.4, p95: 78.8 }, weight: { p5: 7.1, p10: 7.7, p25: 8.5, p50: 9.5, p75: 10.5, p90: 11.6, p95: 12.3 } },
+    1.25: { height: { p5: 70.1, p10: 71.6, p25: 73.8, p50: 76.0, p75: 78.2, p90: 80.4, p95: 81.8 }, weight: { p5: 7.7, p10: 8.3, p25: 9.2, p50: 10.2, p75: 11.3, p90: 12.5, p95: 13.2 } },
+    1.5: { height: { p5: 72.6, p10: 74.1, p25: 76.4, p50: 78.7, p75: 81.0, p90: 83.3, p95: 84.8 }, weight: { p5: 8.2, p10: 8.9, p25: 9.8, p50: 10.9, p75: 12.0, p90: 13.3, p95: 14.0 } },
+    1.75: { height: { p5: 74.9, p10: 76.5, p25: 78.9, p50: 81.3, p75: 83.7, p90: 86.0, p95: 87.6 }, weight: { p5: 8.7, p10: 9.4, p25: 10.4, p50: 11.5, p75: 12.7, p90: 14.0, p95: 14.8 } },
+    // Children and teens (2+ years)
     2: { height: { p5: 81.0, p10: 82.5, p25: 85.0, p50: 87.5, p75: 90.0, p90: 92.5, p95: 94.0 }, weight: { p5: 10.0, p10: 10.5, p25: 11.5, p50: 12.5, p75: 13.5, p90: 14.8, p95: 15.8 } },
     3: { height: { p5: 87.5, p10: 89.5, p25: 92.5, p50: 95.5, p75: 98.5, p90: 101.5, p95: 103.5 }, weight: { p5: 11.5, p10: 12.2, p25: 13.5, p50: 15.0, p75: 16.5, p90: 18.0, p95: 19.0 } },
     4: { height: { p5: 94.0, p10: 96.0, p25: 99.5, p50: 103.0, p75: 106.5, p90: 110.0, p95: 112.0 }, weight: { p5: 13.0, p10: 14.0, p25: 15.5, p50: 17.0, p75: 19.0, p90: 21.0, p95: 22.5 } },
@@ -100,13 +119,129 @@ export const PERCENTILE_DATA: Record<string, Record<number, AgeGenderData>> = {
 };
 
 /**
+ * Eye Color Distribution (Global estimates based on population genetics research)
+ * Sources: Various population genetics studies, World Atlas demographics
+ * Note: These are approximate global percentages
+ */
+export type EyeColor = 'brown' | 'blue' | 'hazel' | 'amber' | 'green' | 'gray';
+
+export const EYE_COLOR_PERCENTAGES: Record<EyeColor, number> = {
+  brown: 70,      // Most common globally (dominant gene)
+  blue: 8,        // Common in European ancestry
+  hazel: 5,       // Mix of brown and green
+  amber: 5,       // Golden/copper tones
+  green: 2,       // Rarest natural eye color
+  gray: 3,        // Rare, often considered blue variant
+};
+
+export const EYE_COLOR_LABELS: Record<EyeColor, string> = {
+  brown: 'Brown',
+  blue: 'Blue',
+  hazel: 'Hazel',
+  amber: 'Amber',
+  green: 'Green',
+  gray: 'Gray',
+};
+
+/**
+ * Hair Color Distribution (Global estimates)
+ * Sources: Population genetics research, demographic studies
+ */
+export type HairColor = 'black' | 'brown' | 'blonde' | 'red' | 'gray' | 'auburn';
+
+export const HAIR_COLOR_PERCENTAGES: Record<HairColor, number> = {
+  black: 75,      // Most common globally
+  brown: 11,      // Common in European/Middle Eastern ancestry
+  blonde: 2,      // Primarily Northern European ancestry
+  red: 1,         // Rarest natural hair color (~1-2%)
+  gray: 7,        // Natural aging (varies by age)
+  auburn: 2,      // Reddish-brown
+};
+
+export const HAIR_COLOR_LABELS: Record<HairColor, string> = {
+  black: 'Black',
+  brown: 'Brown',
+  blonde: 'Blonde',
+  red: 'Red',
+  gray: 'Gray/White',
+  auburn: 'Auburn',
+};
+
+/**
+ * Skin Tone Distribution (Global estimates using Fitzpatrick scale categories)
+ * Using inclusive, descriptive terminology based on melanin levels
+ * Sources: Dermatology research, global demographic studies
+ */
+export type SkinTone = 'very_light' | 'light' | 'medium' | 'olive' | 'tan' | 'deep';
+
+export const SKIN_TONE_PERCENTAGES: Record<SkinTone, number> = {
+  very_light: 8,   // Type I-II: Very fair, burns easily
+  light: 12,       // Type II-III: Fair, sometimes burns
+  medium: 18,      // Type III: Medium, tans gradually
+  olive: 22,       // Type IV: Olive/moderate brown
+  tan: 25,         // Type V: Brown, rarely burns
+  deep: 15,        // Type VI: Deep brown to dark
+};
+
+export const SKIN_TONE_LABELS: Record<SkinTone, string> = {
+  very_light: 'Very Light',
+  light: 'Light',
+  medium: 'Medium',
+  olive: 'Olive',
+  tan: 'Tan',
+  deep: 'Deep',
+};
+
+/**
+ * Ethnicity/Ancestry Distribution (Global estimates based on UN population data)
+ * Using broad geographic ancestry categories
+ * Sources: UN World Population Prospects, demographic research
+ */
+export type Ethnicity = 'east_asian' | 'south_asian' | 'southeast_asian' | 'european' | 'african' | 'middle_eastern' | 'latin_american' | 'oceanian' | 'mixed';
+
+export const ETHNICITY_PERCENTAGES: Record<Ethnicity, number> = {
+  east_asian: 20,       // China, Japan, Korea, Mongolia
+  south_asian: 24,      // India, Pakistan, Bangladesh, Sri Lanka
+  southeast_asian: 9,   // Vietnam, Thailand, Philippines, Indonesia
+  european: 9,          // Europe, European diaspora
+  african: 18,          // Sub-Saharan Africa
+  middle_eastern: 6,    // Middle East, North Africa
+  latin_american: 8,    // Central/South America (mixed heritage)
+  oceanian: 0.5,        // Australia, Pacific Islands indigenous
+  mixed: 5.5,           // Multi-ethnic/mixed heritage
+};
+
+export const ETHNICITY_LABELS: Record<Ethnicity, string> = {
+  east_asian: 'East Asian',
+  south_asian: 'South Asian',
+  southeast_asian: 'Southeast Asian',
+  european: 'European',
+  african: 'African',
+  middle_eastern: 'Middle Eastern / North African',
+  latin_american: 'Latin American',
+  oceanian: 'Oceanian / Pacific Islander',
+  mixed: 'Mixed / Multi-ethnic',
+};
+
+/**
  * Get the closest age bracket for percentile lookup
+ * Supports babies (0-2 years with decimal ages like 0.5 for 6 months)
  */
 export const getClosestAge = (age: number): number => {
-  const ages = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
-  if (age < 2) return 2;
+  // Baby ages (0-2 years) stored as decimals
+  const babyAges = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75];
+  // Child and adult ages
+  const olderAges = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
+
+  if (age < 0) return 0;
   if (age > 80) return 80;
-  return ages.reduce((prev, curr) => Math.abs(curr - age) < Math.abs(prev - age) ? curr : prev);
+
+  // For babies under 2, use baby age brackets
+  if (age < 2) {
+    return babyAges.reduce((prev, curr) => Math.abs(curr - age) < Math.abs(prev - age) ? curr : prev);
+  }
+
+  return olderAges.reduce((prev, curr) => Math.abs(curr - age) < Math.abs(prev - age) ? curr : prev);
 };
 
 /**
@@ -328,91 +463,12 @@ export const WORLD_POPULATION = 8_231_613_070;
  * Funnel step representing cumulative filtering of population
  */
 export interface FunnelStep {
-  dimension: 'world' | 'age' | 'gender' | 'height' | 'weight';
+  dimension: 'world' | 'age' | 'gender' | 'height' | 'weight' | 'eyeColor' | 'hairColor' | 'skinTone' | 'ethnicity';
   label: string;
   description: string;
   population: number;
   percentage: number; // percentage of world population
 }
-
-/**
- * Calculate funnel data - progressive narrowing of population
- * Each step shows how many people match all criteria up to that point
- */
-export const calculateFunnel = (
-  age: number | null,
-  gender: 'male' | 'female' | null,
-  heightCm: number | null,
-  weightKg: number | null
-): FunnelStep[] => {
-  const steps: FunnelStep[] = [];
-  let currentPopulation = WORLD_POPULATION;
-
-  // Step 0: World population (always shown)
-  steps.push({
-    dimension: 'world',
-    label: 'World Population',
-    description: 'Everyone on Earth',
-    population: currentPopulation,
-    percentage: 100,
-  });
-
-  // Step 1: Filter by age (people in same age bracket ±2 years)
-  if (age !== null) {
-    // Find the age bracket population percentage
-    // We use a ±2 year window for "same age"
-    const ageWindowPercent = getAgeWindowPercentage(age, 2);
-    currentPopulation = Math.round(currentPopulation * (ageWindowPercent / 100));
-    steps.push({
-      dimension: 'age',
-      label: `Age ${age}`,
-      description: `People aged ${Math.max(0, age - 2)}-${age + 2}`,
-      population: currentPopulation,
-      percentage: (currentPopulation / WORLD_POPULATION) * 100,
-    });
-  }
-
-  // Step 2: Filter by gender
-  if (gender !== null) {
-    const genderPercent = GENDER_PERCENTAGES[gender];
-    currentPopulation = Math.round(currentPopulation * (genderPercent / 100));
-    steps.push({
-      dimension: 'gender',
-      label: gender === 'male' ? 'Male' : 'Female',
-      description: `${gender === 'male' ? 'Men' : 'Women'}${age !== null ? ` aged ~${age}` : ''}`,
-      population: currentPopulation,
-      percentage: (currentPopulation / WORLD_POPULATION) * 100,
-    });
-  }
-
-  // Step 3: Filter by height (within ±2cm)
-  if (heightCm !== null && gender !== null) {
-    const heightPercentile = getHeightRangePercentage(heightCm, age, gender, 2);
-    currentPopulation = Math.round(currentPopulation * (heightPercentile / 100));
-    steps.push({
-      dimension: 'height',
-      label: `${heightCm} cm tall`,
-      description: `Height ${heightCm - 2}-${heightCm + 2} cm`,
-      population: currentPopulation,
-      percentage: (currentPopulation / WORLD_POPULATION) * 100,
-    });
-  }
-
-  // Step 4: Filter by weight (within ±3kg)
-  if (weightKg !== null && gender !== null) {
-    const weightPercentile = getWeightRangePercentage(weightKg, age, gender, 3);
-    currentPopulation = Math.round(currentPopulation * (weightPercentile / 100));
-    steps.push({
-      dimension: 'weight',
-      label: `${weightKg} kg`,
-      description: `Weight ${weightKg - 3}-${weightKg + 3} kg`,
-      population: currentPopulation,
-      percentage: (currentPopulation / WORLD_POPULATION) * 100,
-    });
-  }
-
-  return steps;
-};
 
 /**
  * Get percentage of population in an age window (±years around target age)
@@ -421,7 +477,6 @@ const getAgeWindowPercentage = (age: number, windowYears: number): number => {
   const minAge = Math.max(0, age - windowYears);
   const maxAge = age + windowYears;
 
-  // Get cumulative percentages for the window bounds
   const getCumulativePercent = (targetAge: number): number => {
     if (targetAge <= 0) return 0;
     for (let i = 0; i < AGE_CUMULATIVE_PERCENTAGES.length; i++) {
@@ -440,46 +495,284 @@ const getAgeWindowPercentage = (age: number, windowYears: number): number => {
 
   const lowerPercent = getCumulativePercent(minAge);
   const upperPercent = getCumulativePercent(maxAge);
-  return upperPercent - lowerPercent;
+  return Math.max(0.1, upperPercent - lowerPercent);
 };
 
 /**
  * Get percentage of population within a height range
- * Uses normal distribution approximation based on percentile data
+ * Supports any combination: with/without gender, with/without age (including babies)
  */
 const getHeightRangePercentage = (
   heightCm: number,
   age: number | null,
-  gender: 'male' | 'female',
+  gender: 'male' | 'female' | null,
   rangeCm: number
 ): number => {
-  const ageToUse = age ? getClosestAge(age) : 30;
-  const data = PERCENTILE_DATA[gender][ageToUse]?.height;
-  if (!data) return 10; // fallback
+  const ageToUse = age !== null ? getClosestAge(age) : 30;
 
-  // Calculate percentile for height-range and height+range
-  const lowerPercentile = calculatePercentile(heightCm - rangeCm, data);
-  const upperPercentile = calculatePercentile(heightCm + rangeCm, data);
+  if (gender) {
+    const data = PERCENTILE_DATA[gender][ageToUse]?.height;
+    if (!data) return 10;
+    const lower = calculatePercentile(heightCm - rangeCm, data);
+    const upper = calculatePercentile(heightCm + rangeCm, data);
+    return Math.max(1, upper - lower);
+  } else {
+    // Average of both genders
+    const maleData = PERCENTILE_DATA.male[ageToUse]?.height;
+    const femaleData = PERCENTILE_DATA.female[ageToUse]?.height;
+    if (!maleData || !femaleData) return 10;
 
-  return upperPercentile - lowerPercentile;
+    const maleLower = calculatePercentile(heightCm - rangeCm, maleData);
+    const maleUpper = calculatePercentile(heightCm + rangeCm, maleData);
+    const femaleLower = calculatePercentile(heightCm - rangeCm, femaleData);
+    const femaleUpper = calculatePercentile(heightCm + rangeCm, femaleData);
+
+    const maleRange = Math.max(1, maleUpper - maleLower);
+    const femaleRange = Math.max(1, femaleUpper - femaleLower);
+    return (maleRange + femaleRange) / 2;
+  }
 };
 
 /**
  * Get percentage of population within a weight range
+ * Supports any combination: with/without gender, with/without age (including babies)
  */
 const getWeightRangePercentage = (
   weightKg: number,
   age: number | null,
-  gender: 'male' | 'female',
+  gender: 'male' | 'female' | null,
   rangeKg: number
 ): number => {
-  const ageToUse = age ? getClosestAge(age) : 30;
-  const data = PERCENTILE_DATA[gender][ageToUse]?.weight;
-  if (!data) return 10; // fallback
+  const ageToUse = age !== null ? getClosestAge(age) : 30;
 
-  const lowerPercentile = calculatePercentile(weightKg - rangeKg, data);
-  const upperPercentile = calculatePercentile(weightKg + rangeKg, data);
+  if (gender) {
+    const data = PERCENTILE_DATA[gender][ageToUse]?.weight;
+    if (!data) return 10;
+    const lower = calculatePercentile(weightKg - rangeKg, data);
+    const upper = calculatePercentile(weightKg + rangeKg, data);
+    return Math.max(1, upper - lower);
+  } else {
+    const maleData = PERCENTILE_DATA.male[ageToUse]?.weight;
+    const femaleData = PERCENTILE_DATA.female[ageToUse]?.weight;
+    if (!maleData || !femaleData) return 10;
 
-  return upperPercentile - lowerPercentile;
+    const maleLower = calculatePercentile(weightKg - rangeKg, maleData);
+    const maleUpper = calculatePercentile(weightKg + rangeKg, maleData);
+    const femaleLower = calculatePercentile(weightKg - rangeKg, femaleData);
+    const femaleUpper = calculatePercentile(weightKg + rangeKg, femaleData);
+
+    const maleRange = Math.max(1, maleUpper - maleLower);
+    const femaleRange = Math.max(1, femaleUpper - femaleLower);
+    return (maleRange + femaleRange) / 2;
+  }
+};
+
+// Baby population percentage (0-2 years) - approximately 2.5% of world population
+const BABY_POPULATION_PERCENT = 2.5;
+const BABY_POPULATION = Math.round(WORLD_POPULATION * (BABY_POPULATION_PERCENT / 100));
+const NON_BABY_POPULATION = WORLD_POPULATION - BABY_POPULATION;
+
+/**
+ * Calculate funnel data - progressive narrowing of population
+ * Supports ANY combination of inputs including physical traits
+ * For babies: starts with baby population
+ * For non-babies: starts with non-baby population
+ */
+export const calculateFunnel = (
+  age: number | null,
+  gender: 'male' | 'female' | null,
+  heightCm: number | null,
+  weightKg: number | null,
+  eyeColor: EyeColor | null = null,
+  hairColor: HairColor | null = null,
+  skinTone: SkinTone | null = null,
+  ethnicity: Ethnicity | null = null
+): FunnelStep[] => {
+  const steps: FunnelStep[] = [];
+
+  // Determine if this is a baby (age < 2 years)
+  const isBaby = age !== null && age < 2;
+
+  // Start with appropriate base population
+  let basePopulation: number;
+  let baseLabel: string;
+  let baseDesc: string;
+
+  if (age !== null) {
+    if (isBaby) {
+      basePopulation = BABY_POPULATION;
+      baseLabel = 'All Babies';
+      baseDesc = `All babies worldwide (0-2 years)`;
+    } else {
+      basePopulation = NON_BABY_POPULATION;
+      baseLabel = 'World Population';
+      baseDesc = 'Everyone on Earth (2+ years)';
+    }
+  } else {
+    basePopulation = WORLD_POPULATION;
+    baseLabel = 'World Population';
+    baseDesc = 'Everyone on Earth';
+  }
+
+  let currentPopulation = basePopulation;
+
+  // Step 0: Base population
+  steps.push({
+    dimension: 'world',
+    label: baseLabel,
+    description: baseDesc,
+    population: currentPopulation,
+    percentage: 100,
+  });
+
+  // Step 1: Filter by age within the base population
+  if (age !== null) {
+    // Use smaller window for babies/toddlers
+    const windowYears = isBaby ? 0.25 : age < 5 ? 1 : 2;
+
+    let ageWindowPercent: number;
+    if (isBaby) {
+      // For babies, calculate percentage within baby population
+      // Each 3-month window is roughly 1/8 of the 0-2 year range = 12.5%
+      ageWindowPercent = Math.max(5, (windowYears * 2 / 2) * 100); // ~12.5% for ±3 months
+    } else {
+      // For non-babies, use the age window percentage adjusted for non-baby population
+      const rawPercent = getAgeWindowPercentage(age, windowYears);
+      // Adjust: the percentage is of world pop, but we're starting from non-baby pop
+      // Non-baby is ~97.5% of world, so scale accordingly
+      ageWindowPercent = (rawPercent / (100 - BABY_POPULATION_PERCENT)) * 100;
+    }
+
+    currentPopulation = Math.round(currentPopulation * (ageWindowPercent / 100));
+
+    // Format age label for babies (show months)
+    let ageLabel: string;
+    let ageDesc: string;
+    if (isBaby) {
+      const months = Math.round(age * 12);
+      ageLabel = months === 0 ? 'Newborn' : `${months} month${months === 1 ? '' : 's'}`;
+      const minMonths = Math.max(0, Math.round((age - windowYears) * 12));
+      const maxMonths = Math.round((age + windowYears) * 12);
+      ageDesc = `Babies ${minMonths}-${maxMonths} months old`;
+    } else {
+      ageLabel = `Age ${Math.round(age)}`;
+      ageDesc = `People aged ${Math.max(0, Math.round(age - windowYears))}-${Math.round(age + windowYears)}`;
+    }
+
+    steps.push({
+      dimension: 'age',
+      label: ageLabel,
+      description: ageDesc,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 2: Filter by gender
+  if (gender !== null) {
+    const genderPercent = GENDER_PERCENTAGES[gender];
+    currentPopulation = Math.round(currentPopulation * (genderPercent / 100));
+    const ageDesc = age !== null ? (isBaby ? ' babies' : ` aged ~${Math.round(age)}`) : '';
+    steps.push({
+      dimension: 'gender',
+      label: gender === 'male' ? 'Male' : 'Female',
+      description: `${gender === 'male' ? (isBaby ? 'Baby boys' : 'Males') : (isBaby ? 'Baby girls' : 'Females')}${ageDesc}`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 3: Filter by height (works with or without gender)
+  if (heightCm !== null) {
+    // Smaller range for babies, medium for children, larger for adults
+    const rangeCm = age !== null ? (isBaby ? 0.5 : age < 10 ? 1 : 2) : 2;
+    const heightPercent = getHeightRangePercentage(heightCm, age, gender, rangeCm);
+    currentPopulation = Math.round(currentPopulation * (heightPercent / 100));
+    steps.push({
+      dimension: 'height',
+      label: `${heightCm.toFixed(isBaby ? 1 : 0)} cm`,
+      description: `Height ${(heightCm - rangeCm).toFixed(1)}-${(heightCm + rangeCm).toFixed(1)} cm`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 4: Filter by weight (works with or without gender)
+  if (weightKg !== null) {
+    // Smaller range for babies, medium for children, larger for adults
+    const rangeKg = age !== null ? (isBaby ? 0.2 : age < 10 ? 0.5 : 3) : 3;
+    const weightPercent = getWeightRangePercentage(weightKg, age, gender, rangeKg);
+    currentPopulation = Math.round(currentPopulation * (weightPercent / 100));
+    steps.push({
+      dimension: 'weight',
+      label: `${weightKg.toFixed(isBaby ? 1 : 0)} kg`,
+      description: `Weight ${(weightKg - rangeKg).toFixed(1)}-${(weightKg + rangeKg).toFixed(1)} kg`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 5: Filter by ethnicity
+  if (ethnicity !== null) {
+    const ethnicityPercent = ETHNICITY_PERCENTAGES[ethnicity];
+    currentPopulation = Math.round(currentPopulation * (ethnicityPercent / 100));
+    steps.push({
+      dimension: 'ethnicity',
+      label: ETHNICITY_LABELS[ethnicity],
+      description: `${ETHNICITY_LABELS[ethnicity]} ancestry`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 6: Filter by skin tone
+  if (skinTone !== null) {
+    const skinPercent = SKIN_TONE_PERCENTAGES[skinTone];
+    currentPopulation = Math.round(currentPopulation * (skinPercent / 100));
+    steps.push({
+      dimension: 'skinTone',
+      label: `${SKIN_TONE_LABELS[skinTone]} skin`,
+      description: `${SKIN_TONE_LABELS[skinTone]} skin tone`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 7: Filter by eye color
+  if (eyeColor !== null) {
+    const eyePercent = EYE_COLOR_PERCENTAGES[eyeColor];
+    currentPopulation = Math.round(currentPopulation * (eyePercent / 100));
+    steps.push({
+      dimension: 'eyeColor',
+      label: `${EYE_COLOR_LABELS[eyeColor]} eyes`,
+      description: `${EYE_COLOR_LABELS[eyeColor]} eye color`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 8: Filter by hair color
+  if (hairColor !== null) {
+    const hairPercent = HAIR_COLOR_PERCENTAGES[hairColor];
+    currentPopulation = Math.round(currentPopulation * (hairPercent / 100));
+    steps.push({
+      dimension: 'hairColor',
+      label: `${HAIR_COLOR_LABELS[hairColor]} hair`,
+      description: `${HAIR_COLOR_LABELS[hairColor]} hair color`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Ensure minimum population of 1
+  if (steps.length > 1) {
+    const lastStep = steps[steps.length - 1];
+    if (lastStep.population < 1) {
+      lastStep.population = 1;
+      lastStep.percentage = (1 / basePopulation) * 100;
+    }
+  }
+
+  return steps;
 };
 

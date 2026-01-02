@@ -6,15 +6,27 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
-import { calculateFunnel, FunnelStep, DATA_SOURCE, WORLD_POPULATION } from '../data/percentiles';
+import {
+  calculateFunnel, FunnelStep, DATA_SOURCE, WORLD_POPULATION,
+  EyeColor, EYE_COLOR_LABELS,
+  HairColor, HAIR_COLOR_LABELS,
+  SkinTone, SKIN_TONE_LABELS,
+  Ethnicity, ETHNICITY_LABELS
+} from '../data/percentiles';
 
 interface RankPageState {
-  age: string;
+  ageYears: string;
+  ageMonths: string;
+  ageUnit: 'years' | 'months';
   gender: 'male' | 'female' | null;
   height: string;
   weight: string;
   heightUnit: 'cm' | 'ft';
   weightUnit: 'kg' | 'lbs';
+  eyeColor: EyeColor | null;
+  hairColor: HairColor | null;
+  skinTone: SkinTone | null;
+  ethnicity: Ethnicity | null;
   funnelSteps: FunnelStep[];
 }
 
@@ -24,12 +36,18 @@ export class RankPage extends Component<{}, RankPageState> {
   constructor(props: {}) {
     super(props);
     this.state = {
-      age: '',
+      ageYears: '',
+      ageMonths: '',
+      ageUnit: 'years',
       gender: null,
       height: '',
       weight: '',
       heightUnit: 'cm',
       weightUnit: 'kg',
+      eyeColor: null,
+      hairColor: null,
+      skinTone: null,
+      ethnicity: null,
       funnelSteps: [],
     };
   }
@@ -64,19 +82,38 @@ export class RankPage extends Component<{}, RankPageState> {
     return weightUnit === 'lbs' ? val * 0.453592 : val;
   };
 
+  private getAgeInYears = (): number | null => {
+    const { ageYears, ageMonths, ageUnit } = this.state;
+
+    if (ageUnit === 'months') {
+      // Baby mode: use months input
+      if (!ageMonths) return null;
+      const months = parseInt(ageMonths);
+      if (isNaN(months) || months < 0) return null;
+      return months / 12; // Convert to years (e.g., 6 months = 0.5 years)
+    } else {
+      // Years mode
+      if (!ageYears) return null;
+      const years = parseInt(ageYears);
+      if (isNaN(years) || years < 0) return null;
+      return years;
+    }
+  };
+
   private calculate = () => {
-    const { age, gender } = this.state;
-    const ageNum = age ? parseInt(age) : null;
+    const { gender, eyeColor, hairColor, skinTone, ethnicity } = this.state;
+    const ageNum = this.getAgeInYears();
     const heightCm = this.convertHeight();
     const weightKg = this.convertWeight();
 
     // Need at least one input beyond world population
-    if (ageNum === null && gender === null && heightCm === null && weightKg === null) {
-      alert('Please enter at least one value (age, gender, height, or weight) to see your rarity.');
+    if (ageNum === null && gender === null && heightCm === null && weightKg === null &&
+        eyeColor === null && hairColor === null && skinTone === null && ethnicity === null) {
+      alert('Please enter at least one trait to see your rarity.');
       return;
     }
 
-    const funnelSteps = calculateFunnel(ageNum, gender, heightCm, weightKg);
+    const funnelSteps = calculateFunnel(ageNum, gender, heightCm, weightKg, eyeColor, hairColor, skinTone, ethnicity);
     this.setState({ funnelSteps }, this.scrollToResults);
   };
 
@@ -94,6 +131,10 @@ export class RankPage extends Component<{}, RankPageState> {
       case 'gender': return '#ec4899';
       case 'height': return '#10b981';
       case 'weight': return '#3b82f6';
+      case 'ethnicity': return '#8b5cf6';
+      case 'skinTone': return '#d97706';
+      case 'eyeColor': return '#0891b2';
+      case 'hairColor': return '#be185d';
       default: return '#10b981';
     }
   };
@@ -105,6 +146,10 @@ export class RankPage extends Component<{}, RankPageState> {
       case 'gender': return '👤';
       case 'height': return '📏';
       case 'weight': return '⚖️';
+      case 'ethnicity': return '🌐';
+      case 'skinTone': return '🎨';
+      case 'eyeColor': return '👁️';
+      case 'hairColor': return '💇';
       default: return '📊';
     }
   };
@@ -253,10 +298,11 @@ export class RankPage extends Component<{}, RankPageState> {
   };
 
   render() {
-    const { age, gender, height, weight, heightUnit, weightUnit, funnelSteps } = this.state;
+    const { ageYears, ageMonths, ageUnit, gender, height, weight, heightUnit, weightUnit, eyeColor, hairColor, skinTone, ethnicity, funnelSteps } = this.state;
     const gradient = 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)';
     const inputStyle = { width: '100%', padding: '1rem', fontSize: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', boxSizing: 'border-box' as const };
     const selectStyle = { ...inputStyle, cursor: 'pointer' };
+    const isBabyMode = ageUnit === 'months';
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
@@ -279,7 +325,18 @@ export class RankPage extends Component<{}, RankPageState> {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Age</label>
-                  <input type="number" placeholder="e.g. 25" value={age} onChange={(e) => this.setState({ age: e.target.value })} min="2" max="80" style={inputStyle} />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {isBabyMode ? (
+                      <input type="number" placeholder="e.g. 6" value={ageMonths} onChange={(e) => this.setState({ ageMonths: e.target.value })} min="0" max="23" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                    ) : (
+                      <input type="number" placeholder="e.g. 25" value={ageYears} onChange={(e) => this.setState({ ageYears: e.target.value })} min="0" max="120" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                    )}
+                    <select value={ageUnit} onChange={(e) => this.setState({ ageUnit: e.target.value as 'years' | 'months' })} style={{ ...selectStyle, width: 'auto', minWidth: '80px', flex: 'none', padding: '0.75rem 0.5rem' }}>
+                      <option value="years">years</option>
+                      <option value="months">months</option>
+                    </select>
+                  </div>
+                  {isBabyMode && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', margin: '0.25rem 0 0 0' }}>👶 Baby mode (0-23 months)</p>}
                 </div>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Gender</label>
@@ -291,7 +348,7 @@ export class RankPage extends Component<{}, RankPageState> {
                 </div>
               </div>
               <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1rem 0', textAlign: 'center' }}>Add more details to see how unique your combination is</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>Height</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -313,6 +370,50 @@ export class RankPage extends Component<{}, RankPageState> {
                   </div>
                 </div>
               </div>
+
+              {/* Physical Traits Section */}
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.75rem 0', textAlign: 'center' }}>🎨 Physical traits (optional)</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>👁️ Eye Color</label>
+                  <select value={eyeColor || ''} onChange={(e) => this.setState({ eyeColor: e.target.value ? e.target.value as EyeColor : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(EYE_COLOR_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>💇 Hair Color</label>
+                  <select value={hairColor || ''} onChange={(e) => this.setState({ hairColor: e.target.value ? e.target.value as HairColor : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(HAIR_COLOR_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>🎨 Skin Tone</label>
+                  <select value={skinTone || ''} onChange={(e) => this.setState({ skinTone: e.target.value ? e.target.value as SkinTone : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(SKIN_TONE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>🌐 Ancestry</label>
+                  <select value={ethnicity || ''} onChange={(e) => this.setState({ ethnicity: e.target.value ? e.target.value as Ethnicity : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(ETHNICITY_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <button onClick={this.calculate} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
                 Calculate Rarity 🔍
               </button>
