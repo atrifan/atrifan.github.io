@@ -4,14 +4,14 @@ import React from 'react';
 import { WidgetCard, BigNumber, StatBox, WidgetHeader, WidgetFooter } from './WidgetCard';
 
 interface BmiWidgetProps {
-  bmi: number;
+  bmi: number | string;
   category: string;
-  weight?: number;
-  height?: number;
+  weight?: number | string;
+  height?: number | string;
 }
 
 const getCategoryColor = (category: string): string => {
-  switch (category.toLowerCase()) {
+  switch ((category || '').toLowerCase()) {
     case 'underweight': return '#60a5fa';
     case 'normal': return '#10b981';
     case 'overweight': return '#f59e0b';
@@ -22,11 +22,13 @@ const getCategoryColor = (category: string): string => {
 
 export const BmiWidget: React.FC<BmiWidgetProps> = ({ bmi, category, weight, height }) => {
   const color = getCategoryColor(category);
-  
+  const bmiNum = typeof bmi === 'string' ? parseFloat(bmi) : bmi;
+  const bmiDisplay = isNaN(bmiNum) ? String(bmi) : bmiNum.toFixed(1);
+
   return (
     <WidgetCard gradient="linear-gradient(135deg, rgba(244, 114, 182, 0.4) 0%, rgba(236, 72, 153, 0.4) 100%)">
       <WidgetHeader icon="📏" title="BMI Calculator" />
-      <BigNumber value={bmi.toFixed(1)} color={color} />
+      <BigNumber value={bmiDisplay} color={color} />
       <div style={{ 
         textAlign: 'center', 
         marginBottom: '1rem',
