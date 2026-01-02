@@ -56,7 +56,7 @@ export class HomePage extends Component<{}, HomePageState> {
       luck: <LuckIcon size={size} />,
       match: <MatchIcon size={size} />,
       sleep: <SleepIcon size={size} />,
-      rank: <RankIcon size={size} />,
+      unique: <RankIcon size={size} />,
       age: <AgeIcon size={size} />,
       tip: <TipIcon size={size} />,
       percent: <PercentIcon size={size} />,

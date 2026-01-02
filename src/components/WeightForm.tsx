@@ -1,11 +1,22 @@
 import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { Sex, UserInput } from '../types';
+import { AlertModal } from './AlertModal';
 
 type UnitSystem = 'metric' | 'imperial';
 
 interface WeightFormProps {
   onSubmit: (input: UserInput) => void;
+}
+
+interface PendingSubmission {
+  age: number;
+  sex: Sex;
+  height: number;
+  currentWeight: number;
+  desiredWeight: number;
+  timeToWeight: number;
+  targetDate?: string;
 }
 
 interface WeightFormState {
@@ -21,11 +32,17 @@ interface WeightFormState {
   unitSystem: UnitSystem;
   showWarning: boolean;
   warningMessage: string;
+  warningTitle: string;
+  warningIcon: string;
   dateError: string;
+  pendingSubmission: PendingSubmission | null;
+  isBlockingWarning: boolean; // true for underweight (blocks), false for aggressive (allows after dismiss)
 }
 
 // Safe weight loss is 0.5-1 kg per week (CDC guidelines)
 const MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG = 1.0;
+// BMI thresholds
+const BMI_UNDERWEIGHT = 18.5;
 
 interface FormFieldProps {
   icon: string;
@@ -102,7 +119,11 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       unitSystem: defaultUnit,
       showWarning: false,
       warningMessage: '',
-      dateError: ''
+      warningTitle: '',
+      warningIcon: '⚠️',
+      dateError: '',
+      pendingSubmission: null,
+      isBlockingWarning: false
     };
   }
 
@@ -172,19 +193,44 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
 
   private checkAggressiveWeightLoss = (currentKg: number, desiredKg: number, weeks: number): { isAggressive: boolean; message: string } => {
     const weightLoss = currentKg - desiredKg;
-    if (weightLoss <= 0) return { isAggressive: false, message: '' };
+    if (weightLoss <= 0 || weeks <= 0) return { isAggressive: false, message: '' };
 
-    const lossPerWeek = weightLoss / weeks;
+    const days = Math.round(weeks * 7);
+    const lossPerWeek = weeks >= 1 ? weightLoss / weeks : weightLoss * 7; // If less than a week, extrapolate to weekly rate
 
     if (lossPerWeek > MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG) {
+      const timeDescription = days === 1 ? '1 day' : `${days} days`;
       return {
         isAggressive: true,
-        message: `⚠️ Warning: Your plan targets ${lossPerWeek.toFixed(2)} kg/week weight loss. ` +
+        message: `You are targeting ${weightLoss.toFixed(1)} kg loss in ${timeDescription}, ` +
+          `which equals ${lossPerWeek.toFixed(1)} kg per week. ` +
           `Medical guidelines recommend no more than ${MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG} kg/week for safe, sustainable weight loss. ` +
-          `Please consult a doctor or registered dietitian before proceeding with this aggressive plan.`
+          `Please consult a nutritionist or doctor before proceeding.`
       };
     }
     return { isAggressive: false, message: '' };
+  };
+
+  private calculateBMI = (weightKg: number, heightCm: number): number => {
+    const heightM = heightCm / 100;
+    return weightKg / (heightM * heightM);
+  };
+
+  private checkUnderweightBMI = (desiredKg: number, heightCm: number): { isUnderweight: boolean; bmi: number; message: string } => {
+    if (heightCm <= 0) return { isUnderweight: false, bmi: 0, message: '' };
+
+    const bmi = this.calculateBMI(desiredKg, heightCm);
+
+    if (bmi < BMI_UNDERWEIGHT) {
+      return {
+        isUnderweight: true,
+        bmi,
+        message: `Your target weight would result in a BMI of ${bmi.toFixed(1)}, which is classified as underweight (below ${BMI_UNDERWEIGHT}). ` +
+          `Being underweight can lead to health issues including weakened immune system, bone loss, and nutritional deficiencies. ` +
+          `Please consult a doctor or nutritionist to determine a healthy weight goal for your body.`
+      };
+    }
+    return { isUnderweight: false, bmi, message: '' };
   };
 
   private calculateWeeksFromDate = (targetDate: string): number => {
@@ -243,17 +289,8 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       ? this.calculateWeeksFromDate(targetDate)
       : Math.ceil((currentKg - desiredKg) / MAX_SAFE_WEIGHT_LOSS_PER_WEEK_KG);
 
-    // Check for aggressive weight loss
-    const { isAggressive, message } = this.checkAggressiveWeightLoss(currentKg, desiredKg, weeks);
-
-    if (isAggressive) {
-      this.setState({ showWarning: true, warningMessage: message });
-    } else {
-      this.setState({ showWarning: false, warningMessage: '' });
-    }
-
-    // Submit with metric values - pass targetDate directly if user selected one
-    this.props.onSubmit({
+    // Prepare submission data
+    const submissionData: PendingSubmission = {
       age: parseInt(age) || 0,
       sex,
       height: Math.round(heightCm),
@@ -261,15 +298,55 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       desiredWeight: Math.round(desiredKg * 10) / 10,
       timeToWeight: weeks,
       targetDate: useTargetDate && targetDate ? targetDate : undefined
-    });
+    };
+
+    // Check for underweight BMI first (more critical)
+    const { isUnderweight, message: bmiMessage } = this.checkUnderweightBMI(desiredKg, heightCm);
+
+    if (isUnderweight) {
+      this.setState({
+        showWarning: true,
+        warningMessage: bmiMessage,
+        warningTitle: 'Underweight Warning',
+        warningIcon: '⚖️',
+        pendingSubmission: submissionData, // Store for submission after dismiss
+        isBlockingWarning: false
+      });
+      return; // Wait for user to acknowledge before showing results
+    }
+
+    // Check for aggressive weight loss
+    const { isAggressive, message } = this.checkAggressiveWeightLoss(currentKg, desiredKg, weeks);
+
+    if (isAggressive) {
+      this.setState({
+        showWarning: true,
+        warningMessage: message,
+        warningTitle: 'Aggressive Weight Loss Detected',
+        warningIcon: '⚠️',
+        pendingSubmission: submissionData, // Store for submission after dismiss
+        isBlockingWarning: false
+      });
+      return; // Wait for user to acknowledge before showing results
+    }
+
+    // No warnings - submit immediately
+    this.props.onSubmit(submissionData);
   };
 
   private dismissWarning = () => {
-    this.setState({ showWarning: false });
+    const { pendingSubmission, isBlockingWarning } = this.state;
+
+    this.setState({ showWarning: false, pendingSubmission: null });
+
+    // If not blocking and we have pending submission, submit now
+    if (!isBlockingWarning && pendingSubmission) {
+      this.props.onSubmit(pendingSubmission);
+    }
   };
 
   render() {
-    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, targetDate, useTargetDate, unitSystem, showWarning, warningMessage, dateError } = this.state;
+    const { age, sex, height, heightFeet, heightInches, currentWeight, desiredWeight, targetDate, useTargetDate, unitSystem, showWarning, warningMessage, warningTitle, warningIcon, dateError } = this.state;
     const isMetric = unitSystem === 'metric';
     const weightUnit = isMetric ? 'kg' : 'lbs';
     const heightLabel = isMetric ? 'Height (cm)' : 'Height';
@@ -288,51 +365,15 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
         }}
       >
         {/* Warning Modal */}
-        {showWarning && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}>
-            <div style={{
-              background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-              borderRadius: '24px',
-              padding: '2rem',
-              maxWidth: '500px',
-              textAlign: 'center',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-            }}>
-              <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>⚠️</span>
-              <h3 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>Aggressive Weight Loss Detected</h3>
-              <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-                {warningMessage}
-              </p>
-              <button
-                onClick={this.dismissWarning}
-                style={{
-                  padding: '1rem 2rem',
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  background: '#fff',
-                  color: '#ee5a24',
-                  border: 'none',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                I Understand
-              </button>
-            </div>
-          </div>
-        )}
+        <AlertModal
+          isOpen={showWarning}
+          title={warningTitle || 'Warning'}
+          message={warningMessage}
+          icon={warningIcon}
+          buttonText="I Understand"
+          color="#ef4444"
+          onClose={this.dismissWarning}
+        />
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>

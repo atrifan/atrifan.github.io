@@ -21,7 +21,7 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Free sleep cycle calculator for adults, teens & children. Calculate optimal bedtime and wake times based on 90-minute sleep cycles. Wake up refreshed, not groggy.',
     keywords: ['sleep calculator', 'sleep cycle calculator', 'bedtime calculator', 'wake up time', 'REM sleep', 'sleep cycles', 'best time to sleep', 'sleep schedule', 'children sleep calculator'],
   },
-  rank: {
+  unique: {
     title: 'How Unique Are You? – Rarity Percentile Calculator | Tulzo',
     description: 'Discover how rare your traits are! Calculate your uniqueness percentile based on height, weight, eye color, hair & ethnicity. Find out: 1 in how many people share your combination.',
     keywords: ['how unique am I', 'rarity calculator', 'uniqueness percentile', 'how rare am I', '1 in how many people', 'trait rarity calculator', 'physical uniqueness', 'body percentile'],

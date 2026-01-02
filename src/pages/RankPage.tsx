@@ -5,6 +5,7 @@ import { RankIcon } from '../components/RankIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { AlertModal } from '../components/AlertModal';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import {
@@ -29,6 +30,8 @@ interface RankPageState {
   skinTone: SkinTone | null;
   ethnicity: Ethnicity | null;
   funnelSteps: FunnelStep[];
+  showAlert: boolean;
+  alertMessage: string;
 }
 
 export class RankPage extends Component<{}, RankPageState> {
@@ -50,11 +53,13 @@ export class RankPage extends Component<{}, RankPageState> {
       skinTone: null,
       ethnicity: null,
       funnelSteps: [],
+      showAlert: false,
+      alertMessage: '',
     };
   }
 
   componentDidMount() {
-    applySEO('rank');
+    applySEO('unique');
   }
 
   private scrollToResults = () => {
@@ -104,7 +109,10 @@ export class RankPage extends Component<{}, RankPageState> {
     // Need at least one input beyond world population
     if (ageNum === null && gender === null && heightCm === null && weightKg === null &&
         eyeColor === null && hairColor === null && skinTone === null && ethnicity === null) {
-      alert('Please enter at least one trait to see your rarity.');
+      this.setState({
+        showAlert: true,
+        alertMessage: 'Please enter at least one trait (age, gender, height, weight, or appearance) to calculate your rarity.'
+      });
       return;
     }
 
@@ -301,14 +309,23 @@ export class RankPage extends Component<{}, RankPageState> {
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+        <AlertModal
+          isOpen={this.state.showAlert}
+          title="Missing Information"
+          message={this.state.alertMessage}
+          icon="✨"
+          buttonText="Got it"
+          color="#10b981"
+          onClose={() => this.setState({ showAlert: false })}
+        />
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.rankTop} format="horizontal" /></View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '1rem' }}><RankIcon size={120} /></div>
-            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>RANK</h1>
-            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>How Rare Are You? 🌍</p>
+            <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>UNIQUE</h1>
+            <p style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.5rem' }}>How Rare Are You? ✨</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>

@@ -5,12 +5,15 @@ import { AgeIcon } from '../components/AgeIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { AlertModal } from '../components/AlertModal';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
 interface AgePageState {
   birthDate: string;
   result: AgeResult | null;
+  showAlert: boolean;
+  alertMessage: string;
 }
 
 interface AgeResult {
@@ -33,6 +36,8 @@ export class AgePage extends Component<{}, AgePageState> {
     this.state = {
       birthDate: '',
       result: null,
+      showAlert: false,
+      alertMessage: '',
     };
   }
 
@@ -54,7 +59,10 @@ export class AgePage extends Component<{}, AgePageState> {
     const today = new Date();
     
     if (birth > today) {
-      alert('Birth date cannot be in the future!');
+      this.setState({
+        showAlert: true,
+        alertMessage: 'Birth date cannot be in the future! Please enter a valid date.'
+      });
       return;
     }
 
@@ -90,11 +98,20 @@ export class AgePage extends Component<{}, AgePageState> {
   };
 
   render() {
-    const { birthDate, result } = this.state;
+    const { birthDate, result, showAlert, alertMessage } = this.state;
     const gradient = 'linear-gradient(135deg, #f472b6 0%, #ec4899 50%, #db2777 100%)';
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #831843 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+        <AlertModal
+          isOpen={showAlert}
+          title="Invalid Date"
+          message={alertMessage}
+          icon="📅"
+          buttonText="Got it"
+          color="#ec4899"
+          onClose={() => this.setState({ showAlert: false })}
+        />
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.ageTop} format="horizontal" /></View>
