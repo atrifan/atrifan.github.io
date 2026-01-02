@@ -1511,11 +1511,12 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
       break;
     }
     case 'coin_flip': {
-      const isHeads = data.result === 'heads';
+      const coinResult = String(data.result || 'heads');
+      const isHeads = coinResult === 'heads';
       content = `
         <div class="header">🪙 Coin Flip</div>
         <div style="text-align:center;font-size:5rem;margin:1rem 0">${isHeads ? '👑' : '🦅'}</div>
-        <div class="big-number" style="color:${isHeads ? '#fbbf24' : '#94a3b8'};font-size:2rem">${(data.result as string).toUpperCase()}</div>`;
+        <div class="big-number" style="color:${isHeads ? '#fbbf24' : '#94a3b8'};font-size:2rem">${coinResult.toUpperCase()}</div>`;
       break;
     }
     case 'dice': {
@@ -1542,19 +1543,19 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
       break;
     }
     case 'zodiac': {
-      const p1 = data.person1 as { sign: string; name: string; symbol: string };
-      const p2 = data.person2 as { sign: string; name: string; symbol: string };
-      const compat = data.compatibility as number;
+      const p1 = (data.person1 || { sign: '?', name: 'Unknown', symbol: '⭐' }) as { sign: string; name: string; symbol: string };
+      const p2 = (data.person2 || { sign: '?', name: 'Unknown', symbol: '⭐' }) as { sign: string; name: string; symbol: string };
+      const compat = (data.compatibility as number) || 50;
       const color = compat >= 80 ? '#10b981' : compat >= 60 ? '#fbbf24' : '#ef4444';
       content = `
         <div class="header">💕 Zodiac Compatibility</div>
         <div style="display:flex;justify-content:center;align-items:center;gap:1rem;margin:1rem 0">
-          <div style="text-align:center"><div style="font-size:2.5rem">${p1.symbol}</div><div style="color:#fff;font-size:0.8rem">${p1.name}</div></div>
+          <div style="text-align:center"><div style="font-size:2.5rem">${p1.symbol || '⭐'}</div><div style="color:#fff;font-size:0.8rem">${p1.name || 'Unknown'}</div></div>
           <div style="font-size:2rem">❤️</div>
-          <div style="text-align:center"><div style="font-size:2.5rem">${p2.symbol}</div><div style="color:#fff;font-size:0.8rem">${p2.name}</div></div>
+          <div style="text-align:center"><div style="font-size:2.5rem">${p2.symbol || '⭐'}</div><div style="color:#fff;font-size:0.8rem">${p2.name || 'Unknown'}</div></div>
         </div>
         <div class="big-number" style="color:${color}">${compat}%</div>
-        <div class="label" style="background:${color}33;color:${color}">${data.level}</div>`;
+        <div class="label" style="background:${color}33;color:${color}">${data.level || 'Moderate'}</div>`;
       break;
     }
     case 'countdown': {
@@ -1703,9 +1704,9 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
       const sign = data as Record<string, unknown>;
       content = `
         <div class="header">⭐ Zodiac Sign</div>
-        <div style="text-align:center;font-size:4rem;margin:0.5rem 0">${sign.symbol}</div>
-        <div class="big-number" style="color:#a78bfa;font-size:2rem">${sign.sign}</div>
-        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${sign.element} • ${sign.dates}</div>`;
+        <div style="text-align:center;font-size:4rem;margin:0.5rem 0">${sign.symbol || '⭐'}</div>
+        <div class="big-number" style="color:#a78bfa;font-size:2rem">${sign.sign || sign.name || 'Unknown'}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${sign.element || 'Element'} • ${sign.dates || ''}</div>`;
       break;
     }
     case 'names': {
@@ -1837,7 +1838,7 @@ function formatResultText(toolName: string, result: unknown): string {
     case 'calculate_tip':
       return `Bill: $${r.billAmount} + Tip (${r.tipPercent}%): $${r.tipAmount} = Total: $${r.total}${(r.splitWays as number) > 1 ? ` ($${r.perPerson} per person)` : ''}`;
     case 'coin_flip':
-      return `🪙 Result: ${(r.result as string).toUpperCase()}`;
+      return `🪙 Result: ${String(r.result || 'heads').toUpperCase()}`;
     case 'roll_dice':
       return `🎲 Rolled: ${(r.rolls as number[]).join(', ')} (Total: ${r.total})`;
     case 'calculate_age':
@@ -1858,6 +1859,48 @@ function formatResultText(toolName: string, result: unknown): string {
     default:
       return JSON.stringify(result, null, 2);
   }
+}
+
+// Generate placeholder template data for resources/read (before tool is called)
+function getTemplateData(toolName: string): Record<string, unknown> {
+  const defaults: Record<string, Record<string, unknown>> = {
+    calculate_bmi: { bmi: 22.5, category: 'Normal', weight: 70, height: 175 },
+    calculate_ideal_weight: { idealWeight: 68, formula: 'Devine', height: 175, gender: 'male' },
+    calculate_bmr: { bmr: 1650, tdee: 2275, activityLevel: 'moderate' },
+    generate_weight_loss_plan: { currentWeight: 80, targetWeight: 70, weeksToGoal: 20, dailyCalories: 1800, weeklyWeightLoss: 0.5, bmr: 1700, tdee: 2300 },
+    calculate_savings_plan: { monthlySavings: 500, monthsToGoal: 24, totalSaved: 12000, disposableIncome: 2000, savingsRate: 25, currency: 'USD' },
+    calculate_date_info: { dayOfWeek: 'Monday', weekNumber: 1, isLeapYear: false, dayOfYear: 1, date: '2026-01-01' },
+    days_between_dates: { days: 30, weeks: 4, months: 1, startDate: '2026-01-01', endDate: '2026-01-31' },
+    random_number: { result: 42, min: 1, max: 100 },
+    coin_flip: { result: 'heads' },
+    pick_random: { result: 'Option A', options: ['Option A', 'Option B', 'Option C'] },
+    calculate_tip: { billAmount: 50, tipPercent: 18, tipAmount: 9, total: 59, perPerson: 59, splitWays: 1 },
+    calculate_percentage: { result: 25, operation: 'percentage_of', value: 100, percentage: 25 },
+    calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilBirthday: 180 },
+    convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
+    calculate_cycle: { nextPeriod: '2026-01-28', fertileStart: '2026-01-10', fertileEnd: '2026-01-16', ovulationDate: '2026-01-14', currentPhase: 'Follicular' },
+    calculate_countdown: { days: 100, weeks: 14, months: 3, targetDate: '2026-04-11', direction: 'until' },
+    make_decision: { decision: 'Yes', options: ['Yes', 'No'] },
+    zodiac_compatibility: {
+      person1: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire' },
+      person2: { sign: 'leo', name: 'Leo', symbol: '♌', element: 'Fire' },
+      compatibility: 85, level: 'Excellent'
+    },
+    get_zodiac_sign: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire', traits: ['Bold', 'Ambitious'] },
+    generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
+    calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
+    calculate_sleep_times: { sleepTimes: ['22:00', '23:30', '01:00'], wakeTimes: ['06:00', '07:30', '09:00'], cycles: 5 },
+    spin_wheel: { result: 'Winner!', options: ['Winner!', 'Try Again', 'Bonus'] },
+    convert_timezone: { result: '15:00', fromTime: '10:00', fromTimezone: 'America/New_York', toTimezone: 'Europe/London' },
+    generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
+    lucky_number: { number: 7, min: 1, max: 100 },
+    roll_dice: { rolls: [4, 6], total: 10, sides: 6, count: 2 },
+    vibe_check: { result: 'Cat Person', catScore: 7, dogScore: 3, traits: ['Independent', 'Curious'] },
+    calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
+    calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },
+    when_date_info: { date: '2026-06-15', dayOfWeek: 'Monday', daysFromToday: 164, zodiacSign: 'Gemini' },
+  };
+  return defaults[toolName] || { message: 'Widget ready' };
 }
 
 // Handle MCP requests
@@ -1884,7 +1927,7 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         // Return list of widget template resources
         const resources = TOOLS.map(tool => ({
           uri: `ui://widget/${tool.name}.html`,
-          name: tool.name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          name: tool.name.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
           description: tool.description,
           mimeType: 'text/html',
         }));
@@ -1904,8 +1947,8 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
           return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName}` } };
         }
 
-        // Generate a template widget HTML (with placeholder data)
-        const templateData = { message: 'Widget template - data will be populated on tool call' };
+        // Generate placeholder data for each tool type
+        const templateData = getTemplateData(toolName);
         const widgetHtml = generateWidgetHtml(toolName, templateData);
 
         return {
@@ -1953,7 +1996,7 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
             uri: `ui://widget/${toolName}.html`,
             mimeType: 'text/html',
             text: widgetHtmlContent,
-            title: toolName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            title: toolName.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
           }
         };
 
