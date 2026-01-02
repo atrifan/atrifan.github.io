@@ -926,6 +926,83 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
+// Base URL for widgets
+const BASE_URL = process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : 'https://tulzo.vercel.app';
+
+// Map tool names to widget types
+function getWidgetType(toolName: string): string | null {
+  const widgetMap: Record<string, string> = {
+    'calculate_bmi': 'bmi',
+    'calculate_tip': 'tip',
+    'coin_flip': 'coin_flip',
+    'roll_dice': 'dice',
+    'calculate_age': 'age',
+    'zodiac_compatibility': 'zodiac',
+    'calculate_countdown': 'countdown',
+    'make_decision': 'decision',
+    'random_number': 'random_number',
+    'lucky_number': 'lucky_number',
+    'pick_random': 'pick_random',
+    'spin_wheel': 'pick_random',
+  };
+  return widgetMap[toolName] || null;
+}
+
+// Generate widget URL for embeddable results
+function generateWidgetUrl(toolName: string, result: unknown, args: Record<string, unknown>): string | null {
+  const widgetType = getWidgetType(toolName);
+  if (!widgetType) return null;
+
+  // Prepare widget data based on tool type
+  let widgetData: Record<string, unknown> = result as Record<string, unknown>;
+
+  // Add input args to widget data for context
+  if (toolName === 'calculate_bmi') {
+    widgetData = { ...widgetData, weight: args.weight, height: args.height };
+  } else if (toolName === 'spin_wheel') {
+    // Map spin_wheel result to pick_random format
+    widgetData = { selected: (result as { result: string }).result, totalItems: (args.options as string[]).length };
+  }
+
+  const encodedData = encodeURIComponent(JSON.stringify(widgetData));
+  return `${BASE_URL}/embed?tool=${widgetType}&data=${encodedData}`;
+}
+
+// Format result as human-readable text
+function formatResultText(toolName: string, result: unknown): string {
+  const r = result as Record<string, unknown>;
+
+  switch (toolName) {
+    case 'calculate_bmi':
+      return `BMI: ${r.bmi} (${r.category})`;
+    case 'calculate_tip':
+      return `Bill: $${r.billAmount} + Tip (${r.tipPercent}%): $${r.tipAmount} = Total: $${r.total}${(r.splitWays as number) > 1 ? ` ($${r.perPerson} per person)` : ''}`;
+    case 'coin_flip':
+      return `🪙 Result: ${(r.result as string).toUpperCase()}`;
+    case 'roll_dice':
+      return `🎲 Rolled: ${(r.rolls as number[]).join(', ')} (Total: ${r.total})`;
+    case 'calculate_age':
+      return `Age: ${r.years} years, ${r.months} months, ${r.days} days (${r.totalDays} total days). Next birthday in ${r.daysUntilNextBirthday} days.`;
+    case 'zodiac_compatibility':
+      return `${(r.person1 as { name: string }).name} ❤️ ${(r.person2 as { name: string }).name}: ${r.compatibility}% compatibility (${r.level})`;
+    case 'calculate_countdown':
+      return `${r.eventName}: ${Math.abs(r.days as number)} days ${r.isPast ? 'ago' : 'to go'} (${r.weeks} weeks, ${r.months} months)`;
+    case 'make_decision':
+      return `Decision: ${r.decision}`;
+    case 'random_number':
+      return `Random number (${r.min}-${r.max}): ${r.result}`;
+    case 'lucky_number':
+      return `🍀 Lucky number: ${r.luckyNumber}`;
+    case 'pick_random':
+    case 'spin_wheel':
+      return `Selected: ${r.result || r.selected}`;
+    default:
+      return JSON.stringify(result, null, 2);
+  }
+}
+
 // Handle MCP requests
 function handleMCPRequest(request: MCPRequest): MCPResponse {
   const { id, method, params } = request;
@@ -948,7 +1025,30 @@ function handleMCPRequest(request: MCPRequest): MCPResponse {
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
         const result = executeTool(toolName, toolArgs);
-        return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+
+        // Generate widget URL if available
+        const widgetUrl = generateWidgetUrl(toolName, result, toolArgs);
+
+        // Build content array with text and optional widget
+        const content: Array<{ type: string; text?: string; url?: string; mimeType?: string }> = [
+          { type: 'text', text: formatResultText(toolName, result) },
+        ];
+
+        // Add JSON data as secondary text content
+        content.push({ type: 'text', text: `\n\nRaw data:\n${JSON.stringify(result, null, 2)}` });
+
+        // Add widget URL as resource if available (for clients that support it)
+        if (widgetUrl) {
+          content.push({
+            type: 'resource',
+            url: widgetUrl,
+            mimeType: 'text/html',
+          });
+          // Also add as text for clients that don't support resources
+          content.push({ type: 'text', text: `\n\n📊 Interactive widget: ${widgetUrl}` });
+        }
+
+        return { jsonrpc: '2.0', id, result: { content } };
       }
       default:
         return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
