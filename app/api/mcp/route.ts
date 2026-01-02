@@ -926,23 +926,42 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
   }
 }
 
-// Map tool names to widget types
-function getWidgetType(toolName: string): string | null {
+// Map tool names to widget types - all tools get widgets
+function getWidgetType(toolName: string): string {
   const widgetMap: Record<string, string> = {
     'calculate_bmi': 'bmi',
-    'calculate_tip': 'tip',
+    'calculate_ideal_weight': 'ideal_weight',
+    'calculate_bmr': 'bmr',
+    'generate_weight_loss_plan': 'weight_loss_plan',
+    'calculate_savings_plan': 'savings_plan',
+    'calculate_date_info': 'date_info',
+    'days_between_dates': 'days_between',
+    'random_number': 'random_number',
     'coin_flip': 'coin_flip',
-    'roll_dice': 'dice',
+    'pick_random': 'pick_random',
+    'calculate_tip': 'tip',
+    'calculate_percentage': 'percentage',
     'calculate_age': 'age',
-    'zodiac_compatibility': 'zodiac',
+    'convert_units': 'convert_units',
+    'calculate_cycle': 'cycle',
     'calculate_countdown': 'countdown',
     'make_decision': 'decision',
-    'random_number': 'random_number',
-    'lucky_number': 'lucky_number',
-    'pick_random': 'pick_random',
+    'zodiac_compatibility': 'zodiac',
+    'get_zodiac_sign': 'zodiac_sign',
+    'generate_names': 'names',
+    'calculate_position_size': 'position_size',
+    'calculate_sleep_times': 'sleep_times',
     'spin_wheel': 'pick_random',
+    'convert_timezone': 'timezone',
+    'generate_unique_id': 'unique_id',
+    'lucky_number': 'lucky_number',
+    'roll_dice': 'dice',
+    'vibe_check': 'vibe_check',
+    'calculate_iq_score': 'iq_score',
+    'calculate_uniqueness': 'uniqueness',
+    'when_date_info': 'when_date',
   };
-  return widgetMap[toolName] || null;
+  return widgetMap[toolName] || 'generic';
 }
 
 // Common CSS styles for widgets
@@ -1010,10 +1029,8 @@ body {
 `;
 
 // Generate self-contained widget HTML
-function generateWidgetHtml(toolName: string, data: Record<string, unknown>): string | null {
+function generateWidgetHtml(toolName: string, data: Record<string, unknown>): string {
   const widgetType = getWidgetType(toolName);
-  if (!widgetType) return null;
-
   let content = '';
 
   switch (widgetType) {
@@ -1136,8 +1153,216 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
         ${data.totalItems ? `<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Selected from ${data.totalItems} items</div>` : ''}`;
       break;
     }
-    default:
-      return null;
+    case 'ideal_weight': {
+      content = `
+        <div class="header">⚖️ Ideal Weight</div>
+        <div class="big-number" style="color:#10b981">${Number(data.idealWeight).toFixed(1)}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">kg (${data.formula})</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">${data.height} cm</div></div>
+          <div class="stat-box"><div class="stat-label">Gender</div><div class="stat-value">${data.gender}</div></div>
+        </div>`;
+      break;
+    }
+    case 'bmr': {
+      content = `
+        <div class="header">🔥 BMR Calculator</div>
+        <div class="big-number" style="color:#f59e0b">${Math.round(data.bmr as number)}</div>
+        <div class="label" style="background:rgba(245,158,11,0.2);color:#f59e0b">calories/day</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">TDEE</div><div class="stat-value">${Math.round(data.tdee as number)} cal</div></div>
+          <div class="stat-box"><div class="stat-label">Activity</div><div class="stat-value">${data.activityLevel}</div></div>
+        </div>`;
+      break;
+    }
+    case 'weight_loss_plan': {
+      const plan = data as Record<string, unknown>;
+      content = `
+        <div class="header">📉 Weight Loss Plan</div>
+        <div class="big-number" style="color:#10b981;font-size:2rem">${plan.targetWeight} kg</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Target in ${plan.weeksToGoal} weeks</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Current</div><div class="stat-value">${plan.currentWeight} kg</div></div>
+          <div class="stat-box"><div class="stat-label">Daily Cal</div><div class="stat-value">${plan.dailyCalories}</div></div>
+        </div>`;
+      break;
+    }
+    case 'savings_plan': {
+      content = `
+        <div class="header">💰 Savings Plan</div>
+        <div class="big-number" style="color:#10b981">$${Number(data.totalSaved).toLocaleString()}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Total after ${data.months} months</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Monthly</div><div class="stat-value">$${data.monthlyAmount}</div></div>
+          <div class="stat-box"><div class="stat-label">Interest</div><div class="stat-value">${data.interestRate}%</div></div>
+        </div>`;
+      break;
+    }
+    case 'date_info': {
+      content = `
+        <div class="header">📅 Date Info</div>
+        <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.formatted || data.date}</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Day</div><div class="stat-value">${data.dayOfWeek}</div></div>
+          <div class="stat-box"><div class="stat-label">Week</div><div class="stat-value">${data.weekNumber}</div></div>
+          <div class="stat-box"><div class="stat-label">Day of Year</div><div class="stat-value">${data.dayOfYear}</div></div>
+          <div class="stat-box"><div class="stat-label">Quarter</div><div class="stat-value">Q${data.quarter}</div></div>
+        </div>`;
+      break;
+    }
+    case 'days_between': {
+      content = `
+        <div class="header">📆 Days Between</div>
+        <div class="big-number" style="color:#a78bfa">${Math.abs(data.days as number)}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">days</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${data.weeks}</div></div>
+          <div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">${data.months}</div></div>
+        </div>`;
+      break;
+    }
+    case 'percentage': {
+      content = `
+        <div class="header">📊 Percentage</div>
+        <div class="big-number" style="color:#f472b6">${data.result}%</div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">${data.value} of ${data.total}</div>`;
+      break;
+    }
+    case 'convert_units': {
+      content = `
+        <div class="header">🔄 Unit Converter</div>
+        <div class="big-number" style="color:#60a5fa;font-size:2rem">${data.result}</div>
+        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.toUnit}</div>
+        <div class="stats">
+          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">${data.value} ${data.fromUnit}</div></div>
+        </div>`;
+      break;
+    }
+    case 'cycle': {
+      content = `
+        <div class="header">🌸 Cycle Tracker</div>
+        <div class="big-number" style="color:#f472b6;font-size:1.5rem">${data.nextPeriod}</div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">${data.currentDay}</div></div>
+          <div class="stat-box"><div class="stat-label">Phase</div><div class="stat-value">${data.phase}</div></div>
+          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">Fertile Window</div><div class="stat-value">${data.fertileStart} - ${data.fertileEnd}</div></div>
+        </div>`;
+      break;
+    }
+    case 'zodiac_sign': {
+      const sign = data as Record<string, unknown>;
+      content = `
+        <div class="header">⭐ Zodiac Sign</div>
+        <div style="text-align:center;font-size:4rem;margin:0.5rem 0">${sign.symbol}</div>
+        <div class="big-number" style="color:#a78bfa;font-size:2rem">${sign.sign}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${sign.element} • ${sign.dates}</div>`;
+      break;
+    }
+    case 'names': {
+      const names = data.names as string[];
+      content = `
+        <div class="header">👶 Name Generator</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin:1rem 0">
+          ${names.slice(0, 8).map(n => `<span style="background:rgba(244,114,182,0.2);color:#f472b6;padding:0.5rem 1rem;border-radius:20px;font-weight:600">${n}</span>`).join('')}
+        </div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">${data.gender} names</div>`;
+      break;
+    }
+    case 'position_size': {
+      content = `
+        <div class="header">📈 Position Size</div>
+        <div class="big-number" style="color:#10b981">$${Number(data.positionSize).toLocaleString()}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">${data.shares} shares</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Risk</div><div class="stat-value">${data.riskPercent}%</div></div>
+          <div class="stat-box"><div class="stat-label">Stop Loss</div><div class="stat-value">$${data.stopLoss}</div></div>
+        </div>`;
+      break;
+    }
+    case 'sleep_times': {
+      const times = data.sleepTimes as string[] || data.wakeTimes as string[];
+      content = `
+        <div class="header">😴 Sleep Calculator</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin:1rem 0">
+          ${times.slice(0, 4).map((t: string) => `<span style="background:rgba(139,92,246,0.2);color:#8b5cf6;padding:0.5rem 1rem;border-radius:20px;font-weight:600">${t}</span>`).join('')}
+        </div>
+        <div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Optimal ${data.sleepTimes ? 'bedtimes' : 'wake times'}</div>`;
+      break;
+    }
+    case 'timezone': {
+      content = `
+        <div class="header">🌍 Timezone</div>
+        <div class="big-number" style="color:#60a5fa;font-size:2rem">${data.convertedTime}</div>
+        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.toTimezone}</div>
+        <div class="stats">
+          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">${data.originalTime} ${data.fromTimezone}</div></div>
+        </div>`;
+      break;
+    }
+    case 'unique_id': {
+      content = `
+        <div class="header">🔑 Unique ID</div>
+        <div style="background:rgba(16,185,129,0.1);padding:1rem;border-radius:8px;margin:1rem 0;word-break:break-all;text-align:center">
+          <code style="color:#10b981;font-size:0.9rem">${data.id}</code>
+        </div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">${data.type || 'UUID'}</div>`;
+      break;
+    }
+    case 'vibe_check': {
+      const vibe = data as Record<string, unknown>;
+      const vibeColor = (vibe.score as number) >= 70 ? '#10b981' : (vibe.score as number) >= 40 ? '#f59e0b' : '#ef4444';
+      content = `
+        <div class="header">✨ Vibe Check</div>
+        <div style="text-align:center;font-size:4rem;margin:0.5rem 0">${vibe.emoji}</div>
+        <div class="big-number" style="color:${vibeColor}">${vibe.score}%</div>
+        <div class="label" style="background:${vibeColor}33;color:${vibeColor}">${vibe.vibe}</div>`;
+      break;
+    }
+    case 'iq_score': {
+      const iq = data.iqScore as number;
+      const iqColor = iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b';
+      content = `
+        <div class="header">🧠 IQ Score</div>
+        <div class="big-number" style="color:${iqColor}">${iq}</div>
+        <div class="label" style="background:${iqColor}33;color:${iqColor}">${data.category}</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">${data.percentile}%</div></div>
+          <div class="stat-box"><div class="stat-label">Rarity</div><div class="stat-value">1 in ${data.rarity}</div></div>
+        </div>`;
+      break;
+    }
+    case 'uniqueness': {
+      const score = data.uniquenessScore as number;
+      const uColor = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+      content = `
+        <div class="header">🦄 Uniqueness</div>
+        <div class="big-number" style="color:${uColor}">${score}%</div>
+        <div class="label" style="background:${uColor}33;color:${uColor}">${data.category}</div>`;
+      break;
+    }
+    case 'when_date': {
+      content = `
+        <div class="header">📅 When?</div>
+        <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.date}</div>
+        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.dayOfWeek}</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Days Away</div><div class="stat-value">${data.daysAway}</div></div>
+          <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${data.weeksAway}</div></div>
+        </div>`;
+      break;
+    }
+    case 'generic':
+    default: {
+      // Generic widget for any tool - display key-value pairs
+      const entries = Object.entries(data).slice(0, 6);
+      content = `
+        <div class="header">🔧 Result</div>
+        <div class="stats" style="grid-template-columns:1fr">
+          ${entries.map(([k, v]) => `<div class="stat-box"><div class="stat-label">${k.replace(/([A-Z])/g, ' $1').trim()}</div><div class="stat-value">${typeof v === 'object' ? JSON.stringify(v) : v}</div></div>`).join('')}
+        </div>`;
+      break;
+    }
   }
 
   return `<!DOCTYPE html>
@@ -1227,21 +1452,26 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         ];
 
         // Add widget HTML for Claude artifact rendering
-        if (widgetHtmlContent) {
-          const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
+        const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
 \`\`\`html
 ${widgetHtmlContent}
 \`\`\`
 This component is fully functional and ready for immediate use.`;
-          content.push({ type: 'text', text: widgetHtml });
-        }
+        content.push({ type: 'text', text: widgetHtml });
 
         return {
           jsonrpc: '2.0',
           id,
           result: {
             content,
-            structuredContent: { result: widgetData },
+            // For GPT: structuredContent with display HTML
+            structuredContent: {
+              result: widgetData,
+              display: {
+                type: 'html',
+                content: widgetHtmlContent,
+              }
+            },
           }
         };
       }
