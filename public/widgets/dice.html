@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #78350f 0%, #a16207 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 16px; padding: 1.5rem; max-width: 320px; width: 100%; border: 1px solid rgba(255,255,255,0.2); text-align: center; }
+    .header { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; }
+    .icon { font-size: 1.5rem; }
+    .title { color: #fff; font-size: 1.1rem; font-weight: 600; }
+    .subtitle { color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-left: 0.5rem; }
+    .dice-container { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .die { width: 50px; height: 50px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; color: #1f2937; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .total-label { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+    .total-value { color: #fbbf24; font-size: 2.5rem; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><span class="icon">🎲</span><span class="title">Dice Roll</span><span id="dice-info" class="subtitle"></span></div>
+    <div id="dice" class="dice-container"></div>
+    <div class="total-label">Total</div>
+    <div id="total" class="total-value">--</div>
+  </div>
+  <script>
+    function render(data) {
+      const d = data?.result || data?.structuredContent?.result || data;
+      const rolls = d.rolls || [];
+      const sides = d.sides || 6;
+      document.getElementById('dice-info').textContent = rolls.length + 'd' + sides;
+      document.getElementById('dice').innerHTML = rolls.map(r => '<div class="die">' + r + '</div>').join('');
+      document.getElementById('total').textContent = d.total || rolls.reduce((a,b) => a+b, 0);
+    }
+    window.addEventListener('openai:set_globals', () => render(window.openai?.toolOutput?.result));
+    window.widgetSetData = render;
+    if (window.__WIDGET_DATA__) render(window.__WIDGET_DATA__);
+  </script>
+</body>
+</html>
+

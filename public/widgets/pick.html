@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 16px; padding: 1.5rem; max-width: 300px; width: 100%; border: 1px solid rgba(255,255,255,0.2); text-align: center; }
+    .header { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .icon { font-size: 1.5rem; }
+    .title { color: #fff; font-size: 1.1rem; font-weight: 600; }
+    .subtitle { color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 1rem; }
+    .emoji { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .result { font-size: 1.8rem; font-weight: 800; color: #8b5cf6; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><span class="icon">🎯</span><span class="title">Random Pick</span></div>
+    <div id="subtitle" class="subtitle">From -- items</div>
+    <div class="emoji">✨</div>
+    <div id="result" class="result">--</div>
+  </div>
+  <script>
+    function render(data) {
+      const d = data?.result || data?.structuredContent?.result || data;
+      const selected = d.result || d.selected || '--';
+      const count = d.totalItems || d.options?.length || '--';
+      document.getElementById('subtitle').textContent = 'From ' + count + ' items';
+      document.getElementById('result').textContent = selected;
+    }
+    window.addEventListener('openai:set_globals', () => render(window.openai?.toolOutput?.result));
+    window.widgetSetData = render;
+    if (window.__WIDGET_DATA__) render(window.__WIDGET_DATA__);
+  </script>
+</body>
+</html>
+

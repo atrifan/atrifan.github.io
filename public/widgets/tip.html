@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #78350f 0%, #92400e 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 16px; padding: 1.5rem; max-width: 320px; width: 100%; border: 1px solid rgba(255,255,255,0.2); }
+    .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+    .icon { font-size: 1.5rem; }
+    .title { color: #fff; font-size: 1.1rem; font-weight: 600; }
+    .subtitle { color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-left: auto; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .stat { background: rgba(255,255,255,0.1); padding: 0.75rem; border-radius: 8px; text-align: center; }
+    .stat-label { color: rgba(255,255,255,0.6); font-size: 0.75rem; text-transform: uppercase; }
+    .stat-value { color: #fff; font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+    .highlight { color: #fbbf24; }
+    .total-box { background: rgba(251,191,36,0.3); padding: 1rem; border-radius: 12px; text-align: center; margin-bottom: 0.75rem; }
+    .total-label { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+    .total-value { color: #fbbf24; font-size: 2rem; font-weight: 800; }
+    .split { text-align: center; color: rgba(255,255,255,0.8); }
+    .split-amount { color: #fbbf24; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><span class="icon">💰</span><span class="title">Tip Calculator</span><span id="tip-percent" class="subtitle">--% tip</span></div>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Bill</div><div id="bill" class="stat-value">$--</div></div>
+      <div class="stat"><div class="stat-label">Tip</div><div id="tip" class="stat-value highlight">$--</div></div>
+    </div>
+    <div class="total-box"><div class="total-label">Total</div><div id="total" class="total-value">$--</div></div>
+    <div id="split" class="split" style="display:none;"></div>
+  </div>
+  <script>
+    function render(data) {
+      const d = data?.result || data?.structuredContent?.result || data;
+      document.getElementById('tip-percent').textContent = (d.tipPercent || '--') + '% tip';
+      document.getElementById('bill').textContent = '$' + (d.billAmount?.toFixed(2) || '--');
+      document.getElementById('tip').textContent = '$' + (d.tipAmount?.toFixed(2) || '--');
+      document.getElementById('total').textContent = '$' + (d.total?.toFixed(2) || '--');
+      if (d.splitWays > 1) {
+        document.getElementById('split').style.display = 'block';
+        document.getElementById('split').innerHTML = 'Split ' + d.splitWays + ' ways: <span class="split-amount">$' + d.perPerson?.toFixed(2) + '</span> each';
+      }
+    }
+    window.addEventListener('openai:set_globals', () => render(window.openai?.toolOutput?.result));
+    window.widgetSetData = render;
+    if (window.__WIDGET_DATA__) render(window.__WIDGET_DATA__);
+  </script>
+</body>
+</html>
+
