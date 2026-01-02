@@ -1477,8 +1477,73 @@ body {
 }
 `;
 
-// Generate self-contained widget HTML
-function generateWidgetHtml(toolName: string, data: Record<string, unknown>): string {
+// Widget rendering mode: 'inline' (default) or 'iframe'
+const WIDGET_MODE: 'inline' | 'iframe' = 'inline';
+
+// Base URL for iframe mode
+const WIDGET_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://tulzo.com';
+
+// Generate iframe-based widget HTML (uses /embed page with React components)
+function generateIframeWidgetHtml(toolName: string, data: Record<string, unknown>): string {
+  const encodedData = encodeURIComponent(JSON.stringify(data));
+  const embedUrl = `${WIDGET_BASE_URL}/embed?tool=${toolName}&data=${encodedData}`;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    iframe {
+      width: 100%;
+      height: 100vh;
+      min-height: 400px;
+      border: none;
+      background: transparent;
+    }
+  </style>
+</head>
+<body>
+  <iframe id="widget-frame" src="${embedUrl}" allow="clipboard-write"></iframe>
+  <script>
+    // Embedded data for reference
+    const embeddedData = ${JSON.stringify({ tool: toolName, data })};
+
+    // OpenAI SDK integration - forward data to iframe
+    window.addEventListener("openai:set_globals", function(ev) {
+      console.log("🎯 openai:set_globals event fired");
+      const toolOutput = window.openai?.toolOutput?.result;
+      if (toolOutput) {
+        console.log("📦 Got OpenAI tool output:", toolOutput);
+        // Post message to iframe with updated data
+        const iframe = document.getElementById('widget-frame');
+        iframe.contentWindow.postMessage({ type: 'widget-data', tool: embeddedData.tool, data: toolOutput }, '*');
+      }
+    });
+
+    // Check if OpenAI data is already available
+    if (window.openai?.toolOutput?.result) {
+      console.log("📦 OpenAI data already available");
+      setTimeout(() => {
+        const iframe = document.getElementById('widget-frame');
+        iframe.contentWindow.postMessage({ type: 'widget-data', tool: embeddedData.tool, data: window.openai.toolOutput.result }, '*');
+      }, 100);
+    }
+  </script>
+</body>
+</html>`;
+}
+
+// Generate self-contained widget HTML (inline mode)
+function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown>): string {
   const widgetType = getWidgetType(toolName);
   let content = '';
 
@@ -1815,6 +1880,7 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
     }
   }
 
+  // Generate HTML with OpenAI SDK support and Claude fallback
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -1823,9 +1889,46 @@ function generateWidgetHtml(toolName: string, data: Record<string, unknown>): st
   <style>${WIDGET_STYLES}</style>
 </head>
 <body>
-  <div class="card">${content}<div class="footer">tulzo.vercel.app</div></div>
+  <div class="card" id="widget-container">${content}<div class="footer">tulzo.vercel.app</div></div>
+  <script>
+    // Embedded data for Claude (fallback)
+    const embeddedData = ${JSON.stringify({ tool: toolName, data })};
+    let widgetData = embeddedData;
+
+    // OpenAI SDK integration - listen for set_globals event
+    window.addEventListener("openai:set_globals", function(ev) {
+      console.log("🎯 openai:set_globals event fired");
+      const toolOutput = window.openai?.toolOutput?.result;
+      if (toolOutput) {
+        console.log("📦 Got OpenAI tool output:", toolOutput);
+        widgetData = { tool: embeddedData.tool, data: toolOutput };
+        updateWidget(widgetData);
+      }
+    });
+
+    // Check if OpenAI data is already available
+    if (window.openai?.toolOutput?.result) {
+      console.log("📦 OpenAI data already available");
+      widgetData = { tool: embeddedData.tool, data: window.openai.toolOutput.result };
+      updateWidget(widgetData);
+    }
+
+    function updateWidget(wd) {
+      // For now, just log - the static HTML is already rendered
+      // In future, this could re-render the widget with new data
+      console.log("🔄 Widget data:", wd);
+    }
+  </script>
 </body>
 </html>`;
+}
+
+// Main widget HTML generator - uses WIDGET_MODE to choose approach
+function generateWidgetHtml(toolName: string, data: Record<string, unknown>): string {
+  if (WIDGET_MODE === 'iframe') {
+    return generateIframeWidgetHtml(toolName, data);
+  }
+  return generateInlineWidgetHtml(toolName, data);
 }
 
 // Format result as human-readable text
