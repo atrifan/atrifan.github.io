@@ -71,7 +71,20 @@ const TOOL_INVOCATION_MESSAGES: Record<string, { invoking: string; invoked: stri
   when_date_info: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
 };
 
-// Tool definitions for MCP with inputSchema, outputSchema, and annotations
+// Helper to generate _meta for a tool
+function generateToolMeta(toolName: string) {
+  const messages = TOOL_INVOCATION_MESSAGES[toolName] || { invoking: 'Processing...', invoked: 'Complete' };
+  return {
+    'openai/outputTemplate': `ui://widget/${toolName}.html`,
+    'openai/toolInvocation/invoking': messages.invoking,
+    'openai/toolInvocation/invoked': messages.invoked,
+    'openai/widgetAccessible': true,
+    'openai/resultCanProduceWidget': true,
+    'openai/widgetPrefersBorder': true,
+  };
+}
+
+// Tool definitions for MCP with inputSchema, outputSchema, annotations, and _meta
 const TOOLS = [
   {
     name: 'calculate_bmi',
@@ -94,6 +107,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_bmi'),
   },
   {
     name: 'calculate_ideal_weight',
@@ -116,6 +130,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_ideal_weight'),
   },
   {
     name: 'calculate_bmr',
@@ -140,6 +155,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_bmr'),
   },
   {
     name: 'generate_weight_loss_plan',
@@ -170,6 +186,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('generate_weight_loss_plan'),
   },
   {
     name: 'calculate_savings_plan',
@@ -198,6 +215,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_savings_plan'),
   },
   {
     name: 'calculate_date_info',
@@ -222,6 +240,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_date_info'),
   },
   {
     name: 'days_between_dates',
@@ -245,6 +264,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('days_between_dates'),
   },
   {
     name: 'random_number',
@@ -266,6 +286,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('random_number'),
   },
   {
     name: 'coin_flip',
@@ -278,6 +299,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('coin_flip'),
   },
   {
     name: 'pick_random',
@@ -298,6 +320,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('pick_random'),
   },
   {
     name: 'calculate_tip',
@@ -327,6 +350,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_tip'),
   },
   {
     name: 'calculate_percentage',
@@ -349,6 +373,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_percentage'),
   },
   {
     name: 'calculate_age',
@@ -375,6 +400,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_age'),
   },
   {
     name: 'convert_units',
@@ -399,6 +425,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('convert_units'),
   },
   {
     name: 'calculate_cycle',
@@ -425,6 +452,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_cycle'),
   },
   {
     name: 'calculate_countdown',
@@ -449,6 +477,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_countdown'),
   },
   {
     name: 'make_decision',
@@ -472,6 +501,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('make_decision'),
   },
   {
     name: 'zodiac_compatibility',
@@ -495,6 +525,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('zodiac_compatibility'),
   },
   {
     name: 'get_zodiac_sign',
@@ -518,6 +549,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('get_zodiac_sign'),
   },
   {
     name: 'generate_names',
@@ -544,6 +576,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('generate_names'),
   },
   {
     name: 'calculate_position_size',
@@ -573,6 +606,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_position_size'),
   },
   {
     name: 'calculate_sleep_times',
@@ -596,6 +630,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_sleep_times'),
   },
   {
     name: 'spin_wheel',
@@ -616,6 +651,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('spin_wheel'),
   },
   {
     name: 'convert_timezone',
@@ -639,6 +675,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('convert_timezone'),
   },
   {
     name: 'generate_unique_id',
@@ -662,6 +699,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('generate_unique_id'),
   },
   {
     name: 'lucky_number',
@@ -682,6 +720,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('lucky_number'),
   },
   {
     name: 'roll_dice',
@@ -704,6 +743,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('roll_dice'),
   },
   {
     name: 'vibe_check',
@@ -733,6 +773,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('vibe_check'),
   },
   {
     name: 'calculate_iq_score',
@@ -757,6 +798,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_iq_score'),
   },
   {
     name: 'calculate_uniqueness',
@@ -786,6 +828,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('calculate_uniqueness'),
   },
   {
     name: 'when_date_info',
@@ -817,6 +860,7 @@ const TOOLS = [
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('when_date_info'),
   },
 ];
 
