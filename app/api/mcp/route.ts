@@ -2169,13 +2169,27 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         };
 
       case 'resources/list': {
-        // Return list of widget template resources
-        const resources = TOOLS.map(tool => ({
-          uri: `ui://widget/${tool.name}.html`,
-          name: tool.name.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-          description: tool.description,
-          mimeType: 'text/html',
-        }));
+        // Return list of widget template resources with _meta (no HTML content - that's in resources/read)
+        const resources = TOOLS.map(tool => {
+          const title = tool.name.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+          const messages = TOOL_INVOCATION_MESSAGES[tool.name] || { invoking: 'Processing...', invoked: 'Complete' };
+          return {
+            uri: `ui://widget/${tool.name}.html`,
+            name: title,
+            title: title,
+            description: tool.description,
+            mimeType: 'text/html',
+            _meta: {
+              'openai/outputTemplate': `ui://widget/${tool.name}.html`,
+              'openai/mimeType': 'text/html+skybridge',
+              'openai/toolInvocation/invoking': messages.invoking,
+              'openai/toolInvocation/invoked': messages.invoked,
+              'openai/widgetAccessible': true,
+              'openai/resultCanProduceWidget': true,
+              'openai/widgetPrefersBorder': true,
+            },
+          };
+        });
         return { jsonrpc: '2.0', id, result: { resources } };
       }
 
