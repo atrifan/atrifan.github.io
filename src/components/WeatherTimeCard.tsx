@@ -43,36 +43,79 @@ export class WeatherTimeCard extends Component<{}, WeatherTimeCardState> {
   }
 
   private fetchLocationAndWeather = async () => {
+    // Try HTML5 Geolocation first (more accurate), fall back to IP-based
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        // Success - user granted permission
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          await this.fetchWeatherAndCity(lat, lon);
+        },
+        // Error or denied - fall back to IP-based
+        async () => {
+          await this.fetchLocationByIP();
+        },
+        { timeout: 5000, enableHighAccuracy: false }
+      );
+    } else {
+      // Geolocation not supported - use IP-based
+      await this.fetchLocationByIP();
+    }
+  };
+
+  private fetchLocationByIP = async () => {
     try {
-      // Get location from IP-based geolocation (free, no API key needed)
       const geoRes = await fetch('https://ipapi.co/json/');
       const geoData = await geoRes.json();
+      const lat = geoData.latitude;
+      const lon = geoData.longitude;
       const city = geoData.city || 'Unknown';
       const country = geoData.country_name || '';
       this.setState({ location: country ? `${city}, ${country}` : city });
-
-      // Fetch weather from Open-Meteo (free, no API key)
-      const lat = geoData.latitude;
-      const lon = geoData.longitude;
       if (lat && lon) {
-        const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
-        );
-        const weatherData = await weatherRes.json();
-        const current = weatherData.current;
-        this.setState({
-          weather: {
-            temp: Math.round(current.temperature_2m),
-            condition: this.getWeatherCondition(current.weather_code),
-            icon: this.getWeatherIcon(current.weather_code),
-            humidity: current.relative_humidity_2m,
-            windSpeed: Math.round(current.wind_speed_10m),
-          },
-          loading: false,
-        });
+        await this.fetchWeather(lat, lon);
       }
     } catch {
       this.setState({ loading: false, error: true, location: 'Your Location' });
+    }
+  };
+
+  private fetchWeatherAndCity = async (lat: number, lon: number) => {
+    try {
+      // Reverse geocode to get city name from coordinates
+      const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+      const geoData = await geoRes.json();
+      const city = geoData.city || geoData.locality || 'Your Location';
+      const country = geoData.countryName || '';
+      this.setState({ location: country ? `${city}, ${country}` : city });
+      await this.fetchWeather(lat, lon);
+    } catch {
+      // If reverse geocoding fails, still try to get weather
+      this.setState({ location: 'Your Location' });
+      await this.fetchWeather(lat, lon);
+    }
+  };
+
+  private fetchWeather = async (lat: number, lon: number) => {
+    try {
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+      );
+      const weatherData = await weatherRes.json();
+      const current = weatherData.current;
+      this.setState({
+        weather: {
+          temp: Math.round(current.temperature_2m),
+          condition: this.getWeatherCondition(current.weather_code),
+          icon: this.getWeatherIcon(current.weather_code),
+          humidity: current.relative_humidity_2m,
+          windSpeed: Math.round(current.wind_speed_10m),
+        },
+        loading: false,
+      });
+    } catch {
+      this.setState({ loading: false, error: true });
     }
   };
 

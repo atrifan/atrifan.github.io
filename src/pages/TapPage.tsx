@@ -372,6 +372,7 @@ export class TapPage extends Component<object, TapPageState> {
   private renderHistory(taps: TapRecord[]) {
     // Show last 10 taps, newest first
     const recentTaps = [...taps].reverse().slice(0, 10);
+    const { startTime } = this.state;
 
     return (
       <View
@@ -392,6 +393,9 @@ export class TapPage extends Component<object, TapPageState> {
               : tap.diff > 0 ? '#f87171'
               : '#fff';
 
+            // Calculate time since start
+            const timeSinceStart = startTime ? tap.timestamp - startTime : 0;
+
             return (
               <div
                 key={tap.tapNumber}
@@ -403,12 +407,16 @@ export class TapPage extends Component<object, TapPageState> {
                   padding: '0.6rem 1rem',
                   borderRadius: '8px',
                   fontSize: '0.9rem',
+                  gap: '0.5rem',
                 }}
               >
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, minWidth: '50px' }}>
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, minWidth: '40px' }}>
                   #{tap.tapNumber}
                 </span>
-                <span style={{ color: '#fff', fontWeight: 600 }}>
+                <span style={{ color: '#60a5fa', fontWeight: 600, minWidth: '65px', textAlign: 'center', fontSize: '0.8rem' }}>
+                  @{this.formatTime(timeSinceStart)}
+                </span>
+                <span style={{ color: '#fff', fontWeight: 600, flex: 1, textAlign: 'center' }}>
                   {tap.interval !== null ? this.formatInterval(tap.interval) : 'First tap'}
                 </span>
                 <span style={{ color: diffColor, fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>
