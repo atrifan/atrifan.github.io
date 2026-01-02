@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { WeightLossPlan } from '../types';
+import { ShareResults } from './ShareResults';
 
 interface ResultsDisplayProps {
   plan: WeightLossPlan;
@@ -64,6 +65,8 @@ const getBMIColor = (category: string): string => {
  * Results Display Component - Beautiful Redesign
  */
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
+  const resultsRef = useRef<HTMLDivElement>(null);
+
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -89,7 +92,18 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
         <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.75rem', fontSize: '1.2rem' }}>
           Here's everything you need to reach your goal
         </p>
+        {/* Share Button */}
+        <div style={{ marginTop: '1.5rem' }}>
+          <ShareResults
+            targetRef={resultsRef}
+            title="My Weight Loss Plan - Tulzo CUT"
+            text={`Check out my weight loss plan! Target: ${plan.idealWeight.toFixed(1)}kg in ${plan.weeksToGoal} weeks`}
+          />
+        </div>
       </div>
+
+      {/* Results content wrapper for screenshot */}
+      <div ref={resultsRef}>
 
       {/* BMI Cards Row */}
       <div style={{
@@ -322,6 +336,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
           </div>
         </div>
       </div>
+      </div>{/* End of results wrapper */}
     </View>
   );
 };

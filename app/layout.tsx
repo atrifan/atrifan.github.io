@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { dark } from '@clerk/themes';
+import Script from 'next/script';
 import { Providers } from './providers';
 import '@/styles/globals.css';
 
@@ -94,11 +95,7 @@ export default function RootLayout({
           }}
         />
 
-        {/* iubenda Cookie Consent Banner */}
-        <script
-          type="text/javascript"
-          src="https://embeds.iubenda.com/widgets/2a8c5c2b-e4ed-46ab-bf87-cf7b1fa09a94.js"
-        />
+
 
         {/* Preconnect for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -134,6 +131,43 @@ export default function RootLayout({
         >
           <Providers>{children}</Providers>
         </ClerkProvider>
+
+        {/* iubenda Cookie Consent Banner - loaded after page */}
+        <Script
+          src="https://cs.iubenda.com/autoblocking/3856498.js"
+          strategy="afterInteractive"
+        />
+        <Script
+          src="//cdn.iubenda.com/cs/gpp/stub.js"
+          strategy="afterInteractive"
+        />
+        <Script
+          src="//cdn.iubenda.com/cs/iubenda_cs.js"
+          strategy="afterInteractive"
+          async
+        />
+        <Script id="iubenda-config" strategy="afterInteractive">
+          {`
+            var _iub = _iub || [];
+            _iub.csConfiguration = {
+              "siteId": 3856498,
+              "cookiePolicyId": 11077306,
+              "lang": "en",
+              "storage": { "useSiteId": true },
+              "banner": {
+                "acceptButtonDisplay": true,
+                "closeButtonDisplay": false,
+                "customizeButtonDisplay": true,
+                "explicitWithdrawal": true,
+                "listPurposes": true,
+                "position": "float-bottom-center",
+                "rejectButtonDisplay": true,
+                "showTitle": false,
+                "backgroundOverlay": true
+              }
+            };
+          `}
+        </Script>
       </body>
     </html>
   );

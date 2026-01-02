@@ -19,11 +19,12 @@ export function Providers({ children }: ProvidersProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Immediate mount
     setMounted(true);
   }, []);
 
-  // Both server and initial client render return the same empty structure
-  // This ensures hydration always matches, regardless of browser extensions
+  // Show loading state only on server/initial render
+  // This should transition immediately on client
   if (!mounted) {
     return (
       <div
@@ -42,8 +43,15 @@ export function Providers({ children }: ProvidersProps) {
             height: '60px',
             borderRadius: '50%',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
+            animation: 'pulse 1.5s ease-in-out infinite',
           }}
         />
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+          }
+        `}</style>
       </div>
     );
   }
