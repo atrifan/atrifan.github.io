@@ -24,6 +24,7 @@ import { RankPage as UniquePage } from './pages/RankPage';
 import { BrainPage } from './pages/BrainPage';
 import { VibePage } from './pages/VibePage';
 import { CyclePage } from './pages/CyclePage';
+import { RiskPage } from './pages/RiskPage';
 
 /**
  * Main App Component with Routing
@@ -45,6 +46,7 @@ class App extends Component {
             {/* Money */}
             <Route path="/stack" element={<StackPage />} />
             <Route path="/tip" element={<TipPage />} />
+            <Route path="/risk" element={<RiskPage />} />
             <Route path="/percent" element={<PercentPage />} />
             {/* Time */}
             <Route path="/when" element={<WhenPage />} />

@@ -28,6 +28,7 @@ import { RankIcon } from '../components/RankIcon';
 import { BrainIcon } from '../components/BrainIcon';
 import { VibeIcon } from '../components/VibeIcon';
 import { CycleIcon } from '../components/CycleIcon';
+import { RiskIcon } from '../components/RiskIcon';
 import { WeatherTimeCard } from '../components/WeatherTimeCard';
 
 interface HomePageState {
@@ -64,6 +65,7 @@ export class HomePage extends Component<{}, HomePageState> {
       cycle: <CycleIcon size={size} />,
       age: <AgeIcon size={size} />,
       tip: <TipIcon size={size} />,
+      risk: <RiskIcon size={size} />,
       percent: <PercentIcon size={size} />,
       days: <DaysIcon size={size} />,
       zone: <ZoneIcon size={size} />,

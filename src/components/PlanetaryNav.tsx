@@ -23,6 +23,7 @@ import { RankIcon } from './RankIcon';
 import { BrainIcon } from './BrainIcon';
 import { VibeIcon } from './VibeIcon';
 import { CycleIcon } from './CycleIcon';
+import { RiskIcon } from './RiskIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -82,6 +83,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
       brain: <BrainIcon size={size} />,
       vibe: <VibeIcon size={size} />,
       tip: <TipIcon size={size} />,
+      risk: <RiskIcon size={size} />,
       percent: <PercentIcon size={size} />,
       days: <DaysIcon size={size} />,
       zone: <ZoneIcon size={size} />,

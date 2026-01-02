@@ -120,6 +120,11 @@ export const ADS_CONFIG = {
     cycleTop: '7896227263',
     cycleResults: '8705572595',
     cycleFooter: '8952984604',
+
+    // RISK page ads (Trading Risk Calculator)
+    riskTop: '7912539132',
+    riskResults: '4846218639',
+    riskFooter: '6186386313',
   },
 
   // Enable/disable ads (useful for development)
