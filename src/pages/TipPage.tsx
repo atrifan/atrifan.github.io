@@ -6,6 +6,7 @@ import { Disclaimer } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface TipPageState {
   mode: 'quick' | 'suggest';
@@ -34,15 +35,7 @@ export class TipPage extends Component<{}, TipPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Tip Calculator – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Calculate the perfect tip amount for any bill with this fast, free tool.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Tip Calculator – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Calculate the perfect tip amount for any bill with this fast, free tool.');
+    applySEO('tip');
   }
 
   private scrollToResult = () => {

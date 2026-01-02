@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { MatchIcon } from '../components/MatchIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 import { ZODIAC_SIGNS, ZodiacSign, getSignFromDate, getCompatibility, getSignInfo, getCompatibilityMessage } from '../data/zodiac';
 
 type InputMode = 'sign' | 'date';
@@ -33,15 +34,7 @@ export class MatchPage extends Component<{}, MatchPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Zodiac Match Tool – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Check zodiac compatibility at a glance with this fast, free handy tool. See your love match percentage.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Zodiac Match Tool – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Check zodiac compatibility at a glance with this fast, free handy tool.');
+    applySEO('match');
   }
 
   private getSignFromInput = (person: PersonInput): ZodiacSign | null => {

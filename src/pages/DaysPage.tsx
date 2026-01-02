@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface DaysPageState {
   eventName: string;
@@ -35,15 +36,7 @@ export class DaysPage extends Component<{}, DaysPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Countdown Timer – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Count down the days until your special event or deadline.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Countdown Timer – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Count down the days until your special event or deadline.');
+    applySEO('days');
   }
 
   private scrollToResults = () => {

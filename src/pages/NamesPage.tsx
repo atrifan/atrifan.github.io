@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 type NameCategory = 'human' | 'pet';
 type HumanNameType = 'first' | 'full' | 'fantasy';
@@ -64,15 +65,7 @@ export class NamesPage extends Component<{}, NamesPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Name & Number Generator – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Generate random names and numbers for games, writing, and more.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Name & Number Generator – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Generate random names and numbers for games, writing, and more.');
+    applySEO('names');
   }
 
   private generateNames = () => {

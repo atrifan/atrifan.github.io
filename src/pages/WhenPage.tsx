@@ -6,6 +6,7 @@ import { Footer } from '../components/Footer';
 import { WhenIcon } from '../components/WhenIcon';
 import { DateCalculator, DateResult } from '../utils/DateCalculator';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface WhenPageState {
   selectedDate: string;
@@ -27,18 +28,7 @@ export class WhenPage extends Component<object, WhenPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Date & Day Finder – Free Handy Tool | Tulzo';
-
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Find the day of the week for any date with this fast, free handy tool. Check birthdays, holidays, or any date.');
-    }
-
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Date & Day Finder – Free Handy Tool | Tulzo');
-
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Find the day of the week for any date with this fast, free handy tool.');
+    applySEO('when');
   }
 
   private handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {

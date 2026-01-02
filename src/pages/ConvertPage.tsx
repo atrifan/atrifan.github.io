@@ -3,6 +3,7 @@ import { View } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
 import { ConvertIcon } from '../components/ConvertIcon';
 import { inputStyles, inputPlaceholderCSS } from '../styles/inputStyles';
+import { applySEO } from '../utils/seo';
 
 interface ConvertPageState {
   category: 'weight' | 'length' | 'temperature';
@@ -43,15 +44,7 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Unit Converter – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Convert between common units like lbs/kg, cm/ft, °C/°F instantly.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Unit Converter – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Convert between common units like lbs/kg, cm/ft, °C/°F instantly.');
+    applySEO('convert');
   }
 
   private convert = () => {

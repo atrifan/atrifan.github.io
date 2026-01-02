@@ -10,6 +10,7 @@ import { StackIcon } from '../components/StackIcon';
 import { BudgetCalculator } from '../utils/BudgetCalculator';
 import { FullBudgetInput, SavingsPlan, Currency } from '../types/budget';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface StackPageState {
   plan: SavingsPlan | null;
@@ -30,19 +31,7 @@ export class StackPage extends Component<{}, StackPageState> {
   }
 
   componentDidMount() {
-    // Update page title and meta for SEO
-    document.title = 'Budget & Savings Tool – Free Handy Tool | Tulzo';
-
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Track budgets and savings quickly with this fast, free handy tool. Plan expenses and reach your financial goals.');
-    }
-
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Budget & Savings Tool – Free Handy Tool | Tulzo');
-
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Track budgets and savings quickly with this fast, free handy tool.');
+    applySEO('stack');
   }
 
   private handleFormSubmit = (input: FullBudgetInput) => {

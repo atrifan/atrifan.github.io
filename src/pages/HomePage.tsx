@@ -4,6 +4,7 @@ import { View } from '@adobe/react-spectrum';
 import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 import { CutIcon } from '../components/CutIcon';
 import { StackIcon } from '../components/StackIcon';
 import { WhenIcon } from '../components/WhenIcon';
@@ -43,19 +44,7 @@ export class HomePage extends Component<{}, HomePageState> {
   }
 
   componentDidMount() {
-    // Reset to default SEO when returning to home
-    document.title = 'Tulzo – Handy Tools for Everyday Tasks | Free Online Utilities';
-
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Fast, free utilities for health, money, time, and simple decisions — all in one place. No sign-ups, instant results, works on any device.');
-    }
-
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Tulzo – Handy Tools for Everyday Tasks');
-
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Fast, free utilities for health, money, time, and simple decisions — all in one place.');
+    applySEO('home');
   }
 
   private renderToolIcon = (toolId: string, size: number): JSX.Element => {

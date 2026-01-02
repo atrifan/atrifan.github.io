@@ -5,6 +5,7 @@ import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { TapIcon } from '../components/TapIcon';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface TapRecord {
   tapNumber: number;
@@ -37,19 +38,7 @@ export class TapPage extends Component<object, TapPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Click Counter & Tally Tool – Free Handy Tool | Tulzo';
-
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Count clicks, reps, or events effortlessly with this fast, free handy tool. Track anything with ease.');
-    }
-
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Click Counter & Tally Tool – Free Handy Tool | Tulzo');
-
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Count clicks, reps, or events effortlessly with this fast, free handy tool.');
-
+    applySEO('tap');
     document.addEventListener('keydown', this.handleKeyDown);
   }
 

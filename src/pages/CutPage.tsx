@@ -10,6 +10,7 @@ import { CutIcon } from '../components/CutIcon';
 import { WeightCalculator } from '../utils/WeightCalculator';
 import { UserInput, WeightLossPlan } from '../types';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface CutPageState {
   plan: WeightLossPlan | null;
@@ -27,19 +28,7 @@ export class CutPage extends Component<{}, CutPageState> {
   }
 
   componentDidMount() {
-    // Update page title and meta for SEO
-    document.title = 'Weight Loss & Fasting Tool – Free Handy Tool | Tulzo';
-
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Plan weight loss and fasting schedules with this fast, free handy tool. Calculate calories, set goals, and track progress.');
-    }
-
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Weight Loss & Fasting Tool – Free Handy Tool | Tulzo');
-
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Plan weight loss and fasting schedules with this fast, free handy tool.');
+    applySEO('cut');
   }
 
   private handleFormSubmit = (input: UserInput): void => {

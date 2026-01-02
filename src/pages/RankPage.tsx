@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 import {
   calculateFunnel, FunnelStep, DATA_SOURCE, WORLD_POPULATION,
   EyeColor, EYE_COLOR_LABELS,
@@ -53,13 +54,7 @@ export class RankPage extends Component<{}, RankPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Body Percentile Calculator – Free Health Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) metaDesc.setAttribute('content', 'Find where you rank in height and weight percentiles by age and gender. Based on 2025 CDC/WHO data.');
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Body Percentile Calculator – Free Health Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Find where you rank in height and weight percentiles by age and gender.');
+    applySEO('rank');
   }
 
   private scrollToResults = () => {

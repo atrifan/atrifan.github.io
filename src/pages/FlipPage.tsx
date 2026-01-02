@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
+import { applySEO } from '../utils/seo';
 
 interface FlipPageState {
   mode: 'coin' | 'dice';
@@ -25,15 +26,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
   }
 
   componentDidMount() {
-    document.title = 'Coin Flip & Dice Roller – Free Handy Tool | Tulzo';
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute('content', 'Flip a coin or roll dice online with this fast, free handy tool.');
-    }
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    if (ogTitle) ogTitle.setAttribute('content', 'Coin Flip & Dice Roller – Free Handy Tool | Tulzo');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogDesc) ogDesc.setAttribute('content', 'Flip a coin or roll dice online with this fast, free handy tool.');
+    applySEO('flip');
     document.addEventListener('keydown', this.handleKeyDown);
   }
 
