@@ -1872,10 +1872,55 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
           id,
           result: {
             protocolVersion: '2024-11-05',
-            capabilities: { tools: {} },
+            capabilities: {
+              tools: {},
+              resources: { subscribe: false, listChanged: false }
+            },
             serverInfo: { name: 'tulzo-mcp', version: '1.0.0' },
           },
         };
+
+      case 'resources/list': {
+        // Return list of widget template resources
+        const resources = TOOLS.map(tool => ({
+          uri: `ui://widget/${tool.name}.html`,
+          name: tool.name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          description: tool.description,
+          mimeType: 'text/html',
+        }));
+        return { jsonrpc: '2.0', id, result: { resources } };
+      }
+
+      case 'resources/read': {
+        const uri = (params as { uri: string }).uri;
+        // Parse tool name from URI: ui://widget/{toolName}.html
+        const match = uri.match(/ui:\/\/widget\/([a-z_]+)\.html/);
+        if (!match) {
+          return { jsonrpc: '2.0', id, error: { code: -32602, message: `Invalid resource URI: ${uri}` } };
+        }
+        const toolName = match[1];
+        const tool = TOOLS.find(t => t.name === toolName);
+        if (!tool) {
+          return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName}` } };
+        }
+
+        // Generate a template widget HTML (with placeholder data)
+        const templateData = { message: 'Widget template - data will be populated on tool call' };
+        const widgetHtml = generateWidgetHtml(toolName, templateData);
+
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            contents: [{
+              uri,
+              mimeType: 'text/html',
+              text: widgetHtml,
+            }]
+          }
+        };
+      }
+
       case 'tools/list':
         return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
       case 'tools/call': {
