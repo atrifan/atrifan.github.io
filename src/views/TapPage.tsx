@@ -1,6 +1,7 @@
 import { Component, createRef } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { TapIcon } from '../components/TapIcon';
@@ -160,6 +161,14 @@ export class TapPage extends Component<object, TapPageState> {
           padding: 'clamp(1rem, 3vw, 2rem)',
         }}
       >
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <div
           ref={this.containerRef}
           tabIndex={-1}

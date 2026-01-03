@@ -137,6 +137,16 @@ export const ADS_CONFIG = {
     // DOCS page ads
     docsHeader: '7221401854',
     docsFooter: '5908320187',
+
+    // Side ads (desktop only) - Left side
+    sideLeftHorizontalTop: '2816426440',
+    sideLeftVerticalMiddle: '2194459973',
+    sideLeftHorizontalBottom: '1971098699',
+
+    // Side ads (desktop only) - Right side
+    sideRightHorizontalTop: '7416842979',
+    sideRightVerticalMiddle: '9554075240',
+    sideRightHorizontalBottom: '6103761301',
   },
 
   // Enable/disable ads (useful for development)

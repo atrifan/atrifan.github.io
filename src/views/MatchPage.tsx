@@ -1,6 +1,7 @@
 import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { MatchIcon } from '../components/MatchIcon';
@@ -104,6 +105,14 @@ export class MatchPage extends Component<{}, MatchPageState> {
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #4c1d95 0%, #be185d 50%, #4c1d95 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.matchTop} format="horizontal" /></View>

@@ -2,7 +2,9 @@ import { Component, createRef, RefObject } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
 import { ConvertIcon } from '../components/ConvertIcon';
+import { SideAds } from '../components/SideAds';
 import { inputStyles, inputPlaceholderCSS } from '../styles/inputStyles';
+import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
 interface ConvertPageState {
@@ -75,6 +77,14 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
 
     return (
       <View padding="size-400" minHeight="100vh" UNSAFE_style={{ background: '#0f0f23' }}>
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <BackToTools />
         
         <View UNSAFE_style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center', paddingTop: '2rem' }}>

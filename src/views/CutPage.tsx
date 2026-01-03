@@ -4,6 +4,7 @@ import { WeightForm } from '../components/WeightForm';
 import { ResultsDisplay } from '../components/ResultsDisplay';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { CutIcon } from '../components/CutIcon';
@@ -48,6 +49,16 @@ export class CutPage extends Component<{}, CutPageState> {
 
     return (
       <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
+        {/* Side Ads - Desktop Only */}
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
+
         <View maxWidth="1200px" marginX="auto">
           {/* Back Button */}
           <div style={{ marginBottom: '2rem' }}>

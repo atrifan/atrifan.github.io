@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { WhenIcon } from '../components/WhenIcon';
@@ -166,6 +167,14 @@ export class WhenPage extends Component<object, WhenPageState> {
           padding: 'clamp(1rem, 3vw, 2rem)',
         }}
       >
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <View maxWidth="800px" marginX="auto">
           {/* Back Button */}
           <View marginBottom="size-400">

@@ -4,6 +4,7 @@ import { BackToTools } from '../components/BackToTools';
 import { RankIcon } from '../components/RankIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { AlertModal } from '../components/AlertModal';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -309,6 +310,14 @@ export class RankPage extends Component<{}, RankPageState> {
 
     return (
       <View UNSAFE_style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <AlertModal
           isOpen={this.state.showAlert}
           title="Missing Information"

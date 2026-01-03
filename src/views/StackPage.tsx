@@ -4,6 +4,7 @@ import { BudgetForm } from '../components/BudgetForm';
 import { BudgetResultsDisplay } from '../components/BudgetResultsDisplay';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { StackIcon } from '../components/StackIcon';
@@ -59,6 +60,14 @@ export class StackPage extends Component<{}, StackPageState> {
           padding: 'clamp(1rem, 3vw, 2rem)',
         }}
       >
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <Flex direction="column" alignItems="center" gap="size-400">
           {/* Back to Home */}
           <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>

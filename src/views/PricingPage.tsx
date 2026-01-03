@@ -5,6 +5,7 @@ import { SignedIn, SignedOut, SignInButton, PricingTable } from '@clerk/nextjs';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 
 export const PricingPage: React.FC = () => {
@@ -13,6 +14,14 @@ export const PricingPage: React.FC = () => {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
     }}>
+      <SideAds
+        leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+        leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+        leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+        rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+        rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+        rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+      />
       <Header />
 
       <main style={{ paddingTop: '5rem', paddingBottom: '3rem' }}>

@@ -4,6 +4,7 @@ import { BackToTools } from '../components/BackToTools';
 import { FlipIcon } from '../components/FlipIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -161,6 +162,14 @@ export class FlipPage extends Component<{}, FlipPageState> {
 
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #78350f 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
         <Flex direction="column" alignItems="center" gap="size-400">
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.flipTop} format="horizontal" /></View>

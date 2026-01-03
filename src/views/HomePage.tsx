@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
 import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { CutIcon } from '../components/CutIcon';
@@ -236,6 +237,16 @@ export class HomePage extends Component<{}, HomePageState> {
   render() {
     return (
       <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
+        {/* Side Ads - Desktop Only */}
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
+
         <View maxWidth="1400px" marginX="auto">
           {/* Hero Section */}
           <View UNSAFE_style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '3rem' }}>

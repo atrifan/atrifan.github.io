@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
+import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 
 interface SchemaProperty {
@@ -185,6 +186,14 @@ export default function ToolsDocumentation() {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)',
     }}>
+      <SideAds
+        leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+        leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+        leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+        rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+        rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+        rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+      />
       <Header />
 
       <main style={{
