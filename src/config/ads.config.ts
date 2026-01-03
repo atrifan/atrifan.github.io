@@ -133,6 +133,10 @@ export const ADS_CONFIG = {
     // DASHBOARD page ads
     dashboardTop: '2779099121',
     dashboardFooter: '5852835087',
+
+    // DOCS page ads
+    docsHeader: '7221401854',
+    docsFooter: '5908320187',
   },
 
   // Enable/disable ads (useful for development)

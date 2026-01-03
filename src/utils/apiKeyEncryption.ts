@@ -99,17 +99,22 @@ export function decryptApiKey(apiKey: string): ApiKeyPayload | null {
       createdAt,
     };
   } catch {
-    // Decryption failed - invalid key
     return null;
   }
 }
 
 /**
- * Validate that an API key is not expired
- * Keys expire after 1 year by default
+ * Check if an API key is expired (older than 90 days)
  */
-export function isApiKeyExpired(payload: ApiKeyPayload, maxAgeMs: number = 365 * 24 * 60 * 60 * 1000): boolean {
-  const now = Date.now();
-  return now - payload.createdAt > maxAgeMs;
+export function isApiKeyExpired(payload: ApiKeyPayload, maxAgeDays = 90): boolean {
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  return Date.now() - payload.createdAt > maxAgeMs;
+}
+
+/**
+ * Check if Clerk API Keys feature is enabled
+ */
+export function useClerkApiKeys(): boolean {
+  return process.env.NEXT_PUBLIC_USE_CLERK_API_KEY === 'true';
 }
 

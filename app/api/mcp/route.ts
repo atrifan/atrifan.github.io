@@ -1,8 +1,195 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { WeightCalculator } from '@/src/utils/WeightCalculator';
 import { BudgetCalculator } from '@/src/utils/BudgetCalculator';
 import { DateCalculator } from '@/src/utils/DateCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
+import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
+
+// Auth types
+type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
+
+interface AuthResult {
+  authenticated: boolean;
+  userId?: string;
+  plan?: string;
+  isSubscribed?: boolean;
+  authMethod: AuthMethod;
+  error?: string;
+}
+
+/**
+ * Check if user has Pro subscription using Clerk Billing
+ */
+async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
+  try {
+    const memberships = await client.users.getOrganizationMembershipList({ userId });
+    for (const membership of memberships.data) {
+      const org = await client.organizations.getOrganization({ organizationId: membership.organization.id });
+      if (org.publicMetadata?.plan === 'pro' || org.publicMetadata?.subscription === 'active') {
+        return true;
+      }
+    }
+    const user = await client.users.getUser(userId);
+    if (user.publicMetadata?.plan === 'pro' || user.publicMetadata?.subscription === 'active') {
+      return true;
+    }
+    if (user.unsafeMetadata?.plan === 'pro') {
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+    return false;
+  }
+}
+
+/**
+ * Validate API key - supports both custom encryption and Clerk API Keys
+ */
+async function validateApiKey(key: string): Promise<AuthResult> {
+  const client = await clerkClient();
+
+  // Try Clerk API Keys first if enabled
+  if (useClerkApiKeys()) {
+    try {
+      const apiKey = await client.apiKeys.verify(key);
+
+      if (!apiKey) {
+        return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
+      }
+
+      if (apiKey.revoked) {
+        return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
+      }
+
+      if (apiKey.expired) {
+        return { authenticated: false, authMethod: 'none', error: 'API key has expired' };
+      }
+
+      const userId = apiKey.subject;
+      const isSubscribed = await checkProSubscription(client, userId);
+
+      return {
+        authenticated: true,
+        userId,
+        plan: isSubscribed ? 'pro' : 'free',
+        isSubscribed,
+        authMethod: 'header',
+      };
+    } catch (error) {
+      console.error('Error validating API key with Clerk:', error);
+      return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
+    }
+  }
+
+  // Use custom encryption (default)
+  const payload = decryptApiKey(key);
+  if (!payload) {
+    return { authenticated: false, authMethod: 'none', error: 'Invalid API key format' };
+  }
+  if (isApiKeyExpired(payload)) {
+    return { authenticated: false, authMethod: 'none', error: 'API key expired' };
+  }
+  try {
+    const user = await client.users.getUser(payload.userId);
+    if (!user) {
+      return { authenticated: false, authMethod: 'none', error: 'User not found' };
+    }
+    const storedKey = user.unsafeMetadata?.apiKey as string | undefined;
+    if (storedKey && storedKey !== key) {
+      return { authenticated: false, authMethod: 'none', error: 'API key revoked' };
+    }
+    const isSubscribed = await checkProSubscription(client, payload.userId);
+    return {
+      authenticated: true,
+      userId: payload.userId,
+      plan: isSubscribed ? 'pro' : 'free',
+      isSubscribed,
+      authMethod: 'header',
+    };
+  } catch (error) {
+    console.error('Error validating API key:', error);
+    return { authenticated: false, authMethod: 'none', error: 'Validation failed' };
+  }
+}
+
+/**
+ * Log MCP connection to user's unsafeMetadata
+ */
+async function logConnection(userId: string, authMethod: AuthMethod, clientIp: string, userAgent: string) {
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const connections = (user.unsafeMetadata?.mcpConnections as Array<{
+      ip: string;
+      agent: string;
+      authMethod: AuthMethod;
+      lastUsed: string;
+    }>) || [];
+
+    // Find existing connection with same IP and agent
+    const existingIndex = connections.findIndex(c => c.ip === clientIp && c.agent === userAgent);
+    const now = new Date().toISOString();
+
+    if (existingIndex >= 0) {
+      // Update existing connection
+      connections[existingIndex].lastUsed = now;
+      connections[existingIndex].authMethod = authMethod;
+    } else {
+      // Add new connection (keep last 10)
+      connections.unshift({
+        ip: clientIp,
+        agent: userAgent,
+        authMethod,
+        lastUsed: now,
+      });
+      if (connections.length > 10) {
+        connections.pop();
+      }
+    }
+
+    await client.users.updateUser(userId, {
+      unsafeMetadata: {
+        ...user.unsafeMetadata,
+        mcpConnections: connections,
+      },
+    });
+  } catch (error) {
+    console.error('Error logging connection:', error);
+  }
+}
+
+/**
+ * Extract auth from request headers
+ */
+function extractAuth(request: NextRequest): { apiKey?: string; authMethod: AuthMethod } {
+  // Check for internal forwarded headers (from path-based route)
+  const internalUserId = request.headers.get('X-User-Id');
+  if (internalUserId) {
+    return { authMethod: 'internal' };
+  }
+
+  // Check x-api-key header
+  const xApiKey = request.headers.get('x-api-key');
+  if (xApiKey) {
+    return { apiKey: xApiKey, authMethod: 'header' };
+  }
+
+  // Check Authorization: Bearer header
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    // If it's a tlz_ key, treat as API key
+    if (token.startsWith('tlz_')) {
+      return { apiKey: token, authMethod: 'header' };
+    }
+    // Otherwise it might be an OAuth token (future support)
+    return { apiKey: token, authMethod: 'oauth' };
+  }
+
+  return { authMethod: 'none' };
+}
 
 // MCP Protocol Types
 interface MCPRequest {
@@ -2317,6 +2504,79 @@ This component is fully functional and ready for immediate use.`;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // Check for internal forwarded request (from path-based auth)
+    const internalUserId = request.headers.get('X-User-Id');
+    const internalPlan = request.headers.get('X-User-Plan');
+    const internalAuthMethod = request.headers.get('X-Auth-Method') as AuthMethod | null;
+
+    if (internalUserId) {
+      // Request forwarded from /api/mcp/[key] route - already authenticated
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+                       request.headers.get('x-real-ip') ||
+                       'unknown';
+      const userAgent = request.headers.get('user-agent') || 'unknown';
+
+      // Log connection asynchronously (don't await)
+      logConnection(internalUserId, internalAuthMethod || 'path', clientIp, userAgent);
+
+      const response = handleMCPRequest(body as MCPRequest);
+      return NextResponse.json(response);
+    }
+
+    // Check for header-based auth (x-api-key or Bearer token)
+    const { apiKey, authMethod } = extractAuth(request);
+
+    if (apiKey) {
+      const authResult = await validateApiKey(apiKey);
+
+      if (!authResult.authenticated) {
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id: (body as MCPRequest).id || null,
+          error: {
+            code: -32001,
+            message: authResult.error || 'Authentication failed',
+          }
+        }, { status: 401 });
+      }
+
+      if (!authResult.isSubscribed) {
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id: (body as MCPRequest).id || null,
+          error: {
+            code: -32003,
+            message: 'MCP access requires Pro plan. Upgrade at tulzo.vercel.app/pricing',
+          }
+        }, { status: 403 });
+      }
+
+      // Log connection
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+                       request.headers.get('x-real-ip') ||
+                       'unknown';
+      const userAgent = request.headers.get('user-agent') || 'unknown';
+      logConnection(authResult.userId!, authMethod, clientIp, userAgent);
+
+      const response = handleMCPRequest(body as MCPRequest);
+      return NextResponse.json(response);
+    }
+
+    // No auth provided - return error for tools/call, allow discovery methods
+    const method = (body as MCPRequest).method;
+    if (method === 'tools/call') {
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id: (body as MCPRequest).id || null,
+        error: {
+          code: -32001,
+          message: 'Authentication required. Use x-api-key header or Bearer token.',
+        }
+      }, { status: 401 });
+    }
+
+    // Allow unauthenticated access to discovery methods
     const response = handleMCPRequest(body as MCPRequest);
     return NextResponse.json(response);
   } catch {
@@ -2324,11 +2584,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const baseUrl = request.nextUrl.origin;
+
   return NextResponse.json({
     name: 'Tulzo MCP Server',
     version: '1.0.0',
     description: 'Model Context Protocol server for Tulzo tools',
+    authentication: {
+      oauth: {
+        supported: true,
+        discovery: `${baseUrl}/.well-known/openid-configuration`,
+      },
+      header: {
+        supported: true,
+        header_name: 'x-api-key',
+        alternative: 'Authorization: Bearer {api_key}',
+      },
+      path: {
+        supported: true,
+        endpoint: `${baseUrl}/api/mcp/{api_key}`,
+      },
+    },
     tools: TOOLS.map(t => ({ name: t.name, description: t.description })),
   });
 }

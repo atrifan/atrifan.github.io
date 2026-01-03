@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useState } from 'react';
 import { isBillingEnabled } from '../config/billing.config';
+import { AboutModal } from './AboutModal';
 
 // Inline logo SVG for header
 const HeaderLogo = () => (
@@ -22,6 +23,7 @@ const HeaderLogo = () => (
 
 export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   return (
     <header style={{
@@ -50,6 +52,20 @@ export const Header: React.FC = () => {
 
         {/* Desktop Nav */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }} className="desktop-nav">
+          <button
+            onClick={() => setAboutOpen(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(255,255,255,0.8)',
+              fontSize: '0.95rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            About
+          </button>
           {isBillingEnabled() && (
             <Link href="/pricing" style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
               Pricing
@@ -109,6 +125,21 @@ export const Header: React.FC = () => {
           gap: '1rem',
           borderTop: '1px solid rgba(255,255,255,0.1)',
         }}>
+          <button
+            onClick={() => { setAboutOpen(true); setMobileMenuOpen(false); }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              textDecoration: 'none',
+              padding: '0.5rem 0',
+              textAlign: 'left',
+              fontSize: '1rem',
+              cursor: 'pointer',
+            }}
+          >
+            About
+          </button>
           {isBillingEnabled() && (
             <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
               Pricing
@@ -140,6 +171,9 @@ export const Header: React.FC = () => {
           </SignedOut>
         </div>
       )}
+
+      {/* About Modal */}
+      <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       <style jsx global>{`
         @media (max-width: 640px) {

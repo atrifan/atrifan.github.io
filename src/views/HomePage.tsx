@@ -378,31 +378,89 @@ export class HomePage extends Component<{}, HomePageState> {
           {/* About Tulzo - SEO Context Block */}
           <View UNSAFE_style={{
             background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: '16px',
-            padding: '2rem',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '20px',
+            padding: 'clamp(1.5rem, 4vw, 2.5rem)',
             marginBottom: '2rem',
             maxWidth: '800px',
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            <h2 style={{
-              fontSize: '1.3rem',
-              fontWeight: 600,
-              color: 'rgba(255, 255, 255, 0.9)',
-              marginBottom: '1rem',
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: '1.5rem',
             }}>
-              About Tulzo
-            </h2>
+              <span style={{ fontSize: '1.75rem' }}>⚡</span>
+              <h2 style={{
+                fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
+                fontWeight: 700,
+                color: '#fff',
+                margin: 0,
+                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>
+                About Tulzo
+              </h2>
+            </div>
+
+            {/* Description */}
             <p style={{
-              fontSize: '1rem',
-              color: 'rgba(255, 255, 255, 0.7)',
+              fontSize: 'clamp(0.95rem, 2.5vw, 1.05rem)',
+              color: 'rgba(255, 255, 255, 0.75)',
               lineHeight: 1.7,
+              margin: '0 0 1.5rem',
+            }}>
+              Tulzo is a collection of fast, free handy tools designed for everyday tasks. Whether you&apos;re planning
+              weight loss goals, tracking your budget, finding what day a date falls on, counting clicks or reps,
+              generating random numbers, or checking zodiac compatibility — we&apos;ve got you covered.
+            </p>
+
+            {/* Feature Pills */}
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+              marginBottom: '1.5rem',
+            }}>
+              {[
+                { icon: '🚀', text: 'Instant & Fast' },
+                { icon: '🆓', text: '100% Free' },
+                { icon: '🔒', text: 'Privacy First' },
+                { icon: '📱', text: 'Mobile Friendly' },
+                { icon: '🤖', text: 'AI-Ready' },
+              ].map((item) => (
+                <span
+                  key={item.text}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    padding: '0.4rem 0.75rem',
+                    borderRadius: '20px',
+                    fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
+                    color: 'rgba(255, 255, 255, 0.85)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                  }}
+                >
+                  {item.icon} {item.text}
+                </span>
+              ))}
+            </div>
+
+            {/* Bottom text */}
+            <p style={{
+              fontSize: 'clamp(0.85rem, 2vw, 0.95rem)',
+              color: 'rgba(255, 255, 255, 0.6)',
+              lineHeight: 1.6,
               margin: 0,
             }}>
-              Tulzo is a collection of fast, free handy tools designed for everyday tasks. Whether you're planning
-              weight loss goals, tracking your budget, finding what day a date falls on, counting clicks or reps,
-              generating random numbers, or checking zodiac compatibility — we've got you covered. Each tool is
-              built to be simple, instant, and accessible on any device. No accounts, no sign-ups, no hassle.
+              Each tool is built to be simple, instant, and accessible on any device. No accounts required, no sign-ups, no hassle.
               Just open and use. We believe useful tools should be free and easy to access for everyone.
             </p>
           </View>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
-import { decryptApiKey, isApiKeyExpired } from '@/src/utils/apiKeyEncryption';
+import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 
 interface ApiKeyUser {
   userId: string;
@@ -11,33 +11,23 @@ interface ApiKeyUser {
 
 /**
  * Check if user has Pro subscription using Clerk Billing
- * This checks the user's organization memberships and subscriptions
  */
 async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
   try {
-    // Get user's organization memberships to check for billing subscriptions
     const memberships = await client.users.getOrganizationMembershipList({ userId });
-
-    // Check if any organization has an active Pro subscription
     for (const membership of memberships.data) {
       const org = await client.organizations.getOrganization({ organizationId: membership.organization.id });
-      // Check organization's subscription status via public metadata
       if (org.publicMetadata?.plan === 'pro' || org.publicMetadata?.subscription === 'active') {
         return true;
       }
     }
-
-    // Also check user's own public metadata for individual subscriptions
     const user = await client.users.getUser(userId);
     if (user.publicMetadata?.plan === 'pro' || user.publicMetadata?.subscription === 'active') {
       return true;
     }
-
-    // Fallback: Check unsafeMetadata for backwards compatibility during migration
     if (user.unsafeMetadata?.plan === 'pro') {
       return true;
     }
-
     return false;
   } catch (error) {
     console.error('Error checking subscription:', error);
@@ -46,44 +36,68 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
 }
 
 /**
- * Validate API key by decrypting it and verifying the user exists with subscription
+ * Validate API key - supports both custom encryption and Clerk API Keys
  */
 async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; error?: string }> {
-  // Step 1: Decrypt the API key
-  const payload = decryptApiKey(key);
+  const client = await clerkClient();
 
+  // Try Clerk API Keys first if enabled
+  if (useClerkApiKeys()) {
+    try {
+      const apiKey = await client.apiKeys.verify(key);
+
+      if (!apiKey) {
+        return { user: null, error: 'Invalid API key' };
+      }
+
+      if (apiKey.revoked) {
+        return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
+      }
+
+      if (apiKey.expired) {
+        return { user: null, error: 'API key has expired. Please generate a new one from your dashboard.' };
+      }
+
+      const userId = apiKey.subject;
+      const user = await client.users.getUser(userId);
+      const isSubscribed = await checkProSubscription(client, userId);
+
+      return {
+        user: {
+          userId,
+          plan: isSubscribed ? 'pro' : 'free',
+          email: user.primaryEmailAddress?.emailAddress,
+          isSubscribed,
+        },
+      };
+    } catch (error) {
+      console.error('Error validating API key with Clerk:', error);
+      return { user: null, error: 'Invalid API key' };
+    }
+  }
+
+  // Use custom encryption (default)
+  const payload = decryptApiKey(key);
   if (!payload) {
     return { user: null, error: 'Invalid API key format or decryption failed' };
   }
-
-  // Step 2: Check if key is expired
   if (isApiKeyExpired(payload)) {
     return { user: null, error: 'API key has expired. Please generate a new one from your dashboard.' };
   }
-
   try {
-    // Step 3: Verify user exists in Clerk
-    const client = await clerkClient();
     const user = await client.users.getUser(payload.userId);
-
     if (!user) {
       return { user: null, error: 'User not found. Account may have been deleted.' };
     }
-
-    // Step 4: Check current subscription status using Clerk Billing
-    const isSubscribed = await checkProSubscription(client, payload.userId);
-    const currentPlan = isSubscribed ? 'pro' : 'free';
-
-    // Step 5: Verify the stored API key matches (for revocation support)
     const storedKey = user.unsafeMetadata?.apiKey as string | undefined;
     if (storedKey && storedKey !== key) {
       return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
     }
-
+    const isSubscribed = await checkProSubscription(client, payload.userId);
     return {
       user: {
         userId: user.id,
-        plan: currentPlan,
+        plan: isSubscribed ? 'pro' : 'free',
         email: user.primaryEmailAddress?.emailAddress,
         isSubscribed,
       },
@@ -97,16 +111,25 @@ async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; e
 // Forward request to main MCP handler with user context
 async function forwardToMCP(request: NextRequest, user: ApiKeyUser) {
   const body = await request.text();
-  
+
   // Get the base URL for internal request
   const baseUrl = request.nextUrl.origin;
-  
+
+  // Forward client info for connection logging
+  const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+                   request.headers.get('x-real-ip') ||
+                   'unknown';
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+
   const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-User-Id': user.userId,
       'X-User-Plan': user.plan,
+      'X-Auth-Method': 'path',
+      'x-forwarded-for': clientIp,
+      'user-agent': userAgent,
     },
     body,
   });
