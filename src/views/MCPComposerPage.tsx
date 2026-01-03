@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
@@ -32,16 +32,20 @@ interface ToolsResponse {
 const SaveModal: React.FC<{
   type: SaveModalType;
   toolCount: number;
+  isEditMode?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-}> = ({ type, toolCount, onConfirm, onCancel }) => {
+}> = ({ type, toolCount, isEditMode = false, onConfirm, onCancel }) => {
   if (!type) return null;
+
+  const actionWord = isEditMode ? 'Updated' : 'Created';
+  const actionVerb = isEditMode ? 'Update' : 'Create';
 
   const config = {
     success: {
       icon: '✅',
-      title: 'MCP Server Created!',
-      message: `Your custom MCP server with ${toolCount} tools has been created successfully.`,
+      title: `MCP Server ${actionWord}!`,
+      message: `Your custom MCP server with ${toolCount} tools has been ${actionWord.toLowerCase()} successfully.`,
       bgColor: 'rgba(16, 185, 129, 0.2)',
       borderColor: 'rgba(16, 185, 129, 0.5)',
       textColor: '#10b981',
@@ -56,7 +60,7 @@ const SaveModal: React.FC<{
       borderColor: 'rgba(245, 158, 11, 0.5)',
       textColor: '#f59e0b',
       showCancel: true,
-      confirmText: 'Create Anyway',
+      confirmText: `${actionVerb} Anyway`,
     },
     danger: {
       icon: '🚨',
@@ -66,7 +70,7 @@ const SaveModal: React.FC<{
       borderColor: 'rgba(239, 68, 68, 0.5)',
       textColor: '#ef4444',
       showCancel: true,
-      confirmText: 'I Understand, Create Anyway',
+      confirmText: `I Understand, ${actionVerb} Anyway`,
     },
   };
 
@@ -235,6 +239,9 @@ export const ToolCountBadge: React.FC<{ count: number }> = ({ count }) => {
 
 export const MCPComposerPage: React.FC = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editServerId = searchParams.get('edit');
+
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,6 +250,7 @@ export const MCPComposerPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showModal, setShowModal] = useState<SaveModalType>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Check if feature is enabled
   useEffect(() => {
@@ -250,6 +258,26 @@ export const MCPComposerPage: React.FC = () => {
       router.push('/dashboard');
     }
   }, [router]);
+
+  // Load existing server data if editing
+  useEffect(() => {
+    if (editServerId) {
+      try {
+        const stored = localStorage.getItem('customMcpServers');
+        if (stored) {
+          const servers: CustomMCPServer[] = JSON.parse(stored);
+          const serverToEdit = servers.find(s => s.id === editServerId);
+          if (serverToEdit) {
+            setServerName(serverToEdit.name);
+            setSelectedTools(serverToEdit.tools);
+            setIsEditMode(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load server for editing:', error);
+      }
+    }
+  }, [editServerId]);
 
   // Fetch tools
   useEffect(() => {
@@ -311,17 +339,30 @@ export const MCPComposerPage: React.FC = () => {
       localStorage.getItem('customMcpServers') || '[]'
     );
 
-    const newServer: CustomMCPServer = {
-      id: `mcp_${Date.now()}`,
-      name: serverName.trim(),
-      tools: selectedTools,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    if (isEditMode && editServerId) {
+      // Update existing server
+      const serverIndex = customServers.findIndex(s => s.id === editServerId);
+      if (serverIndex !== -1) {
+        customServers[serverIndex] = {
+          ...customServers[serverIndex],
+          name: serverName.trim(),
+          tools: selectedTools,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    } else {
+      // Create new server
+      const newServer: CustomMCPServer = {
+        id: `mcp_${Date.now()}`,
+        name: serverName.trim(),
+        tools: selectedTools,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      customServers.push(newServer);
+    }
 
-    customServers.push(newServer);
     localStorage.setItem('customMcpServers', JSON.stringify(customServers));
-
     router.push('/dashboard');
   };
 
@@ -401,7 +442,7 @@ export const MCPComposerPage: React.FC = () => {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            🔧 Create Custom MCP Server
+            🔧 {isEditMode ? 'Edit MCP Server' : 'Create Custom MCP Server'}
           </h1>
           <p style={{
             color: 'rgba(255,255,255,0.7)',
@@ -409,7 +450,9 @@ export const MCPComposerPage: React.FC = () => {
             margin: 0,
             lineHeight: 1.6,
           }}>
-            Compose a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.
+            {isEditMode
+              ? 'Update your custom MCP server configuration. Add or remove tools as needed.'
+              : 'Compose a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.'}
           </p>
         </div>
 
@@ -499,7 +542,7 @@ export const MCPComposerPage: React.FC = () => {
               opacity: selectedTools.length > 0 && serverName.trim() ? 1 : 0.5,
             }}
           >
-            Create Server
+            {isEditMode ? 'Update Server' : 'Create Server'}
           </button>
         </div>
         {/* Search & Filter */}
@@ -862,6 +905,7 @@ export const MCPComposerPage: React.FC = () => {
       <SaveModal
         type={showModal}
         toolCount={selectedTools.length}
+        isEditMode={isEditMode}
         onConfirm={() => {
           if (showModal === 'success') {
             confirmSave();

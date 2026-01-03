@@ -683,9 +683,9 @@ export const DashboardPage: React.FC = () => {
                         </svg>
                         View Docs
                       </Link>
-                      {isCustom && (
+                      {isCustom && selectedServer && (
                         <Link
-                          href="/dashboard/mcp-composer"
+                          href={`/dashboard/mcp-composer?edit=${selectedServer.id}`}
                           style={{
                             padding: '0.35rem 0.75rem',
                             borderRadius: '6px',
