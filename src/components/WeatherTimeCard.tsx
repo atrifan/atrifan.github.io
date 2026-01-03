@@ -16,6 +16,8 @@ interface WeatherTimeCardProps {
 interface WeatherTimeCardState {
   currentTime: Date | null;
   location: string;
+  coordinates: { lat: number; lon: number } | null;
+  altitude: number | null; // in meters
   weather: WeatherData | null;
   loading: boolean;
   error: boolean;
@@ -30,6 +32,8 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     this.state = {
       currentTime: null, // Don't set time in constructor to avoid hydration mismatch
       location: 'Loading...',
+      coordinates: null,
+      altitude: null,
       weather: null,
       loading: true,
       error: false,
@@ -59,13 +63,18 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
         async (position) => {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
+          const altitude = position.coords.altitude; // May be null if not available
+          this.setState({
+            coordinates: { lat, lon },
+            altitude: altitude !== null ? Math.round(altitude) : null
+          });
           await this.fetchWeatherAndCity(lat, lon);
         },
         // Error or denied - fall back to IP-based
         async () => {
           await this.fetchLocationByIP();
         },
-        { timeout: 5000, enableHighAccuracy: false }
+        { timeout: 5000, enableHighAccuracy: true } // Enable high accuracy to get altitude
       );
     } else {
       // Geolocation not supported - use IP-based
@@ -81,7 +90,10 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       const lon = geoData.longitude;
       const city = geoData.city || 'Unknown';
       const country = geoData.country_name || '';
-      this.setState({ location: country ? `${city}, ${country}` : city });
+      this.setState({
+        location: country ? `${city}, ${country}` : city,
+        coordinates: lat && lon ? { lat, lon } : null
+      });
       if (lat && lon) {
         await this.fetchWeather(lat, lon);
       }
@@ -113,7 +125,9 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       );
       const weatherData = await weatherRes.json();
       const current = weatherData.current;
-      this.setState({
+      // Open-Meteo provides elevation in the response
+      const elevation = weatherData.elevation;
+      this.setState((prevState) => ({
         weather: {
           temp: Math.round(current.temperature_2m),
           condition: this.getWeatherCondition(current.weather_code),
@@ -121,8 +135,10 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
           humidity: current.relative_humidity_2m,
           windSpeed: Math.round(current.wind_speed_10m),
         },
+        // Use GPS altitude if available, otherwise use API elevation
+        altitude: prevState.altitude !== null ? prevState.altitude : (elevation !== undefined ? Math.round(elevation) : null),
         loading: false,
-      });
+      }));
     } catch {
       this.setState({ loading: false, error: true });
     }
@@ -159,6 +175,34 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     return { phase: 'Night', emoji: '⭐', gradient: 'linear-gradient(135deg, #1e3a5f 0%, #4c1d95 100%)' };
   };
 
+  private getMoonPhase = (date: Date): { name: string; icon: string } => {
+    // Calculate moon phase using a simplified algorithm
+    // Based on the synodic month (29.53 days)
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+
+    // Calculate days since known new moon (Jan 6, 2000)
+    const knownNewMoon = new Date(2000, 0, 6, 18, 14); // Jan 6, 2000 at 18:14 UTC
+    const diffMs = date.getTime() - knownNewMoon.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    // Synodic month is ~29.53 days
+    const synodicMonth = 29.53058867;
+    const moonAge = ((diffDays % synodicMonth) + synodicMonth) % synodicMonth;
+
+    // Determine phase based on moon age (0-29.53 days)
+    if (moonAge < 1.85) return { name: 'New Moon', icon: '🌑' };
+    if (moonAge < 5.53) return { name: 'Waxing Crescent', icon: '🌒' };
+    if (moonAge < 9.22) return { name: 'First Quarter', icon: '🌓' };
+    if (moonAge < 12.91) return { name: 'Waxing Gibbous', icon: '🌔' };
+    if (moonAge < 16.61) return { name: 'Full Moon', icon: '🌕' };
+    if (moonAge < 20.30) return { name: 'Waning Gibbous', icon: '🌖' };
+    if (moonAge < 23.99) return { name: 'Last Quarter', icon: '🌗' };
+    if (moonAge < 27.68) return { name: 'Waning Crescent', icon: '🌘' };
+    return { name: 'New Moon', icon: '🌑' };
+  };
+
   private getGreeting = (hour: number): string => {
     if (hour >= 5 && hour < 12) return 'Good Morning';
     if (hour >= 12 && hour < 17) return 'Good Afternoon';
@@ -166,8 +210,13 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     return 'Good Night';
   };
 
+  private formatCoordinate = (value: number, isLat: boolean): string => {
+    const direction = isLat ? (value >= 0 ? 'N' : 'S') : (value >= 0 ? 'E' : 'W');
+    return `${Math.abs(value).toFixed(4)}°${direction}`;
+  };
+
   render() {
-    const { currentTime, location, weather, loading, mounted } = this.state;
+    const { currentTime, location, coordinates, altitude, weather, loading, mounted } = this.state;
 
     // Show loading skeleton until mounted on client
     if (!mounted || !currentTime) {
@@ -192,6 +241,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
 
     const hour = currentTime.getHours();
     const { phase, emoji, gradient } = this.getDayPhase(hour);
+    const moonPhase = this.getMoonPhase(currentTime);
     const greeting = this.getGreeting(hour);
     const timeStr = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const dateStr = currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -206,6 +256,12 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 {emoji} {greeting}{this.props.userName ? `, ${this.props.userName}` : ''}!
               </p>
               <p style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.8)', margin: '0.25rem 0 0' }}>📍 {location}</p>
+              {coordinates && (
+                <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: '0.15rem 0 0', fontFamily: 'monospace' }}>
+                  🌐 {this.formatCoordinate(coordinates.lat, true)}, {this.formatCoordinate(coordinates.lon, false)}
+                  {altitude !== null && ` • ⛰️ ${altitude}m`}
+                </p>
+              )}
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', margin: 0, fontFamily: 'monospace' }}>{timeStr}</p>
@@ -235,6 +291,10 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Phase</p>
                   <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>{phase}</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Moon</p>
+                  <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>{moonPhase.icon}</p>
                 </div>
               </div>
             )}

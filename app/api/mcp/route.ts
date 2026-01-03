@@ -9,6 +9,9 @@ import {
   calculateFunnel, WORLD_POPULATION,
   EyeColor, HairColor, SkinTone, Ethnicity, BloodType, Handedness
 } from '@/src/data/percentiles';
+import {
+  TestMode, TEST_MODE_CONFIG, getQuestionsForMode, calculateIQScore, getIQLabel
+} from '@/src/data/iqQuestions';
 
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
@@ -1019,24 +1022,29 @@ const TOOLS = [
   },
   {
     name: 'calculate_iq_score',
-    description: 'Calculate estimated IQ score based on correct answers to logic/pattern questions',
+    description: 'Calculate estimated IQ score based on correct answers to logic/pattern questions. Supports three test modes: quick (15 questions, ~5 min), standard (30 questions, ~12 min), comprehensive (50 questions, ~20 min).',
     inputSchema: {
       type: 'object',
       properties: {
-        correctAnswers: { type: 'integer', description: 'Number of correct answers', minimum: 0, maximum: 15 },
-        totalQuestions: { type: 'integer', description: 'Total questions answered (default: 15)', minimum: 5, maximum: 50 },
-        timeTakenSeconds: { type: 'integer', description: 'Time taken in seconds (optional, faster = higher score)', minimum: 60 },
+        testMode: { type: 'string', enum: ['quick', 'standard', 'comprehensive'], description: 'Test difficulty/length: quick (15 questions), standard (30 questions), comprehensive (50 questions)' },
+        correctAnswers: { type: 'integer', description: 'Number of correct answers', minimum: 0, maximum: 50 },
+        answers: { type: 'array', items: { type: 'integer' }, description: 'Array of answer indices (0-3) for each question. If provided, calculates score with category breakdown.' },
+        timeTakenSeconds: { type: 'integer', description: 'Time taken in seconds (optional)', minimum: 60 },
       },
-      required: ['correctAnswers'],
+      required: ['testMode'],
     },
     outputSchema: {
       type: 'object',
       properties: {
+        testMode: { type: 'string', description: 'Test mode used' },
+        testInfo: { type: 'object', description: 'Test configuration (name, questionCount, estimatedMinutes)' },
         iqScore: { type: 'integer' },
-        category: { type: 'string', enum: ['Genius', 'Gifted', 'Above Average', 'Average', 'Below Average'] },
+        category: { type: 'string', enum: ['Very Superior', 'Superior', 'High Average', 'Average', 'Low Average', 'Below Average'] },
         percentile: { type: 'number', description: 'Percentile rank in population' },
-        rarity: { type: 'string', description: 'How rare this IQ is (e.g., "1 in 100")' },
+        correctAnswers: { type: 'integer' },
+        totalQuestions: { type: 'integer' },
         accuracy: { type: 'number', description: 'Percentage of correct answers' },
+        categoryScores: { type: 'object', description: 'Breakdown by category (pattern, logic, math, spatial, verbal)' },
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
@@ -1127,7 +1135,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         eligible: { type: 'boolean', description: 'Whether the person can donate blood' },
-        amount: { type: 'number', description: 'Recommended donation amount in ml' },
+        amount: { type: 'number', description: 'Recommended donation amount in ml (0 if not eligible)' },
+        maxSafeAmount: { type: 'number', description: 'Maximum safe blood loss in ml based on blood volume (10.5% of total). Shown even when not eligible.' },
         bloodVolume: { type: 'number', description: 'Estimated total blood volume in liters' },
         warnings: { type: 'array', items: { type: 'string' }, description: 'Any warnings or restrictions' },
         tips: { type: 'array', items: { type: 'string' }, description: 'Tips for donation day' },
@@ -1670,22 +1679,52 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { type, catScore, dogScore, percentage, title, description };
     }
     case 'calculate_iq_score': {
-      const correct = args.correctAnswers as number;
-      const total = (args.totalQuestions as number) || 15;
-      const time = args.timeTakenSeconds as number | undefined;
-      const baseScore = 85 + (correct / total) * 45; // Range: 85-130 base
-      let timeBonus = 0;
-      if (time && time < 300) timeBonus = 5; // Under 5 min bonus
-      else if (time && time < 600) timeBonus = 2; // Under 10 min small bonus
-      const estimatedIQ = Math.round(baseScore + timeBonus);
-      let category: string;
-      if (estimatedIQ >= 130) category = 'Very Superior';
-      else if (estimatedIQ >= 120) category = 'Superior';
-      else if (estimatedIQ >= 110) category = 'High Average';
-      else if (estimatedIQ >= 90) category = 'Average';
-      else if (estimatedIQ >= 80) category = 'Low Average';
-      else category = 'Below Average';
-      return { estimatedIQ, category, correctAnswers: correct, totalQuestions: total, accuracy: Math.round((correct / total) * 100) };
+      const testMode = (args.testMode as TestMode) || 'quick';
+      const modeConfig = TEST_MODE_CONFIG[testMode];
+      const questions = getQuestionsForMode(testMode);
+      const totalQuestions = questions.length;
+
+      // If answers array provided, use the shared calculation
+      const answersArray = args.answers as number[] | undefined;
+      if (answersArray && answersArray.length > 0) {
+        const result = calculateIQScore(answersArray, questions);
+        const labelInfo = getIQLabel(result.iq);
+        return {
+          testMode,
+          testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes },
+          iqScore: result.iq,
+          category: labelInfo.label,
+          percentile: result.percentile,
+          correctAnswers: result.correctCount,
+          totalQuestions,
+          accuracy: Math.round((result.correctCount / totalQuestions) * 100),
+          categoryScores: result.categoryScores,
+        };
+      }
+
+      // Fallback: use correctAnswers count
+      const correct = (args.correctAnswers as number) || 0;
+      const percentage = totalQuestions > 0 ? correct / totalQuestions : 0;
+      const iq = Math.round(70 + percentage * 75);
+      const labelInfo = getIQLabel(iq);
+
+      // Calculate percentile
+      const z = (iq - 100) / 15;
+      const t = 1 / (1 + 0.2316419 * Math.abs(z));
+      const d = 0.3989423 * Math.exp(-z * z / 2);
+      const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+      const percentile = Math.round((z > 0 ? 1 - p : p) * 100);
+
+      return {
+        testMode,
+        testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes },
+        iqScore: iq,
+        category: labelInfo.label,
+        percentile,
+        correctAnswers: correct,
+        totalQuestions,
+        accuracy: Math.round(percentage * 100),
+      };
     }
     case 'calculate_uniqueness': {
       // Support both age (years) and ageMonths (for babies)
@@ -1813,6 +1852,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return {
         eligible,
         amount: eligible ? recommendedDonation : 0,
+        maxSafeAmount: Math.round(maxSafeDonation), // Max safe blood loss based on blood volume
         bloodVolume: Math.round(bloodVolume * 100) / 100,
         warnings,
         tips,
@@ -2455,7 +2495,7 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'blood_donation': {
-      const bloodData = data as { eligible?: boolean; amount?: number; bloodVolume?: number; warnings?: string[] };
+      const bloodData = data as { eligible?: boolean; amount?: number; maxSafeAmount?: number; bloodVolume?: number; warnings?: string[] };
       const eligibleColor = bloodData.eligible ? '#22c55e' : '#ef4444';
       const eligibleIcon = bloodData.eligible ? '✅' : '❌';
       const eligibleText = bloodData.eligible ? 'Eligible to Donate' : 'Not Eligible';
@@ -2467,7 +2507,11 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         ${bloodData.eligible ? `<div class="stats">
           <div class="stat-box"><div class="stat-label">Recommended</div><div class="stat-value">${bloodData.amount} ml</div></div>
           <div class="stat-box"><div class="stat-label">Blood Volume</div><div class="stat-value">${bloodData.bloodVolume} L</div></div>
-        </div>` : ''}
+        </div>` : `<div class="stats">
+          <div class="stat-box"><div class="stat-label">Blood Volume</div><div class="stat-value">${bloodData.bloodVolume} L</div></div>
+          <div class="stat-box"><div class="stat-label">Max Safe Loss</div><div class="stat-value" style="color:#fbbf24">${bloodData.maxSafeAmount} ml</div></div>
+        </div>
+        <div style="margin-top:0.25rem;font-size:0.65rem;color:rgba(255,255,255,0.5)">Max safe blood loss (10.5% of blood volume)</div>`}
         ${warnings.length ? `<div style="margin-top:0.5rem;padding:0.5rem;background:rgba(251,191,36,0.1);border-radius:8px;font-size:0.75rem;color:#fbbf24">⚠️ ${warnings[0]}</div>` : ''}`;
       break;
     }
@@ -2667,6 +2711,13 @@ function formatResultText(toolName: string, result: unknown): string {
     case 'pick_random':
     case 'spin_wheel':
       return `Selected: ${r.result || r.selected}`;
+    case 'blood_donation_eligibility':
+      if (r.eligible) {
+        return `🩸 Eligible to donate! Recommended: ${r.amount}ml (Blood volume: ${r.bloodVolume}L)`;
+      } else {
+        const warnings = (r.warnings as string[]) || [];
+        return `🩸 Not eligible to donate. Blood volume: ${r.bloodVolume}L, Max safe loss: ${r.maxSafeAmount}ml. ${warnings.length ? warnings[0] : ''}`;
+      }
     default:
       return JSON.stringify(result, null, 2);
   }

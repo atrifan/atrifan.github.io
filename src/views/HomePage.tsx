@@ -450,7 +450,7 @@ export class HomePage extends Component<{}, HomePageState> {
                   💪 Health & Body
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
-                  Weight loss planner, sleep cycle calculator, period tracker, blood type compatibility, IQ test, uniqueness calculator
+                  Weight loss planner, sleep cycle calculator, period tracker, donation calculator, blood compatibility, baby blood predictor
                 </div>
               </div>
 

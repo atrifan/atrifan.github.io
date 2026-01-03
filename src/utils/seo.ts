@@ -127,9 +127,9 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     keywords: ['position size calculator', 'trading calculator', 'risk management', 'stop loss calculator', 'forex calculator', 'stock position size', 'risk reward'],
   },
   blood: {
-    title: 'Blood Type Calculator - Donation, Compatibility & Baby Blood | Tulzo',
-    description: 'Free blood calculator: Check donation eligibility, blood type compatibility for transfusions, and predict your baby\'s blood type based on genetics. Includes Rh incompatibility warnings.',
-    keywords: ['blood type calculator', 'blood donation eligibility', 'blood compatibility chart', 'baby blood type calculator', 'Rh incompatibility', 'blood type genetics', 'who can I donate blood to', 'universal donor', 'blood transfusion compatibility'],
+    title: 'Blood Type Calculator - Volume, Donation, Compatibility & Baby Blood | Tulzo',
+    description: 'Free blood calculator: Calculate your blood volume using Nadler\'s formula, check donation eligibility, blood type compatibility for transfusions, and predict your baby\'s blood type. Includes Rh incompatibility warnings.',
+    keywords: ['blood type calculator', 'blood volume calculator', 'blood donation eligibility', 'blood compatibility chart', 'baby blood type calculator', 'Rh incompatibility', 'blood type genetics', 'who can I donate blood to', 'universal donor', 'blood transfusion compatibility', 'Nadler formula'],
   },
 };
 

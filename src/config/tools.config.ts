@@ -90,7 +90,7 @@ export const TOOLS: ToolConfig[] = [
     id: 'blood',
     name: 'BLOOD',
     descriptiveName: 'Blood Type Calculator',
-    shortDescription: 'Compatibility & baby blood predictor.',
+    shortDescription: 'Donation calculator, compatibility & baby blood predictor.',
     seoTitle: 'Blood Type Calculator – Donation, Compatibility & Baby Blood | Tulzo',
     seoDescription: 'Calculate blood donation eligibility, check blood type compatibility for transfusions, and predict your baby\'s blood type based on genetics.',
     icon: '🩸',

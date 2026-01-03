@@ -52,6 +52,8 @@ type CalculatorMode = 'donation' | 'compatibility' | 'baby';
 interface DonationResult {
   eligible: boolean;
   amount: number;
+  maxSafeAmount: number; // Maximum safe blood loss based on blood volume
+  bloodVolumeLiters: number; // Total blood volume in liters
   warnings: string[];
   restrictions: string[];
   tips: string[];
@@ -211,6 +213,8 @@ export class BloodPage extends Component<object, BloodPageState> {
       donationResult: {
         eligible,
         amount: eligible ? recommendedDonation : 0,
+        maxSafeAmount: Math.round(maxSafeDonation),
+        bloodVolumeLiters: Math.round(bloodVolume * 100) / 100,
         warnings,
         restrictions,
         tips,
@@ -891,8 +895,10 @@ export class BloodPage extends Component<object, BloodPageState> {
             )}
           </div>
 
-          {/* Hero Ad - between input and results */}
-          <AdBanner slot={ADS_CONFIG.slots.bloodResults} format="horizontal" />
+          {/* Hero Ad - between input and results (only show when there are results) */}
+          {(donationResult || compatibilityResult || babyResult) && (
+            <AdBanner slot={ADS_CONFIG.slots.bloodResults} format="horizontal" />
+          )}
 
           {/* Results */}
           <div ref={this.resultRef}>
@@ -917,11 +923,48 @@ export class BloodPage extends Component<object, BloodPageState> {
                   }}>
                     {donationResult.eligible ? 'You Can Donate!' : 'Not Eligible to Donate'}
                   </h3>
-                  {donationResult.eligible && (
-                    <p style={{ color: '#fff', fontSize: '1.25rem' }}>
-                      Recommended donation: <strong>{donationResult.amount} ml</strong>
+                  <div style={{ marginTop: '1rem' }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '1rem',
+                      maxWidth: '400px',
+                      margin: '0 auto'
+                    }}>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        padding: '1rem'
+                      }}>
+                        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>Your Blood Volume</p>
+                        <p style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700, margin: '0.25rem 0 0' }}>
+                          {donationResult.bloodVolumeLiters} L
+                        </p>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        padding: '1rem'
+                      }}>
+                        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>
+                          {donationResult.eligible ? 'Recommended Donation' : 'Max Safe Loss'}
+                        </p>
+                        <p style={{
+                          color: donationResult.eligible ? '#22c55e' : '#fbbf24',
+                          fontSize: '1.5rem',
+                          fontWeight: 700,
+                          margin: '0.25rem 0 0'
+                        }}>
+                          {donationResult.eligible ? donationResult.amount : donationResult.maxSafeAmount} ml
+                        </p>
+                      </div>
+                    </div>
+                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+                      {donationResult.eligible
+                        ? 'Blood volume calculated using Nadler\'s formula based on your height, weight, and gender'
+                        : 'Based on your body measurements, this is the maximum safe blood loss (10.5% of blood volume)'}
                     </p>
-                  )}
+                  </div>
                 </div>
 
                 {donationResult.warnings.length > 0 && (
