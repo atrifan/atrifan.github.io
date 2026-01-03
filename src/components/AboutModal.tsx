@@ -139,8 +139,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             />
             <FeatureItem
               icon="🆓"
-              title="100% Free"
-              description="Every tool is completely free to use. No hidden fees, no premium tiers for basic features."
+              title="Free Web Tools"
+              description="All web tools are free to use with no signup. Pro & Plus subscriptions unlock AI-powered MCP integration."
             />
             <FeatureItem
               icon="🔒"

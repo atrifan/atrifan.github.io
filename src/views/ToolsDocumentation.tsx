@@ -58,6 +58,11 @@ export default function ToolsDocumentation() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   useEffect(() => {
     fetch('/api/tools')
       .then(res => res.json())
@@ -207,16 +212,31 @@ export default function ToolsDocumentation() {
         </div>
 
         {/* Back Link */}
-        <Link href="/dashboard" style={{
-          color: '#a78bfa',
-          fontSize: '0.9rem',
-          textDecoration: 'none',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          marginBottom: '1.5rem',
-        }}>
-          ← Back to Dashboard
+        <Link href="/dashboard" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1.5rem' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontSize: '1rem',
+            padding: '0.5rem 1rem',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50px',
+            transition: 'all 0.3s ease',
+            fontWeight: 500,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+            e.currentTarget.style.transform = 'translateX(-5px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.transform = 'translateX(0)';
+          }}
+          >
+            <span style={{ fontSize: '1.2rem' }}>←</span>
+            <span>Back to Dashboard</span>
+          </div>
         </Link>
 
         {/* Page Header */}

@@ -60,6 +60,11 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
   const [loading, setLoading] = useState(true);
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Check if feature is enabled and load server
   useEffect(() => {
     if (!isMcpComposerEnabled()) {

@@ -258,6 +258,11 @@ export const MCPComposerPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [allToolNames, setAllToolNames] = useState<string[]>([]);
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Check if feature is enabled
   useEffect(() => {
     if (!isMcpComposerEnabled()) {

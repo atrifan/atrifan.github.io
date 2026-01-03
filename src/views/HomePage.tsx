@@ -334,7 +334,7 @@ export class HomePage extends Component<{}, HomePageState> {
               maxWidth: '600px',
               lineHeight: 1.5,
             }}>
-              Fast, free utilities for health, money, time, and simple decisions — all in one place.
+              Fast utilities for health, money, time, and simple decisions — all in one place.
             </p>
 
             {/* Micro-line */}
@@ -430,8 +430,8 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.7,
               margin: '0 0 1.25rem',
             }}>
-              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>20+ free online tools</strong> for health, finance, time, and fun.
-              Every tool works instantly in your browser — no downloads, no sign-ups, no tracking.
+              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>36+ online tools</strong> for health, finance, time, and fun.
+              Web tools work instantly in your browser — no downloads, no sign-ups. <strong style={{ color: '#a78bfa' }}>Pro & Plus subscriptions</strong> unlock AI-powered MCP integration for use with Claude, ChatGPT, and other AI assistants.
             </p>
 
             {/* Tool Categories */}
@@ -511,10 +511,10 @@ export class HomePage extends Component<{}, HomePageState> {
             }}>
               {[
                 { icon: '🚀', text: 'Instant Results' },
-                { icon: '🆓', text: '100% Free Forever' },
+                { icon: '🆓', text: 'Free Web Tools' },
                 { icon: '🔒', text: 'No Data Collection' },
                 { icon: '📱', text: 'Works on Any Device' },
-                { icon: '🤖', text: 'AI & MCP Ready' },
+                { icon: '🤖', text: 'AI & MCP Ready (Pro)' },
                 { icon: '🌙', text: 'Dark Mode' },
               ].map((item) => (
                 <span
@@ -562,8 +562,8 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.6,
               margin: 0,
             }}>
-              Built for speed and simplicity. No accounts, no sign-ups, no hassle — just open and use.
-              We believe useful tools should be free and accessible to everyone.
+              Built for speed and simplicity. Web tools require no accounts or sign-ups — just open and use.
+              Pro & Plus subscribers get AI-powered MCP integration for seamless use with AI assistants.
             </p>
           </View>
 

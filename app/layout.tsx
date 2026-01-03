@@ -8,11 +8,11 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://tulzo.vercel.app'),
   title: {
-    default: 'Tulzo - Free Online Tools & Calculators',
+    default: 'Tulzo - Free Online Tools & AI-Powered Calculators',
     template: '%s | Tulzo',
   },
-  description: 'Free online tools: IQ test, cat or dog person quiz, sleep calculator, tip calculator, coin flip, wheel spinner, age calculator, timezone converter & more. 100% free, no signup required.',
-  keywords: ['free online tools', 'calculators', 'IQ test', 'cat or dog person quiz', 'sleep calculator', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter'],
+  description: 'Free online tools: BMI calculator, sleep calculator, blood type compatibility, eclipse finder, tip calculator, coin flip & more. No signup required for web tools. Pro & Plus subscriptions for AI-powered MCP integration.',
+  keywords: ['free online tools', 'calculators', 'MCP tools', 'AI tools', 'BMI calculator', 'sleep calculator', 'blood type calculator', 'eclipse finder', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter'],
   authors: [{ name: 'Tulzo' }],
   creator: 'Tulzo',
   publisher: 'Tulzo',
@@ -32,21 +32,21 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://tulzo.vercel.app',
     siteName: 'Tulzo',
-    title: 'Tulzo - Free Online Tools & Calculators',
-    description: 'Free online tools: IQ test, cat or dog person quiz, sleep calculator, tip calculator, coin flip, wheel spinner & more.',
+    title: 'Tulzo - Free Online Tools & AI-Powered Calculators',
+    description: 'Free online tools & AI-powered calculators. No signup for web tools. Pro & Plus subscriptions for MCP AI integration.',
     images: [
       {
         url: '/tulzo-og.svg',
         width: 1200,
         height: 630,
-        alt: 'Tulzo - Free Online Tools',
+        alt: 'Tulzo - Free Online Tools & AI Calculators',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tulzo - Free Online Tools & Calculators',
-    description: 'Free online tools: IQ test, cat or dog person quiz, sleep calculator, tip calculator, coin flip, wheel spinner & more.',
+    title: 'Tulzo - Free Online Tools & AI-Powered Calculators',
+    description: 'Free online tools & AI-powered calculators. No signup for web tools. Pro & Plus subscriptions for MCP AI integration.',
     images: ['/tulzo-og.svg'],
   },
   icons: {
