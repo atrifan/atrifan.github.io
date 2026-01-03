@@ -147,6 +147,11 @@ export const ADS_CONFIG = {
     mcpComposerTop: '7221401854',
     mcpComposerBottom: '5908320187',
 
+    // ECLIPSE page ads (Eclipse Finder)
+    eclipseTop: '7221401854',
+    eclipseResults: '5908320187',
+    eclipseFooter: '2816426440',
+
     // Side ads (desktop only) - Left side
     sideLeftHorizontalTop: '2816426440',
     sideLeftVerticalMiddle: '2194459973',

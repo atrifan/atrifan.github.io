@@ -131,6 +131,11 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Free blood calculator: Calculate your blood volume using Nadler\'s formula, check donation eligibility, blood type compatibility for transfusions, and predict your baby\'s blood type. Includes Rh incompatibility warnings.',
     keywords: ['blood type calculator', 'blood volume calculator', 'blood donation eligibility', 'blood compatibility chart', 'baby blood type calculator', 'Rh incompatibility', 'blood type genetics', 'who can I donate blood to', 'universal donor', 'blood transfusion compatibility', 'Nadler formula'],
   },
+  eclipse: {
+    title: 'Eclipse Finder - Next Solar & Lunar Eclipse Dates & Times | Tulzo',
+    description: 'Find upcoming solar and lunar eclipses visible from your location. Get dates, times, visibility info, countdown timers, and best viewing locations for total, partial, and annular eclipses through 2030.',
+    keywords: ['eclipse finder', 'next solar eclipse', 'next lunar eclipse', 'eclipse dates', 'eclipse visibility', 'total solar eclipse', 'blood moon', 'eclipse countdown', 'when is the next eclipse', 'eclipse 2025', 'eclipse 2026', 'annular eclipse', 'partial eclipse'],
+  },
 };
 
 /**

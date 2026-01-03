@@ -31,6 +31,7 @@ import { VibeIcon } from '../components/VibeIcon';
 import { CycleIcon } from '../components/CycleIcon';
 import { RiskIcon } from '../components/RiskIcon';
 import { BloodIcon } from '../components/BloodIcon';
+import { EclipseIcon } from '../components/EclipseIcon';
 import { WeatherTimeCardWrapper } from '../components/WeatherTimeCardWrapper';
 import { Footer } from '../components/Footer';
 
@@ -80,6 +81,7 @@ export class HomePage extends Component<{}, HomePageState> {
       decide: <DecideIcon size={size} />,
       brain: <BrainIcon size={size} />,
       vibe: <VibeIcon size={size} />,
+      eclipse: <EclipseIcon size={size} />,
     };
     return iconMap[toolId] || <span className="big-icon">🔧</span>;
   };

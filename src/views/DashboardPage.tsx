@@ -665,8 +665,8 @@ export const DashboardPage: React.FC = () => {
                 const selectedServer = getSelectedServer();
                 const serverName = selectedServer ? selectedServer.name : 'Default Server';
                 const isCustom = selectedServer !== null;
-                // Calculate tool count - for default server, subtract disabled tools from total (30)
-                const defaultToolCount = 30 - (defaultServerConfig?.disabledTools?.length || 0);
+                // Calculate tool count - for default server, subtract disabled tools from total (36)
+                const defaultToolCount = 36 - (defaultServerConfig?.disabledTools?.length || 0);
                 const toolCount = selectedServer ? selectedServer.tools.length : defaultToolCount;
                 const hasDisabledTools = !isCustom && defaultServerConfig?.disabledTools?.length;
                 return (
@@ -691,8 +691,8 @@ export const DashboardPage: React.FC = () => {
                           {isCustom
                             ? `${toolCount} tools selected`
                             : hasDisabledTools
-                              ? `${toolCount} of 30 tools enabled`
-                              : 'All tools (30)'}
+                              ? `${toolCount} of 36 tools enabled`
+                              : 'All tools (36)'}
                         </div>
                       </div>
                     </div>
@@ -939,7 +939,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
                 {(() => {
-                  const enabledCount = 30 - (defaultServerConfig?.disabledTools?.length || 0);
+                  const enabledCount = 36 - (defaultServerConfig?.disabledTools?.length || 0);
                   const severity = getToolCountSeverity(enabledCount);
                   const color = getToolCountColor(severity);
                   return (

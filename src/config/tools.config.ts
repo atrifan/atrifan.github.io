@@ -214,6 +214,20 @@ export const TOOLS: ToolConfig[] = [
     category: 'time',
     available: true,
   },
+  {
+    id: 'eclipse',
+    name: 'ECLIPSE',
+    descriptiveName: 'Eclipse Finder & Tracker',
+    shortDescription: 'Find upcoming solar & lunar eclipses for your location.',
+    seoTitle: 'Eclipse Finder – Solar & Lunar Eclipse Tracker | Tulzo',
+    seoDescription: 'Discover upcoming solar and lunar eclipses visible from your location. Get dates, times, visibility info, and countdown timers.',
+    icon: '🌑',
+    path: '/eclipse',
+    color: '#1e1b4b',
+    gradient: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
+    category: 'time',
+    available: true,
+  },
   // UTILITIES
   {
     id: 'tap',

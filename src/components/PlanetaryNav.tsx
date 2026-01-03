@@ -26,6 +26,7 @@ import { VibeIcon } from './VibeIcon';
 import { CycleIcon } from './CycleIcon';
 import { RiskIcon } from './RiskIcon';
 import { BloodIcon } from './BloodIcon';
+import { EclipseIcon } from './EclipseIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -97,6 +98,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
       flip: <FlipIcon size={size} />,
       spin: <SpinIcon size={size} />,
       decide: <DecideIcon size={size} />,
+      eclipse: <EclipseIcon size={size} />,
     };
     return iconMap[toolId] || <span style={{ fontSize: `${size}px` }}>🔧</span>;
   };
