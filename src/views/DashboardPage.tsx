@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { useUser, useClerk, useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -10,6 +10,12 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isBillingEnabled } from '../config/billing.config';
+import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
+import type { CustomMCPServer } from '../types/mcp-composer';
+import { ToolCountWarning } from './MCPComposerPage';
+
+// Type for selected server view - null means default, string means custom server id
+type SelectedServerView = 'default' | string;
 
 // Dashboard Icon
 const DashboardIcon = () => (
@@ -57,17 +63,26 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, icon, children }) 
 );
 
 // Get time-based greeting
-const getGreeting = (): { text: string; emoji: string } => {
+type GreetingType = 'morning' | 'afternoon' | 'evening' | 'night';
+const getGreeting = (): { text: string; type: GreetingType } => {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) {
-    return { text: 'Good morning', emoji: '🌅' };
+    return { text: 'Good morning', type: 'morning' };
   } else if (hour >= 12 && hour < 17) {
-    return { text: 'Good afternoon', emoji: '☀️' };
+    return { text: 'Good afternoon', type: 'afternoon' };
   } else if (hour >= 17 && hour < 21) {
-    return { text: 'Good evening', emoji: '🌆' };
+    return { text: 'Good evening', type: 'evening' };
   } else {
-    return { text: 'Good night', emoji: '🌙' };
+    return { text: 'Good night', type: 'night' };
   }
+};
+
+// Greeting emojis - using simple, high-contrast emojis (no landscape backgrounds)
+const greetingEmojis: Record<GreetingType, string> = {
+  morning: '☀️',
+  afternoon: '🌞',
+  evening: '🌙',
+  night: '⭐',
 };
 
 // Config field component for MCP settings
@@ -170,6 +185,24 @@ export const DashboardPage: React.FC = () => {
   const [mcpTab, setMcpTab] = useState<MCPTab>('oauth');
   const [connections, setConnections] = useState<MCPConnection[]>([]);
   const [providerChanged, setProviderChanged] = useState(false);
+  const [customServers, setCustomServers] = useState<CustomMCPServer[]>([]);
+  const [selectedServerView, setSelectedServerView] = useState<SelectedServerView>('default');
+  const mcpConfigCardRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to MCP config card and highlight it
+  const viewServerConfig = (serverId: SelectedServerView) => {
+    setSelectedServerView(serverId);
+    setTimeout(() => {
+      mcpConfigCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      mcpConfigCardRef.current?.focus();
+    }, 100);
+  };
+
+  // Get the currently selected server details
+  const getSelectedServer = (): CustomMCPServer | null => {
+    if (selectedServerView === 'default') return null;
+    return customServers.find(s => s.id === selectedServerView) || null;
+  };
 
   // Check if user has Pro plan using Clerk Billing's has() helper
   // This checks for an active subscription with the 'pro' plan feature
@@ -211,6 +244,27 @@ export const DashboardPage: React.FC = () => {
       setConnections(user.unsafeMetadata.mcpConnections as MCPConnection[]);
     }
   }, [user]);
+
+  // Load custom MCP servers from localStorage
+  useEffect(() => {
+    if (isMcpComposerEnabled()) {
+      try {
+        const stored = localStorage.getItem('customMcpServers');
+        if (stored) {
+          setCustomServers(JSON.parse(stored));
+        }
+      } catch (error) {
+        console.error('Failed to load custom MCP servers:', error);
+      }
+    }
+  }, []);
+
+  // Delete a custom MCP server
+  const deleteCustomServer = (serverId: string) => {
+    const updated = customServers.filter(s => s.id !== serverId);
+    setCustomServers(updated);
+    localStorage.setItem('customMcpServers', JSON.stringify(updated));
+  };
 
   const copyField = async (value: string, fieldName: string) => {
     await navigator.clipboard.writeText(value);
@@ -297,8 +351,15 @@ export const DashboardPage: React.FC = () => {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             margin: '0.75rem 0 0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
           }}>
-            {greeting.emoji} {greeting.text}{user?.firstName ? `, ${user.firstName}` : ''}!
+            <span style={{ fontSize: 'clamp(2rem, 6vw, 3rem)' }}>
+              {greetingEmojis[greeting.type]}
+            </span>
+            {greeting.text}{user?.firstName ? `, ${user.firstName}` : ''}!
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1rem', margin: 0 }}>
             {user?.primaryEmailAddress?.emailAddress}
@@ -561,16 +622,95 @@ export const DashboardPage: React.FC = () => {
           )}
         </DashboardCard>
 
-        {/* MCP Server Card with Tabs */}
-        <DashboardCard title="MCP Server" icon={
+        {/* MCP Server Config Card with Tabs */}
+        <div ref={mcpConfigCardRef} tabIndex={-1} style={{ outline: 'none' }}>
+        <DashboardCard title="MCP Server Config" icon={
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         }>
           {isPro && apiKey ? (
             <div>
+              {/* Selected Server Indicator */}
+              {(() => {
+                const selectedServer = getSelectedServer();
+                const serverName = selectedServer ? selectedServer.name : 'Default Server';
+                const toolCount = selectedServer ? selectedServer.tools.length : 30;
+                const isCustom = selectedServer !== null;
+                return (
+                  <div style={{
+                    background: isCustom ? 'rgba(167, 139, 250, 0.1)' : 'rgba(102, 126, 234, 0.1)',
+                    border: `1px solid ${isCustom ? 'rgba(167, 139, 250, 0.3)' : 'rgba(102, 126, 234, 0.3)'}`,
+                    borderRadius: '10px',
+                    padding: '0.75rem 1rem',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>{isCustom ? '🔧' : '📦'}</span>
+                      <div>
+                        <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>
+                          {serverName}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
+                          {isCustom ? `${toolCount} tools selected` : 'All tools (30+)'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <Link
+                        href={isCustom ? `/dashboard/mcp-server/${selectedServer.id}` : '/docs/tools'}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          background: 'rgba(255,255,255,0.1)',
+                          color: 'rgba(255,255,255,0.7)',
+                          textDecoration: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        View Docs
+                      </Link>
+                      {isCustom && (
+                        <Link
+                          href="/dashboard/mcp-composer"
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '6px',
+                            background: 'rgba(167, 139, 250, 0.2)',
+                            color: '#a78bfa',
+                            textDecoration: 'none',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          Edit
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Status */}
               <div style={{
                 background: 'rgba(16, 185, 129, 0.1)',
@@ -584,27 +724,6 @@ export const DashboardPage: React.FC = () => {
               }}>
                 <span style={{ color: '#10b981', fontSize: '1rem' }}>●</span>
                 <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9rem' }}>Server Active</span>
-                <Link
-                  href="/docs/tools"
-                  style={{
-                    color: 'rgba(255,255,255,0.7)',
-                    fontSize: '0.85rem',
-                    marginLeft: 'auto',
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.color = '#a78bfa'}
-                  onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-                >
-                  30+ tools
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </Link>
               </div>
 
               {/* Tabs */}
@@ -736,6 +855,257 @@ export const DashboardPage: React.FC = () => {
             </div>
           )}
         </DashboardCard>
+        </div>
+
+        {/* MCP Servers Card */}
+        {isPro && apiKey && isMcpComposerEnabled() && (
+          <DashboardCard title="MCP Servers" icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          }>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+              Your default server and custom focused MCP servers.
+            </p>
+
+            {/* Servers List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+              {/* Default Server - All Tools */}
+              <div style={{
+                background: selectedServerView === 'default'
+                  ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25))'
+                  : 'linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15))',
+                border: selectedServerView === 'default'
+                  ? '2px solid rgba(102, 126, 234, 0.5)'
+                  : '1px solid rgba(102, 126, 234, 0.3)',
+                borderRadius: '10px',
+                padding: '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
+                      Default Server
+                    </span>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      background: 'rgba(102, 126, 234, 0.3)',
+                      color: '#667eea',
+                      padding: '0.15rem 0.4rem',
+                      borderRadius: '4px',
+                      fontWeight: 600,
+                    }}>DEFAULT</span>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                    All available tools included
+                  </div>
+                </div>
+                <span style={{
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.22)',
+                  color: '#ef4444',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                }}>
+                  30+ tools
+                </span>
+                <button
+                  onClick={() => viewServerConfig('default')}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '6px',
+                    background: selectedServerView === 'default' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.1)',
+                    color: selectedServerView === 'default' ? '#667eea' : 'rgba(255,255,255,0.7)',
+                    border: 'none',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  Config
+                </button>
+                <Link
+                  href="/docs/tools"
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.7)',
+                    textDecoration: 'none',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  Docs
+                </Link>
+              </div>
+
+              {/* Custom Servers */}
+              {customServers.map(server => {
+                const severity = getToolCountSeverity(server.tools.length);
+                const color = getToolCountColor(severity);
+                const isSelected = selectedServerView === server.id;
+                return (
+                  <div key={server.id} style={{
+                    background: isSelected ? 'rgba(167, 139, 250, 0.15)' : 'rgba(0,0,0,0.2)',
+                    border: isSelected ? '2px solid rgba(167, 139, 250, 0.5)' : '1px solid transparent',
+                    borderRadius: '10px',
+                    padding: '0.75rem 1rem',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      flexWrap: 'wrap',
+                    }}>
+                      <div style={{ flex: 1, minWidth: '150px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
+                            {server.name}
+                          </span>
+                          <ToolCountWarning count={server.tools.length} />
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                          Created {new Date(server.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <span style={{
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '12px',
+                        background: `${color}22`,
+                        color: color,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                      }}>
+                        {server.tools.length} tools
+                      </span>
+                      <button
+                        onClick={() => viewServerConfig(server.id)}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          background: isSelected ? 'rgba(167, 139, 250, 0.3)' : 'rgba(255,255,255,0.1)',
+                          color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.7)',
+                          border: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="3" />
+                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                        Config
+                      </button>
+                      <Link
+                        href={`/dashboard/mcp-server/${server.id}`}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          background: 'rgba(255,255,255,0.1)',
+                          color: 'rgba(255,255,255,0.7)',
+                          textDecoration: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Docs
+                      </Link>
+                      <button
+                        onClick={() => deleteCustomServer(server.id)}
+                        style={{
+                          padding: '0.35rem 0.5rem',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          color: '#ef4444',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                        }}
+                        title="Delete server"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {/* Publish to Marketplace button */}
+                    <button
+                      onClick={() => {/* Coming soon */}}
+                      style={{
+                        marginTop: '0.75rem',
+                        width: '100%',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '6px',
+                        border: '1px dashed rgba(251, 191, 36, 0.4)',
+                        background: 'rgba(251, 191, 36, 0.1)',
+                        color: '#fbbf24',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                      </svg>
+                      Publish to Marketplace
+                      <span style={{
+                        fontSize: '0.6rem',
+                        background: 'rgba(251, 191, 36, 0.3)',
+                        padding: '0.1rem 0.3rem',
+                        borderRadius: '4px',
+                      }}>Soon</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Create New Button */}
+            <Link
+              href="/dashboard/mcp-composer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '10px',
+                border: '2px dashed rgba(167, 139, 250, 0.4)',
+                background: 'rgba(167, 139, 250, 0.1)',
+                color: '#a78bfa',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                transition: 'all 0.2s',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Create Custom MCP Server
+            </Link>
+          </DashboardCard>
+        )}
 
         {/* MCP Connections Card */}
         {isPro && connections.length > 0 && (

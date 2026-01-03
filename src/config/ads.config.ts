@@ -138,6 +138,10 @@ export const ADS_CONFIG = {
     docsHeader: '7221401854',
     docsFooter: '5908320187',
 
+    // MCP Composer page ads
+    mcpComposerTop: '7221401854',
+    mcpComposerBottom: '5908320187',
+
     // Side ads (desktop only) - Left side
     sideLeftHorizontalTop: '2816426440',
     sideLeftVerticalMiddle: '2194459973',
