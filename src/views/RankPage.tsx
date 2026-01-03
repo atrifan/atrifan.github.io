@@ -14,7 +14,9 @@ import {
   EyeColor, EYE_COLOR_LABELS,
   HairColor, HAIR_COLOR_LABELS,
   SkinTone, SKIN_TONE_LABELS,
-  Ethnicity, ETHNICITY_LABELS
+  Ethnicity, ETHNICITY_LABELS,
+  BloodType, BLOOD_TYPE_LABELS,
+  Handedness, HANDEDNESS_LABELS
 } from '../data/percentiles';
 
 interface RankPageState {
@@ -30,6 +32,8 @@ interface RankPageState {
   hairColor: HairColor | null;
   skinTone: SkinTone | null;
   ethnicity: Ethnicity | null;
+  bloodType: BloodType | null;
+  handedness: Handedness | null;
   funnelSteps: FunnelStep[];
   showAlert: boolean;
   alertMessage: string;
@@ -53,6 +57,8 @@ export class RankPage extends Component<{}, RankPageState> {
       hairColor: null,
       skinTone: null,
       ethnicity: null,
+      bloodType: null,
+      handedness: null,
       funnelSteps: [],
       showAlert: false,
       alertMessage: '',
@@ -102,14 +108,14 @@ export class RankPage extends Component<{}, RankPageState> {
   };
 
   private calculate = () => {
-    const { gender, eyeColor, hairColor, skinTone, ethnicity } = this.state;
+    const { gender, eyeColor, hairColor, skinTone, ethnicity, bloodType, handedness } = this.state;
     const ageNum = this.getAgeInYears();
     const heightCm = this.convertHeight();
     const weightKg = this.convertWeight();
 
     // Need at least one input beyond world population
     if (ageNum === null && gender === null && heightCm === null && weightKg === null &&
-        eyeColor === null && hairColor === null && skinTone === null && ethnicity === null) {
+        eyeColor === null && hairColor === null && skinTone === null && ethnicity === null && bloodType === null && handedness === null) {
       this.setState({
         showAlert: true,
         alertMessage: 'Please enter at least one trait (age, gender, height, weight, or appearance) to calculate your rarity.'
@@ -117,7 +123,7 @@ export class RankPage extends Component<{}, RankPageState> {
       return;
     }
 
-    const funnelSteps = calculateFunnel(ageNum, gender, heightCm, weightKg, eyeColor, hairColor, skinTone, ethnicity);
+    const funnelSteps = calculateFunnel(ageNum, gender, heightCm, weightKg, eyeColor, hairColor, skinTone, ethnicity, bloodType, handedness);
     this.setState({ funnelSteps }, this.scrollToResults);
   };
 
@@ -139,6 +145,8 @@ export class RankPage extends Component<{}, RankPageState> {
       case 'skinTone': return '#d97706';
       case 'eyeColor': return '#0891b2';
       case 'hairColor': return '#be185d';
+      case 'bloodType': return '#ef4444';
+      case 'handedness': return '#14b8a6';
       default: return '#10b981';
     }
   };
@@ -154,6 +162,8 @@ export class RankPage extends Component<{}, RankPageState> {
       case 'skinTone': return '🎨';
       case 'eyeColor': return '👁️';
       case 'hairColor': return '💇';
+      case 'bloodType': return '🩸';
+      case 'handedness': return '✋';
       default: return '📊';
     }
   };
@@ -302,7 +312,7 @@ export class RankPage extends Component<{}, RankPageState> {
   };
 
   render() {
-    const { ageYears, ageMonths, ageUnit, gender, height, weight, heightUnit, weightUnit, eyeColor, hairColor, skinTone, ethnicity, funnelSteps } = this.state;
+    const { ageYears, ageMonths, ageUnit, gender, height, weight, heightUnit, weightUnit, eyeColor, hairColor, skinTone, ethnicity, bloodType, handedness, funnelSteps } = this.state;
     const gradient = 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)';
     const inputStyle = { width: '100%', padding: '1rem', fontSize: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', boxSizing: 'border-box' as const };
     const selectStyle = { ...inputStyle, cursor: 'pointer' };
@@ -429,6 +439,24 @@ export class RankPage extends Component<{}, RankPageState> {
                   <select value={ethnicity || ''} onChange={(e) => this.setState({ ethnicity: e.target.value ? e.target.value as Ethnicity : null })} style={selectStyle}>
                     <option value="">Select...</option>
                     {Object.entries(ETHNICITY_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>🩸 Blood Type</label>
+                  <select value={bloodType || ''} onChange={(e) => this.setState({ bloodType: e.target.value ? e.target.value as BloodType : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(BLOOD_TYPE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>✋ Handedness</label>
+                  <select value={handedness || ''} onChange={(e) => this.setState({ handedness: e.target.value ? e.target.value as Handedness : null })} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {Object.entries(HANDEDNESS_LABELS).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
                     ))}
                   </select>

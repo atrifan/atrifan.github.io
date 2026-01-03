@@ -5,6 +5,10 @@ import { BudgetCalculator } from '@/src/utils/BudgetCalculator';
 import { DateCalculator } from '@/src/utils/DateCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
+import {
+  calculateFunnel, WORLD_POPULATION,
+  EyeColor, HairColor, SkinTone, Ethnicity, BloodType, Handedness
+} from '@/src/data/percentiles';
 
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
@@ -1040,29 +1044,32 @@ const TOOLS = [
   },
   {
     name: 'calculate_uniqueness',
-    description: 'Calculate how unique/rare a person is based on their physical characteristics compared to world population',
+    description: 'Calculate how unique/rare a person is based on their physical characteristics compared to world population. Supports baby mode (ageMonths) for infants under 24 months.',
     inputSchema: {
       type: 'object',
       properties: {
-        age: { type: 'integer', description: 'Age in years', minimum: 0, maximum: 120 },
+        age: { type: 'number', description: 'Age in years (use ageMonths for babies under 2 years)', minimum: 0, maximum: 120 },
+        ageMonths: { type: 'number', description: 'Age in months for babies (0-24 months). If provided, overrides age.', minimum: 0, maximum: 24 },
         gender: { type: 'string', enum: ['male', 'female'] },
-        heightCm: { type: 'number', description: 'Height in centimeters', minimum: 50, maximum: 250 },
-        weightKg: { type: 'number', description: 'Weight in kilograms', minimum: 20, maximum: 300 },
+        heightCm: { type: 'number', description: 'Height in centimeters', minimum: 30, maximum: 250 },
+        weightKg: { type: 'number', description: 'Weight in kilograms', minimum: 2, maximum: 300 },
         eyeColor: { type: 'string', enum: ['brown', 'blue', 'hazel', 'green', 'gray', 'amber'] },
-        hairColor: { type: 'string', enum: ['black', 'brown', 'blonde', 'red', 'gray', 'white'] },
+        hairColor: { type: 'string', enum: ['black', 'brown', 'blonde', 'red', 'gray', 'auburn'] },
+        skinTone: { type: 'string', enum: ['very_light', 'light', 'medium', 'olive', 'tan', 'deep'], description: 'Skin tone based on Fitzpatrick scale' },
+        ethnicity: { type: 'string', enum: ['east_asian', 'south_asian', 'southeast_asian', 'european', 'african', 'middle_eastern', 'latin_american', 'oceanian', 'mixed'], description: 'Geographic ancestry' },
+        bloodType: { type: 'string', enum: ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'] },
         handedness: { type: 'string', enum: ['right', 'left', 'ambidextrous'] },
-        bloodType: { type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
       },
-      required: ['age', 'gender'],
+      required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        uniquenessScore: { type: 'number', description: 'Uniqueness percentage 0-100' },
-        category: { type: 'string', enum: ['Extremely Rare', 'Very Rare', 'Rare', 'Uncommon', 'Common'] },
-        rarity: { type: 'string', description: 'e.g., "1 in 10,000"' },
-        estimatedPeopleWithTraits: { type: 'number' },
-        traitBreakdown: { type: 'object', description: 'Rarity of each individual trait' },
+        worldPopulation: { type: 'number', description: 'Total world population used as base' },
+        matchingPeople: { type: 'number', description: 'Estimated number of people matching all traits' },
+        rarity: { type: 'string', description: 'Rarity ratio e.g., "1 in 10,000"' },
+        isBabyMode: { type: 'boolean', description: 'Whether baby population was used as base' },
+        steps: { type: 'array', description: 'Funnel steps showing progressive filtering' },
       },
     },
     annotations: READ_ONLY_ANNOTATIONS,
@@ -1681,48 +1688,50 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { estimatedIQ, category, correctAnswers: correct, totalQuestions: total, accuracy: Math.round((correct / total) * 100) };
     }
     case 'calculate_uniqueness': {
-      const age = args.age as number;
-      const gender = args.gender as 'male' | 'female';
-      const heightCm = args.heightCm as number | undefined;
-      const weightKg = args.weightKg as number | undefined;
-      const eyeColor = args.eyeColor as string | undefined;
-      const hairColor = args.hairColor as string | undefined;
-      const worldPop = 8_000_000_000;
-      let remaining = worldPop;
-      const steps: { trait: string; percentage: number; remaining: number }[] = [];
-      // Gender filter (roughly 50/50)
-      remaining = Math.round(remaining * 0.5);
-      steps.push({ trait: `Gender: ${gender}`, percentage: 50, remaining });
-      // Age filter (rough distribution)
-      const agePercent = age < 18 ? 25 : age < 35 ? 20 : age < 50 ? 18 : age < 65 ? 15 : 12;
-      remaining = Math.round(remaining * (agePercent / 100));
-      steps.push({ trait: `Age: ~${age} years`, percentage: agePercent, remaining });
-      // Height filter (if provided)
-      if (heightCm) {
-        const heightPercent = 15; // Approximate for specific height range
-        remaining = Math.round(remaining * (heightPercent / 100));
-        steps.push({ trait: `Height: ${heightCm}cm`, percentage: heightPercent, remaining });
-      }
-      // Weight filter (if provided)
-      if (weightKg) {
-        const weightPercent = 15;
-        remaining = Math.round(remaining * (weightPercent / 100));
-        steps.push({ trait: `Weight: ${weightKg}kg`, percentage: weightPercent, remaining });
-      }
-      // Eye color (if provided)
-      const eyeColorPercents: Record<string, number> = { brown: 79, blue: 8, hazel: 5, green: 2, gray: 3, amber: 3 };
-      if (eyeColor && eyeColorPercents[eyeColor]) {
-        remaining = Math.round(remaining * (eyeColorPercents[eyeColor] / 100));
-        steps.push({ trait: `Eye color: ${eyeColor}`, percentage: eyeColorPercents[eyeColor], remaining });
-      }
-      // Hair color (if provided)
-      const hairColorPercents: Record<string, number> = { black: 75, brown: 11, blonde: 2, red: 1, gray: 8, white: 3 };
-      if (hairColor && hairColorPercents[hairColor]) {
-        remaining = Math.round(remaining * (hairColorPercents[hairColor] / 100));
-        steps.push({ trait: `Hair color: ${hairColor}`, percentage: hairColorPercents[hairColor], remaining });
-      }
-      const uniquenessRatio = worldPop / remaining;
-      return { worldPopulation: worldPop, matchingPeople: remaining, uniquenessRatio: `1 in ${Math.round(uniquenessRatio).toLocaleString()}`, steps };
+      // Support both age (years) and ageMonths (for babies)
+      const ageMonths = args.ageMonths as number | undefined;
+      const ageYears = args.age as number | undefined;
+      // If ageMonths provided, convert to years (decimal)
+      const age = ageMonths !== undefined ? ageMonths / 12 : (ageYears ?? null);
+      const isBabyMode = age !== null && age < 2;
+
+      const gender = (args.gender as 'male' | 'female') || null;
+      const heightCm = (args.heightCm as number) || null;
+      const weightKg = (args.weightKg as number) || null;
+      const eyeColor = (args.eyeColor as EyeColor) || null;
+      const hairColor = (args.hairColor as HairColor) || null;
+      const skinTone = (args.skinTone as SkinTone) || null;
+      const ethnicity = (args.ethnicity as Ethnicity) || null;
+      const bloodType = (args.bloodType as BloodType) || null;
+      const handedness = (args.handedness as Handedness) || null;
+
+      // Use the shared calculateFunnel function
+      const funnelSteps = calculateFunnel(
+        age, gender, heightCm, weightKg,
+        eyeColor, hairColor, skinTone, ethnicity, bloodType, handedness
+      );
+
+      // Get final population from last step
+      const finalStep = funnelSteps[funnelSteps.length - 1];
+      const matchingPeople = finalStep?.population ?? WORLD_POPULATION;
+      const uniquenessRatio = WORLD_POPULATION / matchingPeople;
+
+      // Format steps for output
+      const steps = funnelSteps.map(step => ({
+        dimension: step.dimension,
+        label: step.label,
+        description: step.description,
+        population: step.population,
+        percentage: Math.round(step.percentage * 100) / 100,
+      }));
+
+      return {
+        worldPopulation: WORLD_POPULATION,
+        matchingPeople,
+        rarity: `1 in ${Math.round(uniquenessRatio).toLocaleString()}`,
+        isBabyMode,
+        steps,
+      };
     }
     case 'when_date_info': {
       const dateStr = args.date as string;

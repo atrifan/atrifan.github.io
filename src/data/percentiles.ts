@@ -224,6 +224,54 @@ export const ETHNICITY_LABELS: Record<Ethnicity, string> = {
 };
 
 /**
+ * Blood Type Distribution (Global estimates)
+ * Sources: Stanford Blood Center, Red Cross, WHO data
+ * Note: Distribution varies by region/ethnicity but these are global averages
+ */
+export type BloodType = 'O+' | 'O-' | 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-';
+
+export const BLOOD_TYPE_PERCENTAGES: Record<BloodType, number> = {
+  'O+': 38,    // Most common globally
+  'O-': 7,     // Universal donor (red cells)
+  'A+': 27,    // Second most common
+  'A-': 6,     // Relatively rare
+  'B+': 9,     // Common in Asian populations
+  'B-': 2,     // Rare
+  'AB+': 3,    // Universal recipient
+  'AB-': 1,    // Rarest blood type
+};
+
+export const BLOOD_TYPE_LABELS: Record<BloodType, string> = {
+  'O+': 'O+',
+  'O-': 'O−',
+  'A+': 'A+',
+  'A-': 'A−',
+  'B+': 'B+',
+  'B-': 'B−',
+  'AB+': 'AB+',
+  'AB-': 'AB−',
+};
+
+/**
+ * Handedness Distribution (Global estimates)
+ * Sources: Various neurological and population studies
+ * Right-handedness is dominant globally
+ */
+export type Handedness = 'right' | 'left' | 'ambidextrous';
+
+export const HANDEDNESS_PERCENTAGES: Record<Handedness, number> = {
+  right: 90,         // ~90% of world population
+  left: 9,           // ~9% of world population
+  ambidextrous: 1,   // ~1% truly ambidextrous
+};
+
+export const HANDEDNESS_LABELS: Record<Handedness, string> = {
+  right: 'Right-handed',
+  left: 'Left-handed',
+  ambidextrous: 'Ambidextrous',
+};
+
+/**
  * Get the closest age bracket for percentile lookup
  * Supports babies (0-2 years with decimal ages like 0.5 for 6 months)
  */
@@ -463,7 +511,7 @@ export const WORLD_POPULATION = 8_231_613_070;
  * Funnel step representing cumulative filtering of population
  */
 export interface FunnelStep {
-  dimension: 'world' | 'age' | 'gender' | 'height' | 'weight' | 'eyeColor' | 'hairColor' | 'skinTone' | 'ethnicity';
+  dimension: 'world' | 'age' | 'gender' | 'height' | 'weight' | 'eyeColor' | 'hairColor' | 'skinTone' | 'ethnicity' | 'bloodType' | 'handedness';
   label: string;
   description: string;
   population: number;
@@ -586,7 +634,9 @@ export const calculateFunnel = (
   eyeColor: EyeColor | null = null,
   hairColor: HairColor | null = null,
   skinTone: SkinTone | null = null,
-  ethnicity: Ethnicity | null = null
+  ethnicity: Ethnicity | null = null,
+  bloodType: BloodType | null = null,
+  handedness: Handedness | null = null
 ): FunnelStep[] => {
   const steps: FunnelStep[] = [];
 
@@ -759,6 +809,32 @@ export const calculateFunnel = (
       dimension: 'hairColor',
       label: `${HAIR_COLOR_LABELS[hairColor]} hair`,
       description: `${HAIR_COLOR_LABELS[hairColor]} hair color`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 9: Filter by blood type
+  if (bloodType !== null) {
+    const bloodPercent = BLOOD_TYPE_PERCENTAGES[bloodType];
+    currentPopulation = Math.round(currentPopulation * (bloodPercent / 100));
+    steps.push({
+      dimension: 'bloodType',
+      label: `Blood type ${BLOOD_TYPE_LABELS[bloodType]}`,
+      description: `Blood type ${BLOOD_TYPE_LABELS[bloodType]}`,
+      population: currentPopulation,
+      percentage: (currentPopulation / basePopulation) * 100,
+    });
+  }
+
+  // Step 10: Filter by handedness
+  if (handedness !== null) {
+    const handPercent = HANDEDNESS_PERCENTAGES[handedness];
+    currentPopulation = Math.round(currentPopulation * (handPercent / 100));
+    steps.push({
+      dimension: 'handedness',
+      label: HANDEDNESS_LABELS[handedness],
+      description: HANDEDNESS_LABELS[handedness],
       population: currentPopulation,
       percentage: (currentPopulation / basePopulation) * 100,
     });
