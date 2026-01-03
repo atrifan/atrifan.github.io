@@ -152,10 +152,11 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
   };
 
   private getDayPhase = (hour: number): { phase: string; emoji: string; gradient: string } => {
-    if (hour >= 5 && hour < 12) return { phase: 'Morning', emoji: '🌅', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' };
-    if (hour >= 12 && hour < 17) return { phase: 'Afternoon', emoji: '☀️', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)' };
-    if (hour >= 17 && hour < 21) return { phase: 'Evening', emoji: '🌆', gradient: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' };
-    return { phase: 'Night', emoji: '🌙', gradient: 'linear-gradient(135deg, #1e3a5f 0%, #4c1d95 100%)' };
+    // Using same emojis as Dashboard for consistency
+    if (hour >= 5 && hour < 12) return { phase: 'Morning', emoji: '☀️', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' };
+    if (hour >= 12 && hour < 17) return { phase: 'Afternoon', emoji: '🌞', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)' };
+    if (hour >= 17 && hour < 21) return { phase: 'Evening', emoji: '🌙', gradient: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' };
+    return { phase: 'Night', emoji: '⭐', gradient: 'linear-gradient(135deg, #1e3a5f 0%, #4c1d95 100%)' };
   };
 
   private getGreeting = (hour: number): string => {
