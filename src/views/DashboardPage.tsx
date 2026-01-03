@@ -11,7 +11,7 @@ import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isBillingEnabled } from '../config/billing.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
-import type { CustomMCPServer } from '../types/mcp-composer';
+import type { CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
 import { ToolCountWarning } from './MCPComposerPage';
 
 // Type for selected server view - null means default, string means custom server id
@@ -186,6 +186,7 @@ export const DashboardPage: React.FC = () => {
   const [connections, setConnections] = useState<MCPConnection[]>([]);
   const [providerChanged, setProviderChanged] = useState(false);
   const [customServers, setCustomServers] = useState<CustomMCPServer[]>([]);
+  const [defaultServerConfig, setDefaultServerConfig] = useState<DefaultServerConfig | null>(null);
   const [selectedServerView, setSelectedServerView] = useState<SelectedServerView>('default');
   const mcpConfigCardRef = useRef<HTMLDivElement>(null);
 
@@ -204,9 +205,28 @@ export const DashboardPage: React.FC = () => {
     return customServers.find(s => s.id === selectedServerView) || null;
   };
 
-  // Check if user has Pro plan using Clerk Billing's has() helper
-  // This checks for an active subscription with the 'pro' plan feature
-  const isPro = has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
+  // Get the server path suffix for MCP URLs
+  // Default server: no suffix, Custom server: /<server_name>
+  const getServerPathSuffix = (): string => {
+    const selectedServer = getSelectedServer();
+    if (!selectedServer) return ''; // Default server - no suffix
+    // URL-encode the server name to handle spaces and special characters
+    return `/${encodeURIComponent(selectedServer.name)}`;
+  };
+
+  // Check if user has Plus plan using Clerk Billing's has() helper
+  const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
+
+  // Check if user has Pro plan (or higher - Plus includes Pro features)
+  const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
+
+  // Get the plan name and description for display
+  const getPlanInfo = () => {
+    if (isPlus) return { name: 'Plus', icon: '💎', description: 'Access to all features' };
+    if (isPro) return { name: 'Pro', icon: '⭐', description: 'Access to most AI features' };
+    return { name: 'Free', icon: '🆓', description: 'Basic tools only' };
+  };
+  const planInfo = getPlanInfo();
 
   // Update greeting every minute
   useEffect(() => {
@@ -245,7 +265,7 @@ export const DashboardPage: React.FC = () => {
     }
   }, [user]);
 
-  // Load custom MCP servers from localStorage
+  // Load custom MCP servers and default server config from localStorage
   useEffect(() => {
     if (isMcpComposerEnabled()) {
       try {
@@ -253,8 +273,12 @@ export const DashboardPage: React.FC = () => {
         if (stored) {
           setCustomServers(JSON.parse(stored));
         }
+        const defaultConfig = localStorage.getItem('defaultServerConfig');
+        if (defaultConfig) {
+          setDefaultServerConfig(JSON.parse(defaultConfig));
+        }
       } catch (error) {
-        console.error('Failed to load custom MCP servers:', error);
+        console.error('Failed to load MCP server configs:', error);
       }
     }
   }, []);
@@ -305,7 +329,7 @@ export const DashboardPage: React.FC = () => {
 
   const copyMcpUrl = async () => {
     if (!apiKey) return;
-    const mcpUrl = `https://tulzo.vercel.app/api/mcp/${apiKey}`;
+    const mcpUrl = `https://tulzo.vercel.app/api/mcp/${apiKey}${getServerPathSuffix()}`;
     await navigator.clipboard.writeText(mcpUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -422,7 +446,7 @@ export const DashboardPage: React.FC = () => {
             justifyContent: 'center',
             fontSize: '1.25rem',
           }}>
-            {isPro ? '⭐' : '🆓'}
+            {planInfo.icon}
           </div>
         }>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
@@ -431,19 +455,23 @@ export const DashboardPage: React.FC = () => {
                 display: 'inline-block',
                 padding: '0.35rem 1rem',
                 borderRadius: '20px',
-                background: isPro ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                background: isPlus
+                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                  : isPro
+                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                    : 'rgba(255,255,255,0.1)',
                 color: '#fff',
                 fontWeight: 700,
                 fontSize: '0.9rem',
                 textTransform: 'uppercase',
               }}>
-                {isPro ? 'Pro' : 'Free'}
+                {planInfo.name}
               </span>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: 0 }}>
-                {isPro ? 'Full access to all features' : 'Basic tools only'}
+                {planInfo.description}
               </p>
             </div>
-            {isPro && isBillingEnabled() ? (
+            {(isPro || isPlus) && isBillingEnabled() ? (
               <Link href="/pricing" style={{ textDecoration: 'none' }}>
                 <button style={{
                   background: 'rgba(255,255,255,0.1)',
@@ -458,7 +486,7 @@ export const DashboardPage: React.FC = () => {
                   Manage Subscription
                 </button>
               </Link>
-            ) : !isPro && isBillingEnabled() ? (
+            ) : !isPro && !isPlus && isBillingEnabled() ? (
               <Link href="/pricing" style={{ textDecoration: 'none' }}>
                 <button style={{
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -636,8 +664,11 @@ export const DashboardPage: React.FC = () => {
               {(() => {
                 const selectedServer = getSelectedServer();
                 const serverName = selectedServer ? selectedServer.name : 'Default Server';
-                const toolCount = selectedServer ? selectedServer.tools.length : 30;
                 const isCustom = selectedServer !== null;
+                // Calculate tool count - for default server, subtract disabled tools from total (30)
+                const defaultToolCount = 30 - (defaultServerConfig?.disabledTools?.length || 0);
+                const toolCount = selectedServer ? selectedServer.tools.length : defaultToolCount;
+                const hasDisabledTools = !isCustom && defaultServerConfig?.disabledTools?.length;
                 return (
                   <div style={{
                     background: isCustom ? 'rgba(167, 139, 250, 0.1)' : 'rgba(102, 126, 234, 0.1)',
@@ -657,7 +688,11 @@ export const DashboardPage: React.FC = () => {
                           {serverName}
                         </div>
                         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                          {isCustom ? `${toolCount} tools selected` : 'All tools (30+)'}
+                          {isCustom
+                            ? `${toolCount} tools selected`
+                            : hasDisabledTools
+                              ? `${toolCount} of 30 tools enabled`
+                              : 'All tools (30)'}
                         </div>
                       </div>
                     </div>
@@ -683,29 +718,27 @@ export const DashboardPage: React.FC = () => {
                         </svg>
                         View Docs
                       </Link>
-                      {isCustom && selectedServer && (
-                        <Link
-                          href={`/dashboard/mcp-composer?edit=${selectedServer.id}`}
-                          style={{
-                            padding: '0.35rem 0.75rem',
-                            borderRadius: '6px',
-                            background: 'rgba(167, 139, 250, 0.2)',
-                            color: '#a78bfa',
-                            textDecoration: 'none',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Edit
-                        </Link>
-                      )}
+                      <Link
+                        href={isCustom && selectedServer ? `/dashboard/mcp-composer?edit=${selectedServer.id}` : '/dashboard/mcp-composer?edit=default'}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          background: 'rgba(167, 139, 250, 0.2)',
+                          color: '#a78bfa',
+                          textDecoration: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Edit
+                      </Link>
                     </div>
                   </div>
                 );
@@ -759,7 +792,7 @@ export const DashboardPage: React.FC = () => {
                     <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
                       For ChatGPT, Claude.ai, n8n, and clients with OAuth support.
                     </p>
-                    <ConfigField label="MCP Server URL" value="https://tulzo.vercel.app/api/mcp" onCopy={copyField} copiedField={copiedField} />
+                    <ConfigField label="MCP Server URL" value={`https://tulzo.vercel.app/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
 
                     <div style={{ background: 'rgba(102, 126, 234, 0.1)', borderRadius: '8px', padding: '0.75rem', marginTop: '1rem' }}>
                       <p style={{ color: '#667eea', fontSize: '0.8rem', fontWeight: 600, margin: '0 0 0.5rem' }}>✨ OAuth Auto-Discovery</p>
@@ -793,7 +826,7 @@ export const DashboardPage: React.FC = () => {
                     <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
                       For clients that support custom headers but not OAuth.
                     </p>
-                    <ConfigField label="MCP Server URL" value="https://tulzo.vercel.app/api/mcp" onCopy={copyField} copiedField={copiedField} />
+                    <ConfigField label="MCP Server URL" value={`https://tulzo.vercel.app/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
                     <ConfigField label="Header Name" value="x-api-key" onCopy={copyField} copiedField={copiedField} />
                     <ConfigField label="Header Value" value={apiKey} onCopy={copyField} copiedField={copiedField} isSecret />
                     <div style={{ background: 'rgba(251, 191, 36, 0.1)', borderRadius: '8px', padding: '0.75rem', marginTop: '1rem' }}>
@@ -811,7 +844,7 @@ export const DashboardPage: React.FC = () => {
                     </p>
                     <ConfigField
                       label="MCP Server URL (with API key)"
-                      value={`https://tulzo.vercel.app/api/mcp/${apiKey}`}
+                      value={`https://tulzo.vercel.app/api/mcp/${apiKey}${getServerPathSuffix()}`}
                       onCopy={copyField}
                       copiedField={copiedField}
                       isSecret
@@ -900,19 +933,32 @@ export const DashboardPage: React.FC = () => {
                     }}>DEFAULT</span>
                   </div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    All available tools included
+                    {defaultServerConfig?.disabledTools?.length
+                      ? `${defaultServerConfig.disabledTools.length} tools disabled`
+                      : 'All available tools included'}
                   </div>
                 </div>
-                <span style={{
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '12px',
-                  background: 'rgba(239, 68, 68, 0.22)',
-                  color: '#ef4444',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                }}>
-                  30+ tools
-                </span>
+                {(() => {
+                  const enabledCount = 30 - (defaultServerConfig?.disabledTools?.length || 0);
+                  const severity = getToolCountSeverity(enabledCount);
+                  const color = getToolCountColor(severity);
+                  return (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '12px',
+                      background: `${color}22`,
+                      color: color,
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                    }}>
+                      {enabledCount} tools
+                      {severity !== 'optimal' && <ToolCountWarning count={enabledCount} />}
+                    </span>
+                  );
+                })()}
                 <button
                   onClick={() => viewServerConfig('default')}
                   style={{

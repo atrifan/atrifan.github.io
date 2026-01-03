@@ -22,6 +22,17 @@ export interface CustomMCPServer {
 }
 
 /**
+ * Configuration for the default MCP server
+ * Stores which tools are disabled (all tools enabled by default)
+ */
+export interface DefaultServerConfig {
+  /** Array of tool names that are disabled */
+  disabledTools: string[];
+  /** When the config was last updated */
+  updatedAt: string;
+}
+
+/**
  * State for the MCP composer page
  */
 export interface MCPComposerState {

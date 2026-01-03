@@ -9,7 +9,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
-import type { MCPTool, SaveModalType, CustomMCPServer } from '../types/mcp-composer';
+import type { MCPTool, SaveModalType, CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
 
 // Category icons
 const categoryIcons: Record<string, string> = {
@@ -33,19 +33,23 @@ const SaveModal: React.FC<{
   type: SaveModalType;
   toolCount: number;
   isEditMode?: boolean;
+  isDefaultServer?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-}> = ({ type, toolCount, isEditMode = false, onConfirm, onCancel }) => {
+}> = ({ type, toolCount, isEditMode = false, isDefaultServer = false, onConfirm, onCancel }) => {
   if (!type) return null;
 
-  const actionWord = isEditMode ? 'Updated' : 'Created';
-  const actionVerb = isEditMode ? 'Update' : 'Create';
+  const actionWord = isDefaultServer ? 'Saved' : isEditMode ? 'Updated' : 'Created';
+  const actionVerb = isDefaultServer ? 'Save' : isEditMode ? 'Update' : 'Create';
+  const serverType = isDefaultServer ? 'default server' : 'custom MCP server';
 
   const config = {
     success: {
       icon: '✅',
-      title: `MCP Server ${actionWord}!`,
-      message: `Your custom MCP server with ${toolCount} tools has been ${actionWord.toLowerCase()} successfully.`,
+      title: isDefaultServer ? 'Configuration Saved!' : `MCP Server ${actionWord}!`,
+      message: isDefaultServer
+        ? `Your default server configuration with ${toolCount} enabled tools has been saved successfully.`
+        : `Your custom MCP server with ${toolCount} tools has been ${actionWord.toLowerCase()} successfully.`,
       bgColor: 'rgba(16, 185, 129, 0.2)',
       borderColor: 'rgba(16, 185, 129, 0.5)',
       textColor: '#10b981',
@@ -54,8 +58,8 @@ const SaveModal: React.FC<{
     },
     warning: {
       icon: '⚠️',
-      title: 'Many Tools Selected',
-      message: `You have selected ${toolCount} tools. Having more than ${MCP_COMPOSER_CONFIG.thresholds.optimal} tools may cause AI assistants to have difficulty choosing the right tool, leading to potential collisions and unexpected behavior.`,
+      title: 'Many Tools Enabled',
+      message: `You have ${toolCount} tools enabled. Having more than ${MCP_COMPOSER_CONFIG.thresholds.optimal} tools may cause AI assistants to have difficulty choosing the right tool, leading to potential collisions and unexpected behavior.`,
       bgColor: 'rgba(245, 158, 11, 0.2)',
       borderColor: 'rgba(245, 158, 11, 0.5)',
       textColor: '#f59e0b',
@@ -65,7 +69,7 @@ const SaveModal: React.FC<{
     danger: {
       icon: '🚨',
       title: 'Too Many Tools!',
-      message: `You have selected ${toolCount} tools. Having more than ${MCP_COMPOSER_CONFIG.thresholds.warning} tools is strongly discouraged as it significantly increases the chance of tool collisions and poor AI performance. Consider creating multiple focused MCP servers instead.`,
+      message: `You have ${toolCount} tools enabled. Having more than ${MCP_COMPOSER_CONFIG.thresholds.warning} tools is strongly discouraged as it significantly increases the chance of tool collisions and poor AI performance.${!isDefaultServer ? ' Consider creating multiple focused MCP servers instead.' : ''}`,
       bgColor: 'rgba(239, 68, 68, 0.2)',
       borderColor: 'rgba(239, 68, 68, 0.5)',
       textColor: '#ef4444',
@@ -241,6 +245,7 @@ export const MCPComposerPage: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editServerId = searchParams.get('edit');
+  const isDefaultServer = editServerId === 'default';
 
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -251,6 +256,7 @@ export const MCPComposerPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showModal, setShowModal] = useState<SaveModalType>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [allToolNames, setAllToolNames] = useState<string[]>([]);
 
   // Check if feature is enabled
   useEffect(() => {
@@ -259,37 +265,60 @@ export const MCPComposerPage: React.FC = () => {
     }
   }, [router]);
 
-  // Load existing server data if editing
-  useEffect(() => {
-    if (editServerId) {
-      try {
-        const stored = localStorage.getItem('customMcpServers');
-        if (stored) {
-          const servers: CustomMCPServer[] = JSON.parse(stored);
-          const serverToEdit = servers.find(s => s.id === editServerId);
-          if (serverToEdit) {
-            setServerName(serverToEdit.name);
-            setSelectedTools(serverToEdit.tools);
-            setIsEditMode(true);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load server for editing:', error);
-      }
-    }
-  }, [editServerId]);
-
-  // Fetch tools
+  // Fetch tools first, then load server data
   useEffect(() => {
     fetch('/api/tools')
       .then(res => res.json())
       .then((data: ToolsResponse) => {
         setTools(data.tools);
         setCategories(data.categories);
+        const toolNames = data.tools.map((t: MCPTool) => t.name);
+        setAllToolNames(toolNames);
+
+        // Now load server data based on edit mode
+        if (editServerId) {
+          if (isDefaultServer) {
+            // Editing default server - load disabled tools config
+            try {
+              const defaultConfig = localStorage.getItem('defaultServerConfig');
+              if (defaultConfig) {
+                const config: DefaultServerConfig = JSON.parse(defaultConfig);
+                // Selected tools = all tools minus disabled tools
+                const disabledSet = new Set(config.disabledTools);
+                setSelectedTools(toolNames.filter((name: string) => !disabledSet.has(name)));
+              } else {
+                // No config yet, all tools are enabled
+                setSelectedTools(toolNames);
+              }
+            } catch (error) {
+              console.error('Failed to load default server config:', error);
+              setSelectedTools(toolNames);
+            }
+            setServerName('Default Server');
+            setIsEditMode(true);
+          } else {
+            // Editing custom server
+            try {
+              const stored = localStorage.getItem('customMcpServers');
+              if (stored) {
+                const servers: CustomMCPServer[] = JSON.parse(stored);
+                const serverToEdit = servers.find(s => s.id === editServerId);
+                if (serverToEdit) {
+                  setServerName(serverToEdit.name);
+                  setSelectedTools(serverToEdit.tools);
+                  setIsEditMode(true);
+                }
+              }
+            } catch (error) {
+              console.error('Failed to load server for editing:', error);
+            }
+          }
+        }
+
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [editServerId, isDefaultServer]);
 
   const filteredTools = tools.filter(tool => {
     const matchesCategory = selectedCategory === 'all' || tool.category === selectedCategory;
@@ -321,7 +350,12 @@ export const MCPComposerPage: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (selectedTools.length === 0 || !serverName.trim()) return;
+    // For default server, only need selected tools. For custom, also need name.
+    const canSave = isDefaultServer
+      ? selectedTools.length > 0
+      : selectedTools.length > 0 && serverName.trim();
+
+    if (!canSave) return;
 
     const severity = getToolCountSeverity(selectedTools.length);
     if (severity === 'optimal') {
@@ -334,7 +368,22 @@ export const MCPComposerPage: React.FC = () => {
   };
 
   const confirmSave = () => {
-    // For now, just store in localStorage (later will be API)
+    if (isDefaultServer) {
+      // Save default server config - store disabled tools
+      const selectedSet = new Set(selectedTools);
+      const disabledTools = allToolNames.filter(name => !selectedSet.has(name));
+
+      const config: DefaultServerConfig = {
+        disabledTools,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem('defaultServerConfig', JSON.stringify(config));
+      router.push('/dashboard');
+      return;
+    }
+
+    // For custom servers, store in localStorage (later will be API)
     const customServers: CustomMCPServer[] = JSON.parse(
       localStorage.getItem('customMcpServers') || '[]'
     );
@@ -442,7 +491,7 @@ export const MCPComposerPage: React.FC = () => {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            🔧 {isEditMode ? 'Edit MCP Server' : 'Create Custom MCP Server'}
+            🔧 {isDefaultServer ? 'Configure Default Server' : isEditMode ? 'Edit MCP Server' : 'Create Custom MCP Server'}
           </h1>
           <p style={{
             color: 'rgba(255,255,255,0.7)',
@@ -450,9 +499,11 @@ export const MCPComposerPage: React.FC = () => {
             margin: 0,
             lineHeight: 1.6,
           }}>
-            {isEditMode
-              ? 'Update your custom MCP server configuration. Add or remove tools as needed.'
-              : 'Compose a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.'}
+            {isDefaultServer
+              ? 'Toggle tools on or off for your default server. Disabled tools will not be available to AI assistants.'
+              : isEditMode
+                ? 'Update your custom MCP server configuration. Add or remove tools as needed.'
+                : 'Compose a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.'}
           </p>
         </div>
 
@@ -475,34 +526,36 @@ export const MCPComposerPage: React.FC = () => {
           </ul>
         </div>
 
-        {/* Server Name Input */}
-        <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: '16px',
-          padding: 'clamp(1rem, 3vw, 1.5rem)',
-          marginBottom: '1.5rem',
-        }}>
-          <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>
-            Server Name *
-          </label>
-          <input
-            type="text"
-            value={serverName}
-            onChange={(e) => setServerName(e.target.value)}
-            placeholder="e.g., Health & Fitness Tools"
-            style={{
-              width: '100%',
-              padding: '0.875rem 1rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(0,0,0,0.3)',
-              color: '#fff',
-              fontSize: '1rem',
-              outline: 'none',
-            }}
-          />
-        </div>
+        {/* Server Name Input - hidden for default server */}
+        {!isDefaultServer && (
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '16px',
+            padding: 'clamp(1rem, 3vw, 1.5rem)',
+            marginBottom: '1.5rem',
+          }}>
+            <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', display: 'block', marginBottom: '0.5rem' }}>
+              Server Name *
+            </label>
+            <input
+              type="text"
+              value={serverName}
+              onChange={(e) => setServerName(e.target.value)}
+              placeholder="e.g., Health & Fitness Tools"
+              style={{
+                width: '100%',
+                padding: '0.875rem 1rem',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(0,0,0,0.3)',
+                color: '#fff',
+                fontSize: '1rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
 
         {/* Selected Tools Summary */}
         <div style={{
@@ -525,25 +578,33 @@ export const MCPComposerPage: React.FC = () => {
             <span style={{ color: '#fff', fontWeight: 600 }}>Selected:</span>
             <ToolCountBadge count={selectedTools.length} />
           </div>
-          <button
-            onClick={handleSave}
-            disabled={selectedTools.length === 0 || !serverName.trim()}
-            style={{
-              padding: '0.5rem 1.25rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: selectedTools.length > 0 && serverName.trim()
-                ? 'linear-gradient(135deg, #667eea, #764ba2)'
-                : 'rgba(255,255,255,0.1)',
-              color: '#fff',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              cursor: selectedTools.length > 0 && serverName.trim() ? 'pointer' : 'not-allowed',
-              opacity: selectedTools.length > 0 && serverName.trim() ? 1 : 0.5,
-            }}
-          >
-            {isEditMode ? 'Update Server' : 'Create Server'}
-          </button>
+          {(() => {
+            // For default server, only need selected tools. For custom, also need name.
+            const canSave = isDefaultServer
+              ? selectedTools.length > 0
+              : selectedTools.length > 0 && serverName.trim();
+            return (
+              <button
+                onClick={handleSave}
+                disabled={!canSave}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: canSave
+                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                    : 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: canSave ? 'pointer' : 'not-allowed',
+                  opacity: canSave ? 1 : 0.5,
+                }}
+              >
+                {isDefaultServer ? 'Save Configuration' : isEditMode ? 'Update Server' : 'Create Server'}
+              </button>
+            );
+          })()}
         </div>
         {/* Search & Filter */}
         <div style={{
@@ -906,6 +967,7 @@ export const MCPComposerPage: React.FC = () => {
         type={showModal}
         toolCount={selectedTools.length}
         isEditMode={isEditMode}
+        isDefaultServer={isDefaultServer}
         onConfirm={() => {
           if (showModal === 'success') {
             confirmSave();
