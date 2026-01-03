@@ -451,7 +451,7 @@ export class BloodPage extends Component<object, BloodPageState> {
               BLOOD
             </h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1.1rem' }}>
-              Blood Donation & Compatibility Calculator
+              Blood Donation, Compatibility & Baby Blood Predictor
             </p>
           </View>
 

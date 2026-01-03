@@ -95,7 +95,11 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
         coordinates: lat && lon ? { lat, lon } : null
       });
       if (lat && lon) {
-        await this.fetchWeather(lat, lon);
+        // Fetch weather and elevation in parallel
+        await Promise.all([
+          this.fetchWeather(lat, lon),
+          this.fetchElevation(lat, lon)
+        ]);
       }
     } catch {
       this.setState({ loading: false, error: true, location: 'Your Location' });
@@ -110,11 +114,34 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       const city = geoData.city || geoData.locality || 'Your Location';
       const country = geoData.countryName || '';
       this.setState({ location: country ? `${city}, ${country}` : city });
-      await this.fetchWeather(lat, lon);
+      // Fetch weather and elevation in parallel
+      await Promise.all([
+        this.fetchWeather(lat, lon),
+        this.fetchElevation(lat, lon)
+      ]);
     } catch {
       // If reverse geocoding fails, still try to get weather
       this.setState({ location: 'Your Location' });
       await this.fetchWeather(lat, lon);
+    }
+  };
+
+  private fetchElevation = async (lat: number, lon: number) => {
+    // Skip if we already have GPS altitude
+    if (this.state.altitude !== null) return;
+
+    try {
+      // Use Open-Meteo's elevation API (free, no key required)
+      const elevRes = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+      const elevData = await elevRes.json();
+      if (elevData.elevation && Array.isArray(elevData.elevation) && elevData.elevation.length > 0) {
+        const elevation = elevData.elevation[0];
+        if (typeof elevation === 'number') {
+          this.setState({ altitude: Math.round(elevation) });
+        }
+      }
+    } catch {
+      // Silently fail - altitude is optional
     }
   };
 
@@ -125,9 +152,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       );
       const weatherData = await weatherRes.json();
       const current = weatherData.current;
-      // Open-Meteo provides elevation in the response
-      const elevation = weatherData.elevation;
-      this.setState((prevState) => ({
+      this.setState({
         weather: {
           temp: Math.round(current.temperature_2m),
           condition: this.getWeatherCondition(current.weather_code),
@@ -135,10 +160,8 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
           humidity: current.relative_humidity_2m,
           windSpeed: Math.round(current.wind_speed_10m),
         },
-        // Use GPS altitude if available, otherwise use API elevation
-        altitude: prevState.altitude !== null ? prevState.altitude : (elevation !== undefined ? Math.round(elevation) : null),
         loading: false,
-      }));
+      });
     } catch {
       this.setState({ loading: false, error: true });
     }

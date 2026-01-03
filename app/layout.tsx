@@ -82,18 +82,19 @@ export default function RootLayout({
         />
         <meta name="google-adsense-account" content="ca-pub-7299057534028491" />
 
-        {/* Google Analytics */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-QSNTL3PGRJ" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-QSNTL3PGRJ');
-            `,
-          }}
+        {/* Google Analytics - using next/script to avoid hydration mismatch */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-QSNTL3PGRJ"
+          strategy="afterInteractive"
         />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-QSNTL3PGRJ');
+          `}
+        </Script>
 
 
 
@@ -102,20 +103,16 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
         {/* Suppress hydration warnings from browser extensions */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Remove any extension-injected elements before React hydrates
-              if (typeof window !== 'undefined') {
-                document.addEventListener('DOMContentLoaded', function() {
-                  // Clean up extension injections
-                  const extensionElements = document.querySelectorAll('[data-extension], [class*="extension"]');
-                  extensionElements.forEach(el => el.remove());
-                });
-              }
-            `,
-          }}
-        />
+        <Script id="extension-cleanup" strategy="beforeInteractive">
+          {`
+            if (typeof window !== 'undefined') {
+              document.addEventListener('DOMContentLoaded', function() {
+                var extensionElements = document.querySelectorAll('[data-extension], [class*="extension"]');
+                extensionElements.forEach(function(el) { el.remove(); });
+              });
+            }
+          `}
+        </Script>
       </head>
       <body suppressHydrationWarning>
         <ClerkProvider
