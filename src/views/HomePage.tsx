@@ -1,7 +1,7 @@
 import { Component } from 'react';
 import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
-import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder } from '../config/tools.config';
+import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder, TOTAL_UI_TOOL_COUNT } from '../config/tools.config';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -430,7 +430,7 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.7,
               margin: '0 0 1.25rem',
             }}>
-              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>36+ online tools</strong> for health, finance, time, and fun.
+              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>{TOTAL_UI_TOOL_COUNT}+ online tools</strong> for health, finance, time, and fun.
               Web tools work instantly in your browser — no downloads, no sign-ups. <strong style={{ color: '#a78bfa' }}>Pro & Plus subscriptions</strong> unlock AI-powered MCP integration for use with Claude, ChatGPT, and other AI assistants.
             </p>
 

@@ -13,6 +13,7 @@ import { isBillingEnabled } from '../config/billing.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
 import type { CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
 import { ToolCountWarning } from './MCPComposerPage';
+import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 
 // Type for selected server view - null means default, string means custom server id
 type SelectedServerView = 'default' | string;
@@ -665,8 +666,8 @@ export const DashboardPage: React.FC = () => {
                 const selectedServer = getSelectedServer();
                 const serverName = selectedServer ? selectedServer.name : 'Default Server';
                 const isCustom = selectedServer !== null;
-                // Calculate tool count - for default server, subtract disabled tools from total (36)
-                const defaultToolCount = 36 - (defaultServerConfig?.disabledTools?.length || 0);
+                // Calculate tool count - for default server, subtract disabled tools from total
+                const defaultToolCount = TOTAL_TOOL_COUNT - (defaultServerConfig?.disabledTools?.length || 0);
                 const toolCount = selectedServer ? selectedServer.tools.length : defaultToolCount;
                 const hasDisabledTools = !isCustom && defaultServerConfig?.disabledTools?.length;
                 return (
@@ -691,8 +692,8 @@ export const DashboardPage: React.FC = () => {
                           {isCustom
                             ? `${toolCount} tools selected`
                             : hasDisabledTools
-                              ? `${toolCount} of 36 tools enabled`
-                              : 'All tools (36)'}
+                              ? `${toolCount} of ${TOTAL_TOOL_COUNT} tools enabled`
+                              : `All tools (${TOTAL_TOOL_COUNT})`}
                         </div>
                       </div>
                     </div>
@@ -939,7 +940,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
                 {(() => {
-                  const enabledCount = 36 - (defaultServerConfig?.disabledTools?.length || 0);
+                  const enabledCount = TOTAL_TOOL_COUNT - (defaultServerConfig?.disabledTools?.length || 0);
                   const severity = getToolCountSeverity(enabledCount);
                   const color = getToolCountColor(severity);
                   return (

@@ -400,3 +400,5 @@ export const getCategoryOrder = (): ToolCategory[] => {
   return ['health', 'money', 'time', 'utilities', 'fun'];
 };
 
+// Total count of available UI tools
+export const TOTAL_UI_TOOL_COUNT = TOOLS.filter(t => t.available).length;

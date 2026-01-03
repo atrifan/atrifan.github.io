@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
+import { isHigherOrEqualTo } from '@/src/config/billing.config';
 
 interface ApiKeyUser {
   userId: string;
@@ -10,29 +11,52 @@ interface ApiKeyUser {
 }
 
 /**
- * Check if user has Pro subscription using Clerk Billing
+ * Get user's plan from metadata
  */
-async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
+async function getUserPlan(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<string> {
   try {
+    const user = await client.users.getUser(userId);
+
+    // Check publicMetadata first
+    if (user.publicMetadata?.plan) {
+      return user.publicMetadata.plan as string;
+    }
+
+    // Check for active subscription
+    if (user.publicMetadata?.subscription === 'active') {
+      return 'pro';
+    }
+
+    // Check unsafeMetadata
+    if (user.unsafeMetadata?.plan) {
+      return user.unsafeMetadata.plan as string;
+    }
+
+    // Check organization memberships for plan
     const memberships = await client.users.getOrganizationMembershipList({ userId });
     for (const membership of memberships.data) {
       const org = await client.organizations.getOrganization({ organizationId: membership.organization.id });
-      if (org.publicMetadata?.plan === 'pro' || org.publicMetadata?.subscription === 'active') {
-        return true;
+      if (org.publicMetadata?.plan) {
+        return org.publicMetadata.plan as string;
+      }
+      if (org.publicMetadata?.subscription === 'active') {
+        return 'pro';
       }
     }
-    const user = await client.users.getUser(userId);
-    if (user.publicMetadata?.plan === 'pro' || user.publicMetadata?.subscription === 'active') {
-      return true;
-    }
-    if (user.unsafeMetadata?.plan === 'pro') {
-      return true;
-    }
-    return false;
+
+    return 'free';
   } catch (error) {
-    console.error('Error checking subscription:', error);
-    return false;
+    console.error('Error getting user plan:', error);
+    return 'free';
   }
+}
+
+/**
+ * Check if user has Pro or higher subscription
+ */
+async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
+  const plan = await getUserPlan(client, userId);
+  return isHigherOrEqualTo(plan, 'pro');
 }
 
 /**
@@ -175,7 +199,7 @@ export async function POST(
       id: null,
       error: {
         code: -32003,
-        message: 'MCP access requires Pro plan. Upgrade at tulzo.vercel.app/pricing'
+        message: 'MCP access is not allowed for free users. Upgrade at tulzo.vercel.app/pricing'
       }
     }, { status: 403 });
   }
@@ -217,8 +241,8 @@ export async function GET(
 
   if (!user.isSubscribed) {
     return NextResponse.json({
-      error: 'Pro plan required',
-      message: 'Upgrade to Pro at tulzo.vercel.app/pricing for MCP access',
+      error: 'MCP access not allowed',
+      message: 'MCP access is not allowed for free users. Upgrade at tulzo.vercel.app/pricing',
       currentPlan: user.plan,
     }, { status: 403 });
   }
