@@ -38,10 +38,8 @@ export const PricingPage: React.FC = () => {
 
         {/* Clerk PricingTable */}
         <section style={{
-          display: 'flex',
-          justifyContent: 'center',
           padding: '0 1rem',
-          maxWidth: '900px',
+          maxWidth: '1000px',
           margin: '0 auto',
         }}>
           <SignedIn>
@@ -51,38 +49,79 @@ export const PricingPage: React.FC = () => {
           </SignedIn>
           <SignedOut>
             <div style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '24px',
-              padding: 'clamp(2rem, 5vw, 3rem)',
-              textAlign: 'center',
-              maxWidth: '500px',
-              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
             }}>
-              <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700, margin: '0 0 1rem' }}>
-                View Our Plans
-              </h2>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 2rem' }}>
-                Sign in to see pricing details and subscribe to Pro for AI-powered tools and MCP access.
-              </p>
-              <SignInButton mode="modal">
-                <button style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '1rem 2.5rem',
-                  color: '#fff',
-                  fontWeight: 600,
-                  fontSize: '1.1rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-                }}>
-                  Sign In to Get Started
-                </button>
-              </SignInButton>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '24px',
+                padding: 'clamp(2rem, 5vw, 3rem)',
+                textAlign: 'center',
+                maxWidth: '500px',
+                width: '100%',
+              }}>
+                <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700, margin: '0 0 1rem' }}>
+                  View Our Plans
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 2rem' }}>
+                  Sign in to see pricing details and subscribe to Pro for AI-powered tools and MCP access.
+                </p>
+                <SignInButton mode="modal">
+                  <button style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '1rem 2.5rem',
+                    color: '#fff',
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                  }}>
+                    Sign In to Get Started
+                  </button>
+                </SignInButton>
+              </div>
             </div>
           </SignedOut>
         </section>
+
+        {/* CSS to make Clerk PricingTable horizontal */}
+        <style>{`
+          .pricing-table-wrapper {
+            width: 100%;
+          }
+          .pricing-table-wrapper .cl-pricingTable-root,
+          .pricing-table-wrapper .cl-pricingTableContainer,
+          .pricing-table-wrapper > div > div {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+            gap: 1.5rem !important;
+            align-items: stretch !important;
+          }
+          .pricing-table-wrapper .cl-pricingTableCard,
+          .pricing-table-wrapper > div > div > div {
+            flex: 1 1 300px !important;
+            max-width: 420px !important;
+            min-width: 280px !important;
+          }
+          @media (max-width: 700px) {
+            .pricing-table-wrapper .cl-pricingTable-root,
+            .pricing-table-wrapper .cl-pricingTableContainer,
+            .pricing-table-wrapper > div > div {
+              flex-direction: column !important;
+              align-items: center !important;
+            }
+            .pricing-table-wrapper .cl-pricingTableCard,
+            .pricing-table-wrapper > div > div > div {
+              max-width: 100% !important;
+              width: 100% !important;
+            }
+          }
+        `}</style>
 
         {/* FAQ Section */}
         <section style={{ maxWidth: '700px', margin: '4rem auto 0', padding: '0 1rem' }}>
