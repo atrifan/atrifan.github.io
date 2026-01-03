@@ -5,6 +5,7 @@ import { DaysIcon } from '../components/DaysIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -104,22 +105,31 @@ export class DaysPage extends Component<{}, DaysPageState> {
           )}
 
           {result && (
-            <div ref={this.resultsRef} id="days-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(8, 145, 178, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
-              {eventName && <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '0.5rem' }}>{result.isPast ? 'Since' : 'Until'} {eventName}</div>}
-              <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', fontWeight: 800, color: '#06b6d4', marginBottom: '0.5rem' }}>{result.days}</div>
-              <div style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>days {result.isPast ? 'ago' : 'to go'}</div>
-              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.1rem', marginBottom: '1.5rem' }}>{result.days} days, {result.hours} hours, {result.minutes} minutes</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Weeks</div>
-                  <div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>{result.weeks}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Months</div>
-                  <div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>{result.months}</div>
+            <>
+              <div ref={this.resultsRef} id="days-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(8, 145, 178, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                {eventName && <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '0.5rem' }}>{result.isPast ? 'Since' : 'Until'} {eventName}</div>}
+                <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', fontWeight: 800, color: '#06b6d4', marginBottom: '0.5rem' }}>{result.days}</div>
+                <div style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>days {result.isPast ? 'ago' : 'to go'}</div>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.1rem', marginBottom: '1.5rem' }}>{result.days} days, {result.hours} hours, {result.minutes} minutes</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Weeks</div>
+                    <div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>{result.weeks}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Months</div>
+                    <div style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700 }}>{result.months}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="Countdown - Tulzo"
+                  text={`${result.days} days ${result.isPast ? 'since' : 'until'} ${eventName || 'my event'}! ⏳`}
+                />
+              </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>

@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { AlertModal } from '../components/AlertModal';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -159,6 +160,13 @@ export class AgePage extends Component<{}, AgePageState> {
               <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(244,114,182,0.2)', borderRadius: '12px', textAlign: 'center' }}>
                 <div style={{ color: '#f472b6', fontWeight: 600 }}>🎉 Next Birthday</div>
                 <div style={{ color: '#fff', fontSize: '1.1rem' }}>{result.daysUntilBirthday} days away ({result.nextBirthday.toLocaleDateString()})</div>
+              </div>
+              <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="My Age - Tulzo"
+                  text={`I'm ${result.years} years old! That's ${result.totalDays.toLocaleString()} days of life 🎂`}
+                />
               </div>
             </div>
           )}

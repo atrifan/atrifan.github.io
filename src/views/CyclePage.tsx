@@ -5,6 +5,7 @@ import { CycleIcon } from '../components/CycleIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -275,59 +276,69 @@ export class CyclePage extends Component<object, CyclePageState> {
     const titleStyle = { fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' };
 
     return (
-      <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px' }}>
+      <div style={{ width: '100%', maxWidth: '600px' }}>
         <AdBanner slot={ADS_CONFIG.slots.cycleResults} format="horizontal" />
 
-        {/* Current Phase */}
-        <div style={{ ...cardStyle, background: `linear-gradient(135deg, ${phaseInfo.color}33 0%, ${phaseInfo.color}1a 100%)`, border: `1px solid ${phaseInfo.color}66` }}>
-          <div style={{ ...titleStyle, color: phaseInfo.color }}>{phaseInfo.emoji} Current Phase</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.25rem' }}>{phaseInfo.name}</div>
-          <div style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>{phaseInfo.desc}</div>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Day {result.cycleDay} of your cycle</div>
-        </div>
-
-        {/* Key Dates Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
-          {/* Next Period */}
-          <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #ef444433 0%, #ef44441a 100%)', border: '1px solid #ef444466' }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🩸</div>
-            <div style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.85rem' }}>Next Period</div>
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.nextPeriodStart)}</div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilPeriod <= 0 ? 'Today!' : `In ${daysUntilPeriod} days`}</div>
+        <div ref={this.resultsRef}>
+          {/* Current Phase */}
+          <div style={{ ...cardStyle, background: `linear-gradient(135deg, ${phaseInfo.color}33 0%, ${phaseInfo.color}1a 100%)`, border: `1px solid ${phaseInfo.color}66` }}>
+            <div style={{ ...titleStyle, color: phaseInfo.color }}>{phaseInfo.emoji} Current Phase</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.25rem' }}>{phaseInfo.name}</div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>{phaseInfo.desc}</div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Day {result.cycleDay} of your cycle</div>
           </div>
 
-          {/* Ovulation */}
-          <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #f59e0b33 0%, #f59e0b1a 100%)', border: '1px solid #f59e0b66' }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🥚</div>
-            <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '0.85rem' }}>Ovulation</div>
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.ovulationDate)}</div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilOvulation <= 0 ? 'Today!' : daysUntilOvulation < 0 ? 'Passed' : `In ${daysUntilOvulation} days`}</div>
-          </div>
-        </div>
-
-        {/* Fertile Window */}
-        <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #22c55e33 0%, #22c55e1a 100%)', border: '1px solid #22c55e66' }}>
-          <div style={{ ...titleStyle, color: '#22c55e' }}>💚 Fertile Window (High Chance of Conception)</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div>
-              <div style={{ color: '#fff', fontWeight: 700 }}>{this.formatDate(result.fertileWindowStart)} → {this.formatDate(result.fertileWindowEnd)}</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{daysUntilFertile <= 0 ? 'Currently in fertile window' : `Starts in ${daysUntilFertile} days`}</div>
+          {/* Key Dates Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+            {/* Next Period */}
+            <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #ef444433 0%, #ef44441a 100%)', border: '1px solid #ef444466' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🩸</div>
+              <div style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.85rem' }}>Next Period</div>
+              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.nextPeriodStart)}</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilPeriod <= 0 ? 'Today!' : `In ${daysUntilPeriod} days`}</div>
             </div>
-            <div style={{ background: '#22c55e', color: '#fff', padding: '0.5rem 1rem', borderRadius: '20px', fontWeight: 700, fontSize: '0.85rem' }}>
-              ~6 days
+
+            {/* Ovulation */}
+            <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #f59e0b33 0%, #f59e0b1a 100%)', border: '1px solid #f59e0b66' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🥚</div>
+              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '0.85rem' }}>Ovulation</div>
+              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.ovulationDate)}</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilOvulation <= 0 ? 'Today!' : daysUntilOvulation < 0 ? 'Passed' : `In ${daysUntilOvulation} days`}</div>
             </div>
           </div>
+
+          {/* Fertile Window */}
+          <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #22c55e33 0%, #22c55e1a 100%)', border: '1px solid #22c55e66' }}>
+            <div style={{ ...titleStyle, color: '#22c55e' }}>💚 Fertile Window (High Chance of Conception)</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700 }}>{this.formatDate(result.fertileWindowStart)} → {this.formatDate(result.fertileWindowEnd)}</div>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{daysUntilFertile <= 0 ? 'Currently in fertile window' : `Starts in ${daysUntilFertile} days`}</div>
+              </div>
+              <div style={{ background: '#22c55e', color: '#fff', padding: '0.5rem 1rem', borderRadius: '20px', fontWeight: 700, fontSize: '0.85rem' }}>
+                ~6 days
+              </div>
+            </div>
+          </div>
+
+          {/* Info Section */}
+          <div style={{ ...cardStyle, background: 'rgba(255,255,255,0.05)' }}>
+            <div style={{ ...titleStyle, color: '#a78bfa' }}>📚 How This Works</div>
+            <ul style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', lineHeight: 1.7, margin: 0, paddingLeft: '1.25rem' }}>
+              <li><strong>Ovulation</strong> typically occurs ~14 days before your next period (luteal phase)</li>
+              <li><strong>Fertile window</strong> spans 5 days before ovulation (sperm survival) + ovulation day + 1 day after</li>
+              <li><strong>Peak fertility</strong> is 1-2 days before and on ovulation day</li>
+              <li>Cycles can vary ±7 days even in regular cycles</li>
+            </ul>
+          </div>
         </div>
 
-        {/* Info Section */}
-        <div style={{ ...cardStyle, background: 'rgba(255,255,255,0.05)' }}>
-          <div style={{ ...titleStyle, color: '#a78bfa' }}>📚 How This Works</div>
-          <ul style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', lineHeight: 1.7, margin: 0, paddingLeft: '1.25rem' }}>
-            <li><strong>Ovulation</strong> typically occurs ~14 days before your next period (luteal phase)</li>
-            <li><strong>Fertile window</strong> spans 5 days before ovulation (sperm survival) + ovulation day + 1 day after</li>
-            <li><strong>Peak fertility</strong> is 1-2 days before and on ovulation day</li>
-            <li>Cycles can vary ±7 days even in regular cycles</li>
-          </ul>
+        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <ShareResults
+            targetRef={this.resultsRef}
+            title="My Cycle Tracker - Tulzo"
+            text={`Next period: ${this.formatDate(result.nextPeriodStart)} | Ovulation: ${this.formatDate(result.ovulationDate)} 🌸`}
+          />
         </div>
       </div>
     );

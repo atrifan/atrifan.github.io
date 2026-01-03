@@ -5,6 +5,7 @@ import { SleepIcon } from '../components/SleepIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -321,6 +322,13 @@ export class SleepPage extends Component<{}, SleepPageState> {
                   ? `Each sleep cycle is ~${rec.cycleLength} min. Waking between cycles helps you feel refreshed.`
                   : `Children have shorter sleep cycles (~${rec.cycleLength} min) and need more total sleep.`}
               </p>
+              <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="My Sleep Schedule - Tulzo"
+                  text={`Optimal sleep times for ${mode === 'wakeUp' ? 'waking at' : 'sleeping at'} ${mode === 'wakeUp' ? wakeTime : sleepTime} 😴`}
+                />
+              </div>
             </div>
           )}
 

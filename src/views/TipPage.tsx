@@ -5,6 +5,7 @@ import { TipIcon } from '../components/TipIcon';
 import { Disclaimer } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -156,6 +157,13 @@ export class TipPage extends Component<{}, TipPageState> {
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                   {splitCount > 1 && <span style={{ color: '#f59e0b', fontWeight: 700 }}>${perPerson.toFixed(2)} each</span>}
+                </div>
+                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                  <ShareResults
+                    targetRef={this.resultRef}
+                    title="Tip Calculator - Tulzo"
+                    text={`Bill: $${bill.toFixed(2)} | Tip: ${tipPercent}% ($${tipAmount.toFixed(2)}) | Total: $${total.toFixed(2)} 💰`}
+                  />
                 </div>
               </div>
             </div>

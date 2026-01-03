@@ -6,6 +6,7 @@ import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { inputStyles } from '../styles/inputStyles';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -297,30 +298,39 @@ export class ZonePage extends Component<{}, ZonePageState> {
           )}
 
           {hasConverted && (
-            <div ref={this.resultsRef} id="zone-results" style={{ width: '100%', maxWidth: '700px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(29, 78, 216, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
-              <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem', textAlign: 'center' }}>📍 {inputTime} in {fromTz?.city || fromZone}</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {targetZones.map((tzId, index) => {
-                  const tz = TIMEZONES.find(t => t.id === tzId);
-                  if (!tz) return null;
-                  const convertedTime = this.convertTime(fromOffset, tz.offset, hours, minutes);
-                  const offsetDiff = tz.offset - fromOffset;
-                  const offsetStr = offsetDiff >= 0 ? `+${offsetDiff}h` : `${offsetDiff}h`;
-                  return (
-                    <div key={index} style={{ background: gradient, borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>{tz.city}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>{tz.id.startsWith('UTC') ? tz.id : tz.label.split('(')[1]?.replace(')', '') || ''}</div>
+            <>
+              <div ref={this.resultsRef} id="zone-results" style={{ width: '100%', maxWidth: '700px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(29, 78, 216, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
+                <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem', textAlign: 'center' }}>📍 {inputTime} in {fromTz?.city || fromZone}</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {targetZones.map((tzId, index) => {
+                    const tz = TIMEZONES.find(t => t.id === tzId);
+                    if (!tz) return null;
+                    const convertedTime = this.convertTime(fromOffset, tz.offset, hours, minutes);
+                    const offsetDiff = tz.offset - fromOffset;
+                    const offsetStr = offsetDiff >= 0 ? `+${offsetDiff}h` : `${offsetDiff}h`;
+                    return (
+                      <div key={index} style={{ background: gradient, borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>{tz.city}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>{tz.id.startsWith('UTC') ? tz.id : tz.label.split('(')[1]?.replace(')', '') || ''}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.5rem' }}>{convertedTime}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{offsetStr} from source</div>
+                        </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.5rem' }}>{convertedTime}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{offsetStr} from source</div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="Timezone Converter - Tulzo"
+                  text={`${inputTime} in ${fromTz?.city || fromZone} converted to ${targetZones.length} timezone(s) 🌍`}
+                />
+              </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '700px', marginTop: '2rem' }}>

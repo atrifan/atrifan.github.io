@@ -5,6 +5,7 @@ import { FlipIcon } from '../components/FlipIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -230,12 +231,21 @@ export class FlipPage extends Component<{}, FlipPageState> {
           )}
 
           {history.length > 0 && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', textAlign: 'left' }}>
-                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>History</div>
-                {history.map((h, i) => <div key={i} style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', padding: '0.25rem 0' }}>{h}</div>)}
+            <>
+              <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', textAlign: 'left' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>History</div>
+                  {history.map((h, i) => <div key={i} style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', padding: '0.25rem 0' }}>{h}</div>)}
+                </div>
+              </View>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultRef}
+                  title={mode === 'coin' ? 'Coin Flip - Tulzo' : 'Dice Roll - Tulzo'}
+                  text={mode === 'coin' ? `I flipped ${coinResult?.toUpperCase()}! 🪙` : `I rolled ${diceResults.join(', ')} (Total: ${diceResults.reduce((a, b) => a + b, 0)}) 🎲`}
+                />
               </div>
-            </View>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>

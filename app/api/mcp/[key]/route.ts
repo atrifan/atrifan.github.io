@@ -1,12 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
-import { decryptApiKey, isApiKeyExpired, ApiKeyPayload } from '@/src/utils/apiKeyEncryption';
+import { decryptApiKey, isApiKeyExpired } from '@/src/utils/apiKeyEncryption';
 
 interface ApiKeyUser {
   userId: string;
   plan: string;
   email?: string;
   isSubscribed: boolean;
+}
+
+/**
+ * Check if user has Pro subscription using Clerk Billing
+ * This checks the user's organization memberships and subscriptions
+ */
+async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
+  try {
+    // Get user's organization memberships to check for billing subscriptions
+    const memberships = await client.users.getOrganizationMembershipList({ userId });
+
+    // Check if any organization has an active Pro subscription
+    for (const membership of memberships.data) {
+      const org = await client.organizations.getOrganization({ organizationId: membership.organization.id });
+      // Check organization's subscription status via public metadata
+      if (org.publicMetadata?.plan === 'pro' || org.publicMetadata?.subscription === 'active') {
+        return true;
+      }
+    }
+
+    // Also check user's own public metadata for individual subscriptions
+    const user = await client.users.getUser(userId);
+    if (user.publicMetadata?.plan === 'pro' || user.publicMetadata?.subscription === 'active') {
+      return true;
+    }
+
+    // Fallback: Check unsafeMetadata for backwards compatibility during migration
+    if (user.unsafeMetadata?.plan === 'pro') {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+    return false;
+  }
 }
 
 /**
@@ -34,9 +70,9 @@ async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; e
       return { user: null, error: 'User not found. Account may have been deleted.' };
     }
 
-    // Step 4: Check current subscription status from user metadata
-    const currentPlan = (user.unsafeMetadata?.plan as string) || 'free';
-    const isSubscribed = currentPlan === 'pro';
+    // Step 4: Check current subscription status using Clerk Billing
+    const isSubscribed = await checkProSubscription(client, payload.userId);
+    const currentPlan = isSubscribed ? 'pro' : 'free';
 
     // Step 5: Verify the stored API key matches (for revocation support)
     const storedKey = user.unsafeMetadata?.apiKey as string | undefined;

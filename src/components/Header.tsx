@@ -3,6 +3,7 @@
 import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useState } from 'react';
+import { isBillingEnabled } from '../config/billing.config';
 
 // Inline logo SVG for header
 const HeaderLogo = () => (
@@ -49,9 +50,11 @@ export const Header: React.FC = () => {
 
         {/* Desktop Nav */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }} className="desktop-nav">
-          <Link href="/pricing" style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
-            Pricing
-          </Link>
+          {isBillingEnabled() && (
+            <Link href="/pricing" style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+              Pricing
+            </Link>
+          )}
           <SignedIn>
             <Link href="/dashboard" style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
               Dashboard
@@ -106,9 +109,11 @@ export const Header: React.FC = () => {
           gap: '1rem',
           borderTop: '1px solid rgba(255,255,255,0.1)',
         }}>
-          <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
-            Pricing
-          </Link>
+          {isBillingEnabled() && (
+            <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
+              Pricing
+            </Link>
+          )}
           <SignedIn>
             <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
               Dashboard

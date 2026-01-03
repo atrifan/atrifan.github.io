@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { View } from '@adobe/react-spectrum';
-import { useUser, useClerk } from '@clerk/nextjs';
+import { useUser, useClerk, useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
+import { isBillingEnabled } from '../config/billing.config';
 
 // Dashboard Icon
 const DashboardIcon = () => (
@@ -71,15 +72,16 @@ const getGreeting = (): { text: string; emoji: string } => {
 export const DashboardPage: React.FC = () => {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { has } = useAuth();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [greeting, setGreeting] = useState(getGreeting());
 
-  // User's plan (stored in metadata)
-  const userPlan = (user?.unsafeMetadata?.plan as string) || 'free';
-  const isPro = userPlan === 'pro';
+  // Check if user has Pro plan using Clerk Billing's has() helper
+  // This checks for an active subscription with the 'pro' plan feature
+  const isPro = has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
   // Update greeting every minute
   useEffect(() => {
@@ -174,8 +176,8 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Upgrade Banner - Only for Free users */}
-        {!isPro && (
+        {/* Upgrade Banner - Only for Free users when billing is enabled */}
+        {!isPro && isBillingEnabled() && (
           <div style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
             borderRadius: '16px',
@@ -233,22 +235,55 @@ export const DashboardPage: React.FC = () => {
             {isPro ? '⭐' : '🆓'}
           </div>
         }>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{
-              display: 'inline-block',
-              padding: '0.35rem 1rem',
-              borderRadius: '20px',
-              background: isPro ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              textTransform: 'uppercase',
-            }}>
-              {isPro ? 'Pro' : 'Free'}
-            </span>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: 0 }}>
-              {isPro ? 'Full access to all features' : 'Basic tools only'}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{
+                display: 'inline-block',
+                padding: '0.35rem 1rem',
+                borderRadius: '20px',
+                background: isPro ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                textTransform: 'uppercase',
+              }}>
+                {isPro ? 'Pro' : 'Free'}
+              </span>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: 0 }}>
+                {isPro ? 'Full access to all features' : 'Basic tools only'}
+              </p>
+            </div>
+            {isPro && isBillingEnabled() ? (
+              <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                <button style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}>
+                  Manage Subscription
+                </button>
+              </Link>
+            ) : !isPro && isBillingEnabled() ? (
+              <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                <button style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  color: '#fff',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}>
+                  Upgrade to Pro
+                </button>
+              </Link>
+            ) : null}
           </div>
         </DashboardCard>
 

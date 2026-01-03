@@ -1,10 +1,11 @@
-import { Component } from 'react';
+import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
 import { SpinIcon } from '../components/SpinIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -18,6 +19,8 @@ interface SpinPageState {
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
 export class SpinPage extends Component<{}, SpinPageState> {
+  private resultsRef: RefObject<HTMLDivElement> = createRef();
+
   constructor(props: {}) {
     super(props);
     this.state = { options: 'Pizza\nBurger\nSushi\nTacos\nSalad\nPasta', rotation: 0, isSpinning: false, result: null };
@@ -123,10 +126,19 @@ export class SpinPage extends Component<{}, SpinPageState> {
           )}
 
           {result && (
-            <View id="spin-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem' }}>Winner:</div>
-              <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#ef4444' }}>🎉 {result}</div>
-            </View>
+            <>
+              <div id="spin-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem' }}>Winner:</div>
+                <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#ef4444' }}>🎉 {result}</div>
+              </div>
+              <div style={{ marginTop: '1rem' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="Wheel Spinner - Tulzo"
+                  text={`The wheel chose: ${result}! 🎡`}
+                />
+              </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>

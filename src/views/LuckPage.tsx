@@ -1,9 +1,10 @@
-import { Component } from 'react';
+import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { LuckIcon } from '../components/LuckIcon';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -19,6 +20,7 @@ const MAX_INT = 2147483647;
 
 export class LuckPage extends Component<{}, LuckPageState> {
   private holdInterval: number | null = null;
+  private resultsRef: RefObject<HTMLDivElement> = createRef();
 
   constructor(props: {}) {
     super(props);
@@ -207,13 +209,22 @@ export class LuckPage extends Component<{}, LuckPageState> {
 
           {/* Result Display */}
           {result !== null && (
-            <View id="luck-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Your lucky number is...</p>
-              <p style={{ fontSize: 'clamp(3rem, 12vw, 5rem)', fontWeight: 900, color: '#fff', margin: '0 0 0.5rem 0', wordBreak: 'break-all' }}>{result.toLocaleString()}</p>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0' }}>
-                Range: 1 - {displayMax.toLocaleString()} • Held for {(holdDuration / 1000).toFixed(2)}s
-              </p>
-            </View>
+            <>
+              <div id="luck-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Your lucky number is...</p>
+                <p style={{ fontSize: 'clamp(3rem, 12vw, 5rem)', fontWeight: 900, color: '#fff', margin: '0 0 0.5rem 0', wordBreak: 'break-all' }}>{result.toLocaleString()}</p>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0' }}>
+                  Range: 1 - {displayMax.toLocaleString()} • Held for {(holdDuration / 1000).toFixed(2)}s
+                </p>
+              </div>
+              <div style={{ marginTop: '1rem' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="Lucky Number - Tulzo"
+                  text={`My lucky number is ${result.toLocaleString()}! 🍀`}
+                />
+              </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>

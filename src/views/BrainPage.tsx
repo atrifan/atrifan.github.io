@@ -1,10 +1,11 @@
-import { Component } from 'react';
+import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
 import { BrainIcon } from '../components/BrainIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 
@@ -43,6 +44,8 @@ interface BrainPageState {
 }
 
 export class BrainPage extends Component<{}, BrainPageState> {
+  private resultsRef: RefObject<HTMLDivElement> = createRef();
+
   constructor(props: {}) {
     super(props);
     this.state = {
@@ -199,7 +202,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
             const { label, emoji, color } = this.getIQLabel(iq);
             return (
               <View id="brain-results" UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
-                <div style={{ background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                <div ref={this.resultsRef} style={{ background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                   <p style={{ fontSize: '1.2rem', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem' }}>Your Estimated IQ</p>
                   <p style={{ fontSize: 'clamp(4rem, 15vw, 6rem)', fontWeight: 900, color, margin: '0', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{iq}</p>
                   <p style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{emoji}</p>
@@ -220,7 +223,16 @@ export class BrainPage extends Component<{}, BrainPageState> {
                     You scored higher than approximately <strong style={{ color: '#fff' }}>{percentile}%</strong> of the population based on this quick assessment.
                   </p>
 
-                  <button onClick={this.restartTest} style={{ padding: '1rem 2rem', fontSize: '1.1rem', fontWeight: 700, background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>Try Again 🔄</button>
+                  <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button onClick={this.restartTest} style={{ padding: '1rem 2rem', fontSize: '1.1rem', fontWeight: 700, background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>Try Again 🔄</button>
+                  </div>
+                </div>
+                <div style={{ marginTop: '1rem' }}>
+                  <ShareResults
+                    targetRef={this.resultsRef}
+                    title="My IQ Score - Tulzo"
+                    text={`I scored ${iq} on the Tulzo IQ test! ${emoji} That's in the top ${100 - percentile}% 🧠`}
+                  />
                 </div>
               </View>
             );

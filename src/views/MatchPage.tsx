@@ -1,10 +1,11 @@
-import { Component } from 'react';
+import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { MatchIcon } from '../components/MatchIcon';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { ZODIAC_SIGNS, ZodiacSign, getSignFromDate, getCompatibility, getSignInfo, getCompatibilityMessage } from '../data/zodiac';
@@ -24,6 +25,8 @@ interface MatchPageState {
 }
 
 export class MatchPage extends Component<{}, MatchPageState> {
+  private resultsRef: RefObject<HTMLDivElement> = createRef();
+
   constructor(props: {}) {
     super(props);
     this.state = {
@@ -135,22 +138,31 @@ export class MatchPage extends Component<{}, MatchPageState> {
 
           {/* Results */}
           {result && (
-            <View id="match-results" UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign1).symbol}</span>
-                  <p style={{ color: '#fff', fontWeight: 600, margin: 0 }}>{getSignInfo(result.sign1).name}</p>
+            <>
+              <div id="match-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign1).symbol}</span>
+                    <p style={{ color: '#fff', fontWeight: 600, margin: 0 }}>{getSignInfo(result.sign1).name}</p>
+                  </div>
+                  <span style={{ fontSize: '2rem' }}>❤️</span>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign2).symbol}</span>
+                    <p style={{ color: '#fff', fontWeight: 600, margin: 0 }}>{getSignInfo(result.sign2).name}</p>
+                  </div>
                 </div>
-                <span style={{ fontSize: '2rem' }}>❤️</span>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign2).symbol}</span>
-                  <p style={{ color: '#fff', fontWeight: 600, margin: 0 }}>{getSignInfo(result.sign2).name}</p>
-                </div>
+                <p style={{ fontSize: 'clamp(4rem, 15vw, 6rem)', fontWeight: 900, color: getCompatibilityMessage(result.percentage).color, margin: '0 0 0.5rem 0', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{result.percentage}%</p>
+                <p style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{getCompatibilityMessage(result.percentage).emoji}</p>
+                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', margin: '0' }}>{getCompatibilityMessage(result.percentage).message}</p>
               </div>
-              <p style={{ fontSize: 'clamp(4rem, 15vw, 6rem)', fontWeight: 900, color: getCompatibilityMessage(result.percentage).color, margin: '0 0 0.5rem 0', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{result.percentage}%</p>
-              <p style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{getCompatibilityMessage(result.percentage).emoji}</p>
-              <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', margin: '0' }}>{getCompatibilityMessage(result.percentage).message}</p>
-            </View>
+              <div style={{ marginTop: '1rem' }}>
+                <ShareResults
+                  targetRef={this.resultsRef}
+                  title="Zodiac Compatibility - Tulzo"
+                  text={`${getSignInfo(result.sign1).name} + ${getSignInfo(result.sign2).name} = ${result.percentage}% compatible! ${getCompatibilityMessage(result.percentage).emoji}`}
+                />
+              </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
