@@ -12,9 +12,9 @@ export interface SEOConfig {
 
 export const SEO_DATA: Record<string, SEOConfig> = {
   home: {
-    title: 'Tulzo - Free Online Tools & Calculators | Health, Finance, Utilities, Quizzes',
-    description: 'Free online tools: IQ test, cat or dog person quiz, sleep calculator, tip calculator, coin flip, wheel spinner, age calculator, timezone converter & more. 100% free, no signup required.',
-    keywords: ['free online tools', 'calculators', 'IQ test', 'cat or dog person quiz', 'sleep calculator', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter', 'body percentile', 'decision maker', 'personality quiz'],
+    title: 'Tulzo - 20+ Free Online Tools & Calculators | Health, Finance, Fun & More',
+    description: 'Free online tools: sleep calculator, weight loss planner, blood type compatibility, IQ test, period tracker, tip calculator, coin flip, wheel spinner, trading risk calculator, timezone converter, decision maker & more. 100% free, no signup, works with AI assistants via MCP.',
+    keywords: ['free online tools', 'calculators', 'IQ test', 'cat or dog person quiz', 'sleep calculator', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter', 'body percentile', 'decision maker', 'personality quiz', 'blood type calculator', 'period tracker', 'weight loss calculator', 'trading calculator', 'MCP server', 'AI tools'],
   },
   sleep: {
     title: 'Sleep Cycle Calculator - Find Best Bedtime & Wake Time | Tulzo',
@@ -125,6 +125,11 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     title: 'Position Size Calculator - Trading Risk Management | Tulzo',
     description: 'Free position size calculator for traders. Calculate optimal position size based on risk percentage, stop loss, and account size. Manage trading risk effectively.',
     keywords: ['position size calculator', 'trading calculator', 'risk management', 'stop loss calculator', 'forex calculator', 'stock position size', 'risk reward'],
+  },
+  blood: {
+    title: 'Blood Type Calculator - Donation, Compatibility & Baby Blood | Tulzo',
+    description: 'Free blood calculator: Check donation eligibility, blood type compatibility for transfusions, and predict your baby\'s blood type based on genetics. Includes Rh incompatibility warnings.',
+    keywords: ['blood type calculator', 'blood donation eligibility', 'blood compatibility chart', 'baby blood type calculator', 'Rh incompatibility', 'blood type genetics', 'who can I donate blood to', 'universal donor', 'blood transfusion compatibility'],
   },
 };
 

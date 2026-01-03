@@ -126,6 +126,11 @@ export const ADS_CONFIG = {
     riskResults: '4846218639',
     riskFooter: '6186386313',
 
+    // BLOOD page ads (Blood Donation & Compatibility Calculator)
+    bloodTop: '4959034746',
+    bloodResults: '3908062551',
+    bloodFooter: '2008657523',
+
     // PRICING page ads
     pricingTop: '6996372276',
     pricingFooter: '2643367756',

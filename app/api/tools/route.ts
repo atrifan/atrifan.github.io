@@ -425,6 +425,80 @@ const TOOLS_DOCUMENTATION = [
       properties: { iqScore: { type: 'integer' }, category: { type: 'string' }, percentile: { type: 'number' } },
     },
   },
+  {
+    name: 'blood_donation_eligibility',
+    description: 'Check if a person is eligible to donate blood based on age, weight, and height. Returns donation amount and safety guidelines.',
+    category: 'Health & Fitness',
+    hasWidget: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        age: { type: 'number', description: 'Age in years' },
+        weight: { type: 'number', description: 'Weight in kilograms' },
+        height: { type: 'number', description: 'Height in centimeters' },
+        gender: { type: 'string', enum: ['male', 'female'], description: 'Gender for blood volume calculation' },
+      },
+      required: ['age', 'weight', 'height', 'gender'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        eligible: { type: 'boolean', description: 'Whether the person can donate blood' },
+        amount: { type: 'number', description: 'Recommended donation amount in ml' },
+        bloodVolume: { type: 'number', description: 'Estimated total blood volume in liters' },
+        warnings: { type: 'array', items: { type: 'string' } },
+        tips: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+  {
+    name: 'blood_type_compatibility',
+    description: 'Check blood type compatibility for donation and receiving. Shows who you can donate to and receive from.',
+    category: 'Health & Fitness',
+    hasWidget: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'ABO blood type' },
+        rhFactor: { type: 'string', enum: ['+', '-'], description: 'Rh factor (positive or negative)' },
+      },
+      required: ['bloodType', 'rhFactor'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        fullBloodType: { type: 'string', description: 'Full blood type (e.g., A+, O-)' },
+        canDonateTo: { type: 'array', items: { type: 'string' } },
+        canReceiveFrom: { type: 'array', items: { type: 'string' } },
+        isUniversalDonor: { type: 'boolean' },
+        isUniversalRecipient: { type: 'boolean' },
+      },
+    },
+  },
+  {
+    name: 'baby_blood_type',
+    description: 'Predict possible blood types for a baby based on parents blood types. Also checks for Rh incompatibility risk.',
+    category: 'Health & Fitness',
+    hasWidget: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fatherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Father\'s ABO blood type' },
+        fatherRh: { type: 'string', enum: ['+', '-'], description: 'Father\'s Rh factor' },
+        motherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Mother\'s ABO blood type' },
+        motherRh: { type: 'string', enum: ['+', '-'], description: 'Mother\'s Rh factor' },
+      },
+      required: ['fatherBloodType', 'fatherRh', 'motherBloodType', 'motherRh'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        possibleTypes: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, percentage: { type: 'number' } } } },
+        rhIncompatibilityRisk: { type: 'boolean' },
+        rhWarning: { type: 'string' },
+      },
+    },
+  },
 ];
 
 export async function GET() {

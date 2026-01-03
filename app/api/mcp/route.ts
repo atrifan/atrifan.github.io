@@ -160,6 +160,49 @@ async function logConnection(userId: string, authMethod: AuthMethod, clientIp: s
   }
 }
 
+// GA4 Measurement Protocol configuration
+const GA4_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || 'G-QSNTL3PGRJ';
+const GA4_API_SECRET = process.env.GA4_API_SECRET; // Server-side secret for Measurement Protocol
+
+/**
+ * Track MCP events to Google Analytics using Measurement Protocol
+ * This allows server-side tracking of API calls
+ */
+async function trackMCPEvent(
+  eventName: string,
+  params: Record<string, string | number | boolean>,
+  clientId?: string
+) {
+  // Only track if API secret is configured
+  if (!GA4_API_SECRET) {
+    return;
+  }
+
+  try {
+    const payload = {
+      client_id: clientId || `mcp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      events: [{
+        name: eventName,
+        params: {
+          ...params,
+          engagement_time_msec: 100,
+          session_id: Date.now().toString(),
+        },
+      }],
+    };
+
+    // Fire and forget - don't await
+    fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // Silently ignore errors
+    });
+  } catch {
+    // Silently ignore errors
+  }
+}
+
 /**
  * Extract auth from request headers
  */
@@ -256,6 +299,9 @@ const TOOL_INVOCATION_MESSAGES: Record<string, { invoking: string; invoked: stri
   calculate_iq_score: { invoking: 'Calculating IQ...', invoked: 'IQ estimated' },
   calculate_uniqueness: { invoking: 'Calculating uniqueness...', invoked: 'Uniqueness calculated' },
   when_date_info: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
+  blood_donation_eligibility: { invoking: 'Checking donation eligibility...', invoked: 'Eligibility checked' },
+  blood_type_compatibility: { invoking: 'Checking blood compatibility...', invoked: 'Compatibility ready' },
+  baby_blood_type: { invoking: 'Predicting baby blood type...', invoked: 'Prediction ready' },
 };
 
 // Helper to generate _meta for a tool
@@ -1054,6 +1100,83 @@ const TOOLS = [
     annotations: READ_ONLY_ANNOTATIONS,
     _meta: generateToolMeta('when_date_info'),
   },
+  {
+    name: 'blood_donation_eligibility',
+    description: 'Check if a person is eligible to donate blood based on age, weight, and height. Returns donation amount and safety guidelines. Supports both metric and imperial units.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        age: { type: 'number', description: 'Age in years', minimum: 1, maximum: 120 },
+        weight: { type: 'number', description: 'Weight in kg (metric) or lbs (imperial)', minimum: 20, maximum: 700 },
+        height: { type: 'number', description: 'Height in cm (metric only). Required if unitSystem is metric.' },
+        heightFeet: { type: 'number', description: 'Height feet component (imperial only). Required if unitSystem is imperial.' },
+        heightInches: { type: 'number', description: 'Height inches component (imperial only). Optional, defaults to 0.' },
+        gender: { type: 'string', enum: ['male', 'female'], description: 'Gender for blood volume calculation' },
+        unitSystem: { type: 'string', enum: ['metric', 'imperial'], description: 'Unit system: metric (kg/cm) or imperial (lbs/ft). Defaults to metric.' },
+      },
+      required: ['age', 'weight', 'gender'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        eligible: { type: 'boolean', description: 'Whether the person can donate blood' },
+        amount: { type: 'number', description: 'Recommended donation amount in ml' },
+        bloodVolume: { type: 'number', description: 'Estimated total blood volume in liters' },
+        warnings: { type: 'array', items: { type: 'string' }, description: 'Any warnings or restrictions' },
+        tips: { type: 'array', items: { type: 'string' }, description: 'Tips for donation day' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('blood_donation_eligibility'),
+  },
+  {
+    name: 'blood_type_compatibility',
+    description: 'Check blood type compatibility for donation and receiving. Shows who you can donate to and receive from.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'ABO blood type' },
+        rhFactor: { type: 'string', enum: ['+', '-'], description: 'Rh factor (positive or negative)' },
+      },
+      required: ['bloodType', 'rhFactor'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        fullBloodType: { type: 'string', description: 'Full blood type (e.g., A+, O-)' },
+        canDonateTo: { type: 'array', items: { type: 'string' }, description: 'Blood types you can donate to' },
+        canReceiveFrom: { type: 'array', items: { type: 'string' }, description: 'Blood types you can receive from' },
+        isUniversalDonor: { type: 'boolean', description: 'True if O-' },
+        isUniversalRecipient: { type: 'boolean', description: 'True if AB+' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('blood_type_compatibility'),
+  },
+  {
+    name: 'baby_blood_type',
+    description: 'Predict possible blood types for a baby based on parents blood types. Also checks for Rh incompatibility risk.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fatherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Father\'s ABO blood type' },
+        fatherRh: { type: 'string', enum: ['+', '-'], description: 'Father\'s Rh factor' },
+        motherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Mother\'s ABO blood type' },
+        motherRh: { type: 'string', enum: ['+', '-'], description: 'Mother\'s Rh factor' },
+      },
+      required: ['fatherBloodType', 'fatherRh', 'motherBloodType', 'motherRh'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        possibleTypes: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, percentage: { type: 'number' } } }, description: 'Possible blood types with percentages' },
+        rhIncompatibilityRisk: { type: 'boolean', description: 'True if Rh incompatibility risk exists' },
+        rhWarning: { type: 'string', description: 'Warning message if Rh incompatibility detected' },
+      },
+    },
+    annotations: READ_ONLY_ANNOTATIONS,
+    _meta: generateToolMeta('baby_blood_type'),
+  },
 ];
 
 // Tool execution handlers
@@ -1622,6 +1745,200 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         weeks: Math.round(weeks * 10) / 10,
       };
     }
+    case 'blood_donation_eligibility': {
+      const age = args.age as number;
+      const gender = args.gender as 'male' | 'female';
+      const unitSystem = (args.unitSystem as string) || 'metric';
+
+      // Convert to metric if imperial
+      let weightKg: number;
+      let heightCm: number;
+
+      if (unitSystem === 'imperial') {
+        weightKg = (args.weight as number) * 0.453592; // lbs to kg
+        const feet = (args.heightFeet as number) || 0;
+        const inches = (args.heightInches as number) || 0;
+        heightCm = (feet * 12 + inches) * 2.54; // feet/inches to cm
+      } else {
+        weightKg = args.weight as number;
+        heightCm = args.height as number;
+      }
+
+      const warnings: string[] = [];
+      const tips: string[] = [];
+      let eligible = true;
+
+      // Age check (minimum 17)
+      if (age < 17) {
+        eligible = false;
+        warnings.push('Must be at least 17 years old to donate blood (16 with parental consent in some regions).');
+      } else if (age > 65) {
+        warnings.push('First-time donors should be under 66. Regular donors can continue until 70+.');
+      }
+
+      // Weight check (minimum 50 kg / 110 lbs)
+      if (weightKg < 50) {
+        eligible = false;
+        warnings.push('Must weigh at least 50 kg (110 lbs) to donate blood safely.');
+      }
+
+      // Calculate blood volume using Nadler's formula
+      const heightM = heightCm / 100;
+      let bloodVolume: number;
+      if (gender === 'male') {
+        bloodVolume = 0.3669 * Math.pow(heightM, 3) + 0.03219 * weightKg + 0.6041;
+      } else {
+        bloodVolume = 0.3561 * Math.pow(heightM, 3) + 0.03308 * weightKg + 0.1833;
+      }
+
+      // Standard donation is 450-500ml, max 10.5% of blood volume
+      const bloodVolumeML = bloodVolume * 1000;
+      const maxSafeDonation = Math.min(500, bloodVolumeML * 0.105);
+      const recommendedDonation = Math.round(Math.max(0, Math.min(maxSafeDonation, 470)));
+
+      tips.push('Eat a healthy meal before donating');
+      tips.push('Stay well hydrated - drink plenty of water');
+      tips.push('Avoid alcohol 24 hours before donation');
+      tips.push('Get a good night\'s sleep');
+
+      return {
+        eligible,
+        amount: eligible ? recommendedDonation : 0,
+        bloodVolume: Math.round(bloodVolume * 100) / 100,
+        warnings,
+        tips,
+      };
+    }
+    case 'blood_type_compatibility': {
+      const bloodType = args.bloodType as string;
+      const rhFactor = args.rhFactor as string;
+      const fullType = `${bloodType}${rhFactor}`;
+
+      const donationCompatibility: Record<string, string[]> = {
+        'O-': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
+        'O+': ['O+', 'A+', 'B+', 'AB+'],
+        'A-': ['A-', 'A+', 'AB-', 'AB+'],
+        'A+': ['A+', 'AB+'],
+        'B-': ['B-', 'B+', 'AB-', 'AB+'],
+        'B+': ['B+', 'AB+'],
+        'AB-': ['AB-', 'AB+'],
+        'AB+': ['AB+'],
+      };
+
+      const receiveCompatibility: Record<string, string[]> = {
+        'O-': ['O-'],
+        'O+': ['O-', 'O+'],
+        'A-': ['O-', 'A-'],
+        'A+': ['O-', 'O+', 'A-', 'A+'],
+        'B-': ['O-', 'B-'],
+        'B+': ['O-', 'O+', 'B-', 'B+'],
+        'AB-': ['O-', 'A-', 'B-', 'AB-'],
+        'AB+': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
+      };
+
+      return {
+        fullBloodType: fullType,
+        canDonateTo: donationCompatibility[fullType] || [],
+        canReceiveFrom: receiveCompatibility[fullType] || [],
+        isUniversalDonor: fullType === 'O-',
+        isUniversalRecipient: fullType === 'AB+',
+      };
+    }
+    case 'baby_blood_type': {
+      const fatherBloodType = args.fatherBloodType as string;
+      const fatherRh = args.fatherRh as string;
+      const motherBloodType = args.motherBloodType as string;
+      const motherRh = args.motherRh as string;
+
+      // Blood type alleles
+      const bloodTypeAlleles: Record<string, string[]> = {
+        'A': ['AA', 'AO'], 'B': ['BB', 'BO'], 'AB': ['AB'], 'O': ['OO'],
+      };
+      const rhAlleles: Record<string, string[]> = {
+        '+': ['++', '+-'], '-': ['--'],
+      };
+
+      // Calculate possible ABO types
+      const fatherAlleles = bloodTypeAlleles[fatherBloodType];
+      const motherAlleles = bloodTypeAlleles[motherBloodType];
+      const possibleGenotypes: Record<string, number> = {};
+      let totalCombinations = 0;
+
+      for (const fAllele of fatherAlleles) {
+        for (const mAllele of motherAlleles) {
+          for (const f of fAllele.split('')) {
+            for (const m of mAllele.split('')) {
+              const combo = [f, m].sort().join('');
+              possibleGenotypes[combo] = (possibleGenotypes[combo] || 0) + 1;
+              totalCombinations++;
+            }
+          }
+        }
+      }
+
+      // Convert genotypes to phenotypes
+      const phenotypes: Record<string, number> = {};
+      for (const [genotype, count] of Object.entries(possibleGenotypes)) {
+        let phenotype: string;
+        if (genotype === 'AA' || genotype === 'AO') phenotype = 'A';
+        else if (genotype === 'BB' || genotype === 'BO') phenotype = 'B';
+        else if (genotype === 'AB') phenotype = 'AB';
+        else phenotype = 'O';
+        phenotypes[phenotype] = (phenotypes[phenotype] || 0) + count;
+      }
+
+      // Calculate Rh possibilities
+      const fatherRhAlleles = rhAlleles[fatherRh];
+      const motherRhAlleles = rhAlleles[motherRh];
+      let rhPositiveChance = 0;
+      let rhNegativeChance = 0;
+      let rhCombinations = 0;
+
+      for (const fRh of fatherRhAlleles) {
+        for (const mRh of motherRhAlleles) {
+          for (const f of fRh.split('')) {
+            for (const m of mRh.split('')) {
+              rhCombinations++;
+              if (f === '+' || m === '+') rhPositiveChance++;
+              else rhNegativeChance++;
+            }
+          }
+        }
+      }
+
+      // Combine ABO and Rh
+      const possibleTypes: { type: string; percentage: number }[] = [];
+      for (const [type, count] of Object.entries(phenotypes)) {
+        const aboPercentage = (count / totalCombinations) * 100;
+        if (rhPositiveChance > 0) {
+          possibleTypes.push({
+            type: `${type}+`,
+            percentage: Math.round(aboPercentage * (rhPositiveChance / rhCombinations)),
+          });
+        }
+        if (rhNegativeChance > 0) {
+          possibleTypes.push({
+            type: `${type}-`,
+            percentage: Math.round(aboPercentage * (rhNegativeChance / rhCombinations)),
+          });
+        }
+      }
+
+      // Sort by percentage descending
+      possibleTypes.sort((a, b) => b.percentage - a.percentage);
+
+      // Check for Rh incompatibility risk
+      const rhIncompatibilityRisk = motherRh === '-' && fatherRh === '+';
+      const rhWarning = rhIncompatibilityRisk
+        ? 'Rh incompatibility detected! If the mother is Rh-negative and the father is Rh-positive, the baby may be Rh-positive. Consult with a doctor about RhoGAM injection.'
+        : null;
+
+      return {
+        possibleTypes: possibleTypes.filter(t => t.percentage > 0),
+        rhIncompatibilityRisk,
+        rhWarning,
+      };
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -1661,6 +1978,9 @@ function getWidgetType(toolName: string): string {
     'calculate_iq_score': 'iq_score',
     'calculate_uniqueness': 'uniqueness',
     'when_date_info': 'when_date',
+    'blood_donation_eligibility': 'blood_donation',
+    'blood_type_compatibility': 'blood_compatibility',
+    'baby_blood_type': 'baby_blood',
   };
   return widgetMap[toolName] || 'generic';
 }
@@ -2125,6 +2445,56 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         </div>`;
       break;
     }
+    case 'blood_donation': {
+      const bloodData = data as { eligible?: boolean; amount?: number; bloodVolume?: number; warnings?: string[] };
+      const eligibleColor = bloodData.eligible ? '#22c55e' : '#ef4444';
+      const eligibleIcon = bloodData.eligible ? '✅' : '❌';
+      const eligibleText = bloodData.eligible ? 'Eligible to Donate' : 'Not Eligible';
+      const warnings = bloodData.warnings || [];
+      content = `
+        <div class="header">🩸 Blood Donation</div>
+        <div class="big-number" style="color:${eligibleColor}">${eligibleIcon}</div>
+        <div class="label" style="background:${eligibleColor}33;color:${eligibleColor}">${eligibleText}</div>
+        ${bloodData.eligible ? `<div class="stats">
+          <div class="stat-box"><div class="stat-label">Recommended</div><div class="stat-value">${bloodData.amount} ml</div></div>
+          <div class="stat-box"><div class="stat-label">Blood Volume</div><div class="stat-value">${bloodData.bloodVolume} L</div></div>
+        </div>` : ''}
+        ${warnings.length ? `<div style="margin-top:0.5rem;padding:0.5rem;background:rgba(251,191,36,0.1);border-radius:8px;font-size:0.75rem;color:#fbbf24">⚠️ ${warnings[0]}</div>` : ''}`;
+      break;
+    }
+    case 'blood_compatibility': {
+      const compatData = data as { fullBloodType?: string; canDonateTo?: string[]; canReceiveFrom?: string[]; isUniversalDonor?: boolean; isUniversalRecipient?: boolean };
+      const isSpecial = compatData.isUniversalDonor || compatData.isUniversalRecipient;
+      const specialLabel = compatData.isUniversalDonor ? '🌟 Universal Donor' : compatData.isUniversalRecipient ? '🌟 Universal Recipient' : '';
+      const donateTo = compatData.canDonateTo || [];
+      const receiveFrom = compatData.canReceiveFrom || [];
+      content = `
+        <div class="header">🩸 Blood Compatibility</div>
+        <div class="big-number" style="color:#ef4444;font-size:2.5rem">${compatData.fullBloodType || ''}</div>
+        ${isSpecial ? `<div class="label" style="background:rgba(251,191,36,0.2);color:#fbbf24">${specialLabel}</div>` : ''}
+        <div class="stats">
+          <div class="stat-box" style="background:rgba(34,197,94,0.1)"><div class="stat-label" style="color:#22c55e">Can Donate To</div><div class="stat-value" style="font-size:0.8rem">${donateTo.join(', ') || 'None'}</div></div>
+          <div class="stat-box" style="background:rgba(59,130,246,0.1)"><div class="stat-label" style="color:#3b82f6">Can Receive From</div><div class="stat-value" style="font-size:0.8rem">${receiveFrom.join(', ') || 'None'}</div></div>
+        </div>`;
+      break;
+    }
+    case 'baby_blood': {
+      const babyData = data as { possibleTypes?: { type: string; percentage: number }[]; rhIncompatibilityRisk?: boolean };
+      const topTypes = (babyData.possibleTypes || []).slice(0, 4);
+      const hasRisk = babyData.rhIncompatibilityRisk;
+      content = `
+        <div class="header">👶 Baby Blood Type</div>
+        ${hasRisk ? `<div class="label" style="background:rgba(239,68,68,0.2);color:#ef4444;margin-bottom:0.5rem">⚠️ Rh Incompatibility Risk</div>` : ''}
+        <div class="stats" style="grid-template-columns:repeat(${Math.min(topTypes.length, 2)}, 1fr)">
+          ${topTypes.map((t) => `
+            <div class="stat-box">
+              <div class="stat-value" style="font-size:1.5rem;color:#a78bfa">${t.type}</div>
+              <div class="stat-label">${t.percentage}%</div>
+            </div>
+          `).join('')}
+        </div>`;
+      break;
+    }
     case 'generic':
     default: {
       // Generic widget for any tool - display key-value pairs
@@ -2342,6 +2712,12 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
   try {
     switch (method) {
       case 'initialize':
+        // Track MCP connection initialization
+        trackMCPEvent('mcp_initialize', {
+          event_category: 'mcp',
+          event_label: 'connection',
+          protocol_version: '2024-11-05',
+        });
         return {
           jsonrpc: '2.0',
           id,
@@ -2411,11 +2787,25 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
       }
 
       case 'tools/list':
+        // Track tools/list event
+        trackMCPEvent('mcp_tools_list', {
+          tool_count: TOOLS.length,
+          event_category: 'mcp',
+          event_label: 'tools_list',
+        });
         return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
       case 'tools/call': {
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
         const result = executeTool(toolName, toolArgs);
+
+        // Track tool call event
+        trackMCPEvent('mcp_tool_call', {
+          tool_name: toolName,
+          event_category: 'mcp',
+          event_label: toolName,
+          has_args: Object.keys(toolArgs).length > 0,
+        });
 
         // Prepare widget data with input args for context
         let widgetData: Record<string, unknown> = result as Record<string, unknown>;

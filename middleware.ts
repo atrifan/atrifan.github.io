@@ -15,6 +15,7 @@ const isPublicRoute = createRouteMatcher([
   '/mcp/apikey(.*)',
   // All tool pages are public
   '/age(.*)',
+  '/blood(.*)',
   '/brain(.*)',
   '/convert(.*)',
   '/cut(.*)',

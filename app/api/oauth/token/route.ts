@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
   
   const proxyBody = new URLSearchParams();
   proxyBody.set('client_id', process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID || 'XSfJ6XdWpI4hjmHT');
-  proxyBody.set('client_secret', process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_SECRET || 'V0W2k5USrYoc37NsGpXaYEGb35lV0A2f');
+  proxyBody.set('client_secret', process.env.CLERK_OAUTH_CLIENT_SECRET || 'V0W2k5USrYoc37NsGpXaYEGb35lV0A2f');
   proxyBody.set('grant_type', grantType || 'authorization_code');
   
   if (code) proxyBody.set('code', code);

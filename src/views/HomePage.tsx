@@ -30,6 +30,7 @@ import { BrainIcon } from '../components/BrainIcon';
 import { VibeIcon } from '../components/VibeIcon';
 import { CycleIcon } from '../components/CycleIcon';
 import { RiskIcon } from '../components/RiskIcon';
+import { BloodIcon } from '../components/BloodIcon';
 import { WeatherTimeCardWrapper } from '../components/WeatherTimeCardWrapper';
 import { Footer } from '../components/Footer';
 
@@ -65,6 +66,7 @@ export class HomePage extends Component<{}, HomePageState> {
       sleep: <SleepIcon size={size} />,
       unique: <RankIcon size={size} />,
       cycle: <CycleIcon size={size} />,
+      blood: <BloodIcon size={size} />,
       age: <AgeIcon size={size} />,
       tip: <TipIcon size={size} />,
       risk: <RiskIcon size={size} />,
@@ -393,7 +395,7 @@ export class HomePage extends Component<{}, HomePageState> {
             borderRadius: '20px',
             padding: 'clamp(1.5rem, 4vw, 2.5rem)',
             marginBottom: '2rem',
-            maxWidth: '800px',
+            maxWidth: '900px',
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
@@ -419,17 +421,84 @@ export class HomePage extends Component<{}, HomePageState> {
               </h2>
             </div>
 
-            {/* Description */}
+            {/* Main Description */}
             <p style={{
               fontSize: 'clamp(0.95rem, 2.5vw, 1.05rem)',
-              color: 'rgba(255, 255, 255, 0.75)',
+              color: 'rgba(255, 255, 255, 0.85)',
               lineHeight: 1.7,
-              margin: '0 0 1.5rem',
+              margin: '0 0 1.25rem',
             }}>
-              Tulzo is a collection of fast, free handy tools designed for everyday tasks. Whether you&apos;re planning
-              weight loss goals, tracking your budget, finding what day a date falls on, counting clicks or reps,
-              generating random numbers, or checking zodiac compatibility — we&apos;ve got you covered.
+              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>20+ free online tools</strong> for health, finance, time, and fun.
+              Every tool works instantly in your browser — no downloads, no sign-ups, no tracking.
             </p>
+
+            {/* Tool Categories */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '1rem',
+              marginBottom: '1.5rem',
+            }}>
+              {/* Health Tools */}
+              <div style={{
+                background: 'rgba(236, 72, 153, 0.1)',
+                border: '1px solid rgba(236, 72, 153, 0.2)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ec4899', marginBottom: '0.5rem' }}>
+                  💪 Health & Body
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  Weight loss planner, sleep cycle calculator, period tracker, blood type compatibility, IQ test, uniqueness calculator
+                </div>
+              </div>
+
+              {/* Money Tools */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#10b981', marginBottom: '0.5rem' }}>
+                  💰 Money & Finance
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  Budget calculator, tip calculator, percentage calculator, trading position size & risk calculator
+                </div>
+              </div>
+
+              {/* Time Tools */}
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#3b82f6', marginBottom: '0.5rem' }}>
+                  ⏰ Time & Dates
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  Date finder, countdown timer, time zone converter, age calculator
+                </div>
+              </div>
+
+              {/* Fun Tools */}
+              <div style={{
+                background: 'rgba(139, 92, 246, 0.1)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#8b5cf6', marginBottom: '0.5rem' }}>
+                  🎲 Fun & Random
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  Coin flip, dice roller, wheel spinner, decision maker, zodiac compatibility, name generator, cat/dog quiz
+                </div>
+              </div>
+            </div>
 
             {/* Feature Pills */}
             <div style={{
@@ -439,11 +508,12 @@ export class HomePage extends Component<{}, HomePageState> {
               marginBottom: '1.5rem',
             }}>
               {[
-                { icon: '🚀', text: 'Instant & Fast' },
-                { icon: '🆓', text: '100% Free' },
-                { icon: '🔒', text: 'Privacy First' },
-                { icon: '📱', text: 'Mobile Friendly' },
-                { icon: '🤖', text: 'AI-Ready' },
+                { icon: '🚀', text: 'Instant Results' },
+                { icon: '🆓', text: '100% Free Forever' },
+                { icon: '🔒', text: 'No Data Collection' },
+                { icon: '📱', text: 'Works on Any Device' },
+                { icon: '🤖', text: 'AI & MCP Ready' },
+                { icon: '🌙', text: 'Dark Mode' },
               ].map((item) => (
                 <span
                   key={item.text}
@@ -452,7 +522,7 @@ export class HomePage extends Component<{}, HomePageState> {
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     padding: '0.4rem 0.75rem',
                     borderRadius: '20px',
-                    fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
+                    fontSize: 'clamp(0.75rem, 2vw, 0.85rem)',
                     color: 'rgba(255, 255, 255, 0.85)',
                     display: 'flex',
                     alignItems: 'center',
@@ -464,6 +534,25 @@ export class HomePage extends Component<{}, HomePageState> {
               ))}
             </div>
 
+            {/* MCP Integration Note */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15))',
+              border: '1px solid rgba(102, 126, 234, 0.3)',
+              borderRadius: '10px',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+            }}>
+              <p style={{
+                fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
+                color: 'rgba(255, 255, 255, 0.85)',
+                lineHeight: 1.5,
+                margin: 0,
+              }}>
+                <strong style={{ color: '#a78bfa' }}>🤖 AI Integration:</strong> All Tulzo tools are available as an{' '}
+                <strong>MCP (Model Context Protocol) server</strong> — connect Claude, ChatGPT, or any AI assistant to use these tools directly in your conversations.
+              </p>
+            </div>
+
             {/* Bottom text */}
             <p style={{
               fontSize: 'clamp(0.85rem, 2vw, 0.95rem)',
@@ -471,8 +560,8 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.6,
               margin: 0,
             }}>
-              Each tool is built to be simple, instant, and accessible on any device. No accounts required, no sign-ups, no hassle.
-              Just open and use. We believe useful tools should be free and easy to access for everyone.
+              Built for speed and simplicity. No accounts, no sign-ups, no hassle — just open and use.
+              We believe useful tools should be free and accessible to everyone.
             </p>
           </View>
 
