@@ -60,6 +60,8 @@ export const Header: React.FC = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showPlanetaryNav, setShowPlanetaryNav] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchFocusScrollYRef = useRef<number | null>(null);
 
   // Handle logo click - toggle planetary nav
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -87,6 +89,33 @@ export const Header: React.FC = () => {
       }
     };
   }, [searchQuery]);
+
+  // iOS fix: when search is focused and the user scrolls, blur the input
+  // to dismiss the keyboard (so the sticky header can "follow" again).
+  // Uses a scroll delta threshold so re-focusing still works normally.
+  useEffect(() => {
+    const handleScroll = () => {
+      const input = searchInputRef.current;
+      if (!input) return;
+      if (document.activeElement !== input) return;
+
+      const startY = searchFocusScrollYRef.current;
+      const currentY = window.scrollY || window.pageYOffset || 0;
+
+      if (startY == null) {
+        searchFocusScrollYRef.current = currentY;
+        return;
+      }
+
+      if (Math.abs(currentY - startY) > 30) {
+        input.blur();
+        searchFocusScrollYRef.current = null;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -137,6 +166,7 @@ export const Header: React.FC = () => {
         <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }} className="header-search">
           <div style={{ position: 'relative' }}>
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -155,10 +185,15 @@ export const Header: React.FC = () => {
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#667eea';
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                if (typeof window !== 'undefined') {
+                  const currentY = window.scrollY || window.pageYOffset || 0;
+                  searchFocusScrollYRef.current = currentY;
+                }
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                searchFocusScrollYRef.current = null;
                 setTimeout(() => setShowSearchResults(false), 300);
               }}
             />
