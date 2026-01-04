@@ -2,7 +2,7 @@
 
 import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/nextjs';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { isBillingEnabled } from '../config/billing.config';
 import { AboutModal } from './AboutModal';
 
@@ -24,6 +24,35 @@ const HeaderLogo = () => (
 export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced search - triggers 400ms after user stops typing
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (searchQuery.trim()) {
+      debounceTimerRef.current = setTimeout(() => {
+        setShowSearchResults(true);
+      }, 400);
+    } else {
+      setShowSearchResults(false);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setShowSearchResults(false); // Hide while typing
+  };
 
   return (
     <header style={{
@@ -43,15 +72,107 @@ export const Header: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: '1rem',
       }}>
         {/* Logo */}
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', flexShrink: 0 }}>
           <HeaderLogo />
-          <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Tulzo</span>
+          <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }} className="logo-text">Tulzo</span>
         </Link>
 
+        {/* Search Bar - Desktop */}
+        <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }} className="desktop-search">
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search tools..."
+              style={{
+                width: '100%',
+                padding: searchQuery ? '0.5rem 2.25rem 0.5rem 2.5rem' : '0.5rem 1rem 0.5rem 2.5rem',
+                fontSize: '0.9rem',
+                borderRadius: '50px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                outline: 'none',
+                transition: 'border-color 0.2s, background 0.2s',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                setTimeout(() => setShowSearchResults(false), 300);
+              }}
+            />
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setShowSearchResults(false); }}
+                style={{
+                  position: 'absolute',
+                  right: '0.5rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+                aria-label="Clear search"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {showSearchResults && searchQuery.trim() && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              marginTop: '0.5rem',
+              background: 'rgba(15, 23, 42, 0.98)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '12px',
+              padding: '1rem',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            }}>
+              <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem', margin: 0, textAlign: 'center' }}>
+                🔍 Search not implemented yet
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Desktop Nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }} className="desktop-nav">
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }} className="desktop-nav">
           <button
             onClick={() => setAboutOpen(true)}
             style={{
@@ -122,9 +243,92 @@ export const Header: React.FC = () => {
           padding: '1rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: '0.75rem',
           borderTop: '1px solid rgba(255,255,255,0.1)',
         }}>
+          {/* Mobile Search */}
+          <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search tools..."
+              style={{
+                width: '100%',
+                padding: searchQuery ? '0.75rem 2.75rem 0.75rem 2.75rem' : '0.75rem 1rem 0.75rem 2.75rem',
+                fontSize: '1rem',
+                borderRadius: '50px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              }}
+            />
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setShowSearchResults(false); }}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            {showSearchResults && searchQuery.trim() && (
+              <div style={{
+                marginTop: '0.75rem',
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem', margin: 0, textAlign: 'center' }}>
+                  🔍 Search not implemented yet
+                </p>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => { setAboutOpen(true); setMobileMenuOpen(false); }}
             style={{
@@ -132,24 +336,24 @@ export const Header: React.FC = () => {
               border: 'none',
               color: '#fff',
               textDecoration: 'none',
-              padding: '0.5rem 0',
+              padding: '0.75rem 0',
               textAlign: 'left',
-              fontSize: '1rem',
+              fontSize: '1.1rem',
               cursor: 'pointer',
             }}
           >
             About
           </button>
           {isBillingEnabled() && (
-            <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
+            <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.75rem 0', fontSize: '1.1rem' }}>
               Pricing
             </Link>
           )}
           <SignedIn>
-            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.5rem 0' }}>
+            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ color: '#fff', textDecoration: 'none', padding: '0.75rem 0', fontSize: '1.1rem' }}>
               Dashboard
             </Link>
-            <div style={{ padding: '0.5rem 0' }}>
+            <div style={{ padding: '0.75rem 0' }}>
               <UserButton afterSignOutUrl="/" />
             </div>
           </SignedIn>
@@ -159,9 +363,10 @@ export const Header: React.FC = () => {
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 border: 'none',
                 borderRadius: '8px',
-                padding: '0.75rem 1.5rem',
+                padding: '0.85rem 1.5rem',
                 color: '#fff',
                 fontWeight: 600,
+                fontSize: '1.1rem',
                 cursor: 'pointer',
                 width: '100%',
               }}>
@@ -176,11 +381,13 @@ export const Header: React.FC = () => {
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       <style jsx global>{`
-        @media (max-width: 640px) {
+        @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
+          .desktop-search { display: none !important; }
           .mobile-menu-btn { display: block !important; }
+          .logo-text { display: none !important; }
         }
-        @media (min-width: 641px) {
+        @media (min-width: 769px) {
           .mobile-menu { display: none !important; }
         }
       `}</style>

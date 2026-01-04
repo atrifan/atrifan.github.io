@@ -308,11 +308,11 @@ export class RiskPage extends Component<object, RiskPageState> {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
               <div>
                 <label style={labelStyle}>💰 Capital ($)</label>
-                <input type="number" value={capital} onChange={(e) => this.setState({ capital: e.target.value })} style={inputStyle} placeholder="10000" />
+                <input type="number" value={capital} onChange={(e) => this.setState({ capital: e.target.value })} style={inputStyle} placeholder="Your total capital" />
               </div>
               <div>
                 <label style={labelStyle}>📈 Entry Price ($)</label>
-                <input type="number" value={entryPrice} onChange={(e) => this.setState({ entryPrice: e.target.value })} style={inputStyle} placeholder="100" />
+                <input type="number" value={entryPrice} onChange={(e) => this.setState({ entryPrice: e.target.value })} style={inputStyle} placeholder="Asset entry price" />
               </div>
             </div>
 
@@ -335,7 +335,7 @@ export class RiskPage extends Component<object, RiskPageState> {
             {(mode === 'riskOnly' || mode === 'riskAndSL' || mode === 'riskAndQty') && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={labelStyle}>⚠️ Risk Percentage (%)</label>
-                <input type="number" value={riskPercent} onChange={(e) => this.setState({ riskPercent: e.target.value })} style={inputStyle} placeholder="1" step="0.5" min="0.1" max="100" />
+                <input type="number" value={riskPercent} onChange={(e) => this.setState({ riskPercent: e.target.value })} style={inputStyle} placeholder="e.g. 1-2%" step="0.5" min="0.1" max="100" />
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Recommended: 1-2% per trade</span>
               </div>
             )}
@@ -343,14 +343,14 @@ export class RiskPage extends Component<object, RiskPageState> {
             {(mode === 'riskAndSL' || mode === 'slAndQty') && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={labelStyle}>🛑 Stop Loss Price ($)</label>
-                <input type="number" value={stopLossPrice} onChange={(e) => this.setState({ stopLossPrice: e.target.value })} style={inputStyle} placeholder={direction === 'long' ? '95' : '105'} />
+                <input type="number" value={stopLossPrice} onChange={(e) => this.setState({ stopLossPrice: e.target.value })} style={inputStyle} placeholder={direction === 'long' ? 'Price below entry' : 'Price above entry'} />
               </div>
             )}
 
             {(mode === 'riskAndQty' || mode === 'slAndQty') && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={labelStyle}>📦 Quantity (Units)</label>
-                <input type="number" value={quantity} onChange={(e) => this.setState({ quantity: e.target.value })} style={inputStyle} placeholder="100" />
+                <input type="number" value={quantity} onChange={(e) => this.setState({ quantity: e.target.value })} style={inputStyle} placeholder="Number of units" />
               </div>
             )}
 
