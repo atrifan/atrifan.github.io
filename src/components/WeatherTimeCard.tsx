@@ -271,53 +271,136 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
 
     return (
       <View UNSAFE_style={{ width: '100%', maxWidth: '600px', margin: '0 auto 2rem' }}>
-        <div style={{ background: gradient, borderRadius: '24px', padding: '1.5rem 2rem', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)' }}>
-          {/* Greeting & Time */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {emoji} {greeting}{this.props.userName ? `, ${this.props.userName}` : ''}!
+        <div style={{
+          background: gradient,
+          borderRadius: '24px',
+          padding: 'clamp(1rem, 4vw, 1.5rem) clamp(1rem, 4vw, 2rem)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          border: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          {/* Top Section: Greeting + Time/Date */}
+          <div style={{ marginBottom: '1rem' }}>
+            {/* Greeting */}
+            <p style={{
+              fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
+              fontWeight: 700,
+              color: '#fff',
+              margin: '0 0 0.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}>
+              {emoji} {greeting}{this.props.userName ? `, ${this.props.userName}` : ''}!
+            </p>
+
+            {/* Time & Date - Stacked on mobile, inline on desktop */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.25rem',
+              marginBottom: '0.5rem',
+            }}>
+              <p style={{
+                fontSize: 'clamp(1.75rem, 6vw, 2.25rem)',
+                fontWeight: 800,
+                color: '#fff',
+                margin: 0,
+                fontFamily: 'monospace',
+                letterSpacing: '-0.02em',
+              }}>
+                {timeStr}
               </p>
-              <p style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.8)', margin: '0.25rem 0 0' }}>📍 {location}</p>
-              {coordinates && (
-                <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', margin: '0.15rem 0 0', fontFamily: 'monospace' }}>
-                  🌐 {this.formatCoordinate(coordinates.lat, true)}, {this.formatCoordinate(coordinates.lon, false)}
-                  {altitude !== null && ` • ⛰️ ${altitude}m`}
-                </p>
-              )}
+              <p style={{
+                fontSize: 'clamp(0.85rem, 2.5vw, 1rem)',
+                color: 'rgba(255,255,255,0.85)',
+                margin: 0,
+              }}>
+                {dateStr}
+              </p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', margin: 0, fontFamily: 'monospace' }}>{timeStr}</p>
-              <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', margin: '0.25rem 0 0' }}>{dateStr}</p>
-            </div>
+
+            {/* Location */}
+            <p style={{
+              fontSize: 'clamp(0.85rem, 2.5vw, 0.95rem)',
+              color: 'rgba(255,255,255,0.8)',
+              margin: 0,
+            }}>
+              📍 {location}
+            </p>
+            {coordinates && (
+              <p style={{
+                fontSize: 'clamp(0.65rem, 2vw, 0.75rem)',
+                color: 'rgba(255,255,255,0.5)',
+                margin: '0.15rem 0 0',
+                fontFamily: 'monospace',
+              }}>
+                🌐 {this.formatCoordinate(coordinates.lat, true)}, {this.formatCoordinate(coordinates.lon, false)}
+                {altitude !== null && ` • ⛰️ ${altitude}m`}
+              </p>
+            )}
           </div>
 
-          {/* Weather & Day Phase */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '16px', padding: '1rem 1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '2.5rem' }}>{loading ? '⏳' : weather?.icon || '🌡️'}</span>
+          {/* Weather Section */}
+          <div style={{
+            background: 'rgba(0,0,0,0.2)',
+            borderRadius: '16px',
+            padding: 'clamp(0.75rem, 3vw, 1rem) clamp(0.75rem, 3vw, 1.25rem)',
+          }}>
+            {/* Weather Main */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: weather ? '0.75rem' : 0,
+            }}>
+              <span style={{ fontSize: 'clamp(2rem, 6vw, 2.5rem)' }}>
+                {loading ? '⏳' : weather?.icon || '🌡️'}
+              </span>
               <div>
-                {weather && <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0 }}>{weather.temp}°C</p>}
-                <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', margin: 0 }}>{loading ? 'Loading...' : weather?.condition || 'Weather unavailable'}</p>
+                {weather && (
+                  <p style={{
+                    fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
+                    fontWeight: 700,
+                    color: '#fff',
+                    margin: 0,
+                  }}>
+                    {weather.temp}°C
+                  </p>
+                )}
+                <p style={{
+                  fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)',
+                  color: 'rgba(255,255,255,0.8)',
+                  margin: 0,
+                }}>
+                  {loading ? 'Loading...' : weather?.condition || 'Weather unavailable'}
+                </p>
               </div>
             </div>
+
+            {/* Weather Stats Grid */}
             {weather && (
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 'clamp(0.5rem, 2vw, 1rem)',
+                borderTop: '1px solid rgba(255,255,255,0.15)',
+                paddingTop: '0.75rem',
+              }}>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Humidity</p>
-                  <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>💧 {weather.humidity}%</p>
+                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Humidity</p>
+                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>💧 {weather.humidity}%</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Wind</p>
-                  <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>💨 {weather.windSpeed} km/h</p>
+                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Wind</p>
+                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>💨 {weather.windSpeed}</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Phase</p>
-                  <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>{phase}</p>
+                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Phase</p>
+                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>{phase}</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Moon</p>
-                  <p style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>{moonPhase.icon}</p>
+                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Moon</p>
+                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>{moonPhase.icon}</p>
                 </div>
               </div>
             )}

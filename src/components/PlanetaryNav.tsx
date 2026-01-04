@@ -166,9 +166,8 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '1rem',
+            marginBottom: '0.75rem',
             flexShrink: 0,
-            gap: '1rem',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
               <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -199,76 +198,6 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
               </SignedIn>
             </div>
 
-            {/* Search Bar */}
-            <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }}>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => this.handleSearchChange(e.target.value)}
-                placeholder="Filter tools..."
-                style={{
-                  width: '100%',
-                  padding: searchQuery ? '0.5rem 2.25rem 0.5rem 2.25rem' : '0.5rem 0.75rem 0.5rem 2.25rem',
-                  borderRadius: '50px',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
-                  outline: 'none',
-                  transition: 'border-color 0.2s, background 0.2s',
-                  boxSizing: 'border-box',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#667eea';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                }}
-              />
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.5)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-              >
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={this.clearSearch}
-                  style={{
-                    position: 'absolute',
-                    right: '0.4rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(255, 255, 255, 0.25)',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '22px',
-                    height: '22px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                  aria-label="Clear search"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
             <button
               onClick={onClose}
               style={{
@@ -290,6 +219,82 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             </button>
           </div>
 
+          {/* Search Bar - Below header */}
+          <div style={{
+            position: 'relative',
+            marginBottom: '1rem',
+            flexShrink: 0,
+            maxWidth: isMobile ? '100%' : '400px',
+          }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => this.handleSearchChange(e.target.value)}
+              placeholder="Filter tools..."
+              style={{
+                width: '100%',
+                padding: searchQuery ? '0.6rem 2.5rem 0.6rem 2.5rem' : '0.6rem 1rem 0.6rem 2.5rem',
+                borderRadius: '50px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                fontSize: '0.95rem',
+                outline: 'none',
+                transition: 'border-color 0.2s, background 0.2s',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              }}
+            />
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={this.clearSearch}
+                style={{
+                  position: 'absolute',
+                  right: '0.6rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+                aria-label="Clear search"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
           {/* Category Tabs - Desktop */}
           {!isMobile && (
             <div style={{
@@ -298,6 +303,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
               marginBottom: '1.5rem',
               flexWrap: 'wrap',
               flexShrink: 0,
+              maxWidth: '800px',
             }}>
               <button
                 onClick={() => this.setState({ activeCategory: null })}
