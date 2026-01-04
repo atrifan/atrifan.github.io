@@ -60,26 +60,12 @@ export const Header: React.FC = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showPlanetaryNav, setShowPlanetaryNav] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Handle logo click - toggle planetary nav
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setShowPlanetaryNav(!showPlanetaryNav);
   };
-
-  // iOS fix: blur search input on scroll to dismiss keyboard and fix fixed positioning
-  useEffect(() => {
-    const handleScroll = () => {
-      if (searchInputRef.current && document.activeElement === searchInputRef.current) {
-        searchInputRef.current.blur();
-      }
-    };
-
-    // Use passive listener for better scroll performance
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Debounced search - triggers 400ms after user stops typing
   useEffect(() => {
@@ -110,18 +96,13 @@ export const Header: React.FC = () => {
   return (
     <>
     <header style={{
-      position: 'fixed',
+      position: 'sticky',
       top: 0,
-      left: 0,
-      right: 0,
       zIndex: 1000,
-      background: 'rgba(15, 23, 42, 0.85)',
+      background: 'rgba(15, 23, 42, 0.95)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-      // iOS fix: force GPU layer to maintain fixed position when keyboard opens
-      transform: 'translateZ(0)',
-      WebkitTransform: 'translateZ(0)',
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -156,7 +137,6 @@ export const Header: React.FC = () => {
         <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }} className="header-search">
           <div style={{ position: 'relative' }}>
             <input
-              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
