@@ -36,6 +36,7 @@ interface PlanetaryNavProps {
 interface PlanetaryNavState {
   activeCategory: ToolCategory | null;
   isMobile: boolean;
+  searchQuery: string;
 }
 
 /**
@@ -43,11 +44,14 @@ interface PlanetaryNavState {
  * Responsive grid menu for fast tool access
  */
 export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState> {
+  private debounceTimer: NodeJS.Timeout | null = null;
+
   constructor(props: PlanetaryNavProps) {
     super(props);
     this.state = {
       activeCategory: null,
       isMobile: false, // Default for SSR, will be updated in componentDidMount
+      searchQuery: '',
     };
   }
 
@@ -61,6 +65,9 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
   componentWillUnmount() {
     document.removeEventListener('keydown', this.handleEscape);
     window.removeEventListener('resize', this.handleResize);
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
   }
 
   private handleEscape = (e: KeyboardEvent) => {
@@ -71,6 +78,14 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
 
   private handleResize = () => {
     this.setState({ isMobile: window.innerWidth < 768 });
+  };
+
+  private handleSearchChange = (value: string) => {
+    this.setState({ searchQuery: value });
+  };
+
+  private clearSearch = () => {
+    this.setState({ searchQuery: '' });
   };
 
   private renderToolIcon = (toolId: string, size: number): JSX.Element => {
@@ -105,7 +120,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
 
   render() {
     const { isOpen, onClose } = this.props;
-    const { activeCategory, isMobile } = this.state;
+    const { activeCategory, isMobile, searchQuery } = this.state;
 
     if (!isOpen) return null;
 
@@ -151,12 +166,13 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '1.5rem',
+            marginBottom: '1rem',
             flexShrink: 0,
+            gap: '1rem',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <svg width="40" height="40" viewBox="0 0 120 120">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+              <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg width="24" height="24" viewBox="0 0 120 120">
                   <defs>
                     <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor="#667eea" />
@@ -167,10 +183,10 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                   <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#navLogoGrad)" />
                   <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
                 </svg>
-                <span style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800 }}>TULZO</span>
+                <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 600 }}>Tulzo</span>
               </Link>
               <SignedIn>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.5rem', fontWeight: 300 }}>|</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1rem', fontWeight: 300 }}>|</span>
                 <Link href="/dashboard" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#667eea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -182,20 +198,92 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                 </Link>
               </SignedIn>
             </div>
+
+            {/* Search Bar */}
+            <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => this.handleSearchChange(e.target.value)}
+                placeholder="Filter tools..."
+                style={{
+                  width: '100%',
+                  padding: searchQuery ? '0.5rem 2.25rem 0.5rem 2.25rem' : '0.5rem 0.75rem 0.5rem 2.25rem',
+                  borderRadius: '50px',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  outline: 'none',
+                  transition: 'border-color 0.2s, background 0.2s',
+                  boxSizing: 'border-box',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#667eea';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                }}
+              />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.5)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={this.clearSearch}
+                  style={{
+                    position: 'absolute',
+                    right: '0.4rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(255, 255, 255, 0.25)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '22px',
+                    height: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  aria-label="Clear search"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
             <button
               onClick={onClose}
               style={{
                 background: 'rgba(255,255,255,0.1)',
                 border: 'none',
                 borderRadius: '50%',
-                width: '44px',
-                height: '44px',
+                width: '40px',
+                height: '40px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.5rem',
+                fontSize: '1.25rem',
                 color: '#fff',
+                flexShrink: 0,
               }}
             >
               ✕
@@ -247,69 +335,98 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
 
           {/* Tools Grid */}
           <div style={{ flex: 1, overflow: 'auto' }}>
-            {(activeCategory ? [activeCategory] : categories).map(category => (
-              <div key={category} style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{
-                  color: 'rgba(255,255,255,0.6)',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  marginBottom: '0.75rem',
-                }}>
-                  {CATEGORY_LABELS[category]}
-                </h3>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(auto-fill, minmax(100px, 1fr))',
-                  gap: isMobile ? '0.5rem' : '0.75rem',
-                }}>
-                  {toolsByCategory[category].map((tool, index) => (
-                    <Link
-                      key={tool.id}
-                      href={tool.path}
-                      onClick={onClose}
-                      style={{
-                        textDecoration: 'none',
-                        animation: `toolAppear 0.3s ease-out ${index * 0.03}s both`,
-                      }}
-                    >
-                      <div
+            {(activeCategory ? [activeCategory] : categories).map(category => {
+              // Filter tools based on search query
+              const filteredTools = searchQuery.trim()
+                ? toolsByCategory[category].filter(tool =>
+                    tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    tool.descriptiveName.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                : toolsByCategory[category];
+
+              // Don't render category if no tools match
+              if (filteredTools.length === 0) return null;
+
+              return (
+                <div key={category} style={{ marginBottom: '1.5rem' }}>
+                  <h3 style={{
+                    color: 'rgba(255,255,255,0.6)',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    marginBottom: '0.75rem',
+                  }}>
+                    {CATEGORY_LABELS[category]}
+                  </h3>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(auto-fill, minmax(100px, 1fr))',
+                    gap: isMobile ? '0.5rem' : '0.75rem',
+                  }}>
+                    {filteredTools.map((tool, index) => (
+                      <Link
+                        key={tool.id}
+                        href={tool.path}
+                        onClick={onClose}
                         style={{
-                          background: tool.gradient,
-                          borderRadius: '12px',
-                          padding: isMobile ? '0.75rem 0.5rem' : '1rem',
-                          textAlign: 'center',
-                          cursor: 'pointer',
-                          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                          boxShadow: `0 4px 16px ${tool.color}33`,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
-                          e.currentTarget.style.boxShadow = `0 8px 24px ${tool.color}66`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                          e.currentTarget.style.boxShadow = `0 4px 16px ${tool.color}33`;
+                          textDecoration: 'none',
+                          animation: `toolAppear 0.3s ease-out ${index * 0.03}s both`,
                         }}
                       >
-                        <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                          {this.renderToolIcon(tool.id, isMobile ? 28 : 36)}
+                        <div
+                          style={{
+                            background: tool.gradient,
+                            borderRadius: '12px',
+                            padding: isMobile ? '0.75rem 0.5rem' : '1rem',
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            boxShadow: `0 4px 16px ${tool.color}33`,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
+                            e.currentTarget.style.boxShadow = `0 8px 24px ${tool.color}66`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                            e.currentTarget.style.boxShadow = `0 4px 16px ${tool.color}33`;
+                          }}
+                        >
+                          <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            {this.renderToolIcon(tool.id, isMobile ? 28 : 36)}
+                          </div>
+                          <div style={{
+                            fontSize: isMobile ? '0.65rem' : '0.75rem',
+                            fontWeight: 700,
+                            color: '#fff',
+                            textTransform: 'uppercase',
+                          }}>
+                            {tool.name}
+                          </div>
                         </div>
-                        <div style={{
-                          fontSize: isMobile ? '0.65rem' : '0.75rem',
-                          fontWeight: 700,
-                          color: '#fff',
-                          textTransform: 'uppercase',
-                        }}>
-                          {tool.name}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
+              );
+            })}
+            {/* No results message */}
+            {searchQuery.trim() && categories.every(cat =>
+              toolsByCategory[cat].filter(tool =>
+                tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                tool.descriptiveName.toLowerCase().includes(searchQuery.toLowerCase())
+              ).length === 0
+            ) && (
+              <div style={{
+                textAlign: 'center',
+                padding: '3rem 1rem',
+                color: 'rgba(255,255,255,0.5)',
+              }}>
+                <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>🔍 No tools found</p>
+                <p style={{ fontSize: '0.9rem' }}>Try a different search term</p>
               </div>
-            ))}
+            )}
           </div>
 
           {/* Footer hint */}
