@@ -25,7 +25,7 @@ export const EclipseIcon: React.FC<IconProps> = ({ size = 120 }) => (
       </filter>
     </defs>
     {/* Background */}
-    <circle cx="60" cy="60" r="54" fill="url(#eclipseGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#eclipseGrad)" />
     {/* Corona glow */}
     <circle cx="60" cy="60" r="38" fill="url(#coronaGrad)" filter="url(#eclipseGlow)" />
     {/* Sun behind (partial visible) */}

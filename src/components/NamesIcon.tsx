@@ -10,7 +10,7 @@ export const NamesIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#5b21b6" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#namesGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#namesGrad)" />
     {/* Name tag */}
     <rect x="30" y="40" width="60" height="40" rx="6" fill="#fff" />
     <rect x="30" y="40" width="60" height="14" rx="6" fill="#ef4444" />

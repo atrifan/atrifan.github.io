@@ -41,7 +41,7 @@ export function Providers({ children }: ProvidersProps) {
           style={{
             width: '60px',
             height: '60px',
-            borderRadius: '50%',
+            borderRadius: '12px',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
             animation: 'pulse 1.5s ease-in-out infinite',
           }}

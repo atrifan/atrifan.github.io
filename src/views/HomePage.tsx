@@ -278,7 +278,7 @@ export class HomePage extends Component<{}, HomePageState> {
                 viewBox="0 0 120 120"
                 style={{ filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))' }}
               >
-                {/* Background circle with gradient */}
+                {/* Background rounded rectangle with gradient */}
                 <defs>
                   <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#667eea" />
@@ -290,7 +290,7 @@ export class HomePage extends Component<{}, HomePageState> {
                     <stop offset="100%" stopColor="#f59e0b" />
                   </linearGradient>
                 </defs>
-                <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" />
+                <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#logoGradient)" />
                 {/* Lightning bolt - speed symbol */}
                 <path
                   d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z"

@@ -10,7 +10,7 @@ export const ConvertIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#334155" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#convertGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#convertGrad)" />
     {/* Arrows forming a cycle */}
     <path d="M75 45 L85 55 L75 65" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M35 55 L85 55" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" />

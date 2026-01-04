@@ -10,7 +10,7 @@ export const DaysIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#0e7490" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#daysGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#daysGrad)" />
     {/* Hourglass */}
     <path d="M40 30 L80 30 L80 35 L65 55 L65 65 L80 85 L80 90 L40 90 L40 85 L55 65 L55 55 L40 35 Z" fill="#fff" opacity="0.9" />
     {/* Sand top */}

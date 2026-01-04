@@ -23,7 +23,7 @@ export const RankIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#10b981" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#rankGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#rankGrad)" />
     {/* Chart bars representing percentiles */}
     <rect x="28" y="65" width="14" height="25" rx="3" fill="url(#barGrad1)" />
     <rect x="46" y="50" width="14" height="40" rx="3" fill="url(#barGrad2)" />

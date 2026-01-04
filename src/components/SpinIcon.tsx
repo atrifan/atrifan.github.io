@@ -10,7 +10,7 @@ export const SpinIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#b91c1c" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#spinGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#spinGrad)" />
     {/* Wheel segments */}
     <circle cx="60" cy="60" r="32" fill="#fff" />
     <path d="M60 60 L60 28 A32 32 0 0 1 87.7 44 Z" fill="#fbbf24" />

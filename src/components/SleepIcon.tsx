@@ -10,7 +10,7 @@ export const SleepIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#a855f7" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#sleepGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#sleepGrad)" />
     {/* Moon */}
     <path d="M70 30 C50 30 35 50 35 70 C35 90 55 100 70 95 C55 90 50 75 50 60 C50 45 60 35 70 30Z" fill="#fef3c7" />
     {/* Z's */}

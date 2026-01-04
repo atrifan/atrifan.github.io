@@ -16,7 +16,7 @@ const HeaderLogo = () => (
         <stop offset="100%" stopColor="#f472b6" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="56" fill="url(#headerLogoGrad)" />
+    <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#headerLogoGrad)" />
     <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
   </svg>
 );

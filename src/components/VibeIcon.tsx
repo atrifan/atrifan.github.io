@@ -28,8 +28,8 @@ export const VibeIcon: React.FC<VibeIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#vibeGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#vibeGradient)"/>
       
       {/* Cat face - left side */}
       <g transform="translate(20, 35)">

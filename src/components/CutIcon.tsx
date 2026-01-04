@@ -32,8 +32,8 @@ export const CutIcon: React.FC<CutIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#mainGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#mainGradient)"/>
       
       {/* Digital Scale */}
       <rect x="45" y="85" width="70" height="45" rx="8" fill="#fff" opacity="0.95"/>

@@ -11,7 +11,7 @@ export const RiskIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#ef4444" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#riskGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#riskGrad)" />
     {/* Shield with exclamation */}
     <path d="M60 25 L85 38 L85 58 C85 75 72 88 60 95 C48 88 35 75 35 58 L35 38 Z" fill="#fff" opacity="0.95" />
     <path d="M60 30 L80 41 L80 58 C80 72 69 83 60 89 C51 83 40 72 40 58 L40 41 Z" fill="url(#riskGrad)" opacity="0.3" />

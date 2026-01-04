@@ -14,7 +14,7 @@ export const FlipIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#fbbf24" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#flipGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#flipGrad)" />
     {/* Coin */}
     <ellipse cx="60" cy="55" rx="28" ry="30" fill="url(#coinGrad)" stroke="#d97706" strokeWidth="3" />
     {/* Coin face */}

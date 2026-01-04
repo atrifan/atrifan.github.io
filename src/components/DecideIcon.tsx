@@ -10,7 +10,7 @@ export const DecideIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#15803d" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#decideGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#decideGrad)" />
     {/* Thinking face */}
     <circle cx="60" cy="55" r="28" fill="#fef3c7" />
     {/* Eyes */}

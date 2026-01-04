@@ -11,7 +11,7 @@ export const CycleIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#fb7185" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#cycleGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#cycleGrad)" />
     {/* Calendar icon */}
     <rect x="30" y="35" width="60" height="50" rx="6" fill="#fff" opacity="0.95" />
     <rect x="30" y="35" width="60" height="14" rx="6" fill="#be185d" />

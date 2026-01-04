@@ -10,7 +10,7 @@ export const ZoneIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#1e40af" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#zoneGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#zoneGrad)" />
     {/* Globe */}
     <circle cx="60" cy="60" r="30" fill="none" stroke="#fff" strokeWidth="2" />
     <ellipse cx="60" cy="60" rx="30" ry="12" fill="none" stroke="#fff" strokeWidth="2" />

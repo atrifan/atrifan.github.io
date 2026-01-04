@@ -10,7 +10,7 @@ export const AgeIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#db2777" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#ageGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#ageGrad)" />
     {/* Cake */}
     <rect x="35" y="55" width="50" height="30" rx="4" fill="#fef3c7" />
     <rect x="35" y="50" width="50" height="10" rx="2" fill="#fbbf24" />

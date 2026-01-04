@@ -11,7 +11,7 @@ export const BloodIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#b91c1c" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#bloodGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#bloodGrad)" />
     {/* Blood drop */}
     <path
       d="M60 28 C60 28 42 50 42 66 C42 78 50 88 60 88 C70 88 78 78 78 66 C78 50 60 28 60 28Z"

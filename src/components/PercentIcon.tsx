@@ -10,7 +10,7 @@ export const PercentIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#0369a1" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#percentGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#percentGrad)" />
     {/* Percent symbol */}
     <circle cx="42" cy="42" r="10" fill="none" stroke="#fff" strokeWidth="5" />
     <circle cx="78" cy="78" r="10" fill="none" stroke="#fff" strokeWidth="5" />

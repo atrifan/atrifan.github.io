@@ -28,8 +28,8 @@ export const WhenIcon: React.FC<WhenIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#whenGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#whenGradient)"/>
       
       {/* Calendar body */}
       <rect x="35" y="40" width="90" height="85" rx="10" fill="url(#calendarGradient)"/>

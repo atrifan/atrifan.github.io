@@ -10,7 +10,7 @@ export const TipIcon: React.FC<IconProps> = ({ size = 120 }) => (
         <stop offset="100%" stopColor="#b45309" />
       </linearGradient>
     </defs>
-    <circle cx="60" cy="60" r="54" fill="url(#tipGrad)" />
+    <rect x="6" y="6" width="108" height="108" rx="20" fill="url(#tipGrad)" />
     {/* Receipt */}
     <rect x="38" y="28" width="44" height="60" rx="4" fill="#fff" />
     {/* Lines on receipt */}

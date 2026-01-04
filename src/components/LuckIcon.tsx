@@ -24,8 +24,8 @@ export const LuckIcon: React.FC<LuckIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#luckGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#luckGradient)"/>
       
       {/* Dice body - 3D effect */}
       <rect x="45" y="45" width="70" height="70" rx="12" fill="url(#diceGradient)" transform="rotate(-10 80 80)"/>

@@ -24,8 +24,8 @@ export const MatchIcon: React.FC<MatchIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#matchGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#matchGradient)"/>
       
       {/* Two interlocking hearts */}
       {/* Left heart */}

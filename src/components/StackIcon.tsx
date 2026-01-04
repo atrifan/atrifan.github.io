@@ -29,8 +29,8 @@ export const StackIcon: React.FC<StackIconProps> = ({ size = 160 }) => {
         </linearGradient>
       </defs>
       
-      {/* Background circle */}
-      <circle cx="80" cy="80" r="75" fill="url(#stackGradient)"/>
+      {/* Background rounded rectangle */}
+      <rect x="5" y="5" width="150" height="150" rx="28" fill="url(#stackGradient)"/>
       
       {/* Coin stack - bottom */}
       <ellipse cx="55" cy="115" rx="22" ry="8" fill="#f59e0b"/>
