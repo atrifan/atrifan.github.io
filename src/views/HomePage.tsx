@@ -322,7 +322,7 @@ export class HomePage extends Component<{}, HomePageState> {
               margin: '0 0 1rem 0',
               lineHeight: 1.2,
             }}>
-              Handy Tools for Everyday Tasks
+              Tools for You. And Your AI.
             </h1>
 
             {/* Sub-headline */}
@@ -331,10 +331,10 @@ export class HomePage extends Component<{}, HomePageState> {
               color: 'rgba(255, 255, 255, 0.9)',
               fontWeight: 400,
               margin: '0 auto 1.5rem',
-              maxWidth: '600px',
+              maxWidth: '650px',
               lineHeight: 1.5,
             }}>
-              Fast utilities for health, money, time, and simple decisions — all in one place.
+              20+ instant utilities for health, money, time, and decisions. Free in your browser — upgrade to connect your AI assistant.
             </p>
 
             {/* Micro-line */}
@@ -344,7 +344,7 @@ export class HomePage extends Component<{}, HomePageState> {
               fontWeight: 500,
               margin: '0 auto 2rem',
             }}>
-              No sign-ups • Instant results • Works on any device
+              No sign-ups • Instant results • Pro unlocks Claude, ChatGPT & more
             </p>
           </View>
 
