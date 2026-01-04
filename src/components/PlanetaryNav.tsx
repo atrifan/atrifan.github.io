@@ -171,17 +171,13 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
               <Link href="/" onClick={onClose} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <svg width="24" height="24" viewBox="0 0 120 120">
-                  <defs>
-                    <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#667eea" />
-                      <stop offset="50%" stopColor="#764ba2" />
-                      <stop offset="100%" stopColor="#f472b6" />
-                    </linearGradient>
-                  </defs>
-                  <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#navLogoGrad)" />
-                  <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
-                </svg>
+                <img
+                  src="/tulzo-logo.png"
+                  alt="Tulzo"
+                  width={24}
+                  height={24}
+                  style={{ borderRadius: '4px' }}
+                />
                 <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 600 }}>Tulzo</span>
               </Link>
               <SignedIn>

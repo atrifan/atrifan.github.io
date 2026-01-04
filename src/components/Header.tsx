@@ -40,19 +40,15 @@ const DashboardIcon = () => (
   </svg>
 );
 
-// Inline logo SVG for header
+// Logo image for header
 const HeaderLogo = () => (
-  <svg width="32" height="32" viewBox="0 0 120 120">
-    <defs>
-      <linearGradient id="headerLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#667eea" />
-        <stop offset="50%" stopColor="#764ba2" />
-        <stop offset="100%" stopColor="#f472b6" />
-      </linearGradient>
-    </defs>
-    <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#headerLogoGrad)" />
-    <path d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
-  </svg>
+  <img
+    src="/tulzo-logo.png"
+    alt="Tulzo"
+    width={32}
+    height={32}
+    style={{ borderRadius: '6px' }}
+  />
 );
 
 export const Header: React.FC = () => {

@@ -254,7 +254,7 @@ export class HomePage extends Component<{}, HomePageState> {
         <View maxWidth="1400px" marginX="auto">
           {/* Hero Section */}
           <View UNSAFE_style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '3rem' }}>
-            {/* SVG Logo - Clickable */}
+            {/* Logo - Clickable */}
             <div
               className="animate-float"
               style={{
@@ -272,33 +272,16 @@ export class HomePage extends Component<{}, HomePageState> {
               }}
               title="Click to see planetary navigation"
             >
-              <svg
-                width="120"
-                height="120"
-                viewBox="0 0 120 120"
-                style={{ filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))' }}
-              >
-                {/* Background rounded rectangle with gradient */}
-                <defs>
-                  <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#667eea" />
-                    <stop offset="50%" stopColor="#764ba2" />
-                    <stop offset="100%" stopColor="#f472b6" />
-                  </linearGradient>
-                  <linearGradient id="boltGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#fbbf24" />
-                    <stop offset="100%" stopColor="#f59e0b" />
-                  </linearGradient>
-                </defs>
-                <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#logoGradient)" />
-                {/* Lightning bolt - speed symbol */}
-                <path
-                  d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z"
-                  fill="url(#boltGradient)"
-                  stroke="#fff"
-                  strokeWidth="2"
-                />
-              </svg>
+              <img
+                src="/tulzo-logo.png"
+                alt="Tulzo"
+                width={120}
+                height={120}
+                style={{
+                  filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))',
+                  borderRadius: '20px',
+                }}
+              />
             </div>
 
             {/* Brand - Tulzo */}
@@ -309,9 +292,9 @@ export class HomePage extends Component<{}, HomePageState> {
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               marginBottom: '1.5rem',
-              letterSpacing: '0.1em',
+              letterSpacing: '0.05em',
             }}>
-              TULZO
+              Tulzo
             </div>
 
             {/* H1 - Main headline */}

@@ -41,31 +41,16 @@ export class TulzoLogo extends Component<{}, TulzoLogoState> {
           }}
           title="Click to see all tools"
         >
-          <svg
-            width="60"
-            height="60"
-            viewBox="0 0 120 120"
-            style={{ filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))' }}
-          >
-            <defs>
-              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#667eea" />
-                <stop offset="50%" stopColor="#764ba2" />
-                <stop offset="100%" stopColor="#f472b6" />
-              </linearGradient>
-              <linearGradient id="boltGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#f59e0b" />
-              </linearGradient>
-            </defs>
-            <rect x="4" y="4" width="112" height="112" rx="20" fill="url(#logoGradient)" />
-            <path
-              d="M68 25 L45 58 L58 58 L52 95 L75 55 L62 55 L68 25Z"
-              fill="url(#boltGradient)"
-              stroke="#fff"
-              strokeWidth="2"
-            />
-          </svg>
+          <img
+            src="/tulzo-logo.png"
+            alt="Tulzo"
+            width={60}
+            height={60}
+            style={{
+              filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))',
+              borderRadius: '12px',
+            }}
+          />
         </div>
 
         <PlanetaryNav isOpen={showNav} onClose={() => this.setState({ showNav: false })} />

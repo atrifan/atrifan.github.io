@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     images: ['/tulzo-og.svg'],
   },
   icons: {
-    icon: '/tulzo-logo.svg',
+    icon: '/tulzo-logo.png',
     apple: '/tulzo-logo.png',
   },
   manifest: '/manifest.json',
