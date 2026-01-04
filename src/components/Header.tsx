@@ -87,7 +87,7 @@ export const Header: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Search tools..."
+              placeholder="Search throughout the app..."
               style={{
                 width: '100%',
                 padding: searchQuery ? '0.5rem 2.25rem 0.5rem 2.25rem' : '0.5rem 0.75rem 0.5rem 2.25rem',

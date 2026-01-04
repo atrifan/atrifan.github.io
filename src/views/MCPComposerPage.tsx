@@ -633,22 +633,52 @@ export const MCPComposerPage: React.FC = () => {
           gap: '1rem',
           marginBottom: '1rem',
         }}>
-          <input
-            type="text"
-            placeholder="🔍 Search tools..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.875rem 1rem',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.05)',
-              color: '#fff',
-              fontSize: '1rem',
-              outline: 'none',
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search tools..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: searchQuery ? '0.875rem 2.5rem 0.875rem 1rem' : '0.875rem 1rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                fontSize: '1rem',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
 
           {/* Category Pills */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
