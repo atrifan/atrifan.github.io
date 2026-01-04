@@ -10,8 +10,8 @@
       <stop offset="100%" stop-color="#f59e0b"/>
     </linearGradient>
   </defs>
-  <!-- Full bleed background with rounded corners for iOS home screen bookmark -->
-  <rect x="0" y="0" width="512" height="512" rx="90" fill="url(#logoGradient)"/>
+  <!-- Full bleed square background - iOS will apply its own rounded mask -->
+  <rect x="0" y="0" width="512" height="512" fill="url(#logoGradient)"/>
   <!-- Lightning bolt centered and scaled -->
   <path d="M290 107 L192 248 L248 248 L222 405 L320 235 L264 235 L290 107Z" fill="url(#boltGradient)" stroke="#fff" stroke-width="8"/>
 </svg>
