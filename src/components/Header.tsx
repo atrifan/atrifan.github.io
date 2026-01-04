@@ -60,12 +60,26 @@ export const Header: React.FC = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showPlanetaryNav, setShowPlanetaryNav] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Handle logo click - toggle planetary nav
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setShowPlanetaryNav(!showPlanetaryNav);
   };
+
+  // iOS fix: blur search input on scroll to dismiss keyboard and fix fixed positioning
+  useEffect(() => {
+    const handleScroll = () => {
+      if (searchInputRef.current && document.activeElement === searchInputRef.current) {
+        searchInputRef.current.blur();
+      }
+    };
+
+    // Use passive listener for better scroll performance
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Debounced search - triggers 400ms after user stops typing
   useEffect(() => {
@@ -142,6 +156,7 @@ export const Header: React.FC = () => {
         <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }} className="header-search">
           <div style={{ position: 'relative' }}>
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}

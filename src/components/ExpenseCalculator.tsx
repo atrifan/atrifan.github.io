@@ -116,32 +116,32 @@ export class ExpenseCalculator extends Component<ExpenseCalculatorProps, Expense
           </p>
 
           {/* Header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 40px', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 36px', gap: '0.4rem', marginBottom: '0.5rem' }}>
             <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', paddingLeft: '0.75rem' }}>Description</span>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', textAlign: 'right', paddingRight: '0.75rem' }}>{symbol}</span>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', textAlign: 'right', paddingRight: '0.5rem' }}>{symbol}</span>
             <span></span>
           </div>
 
           {/* Items */}
           {this.state.items.map((item) => (
-            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 40px', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 36px', gap: '0.4rem', marginBottom: '0.5rem' }}>
               <input
                 type="text"
                 value={item.description}
                 onChange={(e) => this.updateItem(item.id, 'description', e.target.value)}
                 placeholder="What for..."
-                style={inputStyle}
+                style={{ ...inputStyle, padding: '0.6rem', minWidth: 0 }}
               />
               <input
                 type="number"
                 value={item.amount}
                 onChange={(e) => this.updateItem(item.id, 'amount', e.target.value)}
                 placeholder="0"
-                style={{ ...inputStyle, textAlign: 'right' }}
+                style={{ ...inputStyle, textAlign: 'right', padding: '0.6rem', minWidth: 0 }}
               />
               <button onClick={() => this.removeRow(item.id)} style={{
                 background: 'rgba(239, 68, 68, 0.2)', border: 'none', borderRadius: '8px',
-                color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer',
+                color: '#ef4444', fontSize: '1.1rem', cursor: 'pointer', flexShrink: 0,
               }}>−</button>
             </div>
           ))}
