@@ -103,7 +103,11 @@ export const Header: React.FC = () => {
       zIndex: 1000,
       background: 'rgba(15, 23, 42, 0.85)',
       backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
       borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+      // iOS fix: force GPU layer to maintain fixed position when keyboard opens
+      transform: 'translateZ(0)',
+      WebkitTransform: 'translateZ(0)',
     }}>
       <div style={{
         maxWidth: '1200px',

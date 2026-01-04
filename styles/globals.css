@@ -13,10 +13,27 @@ textarea,
 button {
   max-width: 100%;
   font-family: inherit;
-  font-size: 16px; /* Prevents iOS zoom on focus - must be 16px or larger */
 }
 
-/* Allow smaller font on desktop where zoom isn't an issue */
+/*
+ * iOS ZOOM PREVENTION - DO NOT REMOVE OR OVERRIDE
+ * ================================================
+ * iOS Safari automatically zooms in when focusing on inputs with font-size < 16px.
+ * This is a UX issue that cannot be fixed with viewport meta tags.
+ * The ONLY solution is to ensure all form inputs have font-size >= 16px on mobile.
+ *
+ * Using !important to prevent inline styles from overriding this rule.
+ * On desktop (769px+), we allow smaller fonts since zoom isn't an issue.
+ */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Allow custom font sizes on desktop where iOS zoom isn't an issue */
 @media (min-width: 769px) {
   input,
   select,
