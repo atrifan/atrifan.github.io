@@ -9,10 +9,15 @@
   "orientation": "portrait-primary",
   "icons": [
     {
+      "src": "/tulzo-logo.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/tulzo-logo.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/svg+xml"
     }
   ],
   "categories": ["utilities", "productivity", "lifestyle"],
