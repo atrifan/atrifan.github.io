@@ -6,13 +6,24 @@
   box-sizing: border-box;
 }
 
-/* Ensure inputs don't overflow on mobile */
+/* Ensure inputs don't overflow on mobile and prevent iOS zoom */
 input,
 select,
 textarea,
 button {
   max-width: 100%;
   font-family: inherit;
+  font-size: 16px; /* Prevents iOS zoom on focus - must be 16px or larger */
+}
+
+/* Allow smaller font on desktop where zoom isn't an issue */
+@media (min-width: 769px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: inherit;
+  }
 }
 
 /* Date inputs need special handling on mobile */

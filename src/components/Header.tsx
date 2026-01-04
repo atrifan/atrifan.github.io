@@ -91,7 +91,6 @@ export const Header: React.FC = () => {
               style={{
                 width: '100%',
                 padding: searchQuery ? '0.5rem 2.25rem 0.5rem 2.25rem' : '0.5rem 0.75rem 0.5rem 2.25rem',
-                fontSize: '16px', // Prevents iOS zoom
                 borderRadius: '50px',
                 border: '1px solid rgba(255, 255, 255, 0.2)',
                 background: 'rgba(255, 255, 255, 0.1)',
