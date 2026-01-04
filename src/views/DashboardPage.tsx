@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { useUser, useClerk, useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
-import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
@@ -363,9 +362,8 @@ export const DashboardPage: React.FC = () => {
         rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
         rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
       />
-      <Header />
-      
-      <main style={{ paddingTop: '5rem', paddingBottom: '3rem', maxWidth: '800px', margin: '0 auto', padding: '5rem 1rem 3rem' }}>
+
+      <main style={{ paddingTop: '2rem', paddingBottom: '3rem', maxWidth: '800px', margin: '0 auto', padding: '2rem 1rem 3rem' }}>
         {/* Welcome Header */}
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <DashboardIcon />

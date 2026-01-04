@@ -2,7 +2,6 @@
 
 import { View } from '@adobe/react-spectrum';
 import { SignedIn, SignedOut, SignInButton, PricingTable } from '@clerk/nextjs';
-import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
@@ -22,9 +21,8 @@ export const PricingPage: React.FC = () => {
         rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
         rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
       />
-      <Header />
 
-      <main style={{ paddingTop: '5rem', paddingBottom: '3rem' }}>
+      <main style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
         {/* Hero */}
         <section style={{ textAlign: 'center', padding: '2rem 1rem 3rem', maxWidth: '800px', margin: '0 auto' }}>
           <h1 style={{

@@ -62,9 +62,7 @@ export function Providers({ children }: ProvidersProps) {
         <Analytics />
       </Suspense>
       <Header />
-      <main style={{ paddingTop: '60px' }}>
-        {children}
-      </main>
+      {children}
     </Provider>
   );
 }

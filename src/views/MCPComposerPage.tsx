@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
@@ -459,7 +458,6 @@ export const MCPComposerPage: React.FC = () => {
         rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
         rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
       />
-      <Header />
 
       <main style={{
         maxWidth: '1000px',

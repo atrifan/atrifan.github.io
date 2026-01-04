@@ -253,7 +253,7 @@ export class HomePage extends Component<{}, HomePageState> {
 
         <View maxWidth="1400px" marginX="auto">
           {/* Hero Section */}
-          <View UNSAFE_style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '3rem' }}>
+          <View UNSAFE_style={{ textAlign: 'center', paddingTop: '2rem', paddingBottom: '3rem' }}>
             {/* Logo - Clickable */}
             <div
               className="animate-float"
