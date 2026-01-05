@@ -46,6 +46,13 @@ export class TipPage extends Component<{}, TipPageState> {
     }, 100);
   };
 
+  private reset = () => {
+    this.setState({
+      billAmount: '50.00', tipPercent: 18, splitCount: 1,
+      serviceQuality: 3, mood: 3, budget: 3, suggestedTip: null
+    });
+  };
+
   private calculateSuggestedTip = () => {
     this.setState({ isCalculating: true, suggestedTip: null });
     setTimeout(() => {
@@ -141,10 +148,16 @@ export class TipPage extends Component<{}, TipPageState> {
                     <label style={{ color: '#fff' }}>Budget situation? <span style={{ color: '#f59e0b' }}>{labels.budget[budget - 1]}</span></label>
                     <input type="range" min="1" max="5" value={budget} onChange={(e) => this.setState({ budget: parseInt(e.target.value) })} style={sliderStyle} />
                   </div>
-                  <button onClick={this.calculateSuggestedTip} disabled={isCalculating}
-                    style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                    {isCalculating ? '🤔 Calculating...' : '✨ Suggest My Tip'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={this.calculateSuggestedTip} disabled={isCalculating}
+                      style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                      {isCalculating ? '🤔 Calculating...' : '✨ Suggest My Tip'}
+                    </button>
+                    <button onClick={this.reset}
+                      style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                      🔄
+                    </button>
+                  </div>
                   {suggestedTip && (
                     <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(245,158,11,0.2)', borderRadius: '12px' }}>
                       <div style={{ color: '#f59e0b', fontWeight: 600 }}>I suggest a tip of:</div>

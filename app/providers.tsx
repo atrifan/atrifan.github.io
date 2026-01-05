@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { Analytics } from '@/src/components/Analytics';
 import { Header } from '@/src/components/Header';
+import { PreferencesProvider } from '@/src/contexts/PreferencesContext';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -58,11 +59,13 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <Provider theme={defaultTheme} colorScheme="dark">
-      <Suspense fallback={null}>
-        <Analytics />
-      </Suspense>
-      <Header />
-      {children}
+      <PreferencesProvider>
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
+        <Header />
+        {children}
+      </PreferencesProvider>
     </Provider>
   );
 }

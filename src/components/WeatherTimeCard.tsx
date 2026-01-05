@@ -1,5 +1,8 @@
+'use client';
+
 import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
+import { TimeFormat, MeasurementSystem } from '../types/preferences';
 
 interface WeatherData {
   temp: number;
@@ -11,6 +14,8 @@ interface WeatherData {
 
 interface WeatherTimeCardProps {
   userName?: string | null;
+  timeFormat?: TimeFormat;
+  measurementSystem?: MeasurementSystem;
 }
 
 interface WeatherTimeCardState {
@@ -22,12 +27,13 @@ interface WeatherTimeCardState {
   loading: boolean;
   error: boolean;
   mounted: boolean;
-  useCelsius: boolean;
-  useKmh: boolean;
-  useMeters: boolean;
+  // Local overrides for click-to-toggle (null means use preference)
+  useCelsiusOverride: boolean | null;
+  useKmhOverride: boolean | null;
+  useMetersOverride: boolean | null;
 }
 
-export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTimeCardState> {
+class WeatherTimeCardClass extends Component<WeatherTimeCardProps, WeatherTimeCardState> {
   private timerInterval: number | null = null;
 
   constructor(props: WeatherTimeCardProps) {
@@ -41,11 +47,39 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       loading: true,
       error: false,
       mounted: false,
-      useCelsius: true,
-      useKmh: true,
-      useMeters: true,
+      useCelsiusOverride: null,
+      useKmhOverride: null,
+      useMetersOverride: null,
     };
   }
+
+  private get useCelsius(): boolean {
+    if (this.state.useCelsiusOverride !== null) return this.state.useCelsiusOverride;
+    return this.props.measurementSystem !== 'imperial';
+  }
+
+  private get useKmh(): boolean {
+    if (this.state.useKmhOverride !== null) return this.state.useKmhOverride;
+    return this.props.measurementSystem !== 'imperial';
+  }
+
+  private get useMeters(): boolean {
+    if (this.state.useMetersOverride !== null) return this.state.useMetersOverride;
+    return this.props.measurementSystem !== 'imperial';
+  }
+
+  private toggleCelsius = () => {
+    this.setState({ useCelsiusOverride: !this.useCelsius });
+  };
+
+  private toggleKmh = () => {
+    this.setState({ useKmhOverride: !this.useKmh });
+  };
+
+  private toggleMeters = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    this.setState({ useMetersOverride: !this.useMeters });
+  };
 
   componentDidMount() {
     // Set initial time only on client side
@@ -278,7 +312,13 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     const { phase, emoji, gradient } = this.getDayPhase(hour);
     const moonPhase = this.getMoonPhase(currentTime);
     const greeting = this.getGreeting(hour);
-    const timeStr = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const is12h = this.props.timeFormat === '12h';
+    const timeStr = currentTime.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: is12h
+    });
     const dateStr = currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
@@ -359,11 +399,11 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 🌐 {this.formatCoordinate(coordinates.lat, true)}, {this.formatCoordinate(coordinates.lon, false)}
                 {altitude !== null && (
                   <span
-                    onClick={(e) => { e.stopPropagation(); this.setState({ useMeters: !this.state.useMeters }); }}
+                    onClick={this.toggleMeters}
                     style={{ cursor: 'pointer' }}
                     title="Click to switch m/ft"
                   >
-                    {this.state.useMeters
+                    {this.useMeters
                       ? ` • ▲ ${altitude}m`
                       : ` • ▲ ${Math.round(altitude * 3.28084)}ft`}
                   </span>
@@ -391,7 +431,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
               <div>
                 {weather && (
                   <p
-                    onClick={() => this.setState({ useCelsius: !this.state.useCelsius })}
+                    onClick={this.toggleCelsius}
                     style={{
                       fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
                       fontWeight: 800,
@@ -403,7 +443,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                     }}
                     title="Click to switch °C/°F"
                   >
-                    {this.state.useCelsius
+                    {this.useCelsius
                       ? `${weather.temp}°C`
                       : `${Math.round(weather.temp * 9/5 + 32)}°F`}
                   </p>
@@ -435,12 +475,12 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 </div>
                 <div
                   style={{ textAlign: 'center', cursor: 'pointer' }}
-                  onClick={() => this.setState({ useKmh: !this.state.useKmh })}
+                  onClick={this.toggleKmh}
                   title="Click to switch km/h / mph"
                 >
                   <p style={{ fontSize: 'clamp(0.7rem, 2vw, 0.85rem)', color: 'rgba(255,255,255,0.9)', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Wind</p>
                   <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', fontWeight: 700, color: '#fff', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
-                    💨 {this.state.useKmh
+                    💨 {this.useKmh
                       ? `${weather.windSpeed} km/h`
                       : `${Math.round(weather.windSpeed * 0.621371)} mph`}
                   </p>
@@ -461,4 +501,18 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     );
   }
 }
+
+// Wrapper functional component to inject preferences
+import { usePreferences } from '../contexts/PreferencesContext';
+
+export const WeatherTimeCard: React.FC<{ userName?: string | null }> = ({ userName }) => {
+  const { preferences } = usePreferences();
+  return (
+    <WeatherTimeCardClass
+      userName={userName}
+      timeFormat={preferences.timeFormat}
+      measurementSystem={preferences.measurementSystem}
+    />
+  );
+};
 

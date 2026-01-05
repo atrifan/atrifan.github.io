@@ -47,6 +47,10 @@ export class DaysPage extends Component<{}, DaysPageState> {
     }, 100);
   };
 
+  private reset = () => {
+    this.setState({ eventName: '', eventDate: '', result: null });
+  };
+
   private calculateCountdown = () => {
     const { eventDate } = this.state;
     if (!eventDate) return;
@@ -100,10 +104,16 @@ export class DaysPage extends Component<{}, DaysPageState> {
                 style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '1rem', boxSizing: 'border-box' }} />
               <input type="date" value={eventDate} onChange={(e) => this.setState({ eventDate: e.target.value })}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '1rem', colorScheme: 'dark', boxSizing: 'border-box' }} />
-              <button onClick={this.calculateCountdown}
-                style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                Start Countdown ⏳
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={this.calculateCountdown}
+                  style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                  Start Countdown ⏳
+                </button>
+                <button onClick={this.reset}
+                  style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                  🔄
+                </button>
+              </div>
             </div>
           </View>
 

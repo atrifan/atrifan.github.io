@@ -13,6 +13,8 @@ import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '.
 import type { CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
 import { ToolCountWarning } from './MCPComposerPage';
 import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
+import { usePreferences } from '../contexts/PreferencesContext';
+import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
 
 // Type for selected server view - null means default, string means custom server id
 type SelectedServerView = 'default' | string;
@@ -176,6 +178,7 @@ export const DashboardPage: React.FC = () => {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const { has } = useAuth();
+  const { preferences, updatePreferences } = usePreferences();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -502,6 +505,60 @@ export const DashboardPage: React.FC = () => {
               </Link>
             ) : null}
           </div>
+        </DashboardCard>
+
+        {/* Preferences Card */}
+        <DashboardCard
+          title="Preferences"
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
+        >
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Set your default preferences for time, measurements, and currency.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            {/* Time Format */}
+            <div>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>🕐 Time Format</label>
+              <select
+                value={preferences.timeFormat}
+                onChange={(e) => updatePreferences({ timeFormat: e.target.value as TimeFormat })}
+                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem' }}
+              >
+                {Object.entries(TIME_FORMAT_LABELS).map(([value, label]) => (
+                  <option key={value} value={value} style={{ background: '#1e293b' }}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {/* Measurement System */}
+            <div>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>📏 Measurements</label>
+              <select
+                value={preferences.measurementSystem}
+                onChange={(e) => updatePreferences({ measurementSystem: e.target.value as MeasurementSystem })}
+                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem' }}
+              >
+                {Object.entries(MEASUREMENT_SYSTEM_LABELS).map(([value, label]) => (
+                  <option key={value} value={value} style={{ background: '#1e293b' }}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {/* Currency */}
+            <div>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>💰 Currency</label>
+              <select
+                value={preferences.currency}
+                onChange={(e) => updatePreferences({ currency: e.target.value as Currency })}
+                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem' }}
+              >
+                {Object.entries(CURRENCY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value} style={{ background: '#1e293b' }}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '1rem', textAlign: 'center' }}>
+            These preferences are saved automatically and used across all tools.
+          </p>
         </DashboardCard>
 
         {/* API Keys Card */}

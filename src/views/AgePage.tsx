@@ -49,6 +49,10 @@ export class AgePage extends Component<{}, AgePageState> {
     }, 100);
   };
 
+  private reset = () => {
+    this.setState({ birthDate: '', result: null });
+  };
+
   componentDidMount() {
     applySEO('age');
   }
@@ -141,10 +145,16 @@ export class AgePage extends Component<{}, AgePageState> {
               <label style={{ color: '#fff', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Enter your birth date</label>
               <input type="date" value={birthDate} onChange={(e) => this.setState({ birthDate: e.target.value })}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '1rem', colorScheme: 'dark', boxSizing: 'border-box' }} />
-              <button onClick={this.calculateAge}
-                style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                Calculate My Age 🎂
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={this.calculateAge}
+                  style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                  Calculate My Age 🎂
+                </button>
+                <button onClick={this.reset}
+                  style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                  🔄
+                </button>
+              </div>
             </div>
           </View>
 

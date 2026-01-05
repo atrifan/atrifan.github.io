@@ -34,6 +34,10 @@ export class PercentPage extends Component<{}, PercentPageState> {
     }, 100);
   };
 
+  private reset = () => {
+    this.setState({ value1: '', value2: '', result: null });
+  };
+
   private calculate = () => {
     const { mode, value1, value2 } = this.state;
     const v1 = parseFloat(value1);
@@ -103,10 +107,16 @@ export class PercentPage extends Component<{}, PercentPageState> {
                 <input type="number" placeholder="Value" value={value2} onChange={(e) => this.setState({ value2: e.target.value })}
                   style={{ width: '120px', padding: '1rem', fontSize: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', textAlign: 'center' }} />
               </div>
-              <button onClick={this.calculate}
-                style={{ marginTop: '1.5rem', width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                Calculate
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button onClick={this.calculate}
+                  style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                  Calculate
+                </button>
+                <button onClick={this.reset}
+                  style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                  🔄
+                </button>
+              </div>
             </div>
           </View>
 

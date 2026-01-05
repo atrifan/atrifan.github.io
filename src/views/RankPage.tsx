@@ -73,6 +73,15 @@ export class RankPage extends Component<{}, RankPageState> {
     setTimeout(() => this.resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
 
+  private reset = () => {
+    this.setState({
+      ageYears: '', ageMonths: '', ageUnit: 'years', gender: null,
+      height: '', weight: '', heightUnit: 'cm', weightUnit: 'kg',
+      eyeColor: null, hairColor: null, skinTone: null, ethnicity: null,
+      bloodType: null, handedness: null, funnelSteps: [], showAlert: false, alertMessage: ''
+    });
+  };
+
   private convertHeight = (): number | null => {
     const { height, heightUnit } = this.state;
     if (!height) return null;
@@ -463,9 +472,15 @@ export class RankPage extends Component<{}, RankPageState> {
                 </div>
               </div>
 
-              <button onClick={this.calculate} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                Calculate Rarity 🔍
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={this.calculate} style={{ flex: 1, padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                  Calculate Rarity 🔍
+                </button>
+                <button onClick={this.reset}
+                  style={{ padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                  🔄
+                </button>
+              </div>
             </div>
           </View>
 

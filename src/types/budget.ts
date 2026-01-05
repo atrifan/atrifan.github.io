@@ -4,7 +4,7 @@
 
 export type SavingsIntensity = 'light' | 'medium' | 'aggressive';
 
-export type Currency = 'EUR' | 'USD' | 'GBP' | 'RON';
+export type Currency = 'EUR' | 'USD' | 'GBP' | 'RON' | 'JPY';
 
 export interface BasicBudgetInput {
   currency: Currency;
@@ -99,5 +99,6 @@ export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: '$',
   GBP: '£',
   RON: 'lei',
+  JPY: '¥',
 };
 

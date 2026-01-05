@@ -63,6 +63,14 @@ export class MatchPage extends Component<{}, MatchPageState> {
     }
   };
 
+  private reset = () => {
+    this.setState({
+      person1: { mode: 'sign', sign: '', birthDate: '' },
+      person2: { mode: 'sign', sign: '', birthDate: '' },
+      result: null,
+    });
+  };
+
   private updatePerson = (personKey: 'person1' | 'person2', updates: Partial<PersonInput>) => {
     this.setState(prev => ({
       ...prev,
@@ -133,9 +141,15 @@ export class MatchPage extends Component<{}, MatchPageState> {
               {this.renderPersonInput('person1', '💜 You')}
               {this.renderPersonInput('person2', '💛 Your Partner')}
             </div>
-            <button onClick={this.handleCalculate} disabled={!canCalculate} style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: canCalculate ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)' : 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '12px', cursor: canCalculate ? 'pointer' : 'not-allowed', opacity: canCalculate ? 1 : 0.6 }}>
-              {result ? 'Recalculate 💕' : 'Check Compatibility 💕'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={this.handleCalculate} disabled={!canCalculate} style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: canCalculate ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)' : 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '12px', cursor: canCalculate ? 'pointer' : 'not-allowed', opacity: canCalculate ? 1 : 0.6 }}>
+                {result ? 'Recalculate 💕' : 'Check Compatibility 💕'}
+              </button>
+              <button onClick={this.reset}
+                style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                🔄
+              </button>
+            </div>
           </View>
 
           {/* Results Ad - between form and results */}

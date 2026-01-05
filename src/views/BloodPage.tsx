@@ -10,6 +10,7 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { MeasurementSystem } from '../types/preferences';
 
 // Blood type genetics data
 const BLOOD_TYPE_ALLELES: Record<string, string[]> = {
@@ -101,14 +102,18 @@ interface BloodPageState {
   showRhWarning: boolean;
 }
 
-export class BloodPage extends Component<object, BloodPageState> {
+interface BloodPageProps {
+  initialUnitSystem?: MeasurementSystem;
+}
+
+class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
   private resultRef: RefObject<HTMLDivElement> = createRef();
 
-  constructor(props: object) {
+  constructor(props: BloodPageProps) {
     super(props);
     this.state = {
       mode: 'donation',
-      unitSystem: 'metric',
+      unitSystem: props.initialUnitSystem || 'metric',
       age: '',
       weight: '',
       height: '',
@@ -138,6 +143,16 @@ export class BloodPage extends Component<object, BloodPageState> {
     setTimeout(() => {
       this.resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
+  };
+
+  private reset = () => {
+    this.setState({
+      age: '', weight: '', height: '', heightFeet: '', heightInches: '',
+      gender: 'male', bloodType: 'O', rhFactor: '+',
+      fatherBloodType: 'A', fatherRh: '+', motherBloodType: 'B', motherRh: '+',
+      donationResult: null, compatibilityResult: null, babyResult: null,
+      showAgeWarning: false, showWeightWarning: false, showRhWarning: false,
+    });
   };
 
   // Calculate blood volume (Nadler's formula)
@@ -663,23 +678,29 @@ export class BloodPage extends Component<object, BloodPageState> {
                       ))}
                     </div>
                   </div>
-                  <button
-                    onClick={this.calculateDonation}
-                    disabled={!age || !weight || (unitSystem === 'metric' ? !height : !heightFeet)}
-                    style={{
-                      padding: '1rem',
-                      background: (age && weight && (unitSystem === 'metric' ? height : heightFeet)) ? gradient : 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '1.1rem',
-                      cursor: (age && weight && (unitSystem === 'metric' ? height : heightFeet)) ? 'pointer' : 'not-allowed',
-                      marginTop: '0.5rem',
-                    }}
-                  >
-                    Check Eligibility
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button
+                      onClick={this.calculateDonation}
+                      disabled={!age || !weight || (unitSystem === 'metric' ? !height : !heightFeet)}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        background: (age && weight && (unitSystem === 'metric' ? height : heightFeet)) ? gradient : 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '1.1rem',
+                        cursor: (age && weight && (unitSystem === 'metric' ? height : heightFeet)) ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      Check Eligibility
+                    </button>
+                    <button onClick={this.reset}
+                      style={{ padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                      🔄
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -743,22 +764,28 @@ export class BloodPage extends Component<object, BloodPageState> {
                       ))}
                     </div>
                   </div>
-                  <button
-                    onClick={this.calculateCompatibility}
-                    style={{
-                      width: '100%',
-                      padding: '1rem',
-                      background: gradient,
-                      border: 'none',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '1.1rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Check Compatibility
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={this.calculateCompatibility}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        background: gradient,
+                        border: 'none',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '1.1rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Check Compatibility
+                    </button>
+                    <button onClick={this.reset}
+                      style={{ padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                      🔄
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -875,21 +902,28 @@ export class BloodPage extends Component<object, BloodPageState> {
                     </div>
                   </div>
 
-                  <button
-                    onClick={this.calculateBabyBlood}
-                    style={{
-                      padding: '1rem',
-                      background: gradient,
-                      border: 'none',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '1.1rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Predict Baby&apos;s Blood Type
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={this.calculateBabyBlood}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        background: gradient,
+                        border: 'none',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '1.1rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Predict Baby&apos;s Blood Type
+                    </button>
+                    <button onClick={this.reset}
+                      style={{ padding: '1rem', fontSize: '1.1rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                      🔄
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1232,4 +1266,12 @@ export class BloodPage extends Component<object, BloodPageState> {
     );
   }
 }
+
+// Wrapper functional component to inject preferences
+import { usePreferences } from '../contexts/PreferencesContext';
+
+export const BloodPage: React.FC = () => {
+  const { preferences } = usePreferences();
+  return <BloodPageClass initialUnitSystem={preferences.measurementSystem} />;
+};
 

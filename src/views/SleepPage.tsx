@@ -68,6 +68,10 @@ export class SleepPage extends Component<{}, SleepPageState> {
     }, 100);
   };
 
+  private reset = () => {
+    this.setState({ wakeTime: '07:00', sleepTime: '22:00', ageGroup: 'adult', results: [] });
+  };
+
   private getQuality = (hours: number): SleepResult['quality'] => {
     const { ageGroup } = this.state;
     const rec = SLEEP_RECOMMENDATIONS[ageGroup];
@@ -269,10 +273,16 @@ export class SleepPage extends Component<{}, SleepPageState> {
                   <input type="time" value={sleepTime} onChange={(e) => this.setState({ sleepTime: e.target.value })} style={inputStyle} />
                 </>
               )}
-              <button onClick={mode === 'sleepNow' ? this.calculateSleepNow : mode === 'wakeUp' ? this.calculateWakeUp : this.calculateSleepAt}
-                style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-                {mode === 'sleepNow' ? 'Calculate Wake Times' : mode === 'wakeUp' ? 'Calculate Sleep Times' : 'Calculate Wake Times'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={mode === 'sleepNow' ? this.calculateSleepNow : mode === 'wakeUp' ? this.calculateWakeUp : this.calculateSleepAt}
+                  style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                  {mode === 'sleepNow' ? 'Calculate Wake Times' : mode === 'wakeUp' ? 'Calculate Sleep Times' : 'Calculate Wake Times'}
+                </button>
+                <button onClick={this.reset}
+                  style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                  🔄
+                </button>
+              </div>
             </div>
           </View>
 

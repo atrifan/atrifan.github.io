@@ -1,4 +1,6 @@
-import { Component } from 'react';
+'use client';
+
+import { useState, useEffect } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { WeightForm } from '../components/WeightForm';
 import { ResultsDisplay } from '../components/ResultsDisplay';
@@ -12,30 +14,23 @@ import { WeightCalculator } from '../utils/WeightCalculator';
 import { UserInput, WeightLossPlan } from '../types';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-interface CutPageState {
-  plan: WeightLossPlan | null;
-}
+import { usePreferences } from '../contexts/PreferencesContext';
 
 /**
  * CUT - Weight Loss Calculator Page
  */
-export class CutPage extends Component<{}, CutPageState> {
-  constructor(props: {}) {
-    super(props);
-    this.state = {
-      plan: null
-    };
-  }
+export const CutPage: React.FC = () => {
+  const { preferences } = usePreferences();
+  const [plan, setPlan] = useState<WeightLossPlan | null>(null);
 
-  componentDidMount() {
+  useEffect(() => {
     applySEO('cut');
-  }
+  }, []);
 
-  private handleFormSubmit = (input: UserInput): void => {
-    const plan = WeightCalculator.generatePlan(input);
-    this.setState({ plan });
-    
+  const handleFormSubmit = (input: UserInput): void => {
+    const newPlan = WeightCalculator.generatePlan(input);
+    setPlan(newPlan);
+
     setTimeout(() => {
       const resultsElement = document.getElementById('results');
       if (resultsElement) {
@@ -43,9 +38,6 @@ export class CutPage extends Component<{}, CutPageState> {
       }
     }, 100);
   };
-
-  render() {
-    const { plan } = this.state;
 
     return (
       <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
@@ -104,7 +96,7 @@ export class CutPage extends Component<{}, CutPageState> {
           {/* Main Content */}
           <View marginBottom="size-400">
             {/* Form Section */}
-            <WeightForm onSubmit={this.handleFormSubmit} />
+            <WeightForm onSubmit={handleFormSubmit} initialUnitSystem={preferences.measurementSystem} />
           </View>
 
           {/* Results Ad - between form and results */}
@@ -127,6 +119,5 @@ export class CutPage extends Component<{}, CutPageState> {
         </View>
       </View>
     );
-  }
-}
+};
 

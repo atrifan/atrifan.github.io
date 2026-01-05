@@ -2,11 +2,13 @@ import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { Sex, UserInput } from '../types';
 import { AlertModal } from './AlertModal';
+import { MeasurementSystem } from '../types/preferences';
 
 type UnitSystem = 'metric' | 'imperial';
 
 interface WeightFormProps {
   onSubmit: (input: UserInput) => void;
+  initialUnitSystem?: MeasurementSystem;
 }
 
 interface PendingSubmission {
@@ -103,8 +105,8 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
   constructor(props: WeightFormProps) {
     super(props);
 
-    // Detect user's locale for default unit system
-    const defaultUnit = this.detectUnitSystem();
+    // Use preference if provided, otherwise default to metric
+    const defaultUnit: UnitSystem = props.initialUnitSystem || 'metric';
 
     this.state = {
       age: '',
@@ -125,11 +127,6 @@ export class WeightForm extends Component<WeightFormProps, WeightFormState> {
       pendingSubmission: null,
       isBlockingWarning: false
     };
-  }
-
-  private detectUnitSystem(): UnitSystem {
-    // Default to metric system
-    return 'metric';
   }
 
   // Convert feet/inches to cm

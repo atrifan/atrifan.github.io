@@ -8,6 +8,10 @@ interface BudgetResultsDisplayProps {
   onReset: () => void;
 }
 
+interface BudgetResultsDisplayState {
+  showAllMonths: boolean;
+}
+
 const cardStyle: React.CSSProperties = {
   background: 'rgba(255, 255, 255, 0.1)',
   backdropFilter: 'blur(10px)',
@@ -21,7 +25,13 @@ const statStyle: React.CSSProperties = {
   padding: '1rem',
 };
 
-export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps> {
+export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, BudgetResultsDisplayState> {
+  constructor(props: BudgetResultsDisplayProps) {
+    super(props);
+    this.state = {
+      showAllMonths: false,
+    };
+  }
   private formatCurrency(amount: number): string {
     const symbol = CURRENCY_SYMBOLS[this.props.currency];
     return `${symbol}${Math.round(amount).toLocaleString()}`;
@@ -154,12 +164,14 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps> {
 
   private renderMonthlyBreakdown() {
     const { plan } = this.props;
-    const preview = plan.breakdown.slice(0, 6);
+    const { showAllMonths } = this.state;
+    const displayMonths = showAllMonths ? plan.breakdown : plan.breakdown.slice(0, 6);
+    const hasMore = plan.breakdown.length > 6;
 
     return (
       <div style={cardStyle}>
         <h3 style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700, marginBottom: '1rem' }}>
-          📅 Monthly Projection (First 6 Months)
+          📅 Monthly Projection {showAllMonths ? `(All ${plan.breakdown.length} Months)` : '(First 6 Months)'}
         </h3>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
@@ -171,24 +183,55 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps> {
               </tr>
             </thead>
             <tbody>
-              {preview.map((month, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                  <td style={{ padding: '0.75rem', color: '#fff' }}>{month.month}</td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
-                    +{this.formatCurrency(month.targetSavings)}
-                  </td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>
-                    {this.formatCurrency(month.cumulativeSavings)}
-                  </td>
-                </tr>
-              ))}
+              {displayMonths.map((month, i) => {
+                const isLastMonth = showAllMonths && i === plan.breakdown.length - 1;
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <td style={{ padding: '0.75rem', color: '#fff' }}>{month.month}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
+                      +{this.formatCurrency(month.targetSavings)}
+                    </td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>
+                      {this.formatCurrency(month.cumulativeSavings)}
+                      {isLastMonth && <span style={{ marginLeft: '0.5rem' }}>🎉</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        {plan.breakdown.length > 6 && (
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', textAlign: 'center', marginTop: '1rem' }}>
-            ... and {plan.breakdown.length - 6} more months
-          </p>
+        {hasMore && (
+          <button
+            onClick={() => this.setState({ showAllMonths: !showAllMonths })}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              marginTop: '1rem',
+              padding: '0.75rem',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '10px',
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+          >
+            <span style={{
+              transition: 'transform 0.3s',
+              transform: showAllMonths ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}>
+              ▼
+            </span>
+            {showAllMonths ? 'Show Less' : `View All ${plan.breakdown.length} Months`}
+          </button>
         )}
       </div>
     );

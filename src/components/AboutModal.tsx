@@ -96,19 +96,17 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         <div style={{ padding: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
           {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <div style={{
-              width: '64px',
-              height: '64px',
-              margin: '0 auto 1rem',
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2rem',
-            }}>
-              ⚡
-            </div>
+            <img
+              src="/tulzo-logo.png"
+              alt="Tulzo"
+              width={64}
+              height={64}
+              style={{
+                margin: '0 auto 1rem',
+                borderRadius: '16px',
+                display: 'block',
+              }}
+            />
             <h2 style={{
               color: '#fff',
               fontSize: 'clamp(1.5rem, 4vw, 2rem)',

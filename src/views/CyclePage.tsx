@@ -68,6 +68,16 @@ export class CyclePage extends Component<object, CyclePageState> {
     }, 100);
   };
 
+  private reset = () => {
+    const today = new Date();
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    this.setState({
+      lastPeriodDate: twoWeeksAgo.toISOString().split('T')[0],
+      cycleLength: 28, periodLength: 5, result: null, simplified: false, isFirstDay: true
+    });
+  };
+
   private calculateCycle = () => {
     const { lastPeriodDate, simplified, isFirstDay } = this.state;
     // In simplified mode, use average values
@@ -261,9 +271,15 @@ export class CyclePage extends Component<object, CyclePageState> {
               </div>
             )}
 
-            <button onClick={this.calculateCycle} style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
-              Calculate My Cycle
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={this.calculateCycle} style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                Calculate My Cycle
+              </button>
+              <button onClick={this.reset}
+                style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                🔄
+              </button>
+            </div>
           </View>
 
           {result && this.renderResults(result)}

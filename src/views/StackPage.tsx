@@ -1,4 +1,6 @@
-import { Component } from 'react';
+'use client';
+
+import { useState, useEffect } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { BudgetForm } from '../components/BudgetForm';
 import { BudgetResultsDisplay } from '../components/BudgetResultsDisplay';
@@ -12,32 +14,25 @@ import { BudgetCalculator } from '../utils/BudgetCalculator';
 import { FullBudgetInput, SavingsPlan, Currency } from '../types/budget';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-interface StackPageState {
-  plan: SavingsPlan | null;
-  currency: Currency;
-}
+import { usePreferences } from '../contexts/PreferencesContext';
 
 /**
  * STACK - Budget & Savings Planner
  * Stack your bread 💰
  */
-export class StackPage extends Component<{}, StackPageState> {
-  constructor(props: {}) {
-    super(props);
-    this.state = {
-      plan: null,
-      currency: 'EUR',
-    };
-  }
+export const StackPage: React.FC = () => {
+  const { preferences } = usePreferences();
+  const [plan, setPlan] = useState<SavingsPlan | null>(null);
+  const [currency, setCurrency] = useState<Currency>('EUR');
 
-  componentDidMount() {
+  useEffect(() => {
     applySEO('stack');
-  }
+  }, []);
 
-  private handleFormSubmit = (input: FullBudgetInput) => {
-    const plan = BudgetCalculator.calculatePlan(input);
-    this.setState({ plan, currency: input.currency });
+  const handleFormSubmit = (input: FullBudgetInput) => {
+    const newPlan = BudgetCalculator.calculatePlan(input);
+    setPlan(newPlan);
+    setCurrency(input.currency);
 
     // Scroll to results
     setTimeout(() => {
@@ -45,12 +40,9 @@ export class StackPage extends Component<{}, StackPageState> {
     }, 100);
   };
 
-  private handleReset = () => {
-    this.setState({ plan: null });
+  const handleReset = () => {
+    setPlan(null);
   };
-
-  render() {
-    const { plan, currency } = this.state;
 
     return (
       <View
@@ -118,7 +110,7 @@ export class StackPage extends Component<{}, StackPageState> {
 
             {/* Form - always visible */}
             <View UNSAFE_style={{ marginTop: '1.5rem' }}>
-              <BudgetForm onSubmit={this.handleFormSubmit} />
+              <BudgetForm onSubmit={handleFormSubmit} initialCurrency={preferences.currency} />
             </View>
 
             {/* Results Ad - between form and results */}
@@ -134,7 +126,7 @@ export class StackPage extends Component<{}, StackPageState> {
                 <BudgetResultsDisplay
                   plan={plan}
                   currency={currency}
-                  onReset={this.handleReset}
+                  onReset={handleReset}
                 />
               </View>
             )}
@@ -150,6 +142,5 @@ export class StackPage extends Component<{}, StackPageState> {
         </Flex>
       </View>
     );
-  }
-}
+};
 

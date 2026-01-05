@@ -1,3 +1,5 @@
+'use client';
+
 import { Component, createRef, RefObject } from 'react';
 import { View, Flex } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
@@ -10,12 +12,14 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { TimeFormat, MeasurementSystem } from '../types/preferences';
 
 interface ZonePageState {
   fromZone: string;
   targetZones: string[];
   inputTime: string;
   hasConverted: boolean;
+  weatherData: Record<string, WeatherData>;
 }
 
 interface TimezoneInfo {
@@ -23,6 +27,13 @@ interface TimezoneInfo {
   label: string;
   city: string;
   offset: number;
+  lat?: number;
+  lon?: number;
+}
+
+interface WeatherData {
+  temp: number;
+  icon: string;
 }
 
 const TIMEZONES: TimezoneInfo[] = [
@@ -31,70 +42,76 @@ const TIMEZONES: TimezoneInfo[] = [
   // Manual offsets
   { id: 'UTC-12', label: 'UTC-12:00', city: 'UTC-12', offset: -12 },
   { id: 'UTC-11', label: 'UTC-11:00', city: 'UTC-11', offset: -11 },
-  { id: 'UTC-10', label: 'UTC-10:00 (Hawaii)', city: 'Hawaii', offset: -10 },
-  { id: 'UTC-9', label: 'UTC-09:00 (Alaska)', city: 'Alaska', offset: -9 },
-  { id: 'UTC-8', label: 'UTC-08:00 (Pacific)', city: 'Pacific', offset: -8 },
-  { id: 'UTC-7', label: 'UTC-07:00 (Mountain)', city: 'Mountain', offset: -7 },
-  { id: 'UTC-6', label: 'UTC-06:00 (Central)', city: 'Central', offset: -6 },
-  { id: 'UTC-5', label: 'UTC-05:00 (Eastern)', city: 'Eastern', offset: -5 },
+  { id: 'UTC-10', label: 'UTC-10:00 (Hawaii)', city: 'Hawaii', offset: -10, lat: 21.31, lon: -157.86 },
+  { id: 'UTC-9', label: 'UTC-09:00 (Alaska)', city: 'Alaska', offset: -9, lat: 61.22, lon: -149.90 },
+  { id: 'UTC-8', label: 'UTC-08:00 (Pacific)', city: 'Pacific', offset: -8, lat: 34.05, lon: -118.24 },
+  { id: 'UTC-7', label: 'UTC-07:00 (Mountain)', city: 'Mountain', offset: -7, lat: 39.74, lon: -104.99 },
+  { id: 'UTC-6', label: 'UTC-06:00 (Central)', city: 'Central', offset: -6, lat: 41.88, lon: -87.63 },
+  { id: 'UTC-5', label: 'UTC-05:00 (Eastern)', city: 'Eastern', offset: -5, lat: 40.71, lon: -74.01 },
   { id: 'UTC-4', label: 'UTC-04:00 (Atlantic)', city: 'Atlantic', offset: -4 },
-  { id: 'UTC-3', label: 'UTC-03:00 (Brazil)', city: 'Brazil', offset: -3 },
+  { id: 'UTC-3', label: 'UTC-03:00 (Brazil)', city: 'Brazil', offset: -3, lat: -23.55, lon: -46.63 },
   { id: 'UTC-2', label: 'UTC-02:00', city: 'UTC-2', offset: -2 },
-  { id: 'UTC-1', label: 'UTC-01:00 (Azores)', city: 'Azores', offset: -1 },
-  { id: 'UTC+1', label: 'UTC+01:00 (CET)', city: 'CET', offset: 1 },
-  { id: 'UTC+2', label: 'UTC+02:00 (EET)', city: 'EET', offset: 2 },
-  { id: 'UTC+3', label: 'UTC+03:00 (Moscow)', city: 'Moscow', offset: 3 },
-  { id: 'UTC+4', label: 'UTC+04:00 (Dubai)', city: 'Dubai', offset: 4 },
-  { id: 'UTC+5', label: 'UTC+05:00 (Pakistan)', city: 'Pakistan', offset: 5 },
-  { id: 'UTC+5.5', label: 'UTC+05:30 (India)', city: 'India', offset: 5.5 },
-  { id: 'UTC+6', label: 'UTC+06:00 (Bangladesh)', city: 'Bangladesh', offset: 6 },
-  { id: 'UTC+7', label: 'UTC+07:00 (Bangkok)', city: 'Bangkok', offset: 7 },
-  { id: 'UTC+8', label: 'UTC+08:00 (Singapore/China)', city: 'Singapore', offset: 8 },
-  { id: 'UTC+9', label: 'UTC+09:00 (Tokyo/Seoul)', city: 'Tokyo', offset: 9 },
-  { id: 'UTC+10', label: 'UTC+10:00 (Sydney)', city: 'Sydney', offset: 10 },
+  { id: 'UTC-1', label: 'UTC-01:00 (Azores)', city: 'Azores', offset: -1, lat: 37.74, lon: -25.68 },
+  { id: 'UTC+1', label: 'UTC+01:00 (CET)', city: 'CET', offset: 1, lat: 48.86, lon: 2.35 },
+  { id: 'UTC+2', label: 'UTC+02:00 (EET)', city: 'EET', offset: 2, lat: 37.98, lon: 23.73 },
+  { id: 'UTC+3', label: 'UTC+03:00 (Moscow)', city: 'Moscow', offset: 3, lat: 55.76, lon: 37.62 },
+  { id: 'UTC+4', label: 'UTC+04:00 (Dubai)', city: 'Dubai', offset: 4, lat: 25.20, lon: 55.27 },
+  { id: 'UTC+5', label: 'UTC+05:00 (Pakistan)', city: 'Pakistan', offset: 5, lat: 24.86, lon: 67.01 },
+  { id: 'UTC+5.5', label: 'UTC+05:30 (India)', city: 'India', offset: 5.5, lat: 28.61, lon: 77.21 },
+  { id: 'UTC+6', label: 'UTC+06:00 (Bangladesh)', city: 'Bangladesh', offset: 6, lat: 23.81, lon: 90.41 },
+  { id: 'UTC+7', label: 'UTC+07:00 (Bangkok)', city: 'Bangkok', offset: 7, lat: 13.76, lon: 100.50 },
+  { id: 'UTC+8', label: 'UTC+08:00 (Singapore/China)', city: 'Singapore', offset: 8, lat: 1.35, lon: 103.82 },
+  { id: 'UTC+9', label: 'UTC+09:00 (Tokyo/Seoul)', city: 'Tokyo', offset: 9, lat: 35.68, lon: 139.69 },
+  { id: 'UTC+10', label: 'UTC+10:00 (Sydney)', city: 'Sydney', offset: 10, lat: -33.87, lon: 151.21 },
   { id: 'UTC+11', label: 'UTC+11:00', city: 'UTC+11', offset: 11 },
-  { id: 'UTC+12', label: 'UTC+12:00 (Auckland)', city: 'Auckland', offset: 12 },
+  { id: 'UTC+12', label: 'UTC+12:00 (Auckland)', city: 'Auckland', offset: 12, lat: -36.85, lon: 174.76 },
   // Major cities
-  { id: 'America/New_York', label: 'New York, USA (EST/EDT)', city: 'New York', offset: -5 },
-  { id: 'America/Los_Angeles', label: 'Los Angeles, USA (PST/PDT)', city: 'Los Angeles', offset: -8 },
-  { id: 'America/Chicago', label: 'Chicago, USA (CST/CDT)', city: 'Chicago', offset: -6 },
-  { id: 'America/Denver', label: 'Denver, USA (MST/MDT)', city: 'Denver', offset: -7 },
-  { id: 'America/Toronto', label: 'Toronto, Canada (EST/EDT)', city: 'Toronto', offset: -5 },
-  { id: 'America/Vancouver', label: 'Vancouver, Canada (PST/PDT)', city: 'Vancouver', offset: -8 },
-  { id: 'America/Mexico_City', label: 'Mexico City (CST)', city: 'Mexico City', offset: -6 },
-  { id: 'America/Sao_Paulo', label: 'São Paulo, Brazil (BRT)', city: 'São Paulo', offset: -3 },
-  { id: 'Europe/London', label: 'London, UK (GMT/BST)', city: 'London', offset: 0 },
-  { id: 'Europe/Paris', label: 'Paris, France (CET/CEST)', city: 'Paris', offset: 1 },
-  { id: 'Europe/Berlin', label: 'Berlin, Germany (CET/CEST)', city: 'Berlin', offset: 1 },
-  { id: 'Europe/Rome', label: 'Rome, Italy (CET/CEST)', city: 'Rome', offset: 1 },
-  { id: 'Europe/Madrid', label: 'Madrid, Spain (CET/CEST)', city: 'Madrid', offset: 1 },
-  { id: 'Europe/Amsterdam', label: 'Amsterdam, Netherlands (CET/CEST)', city: 'Amsterdam', offset: 1 },
-  { id: 'Europe/Moscow', label: 'Moscow, Russia (MSK)', city: 'Moscow', offset: 3 },
-  { id: 'Europe/Istanbul', label: 'Istanbul, Turkey (TRT)', city: 'Istanbul', offset: 3 },
-  { id: 'Asia/Dubai', label: 'Dubai, UAE (GST)', city: 'Dubai', offset: 4 },
-  { id: 'Asia/Kolkata', label: 'Mumbai/Delhi, India (IST)', city: 'India', offset: 5.5 },
-  { id: 'Asia/Bangkok', label: 'Bangkok, Thailand (ICT)', city: 'Bangkok', offset: 7 },
-  { id: 'Asia/Singapore', label: 'Singapore (SGT)', city: 'Singapore', offset: 8 },
-  { id: 'Asia/Hong_Kong', label: 'Hong Kong (HKT)', city: 'Hong Kong', offset: 8 },
-  { id: 'Asia/Shanghai', label: 'Shanghai/Beijing, China (CST)', city: 'Shanghai', offset: 8 },
-  { id: 'Asia/Tokyo', label: 'Tokyo, Japan (JST)', city: 'Tokyo', offset: 9 },
+  { id: 'America/New_York', label: 'New York, USA (EST/EDT)', city: 'New York', offset: -5, lat: 40.71, lon: -74.01 },
+  { id: 'America/Los_Angeles', label: 'Los Angeles, USA (PST/PDT)', city: 'Los Angeles', offset: -8, lat: 34.05, lon: -118.24 },
+  { id: 'America/Chicago', label: 'Chicago, USA (CST/CDT)', city: 'Chicago', offset: -6, lat: 41.88, lon: -87.63 },
+  { id: 'America/Denver', label: 'Denver, USA (MST/MDT)', city: 'Denver', offset: -7, lat: 39.74, lon: -104.99 },
+  { id: 'America/Toronto', label: 'Toronto, Canada (EST/EDT)', city: 'Toronto', offset: -5, lat: 43.65, lon: -79.38 },
+  { id: 'America/Vancouver', label: 'Vancouver, Canada (PST/PDT)', city: 'Vancouver', offset: -8, lat: 49.28, lon: -123.12 },
+  { id: 'America/Mexico_City', label: 'Mexico City (CST)', city: 'Mexico City', offset: -6, lat: 19.43, lon: -99.13 },
+  { id: 'America/Sao_Paulo', label: 'São Paulo, Brazil (BRT)', city: 'São Paulo', offset: -3, lat: -23.55, lon: -46.63 },
+  { id: 'Europe/London', label: 'London, UK (GMT/BST)', city: 'London', offset: 0, lat: 51.51, lon: -0.13 },
+  { id: 'Europe/Paris', label: 'Paris, France (CET/CEST)', city: 'Paris', offset: 1, lat: 48.86, lon: 2.35 },
+  { id: 'Europe/Berlin', label: 'Berlin, Germany (CET/CEST)', city: 'Berlin', offset: 1, lat: 52.52, lon: 13.41 },
+  { id: 'Europe/Rome', label: 'Rome, Italy (CET/CEST)', city: 'Rome', offset: 1, lat: 41.90, lon: 12.50 },
+  { id: 'Europe/Madrid', label: 'Madrid, Spain (CET/CEST)', city: 'Madrid', offset: 1, lat: 40.42, lon: -3.70 },
+  { id: 'Europe/Amsterdam', label: 'Amsterdam, Netherlands (CET/CEST)', city: 'Amsterdam', offset: 1, lat: 52.37, lon: 4.90 },
+  { id: 'Europe/Moscow', label: 'Moscow, Russia (MSK)', city: 'Moscow', offset: 3, lat: 55.76, lon: 37.62 },
+  { id: 'Europe/Istanbul', label: 'Istanbul, Turkey (TRT)', city: 'Istanbul', offset: 3, lat: 41.01, lon: 28.98 },
+  { id: 'Asia/Dubai', label: 'Dubai, UAE (GST)', city: 'Dubai', offset: 4, lat: 25.20, lon: 55.27 },
+  { id: 'Asia/Kolkata', label: 'Mumbai/Delhi, India (IST)', city: 'India', offset: 5.5, lat: 28.61, lon: 77.21 },
+  { id: 'Asia/Bangkok', label: 'Bangkok, Thailand (ICT)', city: 'Bangkok', offset: 7, lat: 13.76, lon: 100.50 },
+  { id: 'Asia/Singapore', label: 'Singapore (SGT)', city: 'Singapore', offset: 8, lat: 1.35, lon: 103.82 },
+  { id: 'Asia/Hong_Kong', label: 'Hong Kong (HKT)', city: 'Hong Kong', offset: 8, lat: 22.32, lon: 114.17 },
+  { id: 'Asia/Shanghai', label: 'Shanghai/Beijing, China (CST)', city: 'Shanghai', offset: 8, lat: 31.23, lon: 121.47 },
+  { id: 'Asia/Tokyo', label: 'Tokyo, Japan (JST)', city: 'Tokyo', offset: 9, lat: 35.68, lon: 139.69 },
   { id: 'Asia/Seoul', label: 'Seoul, South Korea (KST)', city: 'Seoul', offset: 9 },
   { id: 'Australia/Sydney', label: 'Sydney, Australia (AEST/AEDT)', city: 'Sydney', offset: 10 },
   { id: 'Australia/Melbourne', label: 'Melbourne, Australia (AEST/AEDT)', city: 'Melbourne', offset: 10 },
   { id: 'Pacific/Auckland', label: 'Auckland, New Zealand (NZST/NZDT)', city: 'Auckland', offset: 12 },
 ];
 
-export class ZonePage extends Component<{}, ZonePageState> {
+interface ZonePageProps {
+  timeFormat?: TimeFormat;
+  measurementSystem?: MeasurementSystem;
+}
+
+class ZonePageClass extends Component<ZonePageProps, ZonePageState> {
   private resultsRef: RefObject<HTMLDivElement> = createRef();
 
-  constructor(props: {}) {
+  constructor(props: ZonePageProps) {
     super(props);
     // Use fixed time for SSR, will be updated in componentDidMount
     this.state = {
       fromZone: 'UTC',
       targetZones: ['America/New_York', 'Europe/London', 'Asia/Tokyo'],
       inputTime: '12:00',
-      hasConverted: false
+      hasConverted: false,
+      weatherData: {}
     };
   }
 
@@ -105,7 +122,59 @@ export class ZonePage extends Component<{}, ZonePageState> {
     this.setState({
       inputTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
     });
+    // Fetch weather for default target zones
+    this.fetchWeatherForZones(this.state.targetZones);
   }
+
+  private getWeatherIcon = (code: number): string => {
+    if (code === 0) return '☀️';
+    if (code <= 3) return '⛅';
+    if (code <= 48) return '🌫️';
+    if (code <= 55) return '🌧️';
+    if (code <= 65) return '🌧️';
+    if (code <= 77) return '❄️';
+    if (code <= 82) return '🌦️';
+    if (code <= 86) return '🌨️';
+    return '⛈️';
+  };
+
+  private fetchWeatherForZones = async (zoneIds: string[]) => {
+    const newWeatherData: Record<string, WeatherData> = { ...this.state.weatherData };
+
+    for (const zoneId of zoneIds) {
+      if (newWeatherData[zoneId]) continue; // Already fetched
+
+      const tz = TIMEZONES.find(t => t.id === zoneId);
+      if (!tz?.lat || !tz?.lon) continue;
+
+      try {
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${tz.lat}&longitude=${tz.lon}&current=temperature_2m,weather_code&timezone=auto`
+        );
+        const data = await res.json();
+        if (data.current) {
+          newWeatherData[zoneId] = {
+            temp: Math.round(data.current.temperature_2m),
+            icon: this.getWeatherIcon(data.current.weather_code)
+          };
+        }
+      } catch {
+        // Silently fail for individual zones
+      }
+    }
+
+    this.setState({ weatherData: newWeatherData });
+  };
+
+  private formatTimeValue = (hours: number, minutes: number): string => {
+    const { timeFormat } = this.props;
+    if (timeFormat === '12h') {
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const h12 = hours % 12 || 12;
+      return `${h12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    }
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
 
   private convertTime = (fromOffset: number, toOffset: number, hours: number, minutes: number) => {
     const diff = toOffset - fromOffset;
@@ -121,15 +190,26 @@ export class ZonePage extends Component<{}, ZonePageState> {
     }
 
     const h = Math.floor(newHours);
-    const m = minutes + (newHours % 1) * 60;
-    return `${h.toString().padStart(2, '0')}:${Math.round(m).toString().padStart(2, '0')}${dayChange}`;
+    const m = Math.round(minutes + (newHours % 1) * 60);
+    return `${this.formatTimeValue(h, m)}${dayChange}`;
+  };
+
+  private formatTemperature = (tempC: number): string => {
+    const { measurementSystem } = this.props;
+    if (measurementSystem === 'imperial') {
+      const tempF = Math.round(tempC * 9 / 5 + 32);
+      return `${tempF}°F`;
+    }
+    return `${tempC}°C`;
   };
 
   private addTargetZone = () => {
     const { targetZones } = this.state;
     const availableZones = TIMEZONES.filter(tz => !targetZones.includes(tz.id) && tz.id !== this.state.fromZone);
     if (availableZones.length > 0) {
-      this.setState({ targetZones: [...targetZones, availableZones[0].id] });
+      const newZoneId = availableZones[0].id;
+      this.setState({ targetZones: [...targetZones, newZoneId] });
+      this.fetchWeatherForZones([newZoneId]);
     }
   };
 
@@ -145,13 +225,27 @@ export class ZonePage extends Component<{}, ZonePageState> {
     const updated = [...targetZones];
     updated[index] = value;
     this.setState({ targetZones: updated });
+    this.fetchWeatherForZones([value]);
   };
 
   private convert = () => {
     this.setState({ hasConverted: true }, () => {
+      // Fetch weather for all target zones when converting
+      this.fetchWeatherForZones(this.state.targetZones);
       setTimeout(() => {
         this.resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
+    });
+  };
+
+  private reset = () => {
+    const now = new Date();
+    this.setState({
+      fromZone: 'UTC',
+      targetZones: ['America/New_York', 'Europe/London', 'Asia/Tokyo'],
+      inputTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+      hasConverted: false,
+      weatherData: {}
     });
   };
 
@@ -293,10 +387,16 @@ export class ZonePage extends Component<{}, ZonePageState> {
               </button>
             </div>
 
-            <button onClick={this.convert}
-              style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', marginTop: '1rem' }}>
-              Convert Time 🌐
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+              <button onClick={this.convert}
+                style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+                Convert Time 🌐
+              </button>
+              <button onClick={this.reset}
+                style={{ padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px', cursor: 'pointer' }}>
+                🔄
+              </button>
+            </div>
           </div>
           </View>
 
@@ -317,12 +417,19 @@ export class ZonePage extends Component<{}, ZonePageState> {
                     const convertedTime = this.convertTime(fromOffset, tz.offset, hours, minutes);
                     const offsetDiff = tz.offset - fromOffset;
                     const offsetStr = offsetDiff >= 0 ? `+${offsetDiff}h` : `${offsetDiff}h`;
+                    const weather = this.state.weatherData[tzId];
                     return (
                       <div key={index} style={{ background: gradient, borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        <div style={{ textAlign: 'left' }}>
+                        <div style={{ textAlign: 'left', flex: 1 }}>
                           <div style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>{tz.city}</div>
                           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>{tz.id.startsWith('UTC') ? tz.id : tz.label.split('(')[1]?.replace(')', '') || ''}</div>
                         </div>
+                        {weather && (
+                          <div style={{ textAlign: 'center', padding: '0 0.75rem' }}>
+                            <div style={{ fontSize: '1.5rem' }}>{weather.icon}</div>
+                            <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{this.formatTemperature(weather.temp)}</div>
+                          </div>
+                        )}
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.5rem' }}>{convertedTime}</div>
                           <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{offsetStr} from source</div>
@@ -352,4 +459,17 @@ export class ZonePage extends Component<{}, ZonePageState> {
     );
   }
 }
+
+// Wrapper functional component to inject preferences
+import { usePreferences } from '../contexts/PreferencesContext';
+
+export const ZonePage: React.FC = () => {
+  const { preferences } = usePreferences();
+  return (
+    <ZonePageClass
+      timeFormat={preferences.timeFormat}
+      measurementSystem={preferences.measurementSystem}
+    />
+  );
+};
 

@@ -2,9 +2,11 @@ import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { FullBudgetInput, SavingsIntensity, Currency, AdvancedExpenses, CURRENCY_SYMBOLS } from '../types/budget';
 import { ExpenseCalculator } from './ExpenseCalculator';
+import { Currency as PreferenceCurrency } from '../types/preferences';
 
 interface BudgetFormProps {
   onSubmit: (input: FullBudgetInput) => void;
+  initialCurrency?: PreferenceCurrency;
 }
 
 interface BudgetFormState {
@@ -90,8 +92,10 @@ const FormField: React.FC<FormFieldProps> = ({ icon, label, children }) => (
 export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
   constructor(props: BudgetFormProps) {
     super(props);
+    // Map preference currency to budget currency (they're compatible)
+    const initialCurrency: Currency = (props.initialCurrency as Currency) || 'EUR';
     this.state = {
-      currency: 'EUR',
+      currency: initialCurrency,
       monthlyNetIncome: '',
       monthlyFixedExpenses: '',
       currentSavings: '',

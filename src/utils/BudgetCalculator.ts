@@ -140,19 +140,24 @@ export class BudgetCalculator {
   }
   
   private static generateBreakdown(
-    input: FullBudgetInput, 
-    months: number, 
+    input: FullBudgetInput,
+    months: number,
     monthlySavings: number,
     livingBudget: number
   ): MonthlyBreakdown[] {
     const breakdown: MonthlyBreakdown[] = [];
     let cumulativeSavings = input.currentSavings;
     const now = new Date();
-    
-    for (let i = 0; i < Math.min(months, 24); i++) {
+
+    // Continue until we reach the goal or hit 60 months max
+    const maxMonths = Math.min(Math.max(months, 60), 60);
+
+    for (let i = 0; i < maxMonths; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      
+
+      const newCumulativeSavings = cumulativeSavings + monthlySavings;
+
       breakdown.push({
         month: monthName,
         startBalance: cumulativeSavings,
@@ -161,13 +166,18 @@ export class BudgetCalculator {
         fixedExpenses: input.monthlyFixedExpenses,
         estimatedLiving: livingBudget,
         targetSavings: monthlySavings,
-        endBalance: cumulativeSavings + monthlySavings,
-        cumulativeSavings: cumulativeSavings + monthlySavings,
+        endBalance: newCumulativeSavings,
+        cumulativeSavings: newCumulativeSavings,
       });
-      
-      cumulativeSavings += monthlySavings;
+
+      cumulativeSavings = newCumulativeSavings;
+
+      // Stop once we've reached or exceeded the goal
+      if (cumulativeSavings >= input.savingsGoal) {
+        break;
+      }
     }
-    
+
     return breakdown;
   }
 }
