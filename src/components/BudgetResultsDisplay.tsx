@@ -188,7 +188,7 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
         )}
 
         {/* Shareable Content Container */}
-        <div ref={this.shareableRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%)', padding: '1.5rem', borderRadius: '24px' }}>
+        <div ref={this.shareableRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.25) 50%, rgba(4, 120, 87, 0.15) 100%)', padding: '1.5rem', borderRadius: '24px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
 
         {/* Main Stats */}
         <div style={cardStyle}>
