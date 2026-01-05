@@ -102,7 +102,7 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
 
   private renderTooltipHeader(label: string, id: string, align: 'left' | 'right' = 'right') {
     return (
-      <th style={{ padding: '0.5rem', textAlign: align, color: 'rgba(255,255,255,0.7)' }}>
+      <th style={{ padding: '0.35rem 0.25rem', textAlign: align, color: 'rgba(255,255,255,0.7)' }}>
         <button
           data-tooltip-trigger
           onClick={(e) => { e.stopPropagation(); this.toggleTooltip(id); }}
@@ -115,11 +115,11 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
             font: 'inherit',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '0.25rem',
+            gap: '0.15rem',
             whiteSpace: 'nowrap',
           }}
         >
-          {label} <span style={{ fontSize: '0.7rem' }}>ℹ️</span>
+          {label}<span style={{ fontSize: '0.6rem', opacity: 0.7 }}>ℹ️</span>
         </button>
       </th>
     );
@@ -145,7 +145,8 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(4px)',
           zIndex: 10000,
           display: 'flex',
           alignItems: 'center',
@@ -156,13 +157,13 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: 'rgba(15, 23, 42, 0.98)',
-            border: '0.0625rem solid rgba(255,255,255,0.3)',
+            background: '#0f172a',
+            border: '0.125rem solid rgba(255,255,255,0.4)',
             borderRadius: '1rem',
             padding: '1.25rem',
-            maxWidth: '20rem',
-            width: '100%',
-            boxShadow: '0 1rem 3rem rgba(0,0,0,0.6)',
+            maxWidth: '18rem',
+            width: '90%',
+            boxShadow: '0 1rem 3rem rgba(0,0,0,0.8)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -196,15 +197,26 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
   private formatCurrency(amount: number): string {
     const symbol = CURRENCY_SYMBOLS[this.props.currency];
     // Use fixed 2 decimals, then format with proper separators
+    // Add space between symbol and value to allow line break on small screens
     const formatted = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${symbol}${formatted}`;
+    return `${symbol} ${formatted}`;
   }
 
   private formatCurrencyPrecise(amount: number): string {
     const symbol = CURRENCY_SYMBOLS[this.props.currency];
     // Use 2 decimals consistently
+    // Add space between symbol and value to allow line break on small screens
     const formatted = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${symbol}${formatted}`;
+    return `${symbol} ${formatted}`;
+  }
+
+  // Format "January 2025" to "Jan '25"
+  private formatShortMonth(monthStr: string): string {
+    const parts = monthStr.split(' ');
+    if (parts.length !== 2) return monthStr;
+    const monthShort = parts[0].substring(0, 3);
+    const yearShort = "'" + parts[1].substring(2);
+    return `${monthShort} ${yearShort}`;
   }
 
   render() {
@@ -226,32 +238,32 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
 
         {/* Main Stats */}
         <div style={cardStyle}>
-          <h3 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center', marginBottom: '1.5rem' }}>
+          <h3 style={{ color: '#fff', fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', fontWeight: 800, textAlign: 'center', marginBottom: '1rem' }}>
             📊 Your Savings Plan
-            {plan.savingsMode === 'duration' && <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)', display: 'block', marginTop: '0.25rem' }}>({plan.monthsToGoal} month savings projection)</span>}
+            {plan.savingsMode === 'duration' && <span style={{ fontSize: 'clamp(0.7rem, 2.5vw, 0.9rem)', fontWeight: 500, color: 'rgba(255,255,255,0.7)', display: 'block', marginTop: '0.25rem' }}>({plan.monthsToGoal} month projection)</span>}
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(6.25rem, 1fr))', gap: '0.75rem' }}>
-            <div style={{ ...statStyle, padding: '0.75rem', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.3rem, 5vw, 2rem)', fontWeight: 800, color: '#10b981', wordBreak: 'break-word' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+            <div style={{ ...statStyle, padding: '0.5rem', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.5rem)', fontWeight: 800, color: '#10b981', wordBreak: 'break-word' }}>
                 {this.formatCurrency(plan.monthlyTargetSavings)}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>Save Monthly</div>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(0.65rem, 2vw, 0.8rem)' }}>Save/Mo</div>
             </div>
-            <div style={{ ...statStyle, padding: '0.75rem', background: 'rgba(251, 191, 36, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.3rem, 5vw, 2rem)', fontWeight: 800, color: '#fbbf24', wordBreak: 'break-word' }}>
+            <div style={{ ...statStyle, padding: '0.5rem', background: 'rgba(251, 191, 36, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.5rem)', fontWeight: 800, color: '#fbbf24', wordBreak: 'break-word' }}>
                 {this.formatCurrency(plan.finalBalance)}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
-                {plan.savingsMode === 'duration' ? 'Final Balance' : 'Goal Amount'}
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(0.65rem, 2vw, 0.8rem)' }}>
+                {plan.savingsMode === 'duration' ? 'Final' : 'Goal'}
               </div>
             </div>
-            <div style={{ ...statStyle, padding: '0.75rem', background: 'rgba(96, 165, 250, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.3rem, 5vw, 2rem)', fontWeight: 800, color: '#60a5fa' }}>
+            <div style={{ ...statStyle, padding: '0.5rem', background: 'rgba(96, 165, 250, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.9rem, 3.5vw, 1.5rem)', fontWeight: 800, color: '#60a5fa' }}>
                 {plan.monthsToGoal}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
-                {plan.savingsMode === 'duration' ? 'Months' : 'Months to Goal'}
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(0.65rem, 2vw, 0.8rem)' }}>
+                Months
               </div>
             </div>
           </div>
@@ -298,44 +310,44 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
 
         {/* Budget Breakdown - What You Have Left to Spend */}
         <div style={cardStyle}>
-          <h3 style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+          <h3 style={{ color: '#fff', fontSize: 'clamp(1rem, 3.5vw, 1.3rem)', fontWeight: 700, marginBottom: '0.25rem' }}>
             💸 Your Spending Money
           </h3>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 0.5rem 0' }}>
-            After savings &amp; fixed expenses, this is your flexible spending budget
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.7rem, 2.5vw, 0.85rem)', margin: '0 0 0.5rem 0' }}>
+            After savings &amp; fixed expenses
           </p>
           <div style={{
             background: 'rgba(167, 139, 250, 0.1)',
             borderRadius: '0.5rem',
-            padding: '0.5rem 0.75rem',
-            marginBottom: '1rem',
-            fontSize: '0.8rem',
+            padding: '0.4rem 0.6rem',
+            marginBottom: '0.75rem',
+            fontSize: 'clamp(0.65rem, 2vw, 0.8rem)',
             color: 'rgba(255,255,255,0.7)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem'
+            gap: '0.4rem'
           }}>
             <span>💡</span>
-            <span>For fun, entertainment, dining out, shopping &amp; unexpected expenses</span>
+            <span>For fun, dining, shopping &amp; extras</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(6.25rem, 1fr))', gap: '0.75rem', textAlign: 'center' }}>
-            <div style={{ padding: '0.75rem', background: 'rgba(167, 139, 250, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', fontWeight: 700, color: '#a78bfa', wordBreak: 'break-word' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+            <div style={{ padding: '0.5rem', background: 'rgba(167, 139, 250, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.85rem, 3vw, 1.3rem)', fontWeight: 700, color: '#a78bfa', wordBreak: 'break-word' }}>
                 {this.formatCurrency(plan.weeklyBudgetForLiving)}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>Weekly</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.6rem, 2vw, 0.75rem)' }}>Weekly</div>
             </div>
-            <div style={{ padding: '0.75rem', background: 'rgba(244, 114, 182, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', fontWeight: 700, color: '#f472b6', wordBreak: 'break-word' }}>
+            <div style={{ padding: '0.5rem', background: 'rgba(244, 114, 182, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.85rem, 3vw, 1.3rem)', fontWeight: 700, color: '#f472b6', wordBreak: 'break-word' }}>
                 {this.formatCurrency(plan.dailyBudgetForLiving)}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>Daily</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.6rem, 2vw, 0.75rem)' }}>Daily</div>
             </div>
-            <div style={{ padding: '0.75rem', background: 'rgba(52, 211, 153, 0.15)', borderRadius: '0.75rem' }}>
-              <div style={{ fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', fontWeight: 700, color: '#34d399', wordBreak: 'break-word' }}>
-                {plan.targetDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+            <div style={{ padding: '0.5rem', background: 'rgba(52, 211, 153, 0.15)', borderRadius: '0.75rem' }}>
+              <div style={{ fontSize: 'clamp(0.85rem, 3vw, 1.3rem)', fontWeight: 700, color: '#34d399', wordBreak: 'break-word' }}>
+                {plan.targetDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>Target Date</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.6rem, 2vw, 0.75rem)' }}>Target</div>
             </div>
           </div>
         </div>
@@ -414,9 +426,9 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
     const hasMore = plan.breakdown.length > 6;
 
     return (
-      <div style={{ ...cardStyle, overflow: 'visible', paddingTop: '2rem' }} ref={this.containerRef}>
-        <h3 style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700, marginBottom: '1rem', marginTop: '-0.5rem' }}>
-          📅 Monthly Projection {showAllMonths ? `(All ${plan.breakdown.length} Months)` : '(First 6 Months)'}
+      <div style={{ ...cardStyle, overflow: 'visible', padding: '1rem' }} ref={this.containerRef}>
+        <h3 style={{ color: '#fff', fontSize: 'clamp(1rem, 3.5vw, 1.3rem)', fontWeight: 700, marginBottom: '0.75rem', marginTop: 0 }}>
+          📅 Projection {showAllMonths ? `(${plan.breakdown.length}mo)` : '(6mo)'}
         </h3>
 
         {/* Column Legend with Tooltips - Outside scrollable area */}
@@ -424,21 +436,21 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
           display: 'flex',
           flexWrap: 'wrap',
           gap: '0.5rem',
-          marginBottom: '0.75rem',
-          fontSize: '0.8rem',
-          color: 'rgba(255,255,255,0.6)'
+          marginBottom: '0.5rem',
+          fontSize: 'clamp(0.65rem, 2vw, 0.75rem)',
+          color: 'rgba(255,255,255,0.5)'
         }}>
-          <span>Tap column headers for info:</span>
+          <span>Tap headers for info</span>
         </div>
 
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'clamp(0.75rem, 2.5vw, 0.9rem)', minWidth: plan.interestEnabled ? '26rem' : '20rem' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.25rem', padding: '0 0.25rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'clamp(0.65rem, 2.2vw, 0.85rem)', minWidth: plan.interestEnabled ? '18rem' : '15rem' }}>
             <thead>
-              <tr style={{ borderBottom: '0.125rem solid rgba(255,255,255,0.2)' }}>
-                <th style={{ padding: '0.5rem', textAlign: 'left', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>Month</th>
+              <tr style={{ borderBottom: '0.0625rem solid rgba(255,255,255,0.2)' }}>
+                <th style={{ padding: '0.35rem 0.25rem', textAlign: 'left', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}></th>
                 {this.renderTooltipHeader('Start', 'start')}
                 {this.renderTooltipHeader('Save', 'save')}
-                {plan.interestEnabled && this.renderTooltipHeader('Interest', 'interest')}
+                {plan.interestEnabled && this.renderTooltipHeader('Int', 'interest')}
                 {this.renderTooltipHeader('Total', 'total')}
               </tr>
             </thead>
@@ -446,22 +458,22 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
               {displayMonths.map((month, i) => {
                 const isLastMonth = showAllMonths && i === plan.breakdown.length - 1;
                 return (
-                  <tr key={i} style={{ borderBottom: '0.0625rem solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '0.5rem', color: '#fff', whiteSpace: 'nowrap' }}>{month.month}</td>
-                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <tr key={i} style={{ borderBottom: '0.0625rem solid rgba(255,255,255,0.08)' }}>
+                    <td style={{ padding: '0.35rem 0.25rem', color: '#fff', whiteSpace: 'nowrap', fontWeight: 500 }}>{this.formatShortMonth(month.month)}</td>
+                    <td style={{ padding: '0.35rem 0.25rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {this.formatCurrencyPrecise(month.startBalance)}
                     </td>
-                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#10b981', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.35rem 0.25rem', textAlign: 'right', color: '#10b981', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       +{this.formatCurrency(month.targetSavings)}
                     </td>
                     {plan.interestEnabled && (
-                      <td style={{ padding: '0.5rem', textAlign: 'right', color: '#34d399', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.35rem 0.25rem', textAlign: 'right', color: '#34d399', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         +{this.formatCurrencyPrecise(month.interestEarned)}
                       </td>
                     )}
-                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.35rem 0.25rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {this.formatCurrencyPrecise(month.cumulativeSavings)}
-                      {isLastMonth && <span style={{ marginLeft: '0.25rem' }}>🎉</span>}
+                      {isLastMonth && <span style={{ marginLeft: '0.15rem' }}>🎉</span>}
                     </td>
                   </tr>
                 );
