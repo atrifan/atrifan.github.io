@@ -101,61 +101,95 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
   }
 
   private renderTooltipHeader(label: string, id: string, align: 'left' | 'right' = 'right') {
-    const isActive = this.state.activeTooltip === id;
     return (
-      <th style={{ padding: '0.75rem', textAlign: align, color: 'rgba(255,255,255,0.7)' }}>
-        <span style={{ position: 'relative', display: 'inline-block' }}>
-          <button
-            data-tooltip-trigger
-            onClick={(e) => { e.stopPropagation(); this.toggleTooltip(id); }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'inherit',
-              cursor: 'pointer',
-              padding: 0,
-              font: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-            }}
-          >
-            {label} <span style={{ fontSize: '0.7rem' }}>ℹ️</span>
-          </button>
-          {isActive && (
-            <div style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 0.5rem)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 9999,
-              background: 'rgba(15, 23, 42, 0.98)',
-              border: '0.0625rem solid rgba(255,255,255,0.3)',
-              borderRadius: '0.625rem',
-              padding: '0.85rem',
-              fontSize: '0.85rem',
-              color: 'rgba(255,255,255,0.95)',
-              width: '16.25rem',
-              boxShadow: '0 0.5rem 2rem rgba(0,0,0,0.6)',
-              lineHeight: 1.5,
-              textAlign: 'left',
-            }}>
-              {this.getTooltipText(id)}
-              <div style={{
-                position: 'absolute',
-                bottom: '-0.375rem',
-                left: '50%',
-                transform: 'translateX(-50%) rotate(45deg)',
-                width: '0.75rem',
-                height: '0.75rem',
-                background: 'rgba(15, 23, 42, 0.98)',
-                borderRight: '0.0625rem solid rgba(255,255,255,0.3)',
-                borderBottom: '0.0625rem solid rgba(255,255,255,0.3)',
-              }} />
-            </div>
-          )}
-        </span>
+      <th style={{ padding: '0.5rem', textAlign: align, color: 'rgba(255,255,255,0.7)' }}>
+        <button
+          data-tooltip-trigger
+          onClick={(e) => { e.stopPropagation(); this.toggleTooltip(id); }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'inherit',
+            cursor: 'pointer',
+            padding: 0,
+            font: 'inherit',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label} <span style={{ fontSize: '0.7rem' }}>ℹ️</span>
+        </button>
       </th>
+    );
+  }
+
+  private renderTooltipModal() {
+    const { activeTooltip } = this.state;
+    if (!activeTooltip) return null;
+
+    const labels: Record<string, string> = {
+      start: 'Start Balance',
+      save: 'Monthly Savings',
+      interest: 'Interest Earned',
+      total: 'Total Balance',
+    };
+
+    return (
+      <div
+        onClick={() => this.setState({ activeTooltip: null })}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: 'rgba(15, 23, 42, 0.98)',
+            border: '0.0625rem solid rgba(255,255,255,0.3)',
+            borderRadius: '1rem',
+            padding: '1.25rem',
+            maxWidth: '20rem',
+            width: '100%',
+            boxShadow: '0 1rem 3rem rgba(0,0,0,0.6)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h4 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+              {labels[activeTooltip] || activeTooltip}
+            </h4>
+            <button
+              onClick={() => this.setState({ activeTooltip: null })}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: '#fff',
+                width: '2rem',
+                height: '2rem',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '1rem',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0, fontSize: '0.9rem', lineHeight: 1.6 }}>
+            {this.getTooltipText(activeTooltip)}
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -265,11 +299,25 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
         {/* Budget Breakdown - What You Have Left to Spend */}
         <div style={cardStyle}>
           <h3 style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-            💸 Spending Budget
+            💸 Your Spending Money
           </h3>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem 0' }}>
-            What you have left to spend after savings
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 0.5rem 0' }}>
+            After savings &amp; fixed expenses, this is your flexible spending budget
           </p>
+          <div style={{
+            background: 'rgba(167, 139, 250, 0.1)',
+            borderRadius: '0.5rem',
+            padding: '0.5rem 0.75rem',
+            marginBottom: '1rem',
+            fontSize: '0.8rem',
+            color: 'rgba(255,255,255,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <span>💡</span>
+            <span>For fun, entertainment, dining out, shopping &amp; unexpected expenses</span>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(6.25rem, 1fr))', gap: '0.75rem', textAlign: 'center' }}>
             <div style={{ padding: '0.75rem', background: 'rgba(167, 139, 250, 0.15)', borderRadius: '0.75rem' }}>
               <div style={{ fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', fontWeight: 700, color: '#a78bfa', wordBreak: 'break-word' }}>
@@ -370,11 +418,24 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
         <h3 style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700, marginBottom: '1rem', marginTop: '-0.5rem' }}>
           📅 Monthly Projection {showAllMonths ? `(All ${plan.breakdown.length} Months)` : '(First 6 Months)'}
         </h3>
-        <div style={{ overflow: 'visible', position: 'relative' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+
+        {/* Column Legend with Tooltips - Outside scrollable area */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          marginBottom: '0.75rem',
+          fontSize: '0.8rem',
+          color: 'rgba(255,255,255,0.6)'
+        }}>
+          <span>Tap column headers for info:</span>
+        </div>
+
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'clamp(0.75rem, 2.5vw, 0.9rem)', minWidth: plan.interestEnabled ? '26rem' : '20rem' }}>
             <thead>
               <tr style={{ borderBottom: '0.125rem solid rgba(255,255,255,0.2)' }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: 'rgba(255,255,255,0.7)' }}>Month</th>
+                <th style={{ padding: '0.5rem', textAlign: 'left', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>Month</th>
                 {this.renderTooltipHeader('Start', 'start')}
                 {this.renderTooltipHeader('Save', 'save')}
                 {plan.interestEnabled && this.renderTooltipHeader('Interest', 'interest')}
@@ -386,21 +447,21 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
                 const isLastMonth = showAllMonths && i === plan.breakdown.length - 1;
                 return (
                   <tr key={i} style={{ borderBottom: '0.0625rem solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '0.75rem', color: '#fff' }}>{month.month}</td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>
+                    <td style={{ padding: '0.5rem', color: '#fff', whiteSpace: 'nowrap' }}>{month.month}</td>
+                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {this.formatCurrencyPrecise(month.startBalance)}
                     </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
+                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#10b981', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       +{this.formatCurrency(month.targetSavings)}
                     </td>
                     {plan.interestEnabled && (
-                      <td style={{ padding: '0.75rem', textAlign: 'right', color: '#34d399', fontWeight: 600 }}>
+                      <td style={{ padding: '0.5rem', textAlign: 'right', color: '#34d399', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         +{this.formatCurrencyPrecise(month.interestEarned)}
                       </td>
                     )}
-                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>
+                    <td style={{ padding: '0.5rem', textAlign: 'right', color: '#fbbf24', fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {this.formatCurrencyPrecise(month.cumulativeSavings)}
-                      {isLastMonth && <span style={{ marginLeft: '0.5rem' }}>🎉</span>}
+                      {isLastMonth && <span style={{ marginLeft: '0.25rem' }}>🎉</span>}
                     </td>
                   </tr>
                 );
@@ -456,6 +517,9 @@ export class BudgetResultsDisplay extends Component<BudgetResultsDisplayProps, B
             Please check with your financial institution for exact terms and conditions.
           </div>
         )}
+
+        {/* Tooltip Modal */}
+        {this.renderTooltipModal()}
       </div>
     );
   }
