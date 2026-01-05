@@ -6,15 +6,36 @@ export type SavingsIntensity = 'light' | 'medium' | 'aggressive';
 
 export type Currency = 'EUR' | 'USD' | 'GBP' | 'RON' | 'JPY';
 
+// Compounding frequency for interest calculations
+export type CompoundingFrequency = 'yearly' | 'monthly' | 'daily';
+
+// Savings mode: target a goal amount OR save for a duration
+export type SavingsMode = 'goal' | 'duration';
+
+// Interest configuration (optional)
+export interface InterestConfig {
+  enabled: boolean;
+  annualRate: number; // e.g., 5 for 5%
+  compounding: CompoundingFrequency;
+}
+
 export interface BasicBudgetInput {
   currency: Currency;
   monthlyIncome: number;
   monthlyTaxes: number;
   monthlyFixedExpenses: number; // rent, utilities, subscriptions, etc.
   currentSavings: number;
-  savingsGoal: number;
-  targetDate?: string; // ISO date string, optional
+
+  // Savings mode
+  savingsMode: SavingsMode;
+  savingsGoal?: number; // Required if mode is 'goal'
+  savingsDurationMonths?: number; // Required if mode is 'duration'
+
+  targetDate?: string; // ISO date string, optional (only for 'goal' mode)
   intensity: SavingsIntensity;
+
+  // Interest configuration (optional)
+  interest?: InterestConfig;
 }
 
 export interface AdvancedExpenses {
@@ -55,8 +76,10 @@ export interface MonthlyBreakdown {
   fixedExpenses: number;
   estimatedLiving: number;
   targetSavings: number;
+  interestEarned: number; // Interest earned this month
   endBalance: number;
   cumulativeSavings: number;
+  cumulativeInterest: number; // Total interest earned so far
 }
 
 export interface SavingsPlan {
@@ -67,21 +90,31 @@ export interface SavingsPlan {
   monthlyBudgetForLiving: number;    // what's left for daily expenses
   weeklyBudgetForLiving: number;     // weekly breakdown
   dailyBudgetForLiving: number;      // daily breakdown
-  
+
   // Timeline
   monthsToGoal: number;
   targetDate: Date;
-  
+
+  // Savings mode
+  savingsMode: SavingsMode;
+  finalBalance: number; // Final balance at end of plan
+
+  // Interest info (if enabled)
+  interestEnabled: boolean;
+  totalInterestEarned: number;
+  annualInterestRate?: number;
+  compoundingFrequency?: CompoundingFrequency;
+
   // Warnings
   isAchievable: boolean;
   warnings: string[];
-  
+
   // Tips based on intensity
   tips: string[];
-  
+
   // Monthly breakdown
   breakdown: MonthlyBreakdown[];
-  
+
   // Advanced analysis (if advanced mode)
   estimatedMonthlyDiningOut?: number;
   estimatedMonthlyGroceries?: number;

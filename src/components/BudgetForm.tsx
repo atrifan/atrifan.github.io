@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import { View } from '@adobe/react-spectrum';
-import { FullBudgetInput, SavingsIntensity, Currency, AdvancedExpenses, CURRENCY_SYMBOLS } from '../types/budget';
+import { FullBudgetInput, SavingsIntensity, Currency, AdvancedExpenses, CURRENCY_SYMBOLS, SavingsMode, CompoundingFrequency } from '../types/budget';
 import { ExpenseCalculator } from './ExpenseCalculator';
 import { Currency as PreferenceCurrency } from '../types/preferences';
 
@@ -14,13 +14,24 @@ interface BudgetFormState {
   monthlyNetIncome: string;
   monthlyFixedExpenses: string;
   currentSavings: string;
+  // Savings mode
+  savingsMode: SavingsMode;
   savingsGoal: string;
+  savingsDurationMonths: string;
   targetDate: string;
   useTargetDate: boolean;
   intensity: SavingsIntensity;
   advancedMode: boolean;
   showExpenseCalculator: boolean;
   dateError: string;
+  // Interest settings
+  interestEnabled: boolean;
+  interestRate: string;
+  compoundingFrequency: CompoundingFrequency;
+  // Rate calculator
+  showRateCalculator: boolean;
+  rateCalculatorType: 'daily' | 'monthly';
+  rateCalculatorValue: string;
   // Advanced expenses
   weeklyDiningOut: string;
   waterPrice: string;
@@ -99,13 +110,25 @@ export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
       monthlyNetIncome: '',
       monthlyFixedExpenses: '',
       currentSavings: '',
+      // Savings mode
+      savingsMode: 'goal',
       savingsGoal: '',
+      savingsDurationMonths: '',
       targetDate: '',
       useTargetDate: false,
       intensity: 'medium',
       advancedMode: false,
       showExpenseCalculator: false,
       dateError: '',
+      // Interest settings
+      interestEnabled: false,
+      interestRate: '',
+      compoundingFrequency: 'yearly',
+      // Rate calculator
+      showRateCalculator: false,
+      rateCalculatorType: 'daily',
+      rateCalculatorValue: '',
+      // Advanced expenses
       weeklyDiningOut: '',
       waterPrice: '',
       cokePrice: '',
@@ -162,8 +185,8 @@ export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
     e.preventDefault();
     const s = this.state;
 
-    // Don't submit if there's a date error
-    if (s.useTargetDate && s.dateError) {
+    // Don't submit if there's a date error (only for goal mode with target date)
+    if (s.savingsMode === 'goal' && s.useTargetDate && s.dateError) {
       return;
     }
 
@@ -191,11 +214,20 @@ export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
       monthlyTaxes: 0, // User inputs NET income, no taxes needed
       monthlyFixedExpenses: parseFloat(s.monthlyFixedExpenses) || 0,
       currentSavings: parseFloat(s.currentSavings) || 0,
-      savingsGoal: parseFloat(s.savingsGoal) || 0,
-      targetDate: s.useTargetDate && s.targetDate ? s.targetDate : undefined,
+      // Savings mode
+      savingsMode: s.savingsMode,
+      savingsGoal: s.savingsMode === 'goal' ? (parseFloat(s.savingsGoal) || 0) : undefined,
+      savingsDurationMonths: s.savingsMode === 'duration' ? (parseInt(s.savingsDurationMonths) || 12) : undefined,
+      targetDate: s.savingsMode === 'goal' && s.useTargetDate && s.targetDate ? s.targetDate : undefined,
       intensity: s.intensity,
       advancedMode: s.advancedMode,
       advancedExpenses,
+      // Interest configuration
+      interest: s.interestEnabled ? {
+        enabled: true,
+        annualRate: parseFloat(s.interestRate) || 0,
+        compounding: s.compoundingFrequency,
+      } : undefined,
     });
   };
 
@@ -257,25 +289,61 @@ export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
             </p>
           </FormField>
 
-          {/* Savings */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-            <FormField icon="🏦" label={`Current Savings (${symbol})`}>
-              <input type="number" value={s.currentSavings} onChange={(e) => this.setState({ currentSavings: e.target.value })} step="0.01" style={inputStyle} placeholder="What you have" />
-            </FormField>
-            <FormField icon="🎯" label={`Savings Goal (${symbol})`}>
-              <input type="number" value={s.savingsGoal} onChange={(e) => this.setState({ savingsGoal: e.target.value })} step="0.01" style={inputStyle} placeholder="Target amount" />
-            </FormField>
-          </div>
-
-          {/* Timeline */}
-          <FormField icon="📅" label="Timeline">
-            <select value={s.useTargetDate ? 'custom' : 'auto'} onChange={(e) => this.setState({ useTargetDate: e.target.value === 'custom' })} style={selectStyle}>
-              <option value="auto">🤖 Calculate based on intensity</option>
-              <option value="custom">📆 I have a target date</option>
-            </select>
+          {/* Current Savings */}
+          <FormField icon="🏦" label={`Current Savings (${symbol})`}>
+            <input type="number" value={s.currentSavings} onChange={(e) => this.setState({ currentSavings: e.target.value })} step="0.01" style={inputStyle} placeholder="What you have saved" />
           </FormField>
 
-          {s.useTargetDate && (
+          {/* Savings Mode Toggle */}
+          <FormField icon="🎯" label="Savings Mode">
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" onClick={() => this.setState({ savingsMode: 'goal' })} style={{
+                flex: 1, padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600,
+                background: s.savingsMode === 'goal' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.1)',
+                color: '#fff', border: s.savingsMode === 'goal' ? 'none' : '2px solid rgba(255,255,255,0.3)',
+                borderRadius: '10px', cursor: 'pointer',
+              }}>
+                🎯 Target Amount
+              </button>
+              <button type="button" onClick={() => this.setState({ savingsMode: 'duration' })} style={{
+                flex: 1, padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600,
+                background: s.savingsMode === 'duration' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.1)',
+                color: '#fff', border: s.savingsMode === 'duration' ? 'none' : '2px solid rgba(255,255,255,0.3)',
+                borderRadius: '10px', cursor: 'pointer',
+              }}>
+                ⏱️ Save for Duration
+              </button>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>
+              {s.savingsMode === 'goal' ? '💡 Set a target amount to reach' : '💡 Save for a specific number of months'}
+            </p>
+          </FormField>
+
+          {/* Goal Mode: Savings Goal */}
+          {s.savingsMode === 'goal' && (
+            <FormField icon="💰" label={`Savings Goal (${symbol})`}>
+              <input type="number" value={s.savingsGoal} onChange={(e) => this.setState({ savingsGoal: e.target.value })} step="0.01" style={inputStyle} placeholder="Target amount to save" />
+            </FormField>
+          )}
+
+          {/* Duration Mode: Number of Months */}
+          {s.savingsMode === 'duration' && (
+            <FormField icon="📆" label="Savings Duration (months)">
+              <input type="number" value={s.savingsDurationMonths} onChange={(e) => this.setState({ savingsDurationMonths: e.target.value })} min="1" max="600" style={inputStyle} placeholder="How many months to save" />
+            </FormField>
+          )}
+
+          {/* Timeline (only for goal mode) */}
+          {s.savingsMode === 'goal' && (
+            <FormField icon="📅" label="Timeline">
+              <select value={s.useTargetDate ? 'custom' : 'auto'} onChange={(e) => this.setState({ useTargetDate: e.target.value === 'custom' })} style={selectStyle}>
+                <option value="auto">🤖 Calculate based on intensity</option>
+                <option value="custom">📆 I have a target date</option>
+              </select>
+            </FormField>
+          )}
+
+          {s.savingsMode === 'goal' && s.useTargetDate && (
             <FormField icon="🗓️" label="Target Date">
               <input
                 type="date"
@@ -300,8 +368,143 @@ export class BudgetForm extends Component<BudgetFormProps, BudgetFormState> {
             </FormField>
           )}
 
+          {/* Interest / Savings Account */}
+          <FormField icon="🏦" label="Savings Account Interest">
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <button type="button" onClick={() => this.setState({ interestEnabled: false })} style={{
+                flex: 1, padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600,
+                background: !s.interestEnabled ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.1)',
+                color: '#fff', border: !s.interestEnabled ? 'none' : '2px solid rgba(255,255,255,0.3)',
+                borderRadius: '10px', cursor: 'pointer',
+              }}>
+                💵 No Interest
+              </button>
+              <button type="button" onClick={() => this.setState({ interestEnabled: true })} style={{
+                flex: 1, padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600,
+                background: s.interestEnabled ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.1)',
+                color: '#fff', border: s.interestEnabled ? 'none' : '2px solid rgba(255,255,255,0.3)',
+                borderRadius: '10px', cursor: 'pointer',
+              }}>
+                📈 With Interest
+              </button>
+            </div>
+            {s.interestEnabled && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
+                      Annual Rate (%)
+                      <button
+                        type="button"
+                        onClick={() => this.setState({ showRateCalculator: !s.showRateCalculator })}
+                        style={{
+                          marginLeft: '0.5rem',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                        }}
+                        title="Calculate from daily/monthly rate"
+                      >
+                        🧮
+                      </button>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={s.interestRate}
+                      onChange={(e) => {
+                        // Allow both . and , as decimal separator
+                        const value = e.target.value.replace(',', '.');
+                        this.setState({ interestRate: value });
+                      }}
+                      style={inputStyle}
+                      placeholder="e.g., 5"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>Compounding</label>
+                    <select value={s.compoundingFrequency} onChange={(e) => this.setState({ compoundingFrequency: e.target.value as CompoundingFrequency })} style={selectStyle}>
+                      <option value="yearly">Yearly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="daily">Daily</option>
+                    </select>
+                  </div>
+                </div>
+                {/* Rate Calculator */}
+                {s.showRateCalculator && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                      🧮 Convert to Annual Rate
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select
+                        value={s.rateCalculatorType}
+                        onChange={(e) => this.setState({ rateCalculatorType: e.target.value as 'daily' | 'monthly' })}
+                        style={{ ...selectStyle, flex: '0 0 auto', width: 'auto' }}
+                      >
+                        <option value="daily">Daily %</option>
+                        <option value="monthly">Monthly %</option>
+                      </select>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={s.rateCalculatorValue}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(',', '.');
+                          this.setState({ rateCalculatorValue: value });
+                        }}
+                        style={{ ...inputStyle, flex: 1 }}
+                        placeholder={s.rateCalculatorType === 'daily' ? 'e.g., 0.0137' : 'e.g., 0.417'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rate = parseFloat(s.rateCalculatorValue) || 0;
+                          let annualRate: number;
+                          if (s.rateCalculatorType === 'daily') {
+                            // Daily rate to annual: rate * 365
+                            annualRate = rate * 365;
+                          } else {
+                            // Monthly rate to annual: rate * 12
+                            annualRate = rate * 12;
+                          }
+                          this.setState({
+                            interestRate: annualRate.toFixed(3),
+                            showRateCalculator: false,
+                            rateCalculatorValue: '',
+                          });
+                        }}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                        }}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                      {s.rateCalculatorType === 'daily'
+                        ? '💡 Annual = Daily × 365 (e.g., 0.0137% daily = 5% annual)'
+                        : '💡 Annual = Monthly × 12 (e.g., 0.417% monthly = 5% annual)'}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>
+              💡 {s.interestEnabled ? 'Interest will compound on your savings balance' : 'Enable if you have a high-yield savings account'}
+            </p>
+          </FormField>
+
           {/* Intensity */}
-          {!s.useTargetDate && (
+          {(s.savingsMode === 'duration' || !s.useTargetDate) && (
             <FormField icon="⚡" label="Savings Intensity">
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {(['light', 'medium', 'aggressive'] as SavingsIntensity[]).map((level) => (

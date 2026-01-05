@@ -468,28 +468,52 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'calculate_savings_plan': {
+      // Determine savings mode (default to 'goal' for backward compatibility)
+      const savingsMode = (args.savingsMode as 'goal' | 'duration') || 'goal';
+
+      // Build interest config if enabled
+      const interestConfig = args.interestEnabled ? {
+        enabled: true,
+        annualRate: (args.interestRate as number) || 0,
+        compounding: (args.compoundingFrequency as 'yearly' | 'monthly' | 'daily') || 'yearly',
+      } : undefined;
+
       const plan = BudgetCalculator.calculatePlan({
         monthlyIncome: args.monthlyIncome as number,
-        monthlyTaxes: args.monthlyTaxes as number,
+        monthlyTaxes: (args.monthlyTaxes as number) || 0,
         monthlyFixedExpenses: args.monthlyFixedExpenses as number,
         currentSavings: args.currentSavings as number,
-        savingsGoal: args.savingsGoal as number,
+        savingsMode,
+        savingsGoal: savingsMode === 'goal' ? (args.savingsGoal as number) : undefined,
+        savingsDurationMonths: savingsMode === 'duration' ? (args.savingsDurationMonths as number) : undefined,
         intensity: args.intensity as 'light' | 'medium' | 'aggressive',
-        currency: args.currency as 'EUR' | 'USD' | 'GBP' | 'RON',
+        currency: args.currency as 'EUR' | 'USD' | 'GBP' | 'RON' | 'JPY',
         advancedMode: false,
+        interest: interestConfig,
       });
+
+      // Helper to round to 2 decimals
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+
       return {
-        monthlyNetIncome: Math.round(plan.monthlyNetIncome),
-        monthlyDisposable: Math.round(plan.monthlyDisposable),
-        monthlyTargetSavings: Math.round(plan.monthlyTargetSavings),
-        monthlyBudgetForLiving: Math.round(plan.monthlyBudgetForLiving),
-        weeklyBudgetForLiving: Math.round(plan.weeklyBudgetForLiving),
-        dailyBudgetForLiving: Math.round(plan.dailyBudgetForLiving),
+        savingsMode: plan.savingsMode,
+        monthlyNetIncome: round2(plan.monthlyNetIncome),
+        monthlyDisposable: round2(plan.monthlyDisposable),
+        monthlyTargetSavings: round2(plan.monthlyTargetSavings),
+        monthlyBudgetForLiving: round2(plan.monthlyBudgetForLiving),
+        weeklyBudgetForLiving: round2(plan.weeklyBudgetForLiving),
+        dailyBudgetForLiving: round2(plan.dailyBudgetForLiving),
         monthsToGoal: plan.monthsToGoal,
         targetDate: plan.targetDate.toISOString().split('T')[0],
+        finalBalance: round2(plan.finalBalance),
+        interestEnabled: plan.interestEnabled,
+        totalInterestEarned: round2(plan.totalInterestEarned),
+        annualInterestRate: plan.annualInterestRate,
+        compoundingFrequency: plan.compoundingFrequency,
         isAchievable: plan.isAchievable,
         tips: plan.tips,
         warnings: plan.warnings,
+        savingsRate: round2((plan.monthlyTargetSavings / plan.monthlyDisposable) * 100),
       };
     }
     case 'calculate_date_info': {
@@ -1555,13 +1579,32 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'savings_plan': {
+      const currency = (data.currency as string) || 'USD';
+      const currencySymbol: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', RON: 'lei ' };
+      const sym = currencySymbol[currency] || '$';
+      const finalBalance = Number(data.finalBalance || 0).toLocaleString();
+      const monthlyTargetSavings = Number(data.monthlyTargetSavings || 0).toLocaleString();
+      const monthsToGoal = data.monthsToGoal || 0;
+      const savingsMode = data.savingsMode === 'duration' ? '⏱️ Duration' : '🎯 Goal';
+      const interestEnabled = data.interestEnabled;
+      const totalInterestEarned = Number(data.totalInterestEarned || 0).toLocaleString();
+      const annualInterestRate = data.annualInterestRate || 0;
+      const savingsRate = data.savingsRate || 0;
+
       content = `
         <div class="header">💰 Savings Plan</div>
-        <div class="big-number" style="color:#10b981">$${Number(data.totalSaved).toLocaleString()}</div>
-        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Total after ${data.months} months</div>
+        <div class="big-number" style="color:#10b981">${sym}${finalBalance}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">${savingsMode} • ${monthsToGoal} months</div>
         <div class="stats">
-          <div class="stat-box"><div class="stat-label">Monthly</div><div class="stat-value">$${data.monthlyAmount}</div></div>
-          <div class="stat-box"><div class="stat-label">Interest</div><div class="stat-value">${data.interestRate}%</div></div>
+          <div class="stat-box"><div class="stat-label">Monthly Savings</div><div class="stat-value">${sym}${monthlyTargetSavings}</div></div>
+          <div class="stat-box"><div class="stat-label">Savings Rate</div><div class="stat-value">${savingsRate}%</div></div>
+          ${interestEnabled ? `
+          <div class="stat-box"><div class="stat-label">Interest Rate</div><div class="stat-value">${annualInterestRate}%/yr</div></div>
+          <div class="stat-box"><div class="stat-label">Interest Earned</div><div class="stat-value" style="color:#34d399">${sym}${totalInterestEarned}</div></div>
+          ` : `
+          <div class="stat-box"><div class="stat-label">Target Date</div><div class="stat-value">${data.targetDate || 'N/A'}</div></div>
+          <div class="stat-box"><div class="stat-label">Achievable</div><div class="stat-value">${data.isAchievable ? '✅ Yes' : '⚠️ Stretch'}</div></div>
+          `}
         </div>`;
       break;
     }
@@ -1903,6 +1946,33 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               (Number(data.splitWays) > 1 ? '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">Per Person (' + data.splitWays + ' ways)</div><div class="stat-value">$' + Number(data.perPerson).toFixed(2) + '</div></div>' : '') +
             '</div>';
         }
+        case 'savings_plan': {
+          var currencySymbols = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', RON: 'lei ' };
+          var sym = currencySymbols[data.currency] || '$';
+          var finalBalance = Number(data.finalBalance || 0).toLocaleString();
+          var monthlyTargetSavings = Number(data.monthlyTargetSavings || 0).toLocaleString();
+          var monthsToGoal = data.monthsToGoal || 0;
+          var savingsMode = data.savingsMode === 'duration' ? '⏱️ Duration' : '🎯 Goal';
+          var interestEnabled = data.interestEnabled;
+          var totalInterestEarned = Number(data.totalInterestEarned || 0).toLocaleString();
+          var annualInterestRate = data.annualInterestRate || 0;
+          var savingsRate = data.savingsRate || 0;
+
+          return '<div class="header">💰 Savings Plan</div>' +
+            '<div class="big-number" style="color:#10b981">' + sym + finalBalance + '</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + savingsMode + ' • ' + monthsToGoal + ' months</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Monthly Savings</div><div class="stat-value">' + sym + monthlyTargetSavings + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Savings Rate</div><div class="stat-value">' + savingsRate + '%</div></div>' +
+              (interestEnabled ?
+                '<div class="stat-box"><div class="stat-label">Interest Rate</div><div class="stat-value">' + annualInterestRate + '%/yr</div></div>' +
+                '<div class="stat-box"><div class="stat-label">Interest Earned</div><div class="stat-value" style="color:#34d399">' + sym + totalInterestEarned + '</div></div>'
+              :
+                '<div class="stat-box"><div class="stat-label">Target Date</div><div class="stat-value">' + (data.targetDate || 'N/A') + '</div></div>' +
+                '<div class="stat-box"><div class="stat-label">Achievable</div><div class="stat-value">' + (data.isAchievable ? '✅ Yes' : '⚠️ Stretch') + '</div></div>'
+              ) +
+            '</div>';
+        }
         default: {
           // Generic widget - display key-value pairs
           const entries = Object.entries(data).slice(0, 6);
@@ -1983,7 +2053,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_ideal_weight: { idealWeight: 68, formula: 'Devine', height: 175, gender: 'male' },
     calculate_bmr: { bmr: 1650, tdee: 2275, activityLevel: 'moderate' },
     generate_weight_loss_plan: { currentWeight: 80, targetWeight: 70, weeksToGoal: 20, dailyCalories: 1800, weeklyWeightLoss: 0.5, bmr: 1700, tdee: 2300 },
-    calculate_savings_plan: { monthlySavings: 500, monthsToGoal: 24, totalSaved: 12000, disposableIncome: 2000, savingsRate: 25, currency: 'USD' },
+    calculate_savings_plan: { savingsMode: 'goal', monthlyTargetSavings: 500, monthsToGoal: 24, finalBalance: 12000, monthlyDisposable: 2000, savingsRate: 25, currency: 'USD', interestEnabled: false, totalInterestEarned: 0, targetDate: '2028-01-01', isAchievable: true },
     calculate_date_info: { dayOfWeek: 'Monday', weekNumber: 1, isLeapYear: false, dayOfYear: 1, date: '2026-01-01' },
     days_between_dates: { days: 30, weeks: 4, months: 1, startDate: '2026-01-01', endDate: '2026-01-31' },
     random_number: { result: 42, min: 1, max: 100 },
