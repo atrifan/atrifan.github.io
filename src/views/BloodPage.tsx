@@ -108,6 +108,9 @@ interface BloodPageProps {
 
 class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
   private resultRef: RefObject<HTMLDivElement> = createRef();
+  private donationResultRef: RefObject<HTMLDivElement> = createRef();
+  private compatibilityResultRef: RefObject<HTMLDivElement> = createRef();
+  private babyResultRef: RefObject<HTMLDivElement> = createRef();
 
   constructor(props: BloodPageProps) {
     super(props);
@@ -938,14 +941,14 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
           <div ref={this.resultRef}>
             {donationResult && (
               <>
-              <div style={{
+              <div ref={this.donationResultRef} style={{
                 background: donationResult.eligible
                   ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.2) 100%)'
                   : 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%)',
                 borderRadius: '24px',
                 padding: 'clamp(1.5rem, 4vw, 2rem)',
                 border: `2px solid ${donationResult.eligible ? '#22c55e' : '#ef4444'}`,
-                marginBottom: '2rem',
+                marginBottom: '1rem',
               }}>
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                   <span style={{ fontSize: '4rem' }}>
@@ -1048,9 +1051,9 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                   </ul>
                 </div>
               </div>
-              <div style={{ marginTop: '1rem', marginBottom: '2rem', textAlign: 'center' }}>
+              <div style={{ marginTop: '0.5rem', marginBottom: '2rem', textAlign: 'center' }}>
                 <ShareResults
-                  targetRef={this.resultRef}
+                  targetRef={this.donationResultRef}
                   title="Blood Donation Eligibility - Tulzo"
                   text={donationResult.eligible
                     ? `I can donate ${donationResult.amount}ml of blood! 🩸`
@@ -1062,12 +1065,12 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
 
             {compatibilityResult && (
               <>
-              <div style={{
+              <div ref={this.compatibilityResultRef} style={{
                 background: 'rgba(239, 68, 68, 0.1)',
                 borderRadius: '24px',
                 padding: 'clamp(1.5rem, 4vw, 2rem)',
                 border: '2px solid rgba(239, 68, 68, 0.3)',
-                marginBottom: '2rem',
+                marginBottom: '1rem',
               }}>
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                   <div style={{
@@ -1147,9 +1150,9 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                 </div>
 
               </div>
-              <div style={{ marginTop: '1rem', marginBottom: '2rem', textAlign: 'center' }}>
+              <div style={{ marginTop: '0.5rem', marginBottom: '2rem', textAlign: 'center' }}>
                 <ShareResults
-                  targetRef={this.resultRef}
+                  targetRef={this.compatibilityResultRef}
                   title="Blood Type Compatibility - Tulzo"
                   text={`My blood type is ${compatibilityResult.bloodType}! I can donate to ${compatibilityResult.canDonateTo.length} blood types. 🩸`}
                 />
@@ -1159,12 +1162,12 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
 
             {babyResult && (
               <>
-              <div style={{
+              <div ref={this.babyResultRef} style={{
                 background: 'rgba(167, 139, 250, 0.1)',
                 borderRadius: '24px',
                 padding: 'clamp(1.5rem, 4vw, 2rem)',
                 border: '2px solid rgba(167, 139, 250, 0.3)',
-                marginBottom: '2rem',
+                marginBottom: '1rem',
               }}>
                 <h3 style={{ color: '#a78bfa', textAlign: 'center', marginBottom: '1.5rem' }}>
                   👶 Possible Baby Blood Types
@@ -1228,9 +1231,9 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                   ⚕️ Always consult with a doctor or genetic counselor for accurate medical advice.
                 </p>
               </div>
-              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
                 <ShareResults
-                  targetRef={this.resultRef}
+                  targetRef={this.babyResultRef}
                   title="Baby Blood Type Predictor - Tulzo"
                   text={`Predicted baby blood types: ${babyResult.possibleTypes.map(t => `${t.type} (${t.percentage}%)`).join(', ')} 👶🩸`}
                 />
