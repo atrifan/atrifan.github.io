@@ -368,6 +368,7 @@ export class EclipsePage extends Component<object, EclipsePageState> {
 
           {/* Next Eclipse Highlight */}
           {nextEclipse && (
+            <>
             <div ref={this.resultRef} style={{
               background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%)',
               border: '2px solid rgba(139, 92, 246, 0.4)',
@@ -446,15 +447,15 @@ export class EclipsePage extends Component<object, EclipsePageState> {
                 {nextEclipse.duration && <span>⏱️ Duration: {nextEclipse.duration}</span>}
                 <span>📊 Magnitude: {nextEclipse.magnitude.toFixed(3)}</span>
               </div>
-
-              <div style={{ marginTop: '1.5rem' }}>
-                <ShareResults
-                  targetRef={this.resultRef}
-                  title="Eclipse Finder - Tulzo"
-                  text={`Next eclipse: ${this.getSubtypeLabel(nextEclipse.subtype)} ${nextEclipse.type} eclipse on ${this.formatDate(nextEclipse.date)}! 🌑`}
-                />
-              </div>
             </div>
+            <div style={{ marginTop: '1rem', marginBottom: '2rem', textAlign: 'center' }}>
+              <ShareResults
+                targetRef={this.resultRef}
+                title="Eclipse Finder - Tulzo"
+                text={`Next eclipse: ${this.getSubtypeLabel(nextEclipse.subtype)} ${nextEclipse.type} eclipse on ${this.formatDate(nextEclipse.date)}! 🌑`}
+              />
+            </div>
+          </>
           )}
 
           {/* Upcoming Eclipses List */}

@@ -180,14 +180,14 @@ export class TipPage extends Component<{}, TipPageState> {
                   </select>
                   {splitCount > 1 && <span style={{ color: '#f59e0b', fontWeight: 700 }}>${perPerson.toFixed(2)} each</span>}
                 </div>
-                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                  <ShareResults
-                    targetRef={this.resultRef}
-                    title="Tip Calculator - Tulzo"
-                    text={`Bill: $${bill.toFixed(2)} | Tip: ${tipPercent}% ($${tipAmount.toFixed(2)}) | Total: $${total.toFixed(2)} 💰`}
-                  />
-                </div>
               </div>
+            </div>
+            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <ShareResults
+                targetRef={this.resultRef}
+                title="Tip Calculator - Tulzo"
+                text={`Bill: $${bill.toFixed(2)} | Tip: ${tipPercent}% ($${tipAmount.toFixed(2)}) | Total: $${total.toFixed(2)} 💰`}
+              />
             </div>
           </View>
 

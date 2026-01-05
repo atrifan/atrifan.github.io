@@ -293,6 +293,7 @@ export class SleepPage extends Component<{}, SleepPageState> {
           )}
 
           {results.length > 0 && (
+            <>
             <div ref={this.resultsRef} id="sleep-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
               <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '1rem', textAlign: 'center' }}>
                 {mode === 'wakeUp' ? 'Go to sleep at:' : 'Wake up at:'}
@@ -341,14 +342,15 @@ export class SleepPage extends Component<{}, SleepPageState> {
                   ? `Each sleep cycle is ~${rec.cycleLength} min. Waking between cycles helps you feel refreshed.`
                   : `Children have shorter sleep cycles (~${rec.cycleLength} min) and need more total sleep.`}
               </p>
-              <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                <ShareResults
-                  targetRef={this.resultsRef}
-                  title="My Sleep Schedule - Tulzo"
-                  text={`Optimal sleep times for ${mode === 'wakeUp' ? 'waking at' : 'sleeping at'} ${mode === 'wakeUp' ? wakeTime : sleepTime} 😴`}
-                />
-              </div>
             </div>
+            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <ShareResults
+                targetRef={this.resultsRef}
+                title="My Sleep Schedule - Tulzo"
+                text={`Optimal sleep times for ${mode === 'wakeUp' ? 'waking at' : 'sleeping at'} ${mode === 'wakeUp' ? wakeTime : sleepTime} 😴`}
+              />
+            </div>
+          </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>

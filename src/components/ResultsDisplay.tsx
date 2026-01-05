@@ -92,14 +92,6 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
         <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.75rem', fontSize: '1.2rem' }}>
           Here's everything you need to reach your goal
         </p>
-        {/* Share Button */}
-        <div style={{ marginTop: '1.5rem' }}>
-          <ShareResults
-            targetRef={resultsRef}
-            title="My Weight Loss Plan - Tulzo CUT"
-            text={`Check out my weight loss plan! Target: ${plan.idealWeight.toFixed(1)}kg in ${plan.weeksToGoal} weeks`}
-          />
-        </div>
       </div>
 
       {/* Results content wrapper for screenshot */}
@@ -337,6 +329,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
         </div>
       </div>
       </div>{/* End of results wrapper */}
+
+      {/* Share Button - Under Results */}
+      <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+        <ShareResults
+          targetRef={resultsRef}
+          title="My Weight Loss Plan - Tulzo CUT"
+          text={`Check out my weight loss plan! Target: ${plan.idealWeight.toFixed(1)}kg in ${plan.weeksToGoal} weeks`}
+        />
+      </div>
     </View>
   );
 };

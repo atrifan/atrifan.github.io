@@ -165,29 +165,31 @@ export class AgePage extends Component<{}, AgePageState> {
           )}
 
           {result && (
-            <div ref={this.resultsRef} id="age-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(244, 114, 182, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
-              <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#f472b6', marginBottom: '0.5rem', textAlign: 'center' }}>{result.years} years old</div>
-              <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2rem', marginBottom: '1.5rem', textAlign: 'center' }}>{result.years} years, {result.months} months, and {result.days} days</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                {[{ label: 'Total Days', value: result.totalDays.toLocaleString() }, { label: 'Total Weeks', value: result.totalWeeks.toLocaleString() }, { label: 'Total Months', value: result.totalMonths.toLocaleString() }, { label: 'Total Hours', value: result.totalHours.toLocaleString() }].map((item, i) => (
-                  <div key={i} style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{item.label}</div>
-                    <div style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700 }}>{item.value}</div>
-                  </div>
-                ))}
+            <>
+              <div ref={this.resultsRef} id="age-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(244, 114, 182, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
+                <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#f472b6', marginBottom: '0.5rem', textAlign: 'center' }}>{result.years} years old</div>
+                <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2rem', marginBottom: '1.5rem', textAlign: 'center' }}>{result.years} years, {result.months} months, and {result.days} days</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                  {[{ label: 'Total Days', value: result.totalDays.toLocaleString() }, { label: 'Total Weeks', value: result.totalWeeks.toLocaleString() }, { label: 'Total Months', value: result.totalMonths.toLocaleString() }, { label: 'Total Hours', value: result.totalHours.toLocaleString() }].map((item, i) => (
+                    <div key={i} style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{item.label}</div>
+                      <div style={{ color: '#fff', fontSize: '1.3rem', fontWeight: 700 }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(244,114,182,0.2)', borderRadius: '12px', textAlign: 'center' }}>
+                  <div style={{ color: '#f472b6', fontWeight: 600 }}>🎉 Next Birthday</div>
+                  <div style={{ color: '#fff', fontSize: '1.1rem' }}>{result.daysUntilBirthday} days away ({result.nextBirthday.toLocaleDateString()})</div>
+                </div>
               </div>
-              <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(244,114,182,0.2)', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ color: '#f472b6', fontWeight: 600 }}>🎉 Next Birthday</div>
-                <div style={{ color: '#fff', fontSize: '1.1rem' }}>{result.daysUntilBirthday} days away ({result.nextBirthday.toLocaleDateString()})</div>
-              </div>
-              <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
                 <ShareResults
                   targetRef={this.resultsRef}
                   title="My Age - Tulzo"
                   text={`I'm ${result.years} years old! That's ${result.totalDays.toLocaleString()} days of life 🎂`}
                 />
               </div>
-            </div>
+            </>
           )}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>

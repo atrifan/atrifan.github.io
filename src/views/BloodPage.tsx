@@ -937,6 +937,7 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
           {/* Results */}
           <div ref={this.resultRef}>
             {donationResult && (
+              <>
               <div style={{
                 background: donationResult.eligible
                   ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.2) 100%)'
@@ -1046,20 +1047,21 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                     ))}
                   </ul>
                 </div>
-
-                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                  <ShareResults
-                    targetRef={this.resultRef}
-                    title="Blood Donation Eligibility - Tulzo"
-                    text={donationResult.eligible
-                      ? `I can donate ${donationResult.amount}ml of blood! 🩸`
-                      : 'Check your blood donation eligibility at Tulzo! 🩸'}
-                  />
-                </div>
               </div>
+              <div style={{ marginTop: '1rem', marginBottom: '2rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultRef}
+                  title="Blood Donation Eligibility - Tulzo"
+                  text={donationResult.eligible
+                    ? `I can donate ${donationResult.amount}ml of blood! 🩸`
+                    : 'Check your blood donation eligibility at Tulzo! 🩸'}
+                />
+              </div>
+              </>
             )}
 
             {compatibilityResult && (
+              <>
               <div style={{
                 background: 'rgba(239, 68, 68, 0.1)',
                 borderRadius: '24px',
@@ -1144,17 +1146,19 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                  <ShareResults
-                    targetRef={this.resultRef}
-                    title="Blood Type Compatibility - Tulzo"
-                    text={`My blood type is ${compatibilityResult.bloodType}! I can donate to ${compatibilityResult.canDonateTo.length} blood types. 🩸`}
-                  />
-                </div>
               </div>
+              <div style={{ marginTop: '1rem', marginBottom: '2rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultRef}
+                  title="Blood Type Compatibility - Tulzo"
+                  text={`My blood type is ${compatibilityResult.bloodType}! I can donate to ${compatibilityResult.canDonateTo.length} blood types. 🩸`}
+                />
+              </div>
+              </>
             )}
 
             {babyResult && (
+              <>
               <div style={{
                 background: 'rgba(167, 139, 250, 0.1)',
                 borderRadius: '24px',
@@ -1223,15 +1227,15 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
                 }}>
                   ⚕️ Always consult with a doctor or genetic counselor for accurate medical advice.
                 </p>
-
-                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                  <ShareResults
-                    targetRef={this.resultRef}
-                    title="Baby Blood Type Predictor - Tulzo"
-                    text={`Predicted baby blood types: ${babyResult.possibleTypes.map(t => `${t.type} (${t.percentage}%)`).join(', ')} 👶🩸`}
-                  />
-                </div>
               </div>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                <ShareResults
+                  targetRef={this.resultRef}
+                  title="Baby Blood Type Predictor - Tulzo"
+                  text={`Predicted baby blood types: ${babyResult.possibleTypes.map(t => `${t.type} (${t.percentage}%)`).join(', ')} 👶🩸`}
+                />
+              </div>
+              </>
             )}
           </div>
 
