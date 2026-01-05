@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clerkClient } from '@clerk/nextjs/server';
+import { clerkClient, verifyToken } from '@clerk/nextjs/server';
 import { WeightCalculator } from '@/src/utils/WeightCalculator';
 import { BudgetCalculator } from '@/src/utils/BudgetCalculator';
 import { DateCalculator } from '@/src/utils/DateCalculator';
@@ -77,6 +77,9 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
 
 /**
  * Validate API key - supports both custom encryption and Clerk API Keys
+ *
+ * For API keys: If the key validates, assume Pro plan.
+ * Only Pro+ users can generate API keys, so a valid key = Pro access.
  */
 async function validateApiKey(key: string): Promise<AuthResult> {
   const client = await clerkClient();
@@ -99,13 +102,14 @@ async function validateApiKey(key: string): Promise<AuthResult> {
       }
 
       const userId = apiKey.subject;
-      const isSubscribed = await checkProSubscription(client, userId);
 
+      // API key validation success = at least Pro plan
+      // Only Pro+ users can generate API keys, so valid key implies Pro access
       return {
         authenticated: true,
         userId,
-        plan: isSubscribed ? 'pro' : 'free',
-        isSubscribed,
+        plan: 'pro',
+        isSubscribed: true,
         authMethod: 'header',
       };
     } catch (error) {
@@ -131,17 +135,72 @@ async function validateApiKey(key: string): Promise<AuthResult> {
     if (storedKey && storedKey !== key) {
       return { authenticated: false, authMethod: 'none', error: 'API key revoked' };
     }
-    const isSubscribed = await checkProSubscription(client, payload.userId);
+    // Custom encrypted keys also imply Pro access (only Pro+ can generate)
     return {
       authenticated: true,
       userId: payload.userId,
-      plan: isSubscribed ? 'pro' : 'free',
-      isSubscribed,
+      plan: 'pro',
+      isSubscribed: true,
       authMethod: 'header',
     };
   } catch (error) {
     console.error('Error validating API key:', error);
     return { authenticated: false, authMethod: 'none', error: 'Validation failed' };
+  }
+}
+
+/**
+ * Validate OAuth bearer token (Clerk session JWT)
+ *
+ * For bearer tokens: Verify the JWT and check the user's plan.
+ * Uses Clerk's verifyToken to validate the session.
+ */
+async function validateBearerToken(token: string): Promise<AuthResult> {
+  try {
+    // Verify the JWT token with Clerk
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+    });
+
+    if (!payload || !payload.sub) {
+      return { authenticated: false, authMethod: 'none', error: 'Invalid bearer token' };
+    }
+
+    const userId = payload.sub;
+    const client = await clerkClient();
+
+    // Check plan from session claims first (if available from Clerk Billing)
+    // Session claims may include plan info if configured in Clerk dashboard
+    const sessionPlan = (payload as Record<string, unknown>).plan as string | undefined;
+    const sessionFeatures = (payload as Record<string, unknown>).features as string[] | undefined;
+
+    // Check if session has pro/plus plan or features
+    const hasProFromSession = sessionPlan === 'pro' || sessionPlan === 'plus' ||
+      sessionFeatures?.includes('pro_access') || sessionFeatures?.includes('plus_access');
+
+    if (hasProFromSession) {
+      return {
+        authenticated: true,
+        userId,
+        plan: sessionPlan || 'pro',
+        isSubscribed: true,
+        authMethod: 'oauth',
+      };
+    }
+
+    // Fallback: Check user metadata for plan
+    const isSubscribed = await checkProSubscription(client, userId);
+
+    return {
+      authenticated: true,
+      userId,
+      plan: isSubscribed ? 'pro' : 'free',
+      isSubscribed,
+      authMethod: 'oauth',
+    };
+  } catch (error) {
+    console.error('Error validating bearer token:', error);
+    return { authenticated: false, authMethod: 'none', error: 'Invalid or expired bearer token' };
   }
 }
 
@@ -2297,7 +2356,12 @@ export async function POST(request: NextRequest) {
     const { apiKey, authMethod } = extractAuth(request);
 
     if (apiKey) {
-      const authResult = await validateApiKey(apiKey);
+      // Use different validation based on auth method
+      // - 'header' (x-api-key or Bearer tlz_*): API key validation (assumes Pro if valid)
+      // - 'oauth' (Bearer JWT): Session token validation (checks plan)
+      const authResult = authMethod === 'oauth'
+        ? await validateBearerToken(apiKey)
+        : await validateApiKey(apiKey);
 
       if (!authResult.authenticated) {
         return NextResponse.json({
@@ -2326,7 +2390,7 @@ export async function POST(request: NextRequest) {
                        request.headers.get('x-real-ip') ||
                        'unknown';
       const userAgent = request.headers.get('user-agent') || 'unknown';
-      logConnection(authResult.userId!, authMethod, clientIp, userAgent);
+      logConnection(authResult.userId!, authResult.authMethod, clientIp, userAgent);
 
       const response = handleMCPRequest(body as MCPRequest);
       return NextResponse.json(response);

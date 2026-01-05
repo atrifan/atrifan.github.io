@@ -16,32 +16,14 @@ interface ApiKeyUser {
 async function getUserPlan(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<string> {
   try {
     const user = await client.users.getUser(userId);
-
-    // Check publicMetadata first
+    // Check publicMetadata.plan (set by billing webhooks)
     if (user.publicMetadata?.plan) {
       return user.publicMetadata.plan as string;
     }
 
-    // Check for active subscription
-    if (user.publicMetadata?.subscription === 'active') {
-      return 'pro';
-    }
-
-    // Check unsafeMetadata
+    // Check unsafeMetadata.plan as fallback
     if (user.unsafeMetadata?.plan) {
       return user.unsafeMetadata.plan as string;
-    }
-
-    // Check organization memberships for plan
-    const memberships = await client.users.getOrganizationMembershipList({ userId });
-    for (const membership of memberships.data) {
-      const org = await client.organizations.getOrganization({ organizationId: membership.organization.id });
-      if (org.publicMetadata?.plan) {
-        return org.publicMetadata.plan as string;
-      }
-      if (org.publicMetadata?.subscription === 'active') {
-        return 'pro';
-      }
     }
 
     return 'free';
@@ -61,6 +43,9 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
 
 /**
  * Validate API key - supports both custom encryption and Clerk API Keys
+ *
+ * For API keys (path-based auth): If the key validates with Clerk, assume Pro plan.
+ * Only Pro+ users can generate API keys, so a valid key = Pro access.
  */
 async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; error?: string }> {
   const client = await clerkClient();
@@ -84,14 +69,15 @@ async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; e
 
       const userId = apiKey.subject;
       const user = await client.users.getUser(userId);
-      const isSubscribed = await checkProSubscription(client, userId);
 
+      // API key validation success = at least Pro plan
+      // Only Pro+ users can generate API keys, so valid key implies Pro access
       return {
         user: {
           userId,
-          plan: isSubscribed ? 'pro' : 'free',
+          plan: 'pro',
           email: user.primaryEmailAddress?.emailAddress,
-          isSubscribed,
+          isSubscribed: true,
         },
       };
     } catch (error) {
@@ -117,13 +103,13 @@ async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; e
     if (storedKey && storedKey !== key) {
       return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
     }
-    const isSubscribed = await checkProSubscription(client, payload.userId);
+    // Custom encrypted keys also imply Pro access (only Pro+ can generate)
     return {
       user: {
         userId: user.id,
-        plan: isSubscribed ? 'pro' : 'free',
+        plan: 'pro',
         email: user.primaryEmailAddress?.emailAddress,
-        isSubscribed,
+        isSubscribed: true,
       },
     };
   } catch (error) {
