@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * OpenID Connect Discovery endpoint
- * https://openid.net/specs/openid-connect-discovery-1_0.html
+ * OAuth 2.0 Authorization Server Metadata endpoint
+ * RFC 8414: https://tools.ietf.org/html/rfc8414
  *
- * This provides metadata about the OAuth/OIDC configuration.
- * All endpoints point to our OAuth proxy which handles Clerk auth.
+ * This provides the same metadata as OpenID Connect Discovery,
+ * but at the OAuth 2.0 standard location.
  */
 
 export async function GET(request: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     // Issuer identifier
     issuer: baseUrl,
 
-    // OAuth proxy endpoints on our domain
+    // OAuth endpoints
     authorization_endpoint: `${baseUrl}/api/oauth/authorize`,
     token_endpoint: `${baseUrl}/api/oauth/token`,
     userinfo_endpoint: `${baseUrl}/api/oauth/userinfo`,

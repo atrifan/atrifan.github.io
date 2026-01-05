@@ -11,7 +11,9 @@ function getClerkFrontendApi(): string {
   if (publishableKey) {
     try {
       const base64Part = publishableKey.replace(/^pk_(test|live)_/, '');
-      const decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
+      let decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
+      // Remove trailing $ that Clerk adds to the encoded domain
+      decoded = decoded.replace(/\$+$/, '');
       if (decoded && decoded.includes('.clerk.')) {
         return `https://${decoded}`;
       }

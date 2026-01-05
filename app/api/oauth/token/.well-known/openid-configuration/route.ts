@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * OpenID Connect Discovery endpoint
- * https://openid.net/specs/openid-connect-discovery-1_0.html
- *
- * This provides metadata about the OAuth/OIDC configuration.
- * All endpoints point to our OAuth proxy which handles Clerk auth.
+ * OpenID Connect Discovery endpoint at /api/oauth/token/.well-known/openid-configuration
+ * 
+ * Some OAuth clients look for the discovery document relative to the token endpoint.
+ * This redirects to the main discovery endpoint.
  */
 
 export async function GET(request: NextRequest) {
@@ -15,7 +14,7 @@ export async function GET(request: NextRequest) {
     // Issuer identifier
     issuer: baseUrl,
 
-    // OAuth proxy endpoints on our domain
+    // OAuth endpoints
     authorization_endpoint: `${baseUrl}/api/oauth/authorize`,
     token_endpoint: `${baseUrl}/api/oauth/token`,
     userinfo_endpoint: `${baseUrl}/api/oauth/userinfo`,

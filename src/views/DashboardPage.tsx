@@ -16,6 +16,9 @@ import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
 
+// Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
+const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
+
 // Type for selected server view - null means default, string means custom server id
 type SelectedServerView = 'default' | string;
 
@@ -332,7 +335,7 @@ export const DashboardPage: React.FC = () => {
 
   const copyMcpUrl = async () => {
     if (!apiKey) return;
-    const mcpUrl = `https://tulzo.vercel.app/api/mcp/${apiKey}${getServerPathSuffix()}`;
+    const mcpUrl = `${HOST_URL}/api/mcp/${apiKey}${getServerPathSuffix()}`;
     await navigator.clipboard.writeText(mcpUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -699,7 +702,7 @@ export const DashboardPage: React.FC = () => {
                 padding: '0.75rem 1rem',
               }}>
                 <code style={{ color: '#60a5fa', fontSize: '0.85rem' }}>
-                  https://tulzo.vercel.app/api/mcp/...
+                  {HOST_URL}/api/mcp/...
                 </code>
               </div>
             </div>
@@ -848,11 +851,11 @@ export const DashboardPage: React.FC = () => {
                     <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
                       For ChatGPT, Claude.ai, n8n, and clients with OAuth support.
                     </p>
-                    <ConfigField label="MCP Server URL" value={`https://tulzo.vercel.app/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
+                    <ConfigField label="MCP Server URL" value={`${HOST_URL}/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
 
                     <div style={{ background: 'rgba(102, 126, 234, 0.1)', borderRadius: '8px', padding: '0.75rem', marginTop: '1rem' }}>
                       <p style={{ color: '#667eea', fontSize: '0.8rem', fontWeight: 600, margin: '0 0 0.5rem' }}>✨ OAuth Auto-Discovery</p>
-                      <ConfigField label="Discovery URL" value="https://tulzo.vercel.app/.well-known/openid-configuration" onCopy={copyField} copiedField={copiedField} small />
+                      <ConfigField label="Discovery URL" value={`${HOST_URL}/.well-known/openid-configuration`} onCopy={copyField} copiedField={copiedField} small />
                     </div>
 
                     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '0.75rem', marginTop: '1rem' }}>
@@ -866,9 +869,9 @@ export const DashboardPage: React.FC = () => {
                         📋 Manual Configuration
                       </summary>
                       <div style={{ marginTop: '0.75rem' }}>
-                        <ConfigField label="Authorization URL" value="https://tulzo.vercel.app/api/oauth/authorize" onCopy={copyField} copiedField={copiedField} small />
-                        <ConfigField label="Token URL" value="https://tulzo.vercel.app/api/oauth/token" onCopy={copyField} copiedField={copiedField} small />
-                        <ConfigField label="UserInfo URL" value="https://tulzo.vercel.app/api/oauth/userinfo" onCopy={copyField} copiedField={copiedField} small />
+                        <ConfigField label="Authorization URL" value={`${HOST_URL}/api/oauth/authorize`} onCopy={copyField} copiedField={copiedField} small />
+                        <ConfigField label="Token URL" value={`${HOST_URL}/api/oauth/token`} onCopy={copyField} copiedField={copiedField} small />
+                        <ConfigField label="UserInfo URL" value={`${HOST_URL}/api/oauth/userinfo`} onCopy={copyField} copiedField={copiedField} small />
                         <ConfigField label="Scopes" value="openid profile email" onCopy={copyField} copiedField={copiedField} small />
                         <ConfigField label="Grant Types" value="authorization_code, refresh_token" onCopy={copyField} copiedField={copiedField} small />
                         <ConfigField label="PKCE" value="S256 (recommended)" onCopy={copyField} copiedField={copiedField} small />
@@ -882,7 +885,7 @@ export const DashboardPage: React.FC = () => {
                     <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
                       For clients that support custom headers but not OAuth.
                     </p>
-                    <ConfigField label="MCP Server URL" value={`https://tulzo.vercel.app/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
+                    <ConfigField label="MCP Server URL" value={`${HOST_URL}/api/mcp${getServerPathSuffix()}`} onCopy={copyField} copiedField={copiedField} />
                     <ConfigField label="Header Name" value="x-api-key" onCopy={copyField} copiedField={copiedField} />
                     <ConfigField label="Header Value" value={apiKey} onCopy={copyField} copiedField={copiedField} isSecret />
                     <div style={{ background: 'rgba(251, 191, 36, 0.1)', borderRadius: '8px', padding: '0.75rem', marginTop: '1rem' }}>
@@ -900,7 +903,7 @@ export const DashboardPage: React.FC = () => {
                     </p>
                     <ConfigField
                       label="MCP Server URL (with API key)"
-                      value={`https://tulzo.vercel.app/api/mcp/${apiKey}${getServerPathSuffix()}`}
+                      value={`${HOST_URL}/api/mcp/${apiKey}${getServerPathSuffix()}`}
                       onCopy={copyField}
                       copiedField={copiedField}
                       isSecret
