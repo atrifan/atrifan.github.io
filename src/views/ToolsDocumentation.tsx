@@ -200,7 +200,7 @@ export default function ToolsDocumentation() {
       />
 
       <main style={{
-        maxWidth: '1000px',
+        maxWidth: '56rem',
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>

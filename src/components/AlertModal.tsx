@@ -50,7 +50,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           border: `2px solid ${color}66`,
           borderRadius: '24px',
           padding: '2rem',
-          maxWidth: '400px',
+          maxWidth: '25rem',
           width: '100%',
           textAlign: 'center',
           boxShadow: `0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px ${color}33`,

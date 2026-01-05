@@ -81,20 +81,20 @@ export class DaysPage extends Component<{}, DaysPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.daysTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.daysTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><DaysIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>DAYS</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Countdown Timer ⏳</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Countdown Tool" message="This is a utility tool for counting days. Results are calculated based on the dates you provide." color="#06b6d4" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
               <input type="text" placeholder="Event name (e.g., Vacation, Birthday)" value={eventName} onChange={(e) => this.setState({ eventName: e.target.value })}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '1rem', boxSizing: 'border-box' }} />
@@ -108,14 +108,14 @@ export class DaysPage extends Component<{}, DaysPageState> {
           </View>
 
           {result && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.daysResults} format="horizontal" />
             </View>
           )}
 
           {result && (
             <>
-              <div ref={this.resultsRef} id="days-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(8, 145, 178, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              <div ref={this.resultsRef} id="days-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(8, 145, 178, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 {eventName && <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '0.5rem' }}>{result.isPast ? 'Since' : 'Until'} {eventName}</div>}
                 <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', fontWeight: 800, color: '#06b6d4', marginBottom: '0.5rem' }}>{result.days}</div>
                 <div style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>days {result.isPast ? 'ago' : 'to go'}</div>
@@ -141,7 +141,7 @@ export class DaysPage extends Component<{}, DaysPageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.daysFooter} format="horizontal" />
           </View>
 

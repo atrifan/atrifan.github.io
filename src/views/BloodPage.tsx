@@ -359,7 +359,7 @@ export class BloodPage extends Component<object, BloodPageState> {
           background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
           borderRadius: '20px',
           padding: '2rem',
-          maxWidth: '500px',
+          maxWidth: '31rem',
           width: '100%',
           border: '2px solid #ef4444',
           boxShadow: '0 0 30px rgba(239, 68, 68, 0.3)',
@@ -418,7 +418,7 @@ export class BloodPage extends Component<object, BloodPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
 
-        <View maxWidth="800px" marginX="auto">
+        <View maxWidth="50rem" marginX="auto">
           <BackToTools />
 
           {/* Top Ad */}
@@ -510,7 +510,7 @@ export class BloodPage extends Component<object, BloodPageState> {
                 <h2 style={{ color: '#fff', marginBottom: '1.5rem', textAlign: 'center' }}>
                   💉 Blood Donation Eligibility
                 </h2>
-                <div style={{ display: 'grid', gap: '1rem', maxWidth: '400px', margin: '0 auto' }}>
+                <div style={{ display: 'grid', gap: '1rem', maxWidth: '25rem', margin: '0 auto' }}>
                   {/* Unit System Toggle */}
                   <div>
                     <label style={{ color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '0.5rem' }}>
@@ -689,7 +689,7 @@ export class BloodPage extends Component<object, BloodPageState> {
                 <h2 style={{ color: '#fff', marginBottom: '1.5rem', textAlign: 'center' }}>
                   🔄 Blood Type Compatibility
                 </h2>
-                <div style={{ maxWidth: '400px', margin: '0 auto' }}>
+                <div style={{ maxWidth: '25rem', margin: '0 auto' }}>
                   <div style={{ marginBottom: '1rem' }}>
                     <label style={{ color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '0.5rem' }}>
                       Your Blood Type
@@ -768,7 +768,7 @@ export class BloodPage extends Component<object, BloodPageState> {
                 <h2 style={{ color: '#fff', marginBottom: '1.5rem', textAlign: 'center' }}>
                   👶 Baby Blood Type Predictor
                 </h2>
-                <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '500px', margin: '0 auto' }}>
+                <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '31rem', margin: '0 auto' }}>
                   {/* Father's blood type */}
                   <div style={{
                     background: 'rgba(59, 130, 246, 0.1)',
@@ -928,7 +928,7 @@ export class BloodPage extends Component<object, BloodPageState> {
                       display: 'grid',
                       gridTemplateColumns: 'repeat(2, 1fr)',
                       gap: '1rem',
-                      maxWidth: '400px',
+                      maxWidth: '25rem',
                       margin: '0 auto'
                     }}>
                       <div style={{

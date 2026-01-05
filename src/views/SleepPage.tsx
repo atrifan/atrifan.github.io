@@ -206,20 +206,20 @@ export class SleepPage extends Component<{}, SleepPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.sleepTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.sleepTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><SleepIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>SLEEP</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Sleep Cycle Calculator 😴</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Sleep Guidance" message="This tool provides general guidance based on average sleep cycles. Individual sleep needs vary. Consult a healthcare professional for sleep-related concerns." color="#6366f1" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             {/* Age Group Selector */}
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', display: 'block', marginBottom: '0.75rem' }}>
@@ -277,13 +277,13 @@ export class SleepPage extends Component<{}, SleepPageState> {
           </View>
 
           {results.length > 0 && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.sleepResults} format="horizontal" />
             </View>
           )}
 
           {results.length > 0 && (
-            <div ref={this.resultsRef} id="sleep-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
+            <div ref={this.resultsRef} id="sleep-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
               <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '1rem', textAlign: 'center' }}>
                 {mode === 'wakeUp' ? 'Go to sleep at:' : 'Wake up at:'}
               </div>
@@ -341,7 +341,7 @@ export class SleepPage extends Component<{}, SleepPageState> {
             </div>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.sleepFooter} format="horizontal" />
           </View>
 

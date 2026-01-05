@@ -24,7 +24,7 @@ export const PricingPage: React.FC = () => {
 
       <main style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
         {/* Hero */}
-        <section style={{ textAlign: 'center', padding: '2rem 1rem 3rem', maxWidth: '800px', margin: '0 auto' }}>
+        <section style={{ textAlign: 'center', padding: '2rem 1rem 3rem', maxWidth: '50rem', margin: '0 auto' }}>
           <h1 style={{
             fontSize: 'clamp(2rem, 5vw, 3rem)',
             fontWeight: 800,
@@ -46,7 +46,7 @@ export const PricingPage: React.FC = () => {
         {/* Clerk PricingTable */}
         <section style={{
           padding: '0 1rem',
-          maxWidth: '1000px',
+          maxWidth: '56rem',
           margin: '0 auto',
         }}>
           <SignedIn>
@@ -65,7 +65,7 @@ export const PricingPage: React.FC = () => {
                 borderRadius: '24px',
                 padding: 'clamp(2rem, 5vw, 3rem)',
                 textAlign: 'center',
-                maxWidth: '500px',
+                maxWidth: '31rem',
                 width: '100%',
               }}>
                 <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 700, margin: '0 0 1rem' }}>
@@ -106,16 +106,16 @@ export const PricingPage: React.FC = () => {
             flex-direction: row !important;
             flex-wrap: wrap !important;
             justify-content: center !important;
-            gap: 1.5rem !important;
+            gap: 1rem !important;
             align-items: stretch !important;
           }
           .pricing-table-wrapper .cl-pricingTableCard,
           .pricing-table-wrapper > div > div > div {
-            flex: 1 1 300px !important;
-            max-width: 420px !important;
-            min-width: 280px !important;
+            flex: 0 1 17rem !important;
+            max-width: 17rem !important;
+            min-width: 15rem !important;
           }
-          @media (max-width: 700px) {
+          @media (max-width: 44rem) {
             .pricing-table-wrapper .cl-pricingTable-root,
             .pricing-table-wrapper .cl-pricingTableContainer,
             .pricing-table-wrapper > div > div {
@@ -131,7 +131,7 @@ export const PricingPage: React.FC = () => {
         `}</style>
 
         {/* FAQ Section */}
-        <section style={{ maxWidth: '700px', margin: '4rem auto 0', padding: '0 1rem' }}>
+        <section style={{ maxWidth: '44rem', margin: '4rem auto 0', padding: '0 1rem' }}>
           <h2 style={{ textAlign: 'center', color: '#fff', fontSize: 'clamp(1.5rem, 3vw, 2rem)', marginBottom: '2rem' }}>
             Frequently Asked Questions
           </h2>

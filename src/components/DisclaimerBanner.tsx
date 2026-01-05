@@ -20,7 +20,7 @@ export const DisclaimerBanner: React.FC<DisclaimerBannerProps> = ({
       marginBottom="size-500"
       UNSAFE_style={{
         width: '100%',
-        maxWidth: '600px',
+        maxWidth: '38rem',
         margin: '0 auto',
         background: `linear-gradient(135deg, ${color}26 0%, ${color}1a 100%)`,
         backdropFilter: 'blur(10px)',

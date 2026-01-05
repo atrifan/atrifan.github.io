@@ -263,18 +263,18 @@ export class RiskPage extends Component<object, RiskPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.riskTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.riskTop} format="horizontal" /></View>
 
           {/* Header */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.25rem' }}><RiskIcon size={60} /></div>
             <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>RISK</h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem', fontSize: 'clamp(0.8rem, 2.5vw, 1rem)' }}>Trading Risk Management Calculator</p>
           </View>
 
           {/* Disclaimer */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner
               title="Financial Disclaimer"
               message="This calculator is for educational purposes only and is NOT financial advice. Trading involves substantial risk of loss and is not suitable for all investors. Past performance is not indicative of future results. Always consult a qualified financial advisor before making investment decisions."
@@ -283,7 +283,7 @@ export class RiskPage extends Component<object, RiskPageState> {
           </View>
 
           {/* Mode Selector */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
               {(['riskOnly', 'riskAndSL', 'riskAndQty', 'slAndQty'] as CalculationMode[]).map(m => {
                 const labels: Record<CalculationMode, string> = {
@@ -303,7 +303,7 @@ export class RiskPage extends Component<object, RiskPageState> {
           </View>
 
           {/* Input Form */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.15)' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.15)' }}>
             {/* Common Inputs */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
               <div>
@@ -368,8 +368,8 @@ export class RiskPage extends Component<object, RiskPageState> {
           {this.state.suggestions && this.renderSuggestions()}
           {result && this.renderResults(result)}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.riskFooter} format="horizontal" /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><Footer /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.riskFooter} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><Footer /></View>
         </Flex>
       </View>
     );
@@ -383,7 +383,7 @@ export class RiskPage extends Component<object, RiskPageState> {
     const cardStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1rem' };
 
     return (
-      <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px' }}>
+      <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.riskResults} format="horizontal" />
 
         {/* Summary */}
@@ -443,7 +443,7 @@ export class RiskPage extends Component<object, RiskPageState> {
     const highlightColor = result.calculatedField === 'quantity' ? '#60a5fa' : result.calculatedField === 'stopLoss' ? '#ef4444' : '#eab308';
 
     return (
-      <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px' }}>
+      <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.riskResults} format="horizontal" />
 
         {/* Risk Assessment */}

@@ -86,20 +86,20 @@ export class TipPage extends Component<{}, TipPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.tipTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.tipTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><TipIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>TIP</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Tip Calculator 💰</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <Disclaimer text="Tip suggestions are for guidance only. Tipping customs vary by region and establishment." color="#f59e0b" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
               {[{ id: 'quick', label: '⚡ Quick Calc' }, { id: 'suggest', label: '🤖 Suggest Tip' }].map((m) => (
                 <button key={m.id} onClick={() => this.setState({ mode: m.id as any, suggestedTip: null })}
@@ -178,7 +178,7 @@ export class TipPage extends Component<{}, TipPageState> {
             </div>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.tipFooter} format="horizontal" />
           </View>
 

@@ -363,7 +363,7 @@ export const DashboardPage: React.FC = () => {
         rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
       />
 
-      <main style={{ paddingTop: '2rem', paddingBottom: '3rem', maxWidth: '800px', margin: '0 auto', padding: '2rem 1rem 3rem' }}>
+      <main style={{ paddingTop: '2rem', paddingBottom: '3rem', maxWidth: '56rem', margin: '0 auto', padding: '2rem 1rem 3rem' }}>
         {/* Welcome Header */}
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <DashboardIcon />

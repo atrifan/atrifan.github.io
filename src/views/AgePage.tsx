@@ -123,20 +123,20 @@ export class AgePage extends Component<{}, AgePageState> {
           onClose={() => this.setState({ showAlert: false })}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.ageTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.ageTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><AgeIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>AGE</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Age Calculator 🎂</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Fun Tool" message="This is a fun utility tool for calculating your age. Results are based on the date you provide." color="#f472b6" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
               <label style={{ color: '#fff', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Enter your birth date</label>
               <input type="date" value={birthDate} onChange={(e) => this.setState({ birthDate: e.target.value })}
@@ -149,13 +149,13 @@ export class AgePage extends Component<{}, AgePageState> {
           </View>
 
           {result && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.ageResults} format="horizontal" />
             </View>
           )}
 
           {result && (
-            <div ref={this.resultsRef} id="age-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(244, 114, 182, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
+            <div ref={this.resultsRef} id="age-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(244, 114, 182, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
               <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#f472b6', marginBottom: '0.5rem', textAlign: 'center' }}>{result.years} years old</div>
               <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2rem', marginBottom: '1.5rem', textAlign: 'center' }}>{result.years} years, {result.months} months, and {result.days} days</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
@@ -180,7 +180,7 @@ export class AgePage extends Component<{}, AgePageState> {
             </div>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.ageFooter} format="horizontal" />
           </View>
 

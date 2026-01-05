@@ -195,18 +195,18 @@ export class CyclePage extends Component<object, CyclePageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.cycleTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.cycleTop} format="horizontal" /></View>
 
           {/* Header */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.25rem' }}><CycleIcon size={60} /></div>
             <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>CYCLE</h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem', fontSize: 'clamp(0.8rem, 2.5vw, 1rem)' }}>Period & Fertility Calculator</p>
           </View>
 
           {/* Disclaimer */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner
               title="Medical Disclaimer"
               message="This calculator provides estimates based on average cycle patterns and should NOT be used as a contraceptive method or for medical decisions. Cycles vary significantly between individuals. Always consult a healthcare provider for family planning, fertility concerns, or menstrual irregularities."
@@ -215,7 +215,7 @@ export class CyclePage extends Component<object, CyclePageState> {
           </View>
 
           {/* Input Form */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.15)' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.15)' }}>
             {/* Simplified Mode Toggle */}
             <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(236,72,153,0.15)', borderRadius: '12px', border: '1px solid rgba(236,72,153,0.3)' }}>
               <label style={checkboxLabelStyle}>
@@ -268,8 +268,8 @@ export class CyclePage extends Component<object, CyclePageState> {
 
           {result && this.renderResults(result)}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.cycleFooter} format="horizontal" /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><Footer /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.cycleFooter} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><Footer /></View>
         </Flex>
       </View>
     );
@@ -285,7 +285,7 @@ export class CyclePage extends Component<object, CyclePageState> {
     const titleStyle = { fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' };
 
     return (
-      <div style={{ width: '100%', maxWidth: '600px' }}>
+      <div style={{ width: '100%', maxWidth: '38rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.cycleResults} format="horizontal" />
 
         <div ref={this.resultsRef}>

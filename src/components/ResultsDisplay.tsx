@@ -317,7 +317,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan }) => {
             color: 'rgba(255,255,255,0.9)',
             fontSize: '1.2rem',
             marginBottom: '1.5rem',
-            maxWidth: '500px',
+            maxWidth: '31rem',
             margin: '0 auto 1.5rem'
           }}>
             {plan.fastingPlan.description}

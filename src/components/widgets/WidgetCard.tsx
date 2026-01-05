@@ -17,7 +17,7 @@ export const WidgetCard: React.FC<WidgetCardProps> = ({ children, gradient, bord
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     color: '#fff',
     minWidth: '300px',
-    maxWidth: '400px',
+    maxWidth: '25rem',
   }}>
     {children}
   </div>

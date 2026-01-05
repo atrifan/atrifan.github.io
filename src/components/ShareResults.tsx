@@ -254,7 +254,7 @@ export const ShareResults: React.FC<ShareResultsProps> = ({
             borderRadius: '20px',
             padding: '1.5rem',
             width: 'calc(100% - 2rem)',
-            maxWidth: '400px',
+            maxWidth: '25rem',
             maxHeight: '90vh',
             overflowY: 'auto',
             boxShadow: '0 20px 60px rgba(0,0,0,0.5)',

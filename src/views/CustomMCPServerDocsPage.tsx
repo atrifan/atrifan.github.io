@@ -216,7 +216,7 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
       />
 
       <main style={{
-        maxWidth: '1000px',
+        maxWidth: '56rem',
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>

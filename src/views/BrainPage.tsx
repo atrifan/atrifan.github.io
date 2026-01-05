@@ -98,22 +98,22 @@ export class BrainPage extends Component<{}, BrainPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}><AdBanner slot={ADS_CONFIG.slots.brainTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}><AdBanner slot={ADS_CONFIG.slots.brainTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><BrainIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>BRAIN</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Quick IQ Assessment 🧠</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
             <DisclaimerBanner title="Entertainment Only!" message="This is NOT a clinical IQ test. Real IQ tests are administered by licensed psychologists. This quiz is for fun and based on common cognitive patterns. Results are approximate and for entertainment purposes only." color="#60a5fa" />
           </View>
 
           {/* Mode Selection Screen */}
           {!testMode && !showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '700px', textAlign: 'center' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', textAlign: 'center' }}>
               <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
                 <h2 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '0.5rem' }}>Choose Your Test Level</h2>
                 <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>Select the test that fits your time and goals</p>
@@ -139,7 +139,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
 
           {/* Start Screen (after mode selection) */}
           {testMode && !startTime && !showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '700px', textAlign: 'center' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', textAlign: 'center' }}>
               <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>{modeConfig?.emoji}</div>
                 <h2 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '0.5rem' }}>{modeConfig?.name}</h2>
@@ -160,7 +160,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
 
           {/* Question Screen */}
           {startTime && !showResults && question && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
               {/* Progress Bar */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
@@ -200,7 +200,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
 
           {/* Results Ad */}
           {showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.brainResults} format="horizontal" />
             </View>
           )}
@@ -211,7 +211,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
             const { label, emoji, color } = getIQLabel(iq);
             const categoryEmojis: Record<string, string> = { pattern: '🔢', logic: '🧩', math: '➗', spatial: '📐', verbal: '📝' };
             return (
-              <View id="brain-results" UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+              <View id="brain-results" UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
                 <div ref={this.resultsRef} style={{ background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                   <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)', marginBottom: '0.25rem' }}>{modeConfig?.name}</p>
                   <p style={{ fontSize: '1.2rem', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem' }}>Your Estimated IQ</p>
@@ -263,7 +263,7 @@ export class BrainPage extends Component<{}, BrainPageState> {
             );
           })()}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.brainFooter} format="horizontal" />
           </View>
 

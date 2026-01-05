@@ -256,7 +256,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     // Show loading skeleton until mounted on client
     if (!mounted || !currentTime) {
       return (
-        <View UNSAFE_style={{ width: '100%', maxWidth: '600px', margin: '0 auto 2rem' }}>
+        <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', margin: '0 auto 2rem' }}>
           <div style={{
             background: 'linear-gradient(135deg, #374151 0%, #1f2937 100%)',
             borderRadius: '24px',
@@ -282,7 +282,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
     const dateStr = currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
-      <View UNSAFE_style={{ width: '100%', maxWidth: '600px', margin: '0 auto 2rem' }}>
+      <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', margin: '0 auto 2rem' }}>
         <div style={{
           background: gradient,
           borderRadius: '24px',

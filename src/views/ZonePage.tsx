@@ -173,20 +173,20 @@ export class ZonePage extends Component<{}, ZonePageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}><AdBanner slot={ADS_CONFIG.slots.zoneTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}><AdBanner slot={ADS_CONFIG.slots.zoneTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><ZoneIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>ZONE</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Time Zone Converter 🌐</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
             <DisclaimerBanner title="Time Zone Notice" message="Daylight saving time may affect actual times. This tool uses standard UTC offsets for approximate conversions." color="#3b82f6" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
 
           <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
             {/* Source timezone */}
@@ -301,14 +301,14 @@ export class ZonePage extends Component<{}, ZonePageState> {
           </View>
 
           {hasConverted && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '700px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '44rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.zoneResults} format="horizontal" />
             </View>
           )}
 
           {hasConverted && (
             <>
-              <div ref={this.resultsRef} id="zone-results" style={{ width: '100%', maxWidth: '700px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(29, 78, 216, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
+              <div ref={this.resultsRef} id="zone-results" style={{ width: '100%', maxWidth: '44rem', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(29, 78, 216, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)' }}>
                 <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem', textAlign: 'center' }}>📍 {inputTime} in {fromTz?.city || fromZone}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {targetZones.map((tzId, index) => {
@@ -342,7 +342,7 @@ export class ZonePage extends Component<{}, ZonePageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '700px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '44rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.zoneFooter} format="horizontal" />
           </View>
 

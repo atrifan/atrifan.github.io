@@ -59,7 +59,7 @@ export class CutPage extends Component<{}, CutPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
 
-        <View maxWidth="1200px" marginX="auto">
+        <View maxWidth="56rem" marginX="auto">
           {/* Back Button */}
           <div style={{ marginBottom: '2rem' }}>
             <BackToTools />
@@ -89,7 +89,7 @@ export class CutPage extends Component<{}, CutPageState> {
             <p style={{
               fontSize: 'clamp(0.9rem, 2.5vw, 1.4rem)',
               color: 'rgba(255, 255, 255, 0.9)',
-              maxWidth: '700px',
+              maxWidth: '44rem',
               margin: '0 auto',
               lineHeight: 1.4,
               fontWeight: 300,

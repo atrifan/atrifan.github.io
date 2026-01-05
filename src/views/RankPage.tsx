@@ -338,20 +338,20 @@ export class RankPage extends Component<{}, RankPageState> {
           onClose={() => this.setState({ showAlert: false })}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.rankTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.rankTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><RankIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>UNIQUE</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>How Rare Are You? ✨</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Health Information" message={`This tool provides rarity estimates based on ${DATA_SOURCE}. For medical advice, consult a healthcare professional.`} color="#10b981" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.5rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
@@ -469,10 +469,10 @@ export class RankPage extends Component<{}, RankPageState> {
             </div>
           </View>
 
-          {funnelSteps.length > 0 && <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.rankResults} format="horizontal" /></View>}
+          {funnelSteps.length > 0 && <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.rankResults} format="horizontal" /></View>}
 
           {funnelSteps.length > 0 && (
-            <div ref={this.resultsRef} id="rank-results" style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)', borderRadius: '24px', padding: '1.5rem', border: '2px solid rgba(255,255,255,0.2)' }}>
+            <div ref={this.resultsRef} id="rank-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)', borderRadius: '24px', padding: '1.5rem', border: '2px solid rgba(255,255,255,0.2)' }}>
               <h2 style={{ textAlign: 'center', color: '#fff', fontSize: '1.3rem', marginBottom: '1rem', fontWeight: 700 }}>
                 🔬 Your Rarity Funnel
               </h2>
@@ -481,7 +481,7 @@ export class RankPage extends Component<{}, RankPageState> {
             </div>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}><AdBanner slot={ADS_CONFIG.slots.rankFooter} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}><AdBanner slot={ADS_CONFIG.slots.rankFooter} format="horizontal" /></View>
           <Footer />
         </Flex>
         <style>{`input::-webkit-calendar-picker-indicator { filter: invert(1); } select { color-scheme: dark; }`}</style>

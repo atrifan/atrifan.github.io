@@ -174,7 +174,7 @@ export class TapPage extends Component<object, TapPageState> {
           tabIndex={-1}
           style={{ outline: 'none' }}
         >
-          <View maxWidth="800px" marginX="auto">
+          <View maxWidth="50rem" marginX="auto">
             <View marginBottom="size-400">
               <BackToTools />
             </View>

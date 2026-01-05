@@ -77,21 +77,21 @@ export class SpinPage extends Component<{}, SpinPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.spinTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.spinTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><SpinIcon size={70} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>SPIN</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Spin the Wheel 🎡</p>
             <p style={{ fontSize: 'clamp(0.75rem, 2vw, 0.9rem)', color: 'rgba(255,255,255,0.5)', marginTop: '0.15rem' }}>Press SPACE or tap the wheel to spin</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Just for Fun!" message="This is a fun utility tool for random selection. Not suitable for gambling or high-stakes decisions." color="#ef4444" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             {/* Wheel */}
             <div style={{ position: 'relative', width: '280px', height: '280px', margin: '0 auto 2rem', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); this.spin(); }} onTouchEnd={(e) => { e.preventDefault(); this.spin(); }}>
               <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
@@ -129,14 +129,14 @@ export class SpinPage extends Component<{}, SpinPageState> {
           </View>
 
           {result && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.spinResults} format="horizontal" />
             </View>
           )}
 
           {result && (
             <>
-              <div id="spin-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              <div id="spin-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem' }}>Winner:</div>
                 <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#ef4444' }}>🎉 {result}</div>
               </div>
@@ -150,7 +150,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.5rem' }} onClick={(e) => e.stopPropagation()}>
               <label style={{ color: '#fff', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Edit Options (one per line)</label>
               <textarea value={options} onChange={(e) => this.setState({ options: e.target.value })} onClick={(e) => e.stopPropagation()}
@@ -158,7 +158,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
             </div>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.spinFooter} format="horizontal" />
           </View>
 

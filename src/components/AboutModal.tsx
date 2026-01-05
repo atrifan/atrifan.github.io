@@ -53,7 +53,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
           border: '1px solid rgba(255, 255, 255, 0.15)',
           borderRadius: '20px',
           width: '100%',
-          maxWidth: '600px',
+          maxWidth: '38rem',
           maxHeight: '90vh',
           overflow: 'auto',
           position: 'relative',

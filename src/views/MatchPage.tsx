@@ -114,21 +114,21 @@ export class MatchPage extends Component<{}, MatchPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.matchTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.matchTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><MatchIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 50%, #fbbf24 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>MATCH</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Zodiac Compatibility Checker 💕</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Just for Fun!" message="This is astrology-based entertainment only. Please don't base real relationship decisions on zodiac compatibility. Love is complex and unique!" color="#ec4899" />
           </View>
 
           {/* Input Form - always visible */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
               {this.renderPersonInput('person1', '💜 You')}
               {this.renderPersonInput('person2', '💛 Your Partner')}
@@ -140,7 +140,7 @@ export class MatchPage extends Component<{}, MatchPageState> {
 
           {/* Results Ad - between form and results */}
           {result && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.matchResults} format="horizontal" />
             </View>
           )}
@@ -148,7 +148,7 @@ export class MatchPage extends Component<{}, MatchPageState> {
           {/* Results */}
           {result && (
             <>
-              <div id="match-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              <div id="match-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(244, 63, 94, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ fontSize: '3rem' }}>{getSignInfo(result.sign1).symbol}</span>
@@ -174,7 +174,7 @@ export class MatchPage extends Component<{}, MatchPageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.matchFooter} format="horizontal" />
           </View>
 

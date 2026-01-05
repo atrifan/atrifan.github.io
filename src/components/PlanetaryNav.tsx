@@ -220,7 +220,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
             position: 'relative',
             marginBottom: '1rem',
             flexShrink: 0,
-            maxWidth: isMobile ? '100%' : '400px',
+            maxWidth: isMobile ? '100%' : '25rem',
           }}>
             <input
               type="text"
@@ -299,7 +299,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
               marginBottom: '1.5rem',
               flexWrap: 'wrap',
               flexShrink: 0,
-              maxWidth: '800px',
+              maxWidth: '50rem',
             }}>
               <button
                 onClick={() => this.setState({ activeCategory: null })}

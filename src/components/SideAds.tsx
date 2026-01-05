@@ -35,9 +35,9 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
   if (!shouldShowAds()) return null;
 
   const isHorizontal = format === 'horizontal';
-  // Fixed size: 384px wide, 72px tall for horizontal, 480px tall for vertical
-  const width = '384px';
-  const height = isHorizontal ? '72px' : '480px';
+  // Sizes: 22rem wide, 6rem tall for horizontal, 38rem tall for vertical
+  const width = '22rem';
+  const height = isHorizontal ? '6rem' : '38rem';
 
   // Dev/test placeholder
   if (ADS_CONFIG.testMode || process.env.NODE_ENV !== 'production') {
@@ -57,7 +57,7 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
         <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.6rem' }}>
           <span style={{ display: 'block', marginBottom: '0.1rem' }}>📢</span>
           <span style={{ display: 'block' }}>{slot}</span>
-          <span>{format}</span>
+          <span>{format} ({width}x{height})</span>
         </div>
       </div>
     );
@@ -73,7 +73,7 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
         style={{ display: 'block', width: '100%', height: '100%' }}
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
-        data-ad-format="auto"
+        data-ad-format={format}
       />
     </div>
   );
@@ -102,8 +102,8 @@ export const SideAds: React.FC<SideAdsProps> = ({
     const checkVisibility = () => {
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      // Only show ads on screens >= 2230px wide and >= 780px tall
-      setIsVisible(screenWidth >= 2230 && screenHeight >= 780);
+      // Show ads on screens >= 1700px wide and >= 850px tall
+      setIsVisible(screenWidth >= 1700 && screenHeight >= 850);
     };
 
     checkVisibility();
@@ -120,22 +120,22 @@ export const SideAds: React.FC<SideAdsProps> = ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '12px',
+    gap: '0.5rem',
     zIndex: 100,
-    padding: '8px',
+    padding: '0.25rem',
   };
 
   return (
     <>
       {/* Left Side */}
-      <div style={{ ...columnStyle, left: '8px' }}>
+      <div style={{ ...columnStyle, left: '0.5rem' }}>
         <SideAd slot={leftTopSlot} format="horizontal" />
         <SideAd slot={leftMiddleSlot} format="vertical" />
         <SideAd slot={leftBottomSlot} format="horizontal" />
       </div>
 
       {/* Right Side */}
-      <div style={{ ...columnStyle, right: '8px' }}>
+      <div style={{ ...columnStyle, right: '0.5rem' }}>
         <SideAd slot={rightTopSlot} format="horizontal" />
         <SideAd slot={rightMiddleSlot} format="vertical" />
         <SideAd slot={rightBottomSlot} format="horizontal" />

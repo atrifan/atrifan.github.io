@@ -134,7 +134,7 @@ export const Header: React.FC = () => {
       borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
     }}>
       <div style={{
-        maxWidth: '1200px',
+        maxWidth: '56rem',
         margin: '0 auto',
         padding: '0.75rem 1rem',
         display: 'flex',
@@ -163,7 +163,7 @@ export const Header: React.FC = () => {
         </button>
 
         {/* Search Bar - Always visible, responsive */}
-        <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }} className="header-search">
+        <div style={{ flex: 1, maxWidth: '25rem', position: 'relative' }} className="header-search">
           <div style={{ position: 'relative' }}>
             <input
               ref={searchInputRef}

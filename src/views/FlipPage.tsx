@@ -171,21 +171,21 @@ export class FlipPage extends Component<{}, FlipPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.flipTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.flipTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><FlipIcon size={70} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>FLIP</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Coin Flip & Dice Roller 🎲</p>
             <p style={{ fontSize: 'clamp(0.75rem, 2vw, 0.9rem)', color: 'rgba(255,255,255,0.5)', marginTop: '0.15rem' }}>Press SPACE or tap the {mode === 'coin' ? 'coin' : 'dice'} to {mode === 'coin' ? 'flip' : 'roll'}</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Just for Fun!" message="This is a fun utility tool for entertainment. Not suitable for gambling or high-stakes decisions." color="#eab308" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1.5rem' }}>
               {[{ id: 'coin', label: '🪙 Coin' }, { id: 'dice', label: '🎲 Dice' }].map((m) => (
                 <button key={m.id} onClick={(e) => { e.stopPropagation(); this.setState({ mode: m.id as any }); }}
@@ -234,14 +234,14 @@ export class FlipPage extends Component<{}, FlipPageState> {
           </View>
 
           {hasResult && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.flipResults} format="horizontal" />
             </View>
           )}
 
           {history.length > 0 && (
             <>
-              <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+              <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
                 <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', textAlign: 'left' }}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>History</div>
                   {history.map((h, i) => <div key={i} style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', padding: '0.25rem 0' }}>{h}</div>)}
@@ -257,7 +257,7 @@ export class FlipPage extends Component<{}, FlipPageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.flipFooter} format="horizontal" />
           </View>
 

@@ -38,6 +38,7 @@ import { Footer } from '../components/Footer';
 interface HomePageState {
   hoveredTool: string | null;
   showPlanetaryNav: boolean;
+  collapsedCategories: Set<string>;
 }
 
 /**
@@ -49,8 +50,21 @@ export class HomePage extends Component<{}, HomePageState> {
     this.state = {
       hoveredTool: null,
       showPlanetaryNav: false,
+      collapsedCategories: new Set<string>(),
     };
   }
+
+  private toggleCategory = (category: string) => {
+    this.setState(prevState => {
+      const newCollapsed = new Set(prevState.collapsedCategories);
+      if (newCollapsed.has(category)) {
+        newCollapsed.delete(category);
+      } else {
+        newCollapsed.add(category);
+      }
+      return { collapsedCategories: newCollapsed };
+    });
+  };
 
   componentDidMount() {
     applySEO('home');
@@ -225,7 +239,7 @@ export class HomePage extends Component<{}, HomePageState> {
             fontSize: '0.9rem',
             color: 'rgba(255, 255, 255, 0.8)',
             margin: 0,
-            maxWidth: '250px',
+            maxWidth: '16rem',
             lineHeight: 1.4,
             flex: 1,
             display: 'flex',
@@ -251,9 +265,9 @@ export class HomePage extends Component<{}, HomePageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
 
-        <View maxWidth="1400px" marginX="auto">
+        <View maxWidth="56rem" marginX="auto">
           {/* Ad Banner - Home Top (above logo) */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto', paddingTop: '1rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto', paddingTop: '1rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.homeTop} format="horizontal" />
           </View>
 
@@ -319,7 +333,7 @@ export class HomePage extends Component<{}, HomePageState> {
               color: 'rgba(255, 255, 255, 0.9)',
               fontWeight: 400,
               margin: '0 auto 1.5rem',
-              maxWidth: '650px',
+              maxWidth: '40rem',
               lineHeight: 1.5,
             }}>
               20+ instant utilities for health, money, time, and decisions. Free in your browser — upgrade to connect your AI assistant.
@@ -340,7 +354,7 @@ export class HomePage extends Component<{}, HomePageState> {
           <WeatherTimeCardWrapper />
 
           {/* Ad Banner - Home Hero */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto' }}>
             <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
           </View>
 
@@ -349,27 +363,60 @@ export class HomePage extends Component<{}, HomePageState> {
             {getCategoryOrder().map((category) => {
               const toolsInCategory = getToolsByCategory()[category];
               if (toolsInCategory.length === 0) return null;
+              const isCollapsed = this.state.collapsedCategories.has(category);
 
               return (
-                <div key={category} style={{ marginBottom: '3rem' }}>
-                  {/* Category Header */}
-                  <h2 style={{
-                    fontSize: '1.4rem',
-                    fontWeight: 600,
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    marginBottom: '1.5rem',
-                    paddingLeft: '1rem',
-                    borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
-                  }}>
-                    {CATEGORY_LABELS[category]}
-                  </h2>
+                <div key={category} style={{ marginBottom: '2rem' }}>
+                  {/* Category Header - Clickable */}
+                  <button
+                    onClick={() => this.toggleCategory(category)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '0.75rem 1rem',
+                      borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    <span style={{
+                      fontSize: '1.2rem',
+                      color: 'rgba(255, 255, 255, 0.6)',
+                      transition: 'transform 0.3s',
+                      transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                    }}>
+                      ▼
+                    </span>
+                    <h2 style={{
+                      fontSize: '1.4rem',
+                      fontWeight: 600,
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      margin: 0,
+                    }}>
+                      {CATEGORY_LABELS[category]}
+                    </h2>
+                    <span style={{
+                      fontSize: '0.85rem',
+                      color: 'rgba(255, 255, 255, 0.4)',
+                      marginLeft: 'auto',
+                    }}>
+                      {toolsInCategory.length} tools
+                    </span>
+                  </button>
 
-                  {/* Tools in this category */}
+                  {/* Tools in this category - Collapsible */}
                   <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                    gap: '1.5rem',
-                    padding: '0 1rem',
+                    display: isCollapsed ? 'none' : 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
+                    gap: '1rem',
+                    padding: '1rem 1rem 0',
+                    overflow: 'hidden',
                   }}>
                     {toolsInCategory.map((tool, index) => this.renderToolCard(tool, index))}
                   </div>
@@ -385,7 +432,7 @@ export class HomePage extends Component<{}, HomePageState> {
             borderRadius: '20px',
             padding: 'clamp(1.5rem, 4vw, 2.5rem)',
             marginBottom: '2rem',
-            maxWidth: '900px',
+            maxWidth: '56rem',
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
@@ -556,7 +603,7 @@ export class HomePage extends Component<{}, HomePageState> {
           </View>
 
           {/* Bottom Ad - Home Footer */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto' }}>
             <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
           </View>
 

@@ -19,7 +19,7 @@ export const Footer: React.FC = () => {
   };
 
   return (
-    <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center', padding: 'clamp(1rem, 3vw, 2rem) 0', margin: '0 auto' }}>
+    <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center', padding: 'clamp(1rem, 3vw, 2rem) 0', margin: '0 auto' }}>
       <p style={{
         margin: 0,
         fontSize: 'clamp(0.85rem, 2.5vw, 1rem)',

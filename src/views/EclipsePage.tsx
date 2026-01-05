@@ -274,7 +274,7 @@ export class EclipsePage extends Component<object, EclipsePageState> {
     if (!mounted) {
       return (
         <View UNSAFE_style={{ minHeight: '100vh', background: '#0f172a', padding: '2rem 1rem' }}>
-          <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center', color: '#fff' }}>
+          <div style={{ maxWidth: '56rem', margin: '0 auto', textAlign: 'center', color: '#fff' }}>
             Loading...
           </div>
         </View>
@@ -291,7 +291,7 @@ export class EclipsePage extends Component<object, EclipsePageState> {
           rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
-        <View UNSAFE_style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem' }}>
+        <View UNSAFE_style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1rem' }}>
           <BackToTools />
 
           {/* Header */}

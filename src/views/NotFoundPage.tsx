@@ -41,7 +41,7 @@ export const NotFoundPage = () => {
             fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)',
             color: 'rgba(255,255,255,0.6)',
             marginTop: '1rem',
-            maxWidth: '400px'
+            maxWidth: '25rem'
           }}>
             The page you're looking for doesn't exist or has been moved.
           </p>

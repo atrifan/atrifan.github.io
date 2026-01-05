@@ -77,15 +77,20 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   // Show placeholder in development/test mode
   if (ADS_CONFIG.testMode || process.env.NODE_ENV !== 'production') {
     if (!isReady) return null;
+
+    // Match production dimensions in dev mode
+    const isVertical = format === 'vertical';
+    const height = isVertical ? '16rem' : '6rem';
+
     return (
       <View
         borderRadius="medium"
         marginY="size-200"
         UNSAFE_style={{
           width: '100%',
-          maxWidth: '600px',
+          maxWidth: '38rem',
+          height,
           margin: '0 auto',
-          minHeight: format === 'vertical' ? '250px' : '50px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -101,7 +106,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
           padding: '0.5rem'
         }}>
           <span style={{ fontSize: '1rem', display: 'block', marginBottom: '0.15rem' }}>📢</span>
-          <span style={{ fontSize: '0.7rem' }}>Ad: {slot}</span>
+          <span style={{ fontSize: '0.7rem' }}>Ad: {slot} ({isVertical ? 'vertical' : 'horizontal'} - {height})</span>
         </div>
       </View>
     );
@@ -113,18 +118,18 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   }
 
   // Production ad - matches AdSense code structure exactly
-  // For horizontal format, constrain height to prevent oversized mobile ads
-  const isHorizontal = format === 'horizontal';
+  // Constrain height for horizontal and auto formats to prevent oversized mobile ads
+  const isVertical = format === 'vertical';
 
   return (
     <View
       marginY="size-200"
       UNSAFE_style={{
         width: '100%',
-        maxWidth: '600px',
+        maxWidth: '38rem',
         margin: '0 auto',
-        minHeight: format === 'vertical' ? '250px' : '50px',
-        maxHeight: isHorizontal ? '100px' : undefined,
+        minHeight: isVertical ? '16rem' : '3rem',
+        maxHeight: isVertical ? undefined : '6rem',
         overflow: 'hidden',
         ...style
       }}
@@ -134,12 +139,12 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         className="adsbygoogle"
         style={{
           display: 'block',
-          maxHeight: isHorizontal ? '100px' : undefined,
+          maxHeight: isVertical ? undefined : '6rem',
         }}
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
-        data-ad-format={format}
-        data-full-width-responsive={isHorizontal ? "false" : "true"}
+        data-ad-format={isVertical ? format : 'horizontal'}
+        data-full-width-responsive="false"
       />
     </View>
   );

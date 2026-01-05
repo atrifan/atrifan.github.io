@@ -70,17 +70,17 @@ export class StackPage extends Component<{}, StackPageState> {
         />
         <Flex direction="column" alignItems="center" gap="size-400">
           {/* Back to Home */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem' }}>
             <BackToTools />
           </View>
 
           {/* Top Ad */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.stackTop} format="horizontal" />
           </View>
 
           {/* Main Content */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem' }}>
             {/* Hero Header */}
             <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
               <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
@@ -141,7 +141,7 @@ export class StackPage extends Component<{}, StackPageState> {
           </View>
 
           {/* Bottom Ad */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.stackFooter} format="horizontal" />
           </View>
 

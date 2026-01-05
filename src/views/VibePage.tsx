@@ -100,22 +100,22 @@ export class VibePage extends Component<{}, VibePageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><BackToTools /></View>
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}><AdBanner slot={ADS_CONFIG.slots.vibeTop} format="horizontal" /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><BackToTools /></View>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.vibeTop} format="horizontal" /></View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><VibeIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a78bfa 0%, #f472b6 50%, #fbbf24 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>VIBE</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.9)', marginTop: '0.25rem' }}>Are You a Cat or Dog Person? 🐱🐕</p>
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <DisclaimerBanner title="Just for Fun!" message="This is a personality quiz for entertainment only. Your pet preference doesn't define you - love all animals! 🐾" color="#fbbf24" />
           </View>
 
           {/* Start Screen */}
           {!started && !showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
               <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.3)' }}>
                 <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🐱 vs 🐕</div>
                 <h2 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>Discover Your Pet Personality!</h2>
@@ -127,7 +127,7 @@ export class VibePage extends Component<{}, VibePageState> {
 
           {/* Question Screen */}
           {started && !showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem' }}>Question {currentQuestion + 1} of {VIBE_QUESTIONS.length}</span>
@@ -154,7 +154,7 @@ export class VibePage extends Component<{}, VibePageState> {
 
           {/* Results Ad */}
           {showResults && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.vibeResults} format="horizontal" />
             </View>
           )}
@@ -164,7 +164,7 @@ export class VibePage extends Component<{}, VibePageState> {
             const { type, percentage, catScore, dogScore } = this.calculateResult();
             const { title, desc, color } = this.getResultDetails(type, percentage);
             return (
-              <View id="vibe-results" UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+              <View id="vibe-results" UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
                 <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.4)', textAlign: 'center' }}>
                   <div style={{ fontSize: '5rem', marginBottom: '0.5rem' }}>{type === 'cat' ? '🐱' : '🐕'}</div>
                   <p style={{ fontSize: 'clamp(1.8rem, 6vw, 2.5rem)', fontWeight: 900, color, margin: '0 0 0.5rem', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>{title}</p>
@@ -190,7 +190,7 @@ export class VibePage extends Component<{}, VibePageState> {
             );
           })()}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.vibeFooter} format="horizontal" />
           </View>
 

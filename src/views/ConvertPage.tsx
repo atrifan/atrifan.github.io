@@ -87,7 +87,7 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
         />
         <BackToTools />
         
-        <View UNSAFE_style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center', paddingTop: '2rem' }}>
+        <View UNSAFE_style={{ maxWidth: '38rem', margin: '0 auto', textAlign: 'center', paddingTop: '2rem' }}>
           <ConvertIcon size={100} />
           <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: '1rem 0 0.5rem' }}>CONVERT</h1>
           <h2 style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.2rem', fontWeight: 400, marginBottom: '2rem' }}>

@@ -95,7 +95,7 @@ const SaveModal: React.FC<{
         border: `2px solid ${c.borderColor}`,
         borderRadius: '20px',
         padding: 'clamp(1.5rem, 4vw, 2rem)',
-        maxWidth: '500px',
+        maxWidth: '31rem',
         width: '100%',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -460,7 +460,7 @@ export const MCPComposerPage: React.FC = () => {
       />
 
       <main style={{
-        maxWidth: '1000px',
+        maxWidth: '56rem',
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>

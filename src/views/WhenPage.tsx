@@ -175,7 +175,7 @@ export class WhenPage extends Component<object, WhenPageState> {
           rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
-        <View maxWidth="800px" marginX="auto">
+        <View maxWidth="50rem" marginX="auto">
           {/* Back Button */}
           <View marginBottom="size-400">
             <BackToTools />

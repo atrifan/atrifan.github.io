@@ -95,7 +95,7 @@ export class ExpenseCalculator extends Component<ExpenseCalculatorProps, Expense
           background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
           borderRadius: '24px',
           padding: '2rem',
-          maxWidth: '500px',
+          maxWidth: '31rem',
           width: '100%',
           maxHeight: '80vh',
           overflow: 'auto',

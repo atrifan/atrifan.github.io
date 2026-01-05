@@ -153,15 +153,15 @@ export class LuckPage extends Component<{}, LuckPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <Flex direction="column" alignItems="center" gap="size-400">
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <BackToTools />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.luckTop} format="horizontal" />
           </View>
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', textAlign: 'center' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', textAlign: 'center' }}>
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
               <LuckIcon size={80} />
             </div>
@@ -170,7 +170,7 @@ export class LuckPage extends Component<{}, LuckPageState> {
           </View>
 
           {/* Instructions */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.2)' }}>
             <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem', textAlign: 'center', margin: 0 }}>
               🎯 <strong>Hold</strong> the button, <strong>tap & hold</strong> on mobile, or <strong>hold Space</strong> on keyboard.<br/>
               The longer you hold, the more random your number!
@@ -178,7 +178,7 @@ export class LuckPage extends Component<{}, LuckPageState> {
           </View>
 
           {/* Max Value Input */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '300px' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '19rem' }}>
             <label style={{ display: 'block', color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', marginBottom: '0.5rem', textAlign: 'center' }}>
               Maximum Value (optional)
             </label>
@@ -211,7 +211,7 @@ export class LuckPage extends Component<{}, LuckPageState> {
 
           {/* Results Ad - between form and results */}
           {result !== null && (
-            <View UNSAFE_style={{ width: '100%', maxWidth: '600px' }}>
+            <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>
               <AdBanner slot={ADS_CONFIG.slots.luckResults} format="horizontal" />
             </View>
           )}
@@ -219,7 +219,7 @@ export class LuckPage extends Component<{}, LuckPageState> {
           {/* Result Display */}
           {result !== null && (
             <>
-              <div id="luck-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '600px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              <div id="luck-results" ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Your lucky number is...</p>
                 <p style={{ fontSize: 'clamp(3rem, 12vw, 5rem)', fontWeight: 900, color: '#fff', margin: '0 0 0.5rem 0', wordBreak: 'break-all' }}>{result.toLocaleString()}</p>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0' }}>
@@ -236,7 +236,7 @@ export class LuckPage extends Component<{}, LuckPageState> {
             </>
           )}
 
-          <View UNSAFE_style={{ width: '100%', maxWidth: '600px', marginTop: '2rem' }}>
+          <View UNSAFE_style={{ width: '100%', maxWidth: '38rem', marginTop: '2rem' }}>
             <AdBanner slot={ADS_CONFIG.slots.luckFooter} format="horizontal" />
           </View>
 
