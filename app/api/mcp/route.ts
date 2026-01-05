@@ -1020,6 +1020,19 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
       return { sides, count, rolls, total: rolls.reduce((a, b) => a + b, 0) };
     }
+    case 'flip_coin': {
+      const count = Math.min(Math.max((args.count as number) || 1, 1), 100);
+      const results = Array.from({ length: count }, () => Math.random() < 0.5 ? 'heads' : 'tails');
+      const headsCount = results.filter(r => r === 'heads').length;
+      const tailsCount = results.filter(r => r === 'tails').length;
+      return {
+        result: results[0],
+        results,
+        headsCount,
+        tailsCount,
+        count,
+      };
+    }
     case 'calculate_iq_score': {
       const testMode = (args.testMode as TestMode) || 'quick';
       const modeConfig = TEST_MODE_CONFIG[testMode];
@@ -1428,6 +1441,7 @@ function getWidgetType(toolName: string): string {
     'generate_unique_id': 'unique_id',
     'lucky_number': 'lucky_number',
     'roll_dice': 'dice',
+    'flip_coin': 'coin_flip',
     'calculate_iq_score': 'iq_score',
     'calculate_uniqueness': 'uniqueness',
     'when_date_info': 'when_date',
@@ -1610,6 +1624,30 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div style="text-align:center;font-size:3rem;margin:1rem 0">${rolls.map(r => (data.sides === 6 && r <= 6) ? diceEmoji[r] : r).join(' ')}</div>
         <div class="big-number" style="color:#a78bfa">${data.total}</div>
         <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">Total from ${rolls.length} ${data.sides}-sided dice</div>`;
+      break;
+    }
+    case 'coin_flip': {
+      const result = data.result as string;
+      const results = data.results as string[];
+      const count = data.count as number;
+      const headsCount = data.headsCount as number;
+      const tailsCount = data.tailsCount as number;
+      const isHeads = result === 'heads';
+      const coinColor = isHeads ? '#fbbf24' : '#9ca3af';
+      const coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
+      content = `
+        <div class="header">🪙 Coin Flip</div>
+        <div style="text-align:center;margin:1rem 0">
+          <div style="width:80px;height:80px;border-radius:50%;background:${coinBg};display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ${isHeads ? '#b45309' : '#4b5563'}">
+            <span style="font-size:2rem;font-weight:800;color:${isHeads ? '#92400e' : '#374151'}">${isHeads ? 'H' : 'T'}</span>
+          </div>
+        </div>
+        <div class="big-number" style="color:${coinColor};font-size:2rem">${result.toUpperCase()}</div>
+        ${count > 1 ? `
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">${headsCount}</div></div>
+          <div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">${tailsCount}</div></div>
+        </div>` : ''}`;
       break;
     }
     case 'age': {
@@ -2152,6 +2190,13 @@ function formatResultText(toolName: string, result: unknown): string {
       return `Bill: $${r.billAmount} + Tip (${r.tipPercent}%): $${r.tipAmount} = Total: $${r.total}${(r.splitWays as number) > 1 ? ` ($${r.perPerson} per person)` : ''}`;
     case 'roll_dice':
       return `🎲 Rolled: ${(r.rolls as number[]).join(', ')} (Total: ${r.total})`;
+    case 'flip_coin': {
+      const count = r.count as number;
+      if (count === 1) {
+        return `🪙 Flipped: ${(r.result as string).toUpperCase()}`;
+      }
+      return `🪙 Flipped ${count} coins: ${r.headsCount} heads, ${r.tailsCount} tails`;
+    }
     case 'calculate_age':
       return `Age: ${r.years} years, ${r.months} months, ${r.days} days (${r.totalDays} total days). Next birthday in ${r.daysUntilNextBirthday} days.`;
     case 'zodiac_compatibility':
@@ -2220,6 +2265,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
     lucky_number: { number: 7, min: 1, max: 100 },
     roll_dice: { rolls: [4, 6], total: 10, sides: 6, count: 2 },
+    flip_coin: { result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
     calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
     calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },
     when_date_info: { date: '2026-06-15', dayOfWeek: 'Monday', daysFromToday: 164, zodiacSign: 'Gemini' },
