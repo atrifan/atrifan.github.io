@@ -22,6 +22,9 @@ interface WeatherTimeCardState {
   loading: boolean;
   error: boolean;
   mounted: boolean;
+  useCelsius: boolean;
+  useKmh: boolean;
+  useMeters: boolean;
 }
 
 export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTimeCardState> {
@@ -38,6 +41,9 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
       loading: true,
       error: false,
       mounted: false,
+      useCelsius: true,
+      useKmh: true,
+      useMeters: true,
     };
   }
 
@@ -168,14 +174,20 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
   };
 
   private getWeatherCondition = (code: number): string => {
+    if (code === null || code === undefined) return 'No data';
     const conditions: Record<number, string> = {
       0: 'Clear', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
-      45: 'Foggy', 48: 'Foggy', 51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
-      61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain', 71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow',
+      45: 'Foggy', 48: 'Rime Fog',
+      51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
+      56: 'Freezing Drizzle', 57: 'Heavy Freezing Drizzle',
+      61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
+      66: 'Freezing Rain', 67: 'Heavy Freezing Rain',
+      71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow',
       77: 'Snow Grains', 80: 'Light Showers', 81: 'Showers', 82: 'Heavy Showers',
-      85: 'Snow Showers', 86: 'Heavy Snow Showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm',
+      85: 'Snow Showers', 86: 'Heavy Snow Showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm w/ Hail', 99: 'Heavy Thunderstorm',
     };
-    return conditions[code] || 'Unknown';
+    return conditions[code] || `Code ${code}`;
   };
 
   private getWeatherIcon = (code: number): string => {
@@ -279,7 +291,12 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
           border: '1px solid rgba(255,255,255,0.2)',
         }}>
           {/* Top Section: Greeting + Time/Date */}
-          <div style={{ marginBottom: '1rem' }}>
+          <div style={{
+            marginBottom: '1rem',
+            background: 'rgba(0,0,0,0.25)',
+            borderRadius: '12px',
+            padding: '1rem',
+          }}>
             {/* Greeting */}
             <p style={{
               fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
@@ -289,6 +306,7 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
+              textShadow: '0 1px 3px rgba(0,0,0,0.3)',
             }}>
               {emoji} {greeting}{this.props.userName ? `, ${this.props.userName}` : ''}!
             </p>
@@ -307,13 +325,15 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 margin: 0,
                 fontFamily: 'monospace',
                 letterSpacing: '-0.02em',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}>
                 {timeStr}
               </p>
               <p style={{
                 fontSize: 'clamp(0.85rem, 2.5vw, 1rem)',
-                color: 'rgba(255,255,255,0.85)',
+                color: '#fff',
                 margin: 0,
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
               }}>
                 {dateStr}
               </p>
@@ -322,20 +342,32 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
             {/* Location */}
             <p style={{
               fontSize: 'clamp(0.85rem, 2.5vw, 0.95rem)',
-              color: 'rgba(255,255,255,0.8)',
+              color: '#fff',
               margin: 0,
+              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
             }}>
               📍 {location}
             </p>
             {coordinates && (
               <p style={{
                 fontSize: 'clamp(0.65rem, 2vw, 0.75rem)',
-                color: 'rgba(255,255,255,0.5)',
+                color: 'rgba(255,255,255,0.9)',
                 margin: '0.15rem 0 0',
                 fontFamily: 'monospace',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
               }}>
                 🌐 {this.formatCoordinate(coordinates.lat, true)}, {this.formatCoordinate(coordinates.lon, false)}
-                {altitude !== null && ` • ⛰️ ${altitude}m`}
+                {altitude !== null && (
+                  <span
+                    onClick={(e) => { e.stopPropagation(); this.setState({ useMeters: !this.state.useMeters }); }}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to switch m/ft"
+                  >
+                    {this.state.useMeters
+                      ? ` • ▲ ${altitude}m`
+                      : ` • ▲ ${Math.round(altitude * 3.28084)}ft`}
+                  </span>
+                )}
               </p>
             )}
           </div>
@@ -358,19 +390,30 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
               </span>
               <div>
                 {weather && (
-                  <p style={{
-                    fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
-                    fontWeight: 700,
-                    color: '#fff',
-                    margin: 0,
-                  }}>
-                    {weather.temp}°C
+                  <p
+                    onClick={() => this.setState({ useCelsius: !this.state.useCelsius })}
+                    style={{
+                      fontSize: 'clamp(1.25rem, 4vw, 1.5rem)',
+                      fontWeight: 800,
+                      color: '#fff',
+                      margin: 0,
+                      textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                      cursor: 'pointer',
+                      transition: 'opacity 0.2s',
+                    }}
+                    title="Click to switch °C/°F"
+                  >
+                    {this.state.useCelsius
+                      ? `${weather.temp}°C`
+                      : `${Math.round(weather.temp * 9/5 + 32)}°F`}
                   </p>
                 )}
                 <p style={{
-                  fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)',
-                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: 'clamp(0.85rem, 2.5vw, 1rem)',
+                  color: '#fff',
                   margin: 0,
+                  fontWeight: 600,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                 }}>
                   {loading ? 'Loading...' : weather?.condition || 'Weather unavailable'}
                 </p>
@@ -383,24 +426,32 @@ export class WeatherTimeCard extends Component<WeatherTimeCardProps, WeatherTime
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: 'clamp(0.5rem, 2vw, 1rem)',
-                borderTop: '1px solid rgba(255,255,255,0.15)',
+                borderTop: '2px solid rgba(255,255,255,0.4)',
                 paddingTop: '0.75rem',
               }}>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Humidity</p>
-                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>💧 {weather.humidity}%</p>
+                  <p style={{ fontSize: 'clamp(0.7rem, 2vw, 0.85rem)', color: 'rgba(255,255,255,0.9)', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Humidity</p>
+                  <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', fontWeight: 700, color: '#fff', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>💧 {weather.humidity}%</p>
+                </div>
+                <div
+                  style={{ textAlign: 'center', cursor: 'pointer' }}
+                  onClick={() => this.setState({ useKmh: !this.state.useKmh })}
+                  title="Click to switch km/h / mph"
+                >
+                  <p style={{ fontSize: 'clamp(0.7rem, 2vw, 0.85rem)', color: 'rgba(255,255,255,0.9)', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Wind</p>
+                  <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', fontWeight: 700, color: '#fff', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                    💨 {this.state.useKmh
+                      ? `${weather.windSpeed} km/h`
+                      : `${Math.round(weather.windSpeed * 0.621371)} mph`}
+                  </p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Wind</p>
-                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>💨 {weather.windSpeed}</p>
+                  <p style={{ fontSize: 'clamp(0.7rem, 2vw, 0.85rem)', color: 'rgba(255,255,255,0.9)', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Phase</p>
+                  <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', fontWeight: 700, color: '#fff', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{phase}</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Phase</p>
-                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>{phase}</p>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 'clamp(0.65rem, 2vw, 0.8rem)', color: 'rgba(255,255,255,0.6)', margin: 0 }}>Moon</p>
-                  <p style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1rem)', fontWeight: 600, color: '#fff', margin: 0 }}>{moonPhase.icon}</p>
+                  <p style={{ fontSize: 'clamp(0.7rem, 2vw, 0.85rem)', color: 'rgba(255,255,255,0.9)', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Moon</p>
+                  <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', fontWeight: 700, color: '#fff', margin: 0, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{moonPhase.icon}</p>
                 </div>
               </div>
             )}

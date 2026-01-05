@@ -252,6 +252,11 @@ export class HomePage extends Component<{}, HomePageState> {
         />
 
         <View maxWidth="1400px" marginX="auto">
+          {/* Ad Banner - Home Top (above logo) */}
+          <View UNSAFE_style={{ width: '100%', maxWidth: '800px', margin: '0 auto', paddingTop: '1rem' }}>
+            <AdBanner slot={ADS_CONFIG.slots.homeTop} format="horizontal" />
+          </View>
+
           {/* Hero Section */}
           <View UNSAFE_style={{ textAlign: 'center', paddingTop: '2rem', paddingBottom: '3rem' }}>
             {/* Logo - Clickable */}

@@ -15,6 +15,7 @@ export const ADS_CONFIG = {
   // Ad Unit Slot IDs - Created in AdSense dashboard
   slots: {
     // Homepage ads
+    homeTop: '3908062551',
     homeHero: '3908062551',
     homeFooter: '2008657523',
 

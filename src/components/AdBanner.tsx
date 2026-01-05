@@ -113,6 +113,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   }
 
   // Production ad - matches AdSense code structure exactly
+  // For horizontal format, constrain height to prevent oversized mobile ads
+  const isHorizontal = format === 'horizontal';
+
   return (
     <View
       marginY="size-200"
@@ -121,6 +124,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         maxWidth: '600px',
         margin: '0 auto',
         minHeight: format === 'vertical' ? '250px' : '50px',
+        maxHeight: isHorizontal ? '100px' : undefined,
         overflow: 'hidden',
         ...style
       }}
@@ -128,11 +132,14 @@ export const AdBanner: React.FC<AdBannerProps> = ({
       <ins
         ref={adRef}
         className="adsbygoogle"
-        style={{ display: 'block' }}
+        style={{
+          display: 'block',
+          maxHeight: isHorizontal ? '100px' : undefined,
+        }}
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
         data-ad-format={format}
-        data-full-width-responsive="true"
+        data-full-width-responsive={isHorizontal ? "false" : "true"}
       />
     </View>
   );
