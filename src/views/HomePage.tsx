@@ -370,43 +370,54 @@ export class HomePage extends Component<{}, HomePageState> {
                   {/* Category Header - Clickable */}
                   <button
                     onClick={() => this.toggleCategory(category)}
+                    className="category-toggle-btn"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.75rem',
                       width: '100%',
-                      background: 'none',
+                      background: 'rgba(255, 255, 255, 0.03)',
                       border: 'none',
                       cursor: 'pointer',
-                      padding: '0.75rem 1rem',
+                      padding: '1rem',
                       borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
+                      borderRadius: '0 0.5rem 0.5rem 0',
                       transition: 'background 0.2s',
+                      minHeight: '3.5rem',
+                      touchAction: 'manipulation',
+                      WebkitTapHighlightColor: 'rgba(255, 255, 255, 0.1)',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
                   >
                     <span style={{
-                      fontSize: '1.2rem',
+                      fontSize: '1rem',
                       color: 'rgba(255, 255, 255, 0.6)',
                       transition: 'transform 0.3s',
                       transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      flexShrink: 0,
                     }}>
                       ▼
                     </span>
                     <h2 style={{
-                      fontSize: '1.4rem',
+                      fontSize: 'clamp(1.1rem, 4vw, 1.4rem)',
                       fontWeight: 600,
                       color: 'rgba(255, 255, 255, 0.8)',
                       margin: 0,
+                      textAlign: 'left',
                     }}>
                       {CATEGORY_LABELS[category]}
                     </h2>
-                    <span style={{
-                      fontSize: '0.85rem',
+                    <span className="tool-count" style={{
+                      fontSize: '0.8rem',
                       color: 'rgba(255, 255, 255, 0.4)',
                       marginLeft: 'auto',
+                      flexShrink: 0,
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '1rem',
                     }}>
-                      {toolsInCategory.length} tools
+                      {toolsInCategory.length}
                     </span>
                   </button>
 
@@ -415,7 +426,7 @@ export class HomePage extends Component<{}, HomePageState> {
                     display: isCollapsed ? 'none' : 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
                     gap: '1rem',
-                    padding: '1rem 1rem 0',
+                    padding: '1rem 0.5rem 0',
                     overflow: 'hidden',
                   }}>
                     {toolsInCategory.map((tool, index) => this.renderToolCard(tool, index))}
@@ -424,6 +435,23 @@ export class HomePage extends Component<{}, HomePageState> {
               );
             })}
           </View>
+
+          {/* Mobile-friendly styles for category toggles */}
+          <style>{`
+            @media (max-width: 480px) {
+              .category-toggle-btn {
+                padding: 0.875rem 0.75rem !important;
+                gap: 0.5rem !important;
+              }
+              .tool-count {
+                font-size: 0.7rem !important;
+                padding: 0.2rem 0.4rem !important;
+              }
+            }
+            .category-toggle-btn:active {
+              background: rgba(255, 255, 255, 0.12) !important;
+            }
+          `}</style>
 
           {/* About Tulzo - SEO Context Block */}
           <View UNSAFE_style={{
