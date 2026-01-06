@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
   user_id TEXT NOT NULL,
   api_key_hash TEXT NOT NULL UNIQUE,
   api_key_suffix TEXT NOT NULL,
-  provider TEXT NOT NULL CHECK (provider IN ('clerk', 'custom')),
+  name TEXT,
+  server_name TEXT NOT NULL DEFAULT '',
   plan TEXT NOT NULL CHECK (plan IN ('free', 'pro', 'plus')),
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -22,6 +23,9 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
 
 -- Index for active key lookups
 CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active) WHERE is_active = true;
+
+-- Index for server name lookups
+CREATE INDEX IF NOT EXISTS idx_api_keys_server ON api_keys(user_id, server_name);
 
 -- ============ MCP Connections Table ============
 -- Stores connection logs per api_key + server_name
@@ -152,3 +156,40 @@ AFTER INSERT ON mcp_connections
 FOR EACH ROW
 EXECUTE FUNCTION enforce_max_connections();
 
+-- ============ User Preferences Table ============
+-- Stores user preferences (time format, units, currency)
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY,
+  time_format TEXT NOT NULL DEFAULT '24h' CHECK (time_format IN ('12h', '24h')),
+  measurement_system TEXT NOT NULL DEFAULT 'metric' CHECK (measurement_system IN ('metric', 'imperial')),
+  currency TEXT NOT NULL DEFAULT 'USD' CHECK (currency IN ('USD', 'EUR', 'GBP', 'JPY', 'RON')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- RLS for user_preferences
+ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View own preferences" ON user_preferences
+  FOR SELECT USING (true);
+
+CREATE POLICY "Insert own preferences" ON user_preferences
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Update own preferences" ON user_preferences
+  FOR UPDATE USING (true);
+
+-- ============ Seed Data ============
+-- Insert your existing API key
+
+INSERT INTO api_keys (user_id, api_key_hash, api_key_suffix, name, server_name, plan, is_active)
+VALUES (
+  'user_37inOsUBpoqj1Nv5ZyeZ7rBOUKo',
+  encode(sha256('ak_FMZNJPY166AJFVEH5X7CSND1R59GB21R'::bytea), 'hex'),
+  'B21R',
+  'Default Key',
+  '',
+  'pro',
+  true
+) ON CONFLICT (api_key_hash) DO NOTHING;
