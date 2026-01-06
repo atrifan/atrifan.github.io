@@ -13,6 +13,7 @@
  */
 
 import { TIMEZONE_IDS } from '../utils/ZoneCalculator';
+import { ALL_UNITS } from '../utils/UnitConverter';
 
 /**
  *
@@ -738,7 +739,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'convert_units',
-    description: 'Convert between different units of measurement',
+    description: 'Convert between different units of measurement. Supports weight (kg, lbs, oz, g), length (cm, in, m, ft, km, mi, mm), and temperature (c, f, k).',
     category: TOOL_CATEGORIES.UTILITIES,
     hasWidget: true,
     invocationMessages: { invoking: 'Converting units...', invoked: 'Conversion complete' },
@@ -746,19 +747,19 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       type: 'object',
       properties: {
         value: { type: 'number', description: 'Value to convert' },
-        fromUnit: { type: 'string', description: 'Source unit' },
-        toUnit: { type: 'string', description: 'Target unit' },
-        category: { type: 'string', enum: ['length', 'weight', 'temperature', 'volume', 'area', 'speed', 'time', 'data'] },
+        from: { type: 'string', enum: [...ALL_UNITS], description: 'Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)' },
+        to: { type: 'string', enum: [...ALL_UNITS], description: 'Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)' },
+        category: { type: 'string', enum: ['weight', 'length', 'temperature'], description: 'Optional: category hint for the conversion' },
       },
-      required: ['value', 'fromUnit', 'toUnit'],
+      required: ['value', 'from', 'to'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        result: { type: 'number' },
-        fromValue: { type: 'number' },
-        fromUnit: { type: 'string' },
-        toUnit: { type: 'string' },
+        result: { type: 'number', description: 'Converted value' },
+        value: { type: 'number', description: 'Original value' },
+        from: { type: 'string', description: 'Source unit' },
+        to: { type: 'string', description: 'Target unit' },
       },
     },
   },

@@ -10,24 +10,13 @@ import { AlertModal } from '../components/AlertModal';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { calculateAgeForUI, AgeCalculatorUIOutput } from '../utils/AgeCalculator';
 
 interface AgePageState {
   birthDate: string;
-  result: AgeResult | null;
+  result: AgeCalculatorUIOutput | null;
   showAlert: boolean;
   alertMessage: string;
-}
-
-interface AgeResult {
-  years: number;
-  months: number;
-  days: number;
-  totalDays: number;
-  totalWeeks: number;
-  totalMonths: number;
-  totalHours: number;
-  nextBirthday: Date;
-  daysUntilBirthday: number;
 }
 
 export class AgePage extends Component<{}, AgePageState> {
@@ -61,46 +50,17 @@ export class AgePage extends Component<{}, AgePageState> {
     const { birthDate } = this.state;
     if (!birthDate) return;
 
-    const birth = new Date(birthDate);
-    const today = new Date();
-    
-    if (birth > today) {
+    try {
+      // Use shared AgeCalculator - single source of truth
+      const result = calculateAgeForUI({ birthDate });
+      this.setState({ result }, this.scrollToResults);
+    } catch {
+      // Birth date is in the future
       this.setState({
         showAlert: true,
         alertMessage: 'Birth date cannot be in the future! Please enter a valid date.'
       });
-      return;
     }
-
-    let years = today.getFullYear() - birth.getFullYear();
-    let months = today.getMonth() - birth.getMonth();
-    let days = today.getDate() - birth.getDate();
-
-    if (days < 0) {
-      months--;
-      const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-      days += lastMonth.getDate();
-    }
-    if (months < 0) {
-      years--;
-      months += 12;
-    }
-
-    const totalDays = Math.floor((today.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
-    const totalWeeks = Math.floor(totalDays / 7);
-    const totalMonths = years * 12 + months;
-    const totalHours = totalDays * 24;
-
-    // Next birthday
-    const nextBirthday = new Date(today.getFullYear(), birth.getMonth(), birth.getDate());
-    if (nextBirthday <= today) {
-      nextBirthday.setFullYear(nextBirthday.getFullYear() + 1);
-    }
-    const daysUntilBirthday = Math.ceil((nextBirthday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-    this.setState({
-      result: { years, months, days, totalDays, totalWeeks, totalMonths, totalHours, nextBirthday, daysUntilBirthday }
-    }, this.scrollToResults);
   };
 
   render() {
@@ -179,7 +139,7 @@ export class AgePage extends Component<{}, AgePageState> {
                 </div>
                 <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(244,114,182,0.2)', borderRadius: '12px', textAlign: 'center' }}>
                   <div style={{ color: '#f472b6', fontWeight: 600 }}>🎉 Next Birthday</div>
-                  <div style={{ color: '#fff', fontSize: '1.1rem' }}>{result.daysUntilBirthday} days away ({result.nextBirthday.toLocaleDateString()})</div>
+                  <div style={{ color: '#fff', fontSize: '1.1rem' }}>{result.daysUntilNextBirthday} days away ({result.nextBirthdayDate.toLocaleDateString()})</div>
                 </div>
               </div>
               <div style={{ marginTop: '1rem', textAlign: 'center' }}>

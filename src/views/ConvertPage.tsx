@@ -6,36 +6,14 @@ import { SideAds } from '../components/SideAds';
 import { inputStyles, inputPlaceholderCSS } from '../styles/inputStyles';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { convertUnits, CONVERSION_OPTIONS, UnitCategory } from '../utils/UnitConverter';
 
 interface ConvertPageState {
-  category: 'weight' | 'length' | 'temperature';
+  category: UnitCategory;
   value: string;
   fromUnit: string;
   result: string | null;
 }
-
-const CONVERSIONS = {
-  weight: [
-    { from: 'kg', to: 'lbs', factor: 2.20462, label: 'Kilograms → Pounds' },
-    { from: 'lbs', to: 'kg', factor: 0.453592, label: 'Pounds → Kilograms' },
-    { from: 'kg', to: 'oz', factor: 35.274, label: 'Kilograms → Ounces' },
-    { from: 'oz', to: 'kg', factor: 0.0283495, label: 'Ounces → Kilograms' },
-  ],
-  length: [
-    { from: 'cm', to: 'in', factor: 0.393701, label: 'Centimeters → Inches' },
-    { from: 'in', to: 'cm', factor: 2.54, label: 'Inches → Centimeters' },
-    { from: 'm', to: 'ft', factor: 3.28084, label: 'Meters → Feet' },
-    { from: 'ft', to: 'm', factor: 0.3048, label: 'Feet → Meters' },
-    { from: 'km', to: 'mi', factor: 0.621371, label: 'Kilometers → Miles' },
-    { from: 'mi', to: 'km', factor: 1.60934, label: 'Miles → Kilometers' },
-  ],
-  temperature: [
-    { from: 'C', to: 'F', formula: (v: number) => (v * 9/5) + 32, label: 'Celsius → Fahrenheit' },
-    { from: 'F', to: 'C', formula: (v: number) => (v - 32) * 5/9, label: 'Fahrenheit → Celsius' },
-    { from: 'C', to: 'K', formula: (v: number) => v + 273.15, label: 'Celsius → Kelvin' },
-    { from: 'K', to: 'C', formula: (v: number) => v - 273.15, label: 'Kelvin → Celsius' },
-  ],
-};
 
 export class ConvertPage extends Component<{}, ConvertPageState> {
   private resultRef: RefObject<HTMLDivElement> = createRef();
@@ -50,24 +28,22 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
   }
 
   private convert = () => {
-    const { category, value, fromUnit } = this.state;
+    const { value, fromUnit } = this.state;
     const v = parseFloat(value);
     if (isNaN(v)) return;
 
-    const conversions = CONVERSIONS[category];
     const [from, to] = fromUnit.split('→');
-    const conv = conversions.find(c => c.from === from && c.to === to);
-    if (!conv) return;
 
-    let result: number;
-    if ('formula' in conv) {
-      result = (conv as any).formula(v);
-    } else {
-      result = v * (conv as any).factor;
+    try {
+      // Use shared UnitConverter - single source of truth
+      const convResult = convertUnits({ value: v, from, to });
+      this.setState({ result: convResult.formatted }, () => {
+        setTimeout(() => this.resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+      });
+    } catch {
+      // Conversion not supported
+      return;
     }
-    this.setState({ result: `${result.toFixed(4)} ${to}` }, () => {
-      setTimeout(() => this.resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-    });
   };
 
   render() {
@@ -98,7 +74,7 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
             {categories.map((cat) => (
               <button
                 key={cat}
-                onClick={() => this.setState({ category: cat, result: null, fromUnit: CONVERSIONS[cat][0].from + '→' + CONVERSIONS[cat][0].to })}
+                onClick={() => this.setState({ category: cat, result: null, fromUnit: CONVERSION_OPTIONS[cat][0].from + '→' + CONVERSION_OPTIONS[cat][0].to })}
                 style={{
                   padding: '0.75rem 1.5rem', borderRadius: '20px', border: 'none', cursor: 'pointer',
                   background: category === cat ? gradient : 'rgba(255,255,255,0.1)',
@@ -116,7 +92,7 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
               onChange={(e) => this.setState({ fromUnit: e.target.value, result: null })}
               style={{ ...inputStyles.select, marginBottom: '1rem' }}
             >
-              {CONVERSIONS[category].map((c, i) => (
+              {CONVERSION_OPTIONS[category].map((c, i) => (
                 <option key={i} value={`${c.from}→${c.to}`}>{c.label}</option>
               ))}
             </select>

@@ -15,6 +15,8 @@ import { calculateSpin, SpinCalculatorInput, WHEEL_COLORS } from '@/src/utils/Sp
 import { makeDecision, DecisionCalculatorInput, DecisionMode } from '@/src/utils/DecisionCalculator';
 import { calculateCountdown as calculateCountdownShared, CountdownCalculatorInput } from '@/src/utils/CountdownCalculator';
 import { calculateCycle as calculateCycleShared, CycleCalculatorInput } from '@/src/utils/CycleCalculator';
+import { convertUnits as convertUnitsShared, ConvertInput } from '@/src/utils/UnitConverter';
+import { calculateAge as calculateAgeShared, AgeCalculatorInput } from '@/src/utils/AgeCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -759,43 +761,26 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { operation: op, value, percent, result: Math.round(result * 100) / 100 };
     }
     case 'calculate_age': {
-      const [y, m, d] = (args.birthDate as string).split('-').map(Number);
-      const birth = new Date(y, m - 1, d);
-      const now = new Date();
-      let years = now.getFullYear() - birth.getFullYear();
-      let months = now.getMonth() - birth.getMonth();
-      let days = now.getDate() - birth.getDate();
-      if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
-      if (months < 0) { years--; months += 12; }
-      const nextBirthday = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
-      if (nextBirthday < now) nextBirthday.setFullYear(nextBirthday.getFullYear() + 1);
-      const daysUntilBirthday = Math.ceil((nextBirthday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      const totalDays = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
-      return { years, months, days, totalDays, daysUntilNextBirthday: daysUntilBirthday };
+      // Use shared AgeCalculator - single source of truth for age calculations
+      const input: AgeCalculatorInput = {
+        birthDate: args.birthDate as string,
+      };
+      return calculateAgeShared(input);
     }
     case 'convert_units': {
-      const val = args.value as number;
-      const from = (args.from as string).toLowerCase();
-      const to = (args.to as string).toLowerCase();
-      const conversions: Record<string, Record<string, (v: number) => number>> = {
-        kg: { lbs: v => v * 2.20462, oz: v => v * 35.274, g: v => v * 1000 },
-        lbs: { kg: v => v / 2.20462, oz: v => v * 16, g: v => v * 453.592 },
-        oz: { kg: v => v / 35.274, lbs: v => v / 16, g: v => v * 28.3495 },
-        g: { kg: v => v / 1000, lbs: v => v / 453.592, oz: v => v / 28.3495 },
-        cm: { in: v => v / 2.54, m: v => v / 100, ft: v => v / 30.48, mm: v => v * 10 },
-        in: { cm: v => v * 2.54, m: v => v * 0.0254, ft: v => v / 12, mm: v => v * 25.4 },
-        m: { cm: v => v * 100, in: v => v / 0.0254, ft: v => v * 3.28084, km: v => v / 1000 },
-        ft: { cm: v => v * 30.48, in: v => v * 12, m: v => v / 3.28084, mi: v => v / 5280 },
-        km: { m: v => v * 1000, mi: v => v / 1.60934, ft: v => v * 3280.84 },
-        mi: { km: v => v * 1.60934, m: v => v * 1609.34, ft: v => v * 5280 },
-        c: { f: v => v * 9/5 + 32, k: v => v + 273.15 },
-        f: { c: v => (v - 32) * 5/9, k: v => (v - 32) * 5/9 + 273.15 },
-        k: { c: v => v - 273.15, f: v => (v - 273.15) * 9/5 + 32 },
+      // Use shared UnitConverter - single source of truth for unit conversions
+      const input: ConvertInput = {
+        value: args.value as number,
+        from: args.from as string,
+        to: args.to as string,
       };
-      if (from === to) return { value: val, from, to, result: val };
-      const converter = conversions[from]?.[to];
-      if (!converter) throw new Error(`Cannot convert from ${from} to ${to}`);
-      return { value: val, from, to, result: Math.round(converter(val) * 10000) / 10000 };
+      const convResult = convertUnitsShared(input);
+      return {
+        value: convResult.value,
+        from: convResult.from,
+        to: convResult.to,
+        result: convResult.result,
+      };
     }
     case 'calculate_cycle': {
       // Use shared CycleCalculator - single source of truth for cycle logic
