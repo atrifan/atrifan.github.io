@@ -281,36 +281,70 @@ async function validateBearerToken(token: string): Promise<AuthResult> {
 }
 
 /**
- * Log MCP connection to user's unsafeMetadata
+ * Log MCP connection to user's unsafeMetadata and Google Analytics
+ *
+ * Data structure uses agent:method as the composite key.
+ * Primary key is agent - if the same agent uses a different method, it creates a new entry.
+ * Each entry stores up to 5 unique IPs that have used this agent:method combination.
+ * Maximum 10 entries per user, oldest entries are removed when limit is exceeded.
  */
 async function logConnection(userId: string, authMethod: AuthMethod, clientIp: string, userAgent: string) {
+  // Log to Google Analytics (fire and forget)
+  trackMCPEvent('mcp_connection', {
+    event_category: 'mcp',
+    event_label: 'connection',
+    auth_method: authMethod,
+    user_agent: userAgent.slice(0, 100), // Truncate for GA
+  }, `user_${userId.slice(0, 20)}`);
+
   try {
     const client = await clerkClient();
     const user = await client.users.getUser(userId);
+
+    // Data structure: agent:method as key, with list of IPs (max 5)
     const connections = (user.unsafeMetadata?.mcpConnections as Array<{
-      ip: string;
       agent: string;
-      authMethod: AuthMethod;
+      method: AuthMethod;
       lastUsed: string;
+      ips: string[];
     }>) || [];
 
-    // Find existing connection with same IP and agent
-    const existingIndex = connections.findIndex(c => c.ip === clientIp && c.agent === userAgent);
     const now = new Date().toISOString();
+
+    // Find existing connection with same agent AND method (composite key)
+    const existingIndex = connections.findIndex(c => c.agent === userAgent && c.method === authMethod);
 
     if (existingIndex >= 0) {
       // Update existing connection
-      connections[existingIndex].lastUsed = now;
-      connections[existingIndex].authMethod = authMethod;
+      const conn = connections[existingIndex];
+      conn.lastUsed = now;
+
+      // Add IP if not already present (max 5 IPs per agent:method)
+      if (!conn.ips) conn.ips = [];
+      if (clientIp && clientIp !== 'unknown' && !conn.ips.includes(clientIp)) {
+        conn.ips.unshift(clientIp); // Add to front (most recent)
+        if (conn.ips.length > 5) {
+          conn.ips.pop(); // Remove oldest
+        }
+      }
+
+      // Move to front (most recently used)
+      const [updated] = connections.splice(existingIndex, 1);
+      connections.unshift(updated);
     } else {
-      // Add new connection (keep last 10)
+      // Add new connection at the front
+      const ips: string[] = [];
+      if (clientIp && clientIp !== 'unknown') {
+        ips.push(clientIp);
+      }
       connections.unshift({
-        ip: clientIp,
         agent: userAgent,
-        authMethod,
+        method: authMethod,
         lastUsed: now,
+        ips,
       });
-      if (connections.length > 10) {
+      // Keep maximum 10 entries - remove oldest (at the end)
+      while (connections.length > 10) {
         connections.pop();
       }
     }

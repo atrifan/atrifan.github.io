@@ -166,12 +166,15 @@ const ConfigField: React.FC<ConfigFieldProps> = ({ label, value, onCopy, copiedF
   );
 };
 
-// MCP connection type
+// MCP connection type - uses agent:method as composite key
 interface MCPConnection {
-  ip: string;
   agent: string;
-  authMethod: 'oauth' | 'header' | 'path';
+  method: 'oauth' | 'header' | 'path' | 'internal';
   lastUsed: string;
+  ips?: string[]; // Up to 5 IPs per agent:method
+  // Legacy fields for backwards compatibility
+  ip?: string;
+  authMethod?: 'oauth' | 'header' | 'path';
 }
 
 // Tab type for MCP usage
@@ -1222,44 +1225,76 @@ export const DashboardPage: React.FC = () => {
             </svg>
           }>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-              Clients using your MCP server
+              Clients using your MCP server (agent:method)
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {connections.map((conn, i) => (
-                <div key={i} style={{
-                  background: 'rgba(0,0,0,0.2)',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  flexWrap: 'wrap',
-                }}>
-                  <div style={{ flex: 1, minWidth: '150px' }}>
-                    <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>
-                      {conn.agent.length > 40 ? conn.agent.slice(0, 40) + '...' : conn.agent}
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                      {conn.ip}
-                    </div>
-                  </div>
-                  <div style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    background: conn.authMethod === 'oauth' ? 'rgba(16, 185, 129, 0.2)' :
-                               conn.authMethod === 'header' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(96, 165, 250, 0.2)',
-                    color: conn.authMethod === 'oauth' ? '#10b981' :
-                           conn.authMethod === 'header' ? '#fbbf24' : '#60a5fa',
+              {connections.map((conn, i) => {
+                // Support both new (method) and legacy (authMethod) field names
+                const method = conn.method || conn.authMethod || 'path';
+                const methodColors: Record<string, { bg: string; text: string }> = {
+                  oauth: { bg: 'rgba(16, 185, 129, 0.2)', text: '#10b981' },
+                  header: { bg: 'rgba(251, 191, 36, 0.2)', text: '#fbbf24' },
+                  path: { bg: 'rgba(96, 165, 250, 0.2)', text: '#60a5fa' },
+                  internal: { bg: 'rgba(167, 139, 250, 0.2)', text: '#a78bfa' },
+                };
+                const colors = methodColors[method] || methodColors.path;
+                // Format lastUsed as UTC date+time
+                const lastUsedDate = new Date(conn.lastUsed);
+                const lastUsedUTC = lastUsedDate.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+                // Get IPs (support both new ips array and legacy single ip)
+                const ips = conn.ips || (conn.ip ? [conn.ip] : []);
+
+                return (
+                  <div key={i} style={{
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '8px',
+                    padding: '0.75rem 1rem',
                   }}>
-                    {conn.authMethod.toUpperCase()}
+                    {/* Top row: Agent | Method | Last Used */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      flexWrap: 'wrap',
+                    }}>
+                      {/* Agent (left) */}
+                      <div style={{ flex: 1, minWidth: '150px' }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>
+                          {conn.agent.length > 50 ? conn.agent.slice(0, 50) + '...' : conn.agent}
+                        </div>
+                      </div>
+                      {/* Method (middle) */}
+                      <div style={{
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        background: colors.bg,
+                        color: colors.text,
+                      }}>
+                        {method.toUpperCase()}
+                      </div>
+                      {/* Last Used UTC (right) */}
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', minWidth: '140px', textAlign: 'right' }}>
+                        {lastUsedUTC}
+                      </div>
+                    </div>
+                    {/* IPs row (under agent:method) */}
+                    {ips.length > 0 && (
+                      <div style={{
+                        marginTop: '0.5rem',
+                        paddingTop: '0.5rem',
+                        borderTop: '1px solid rgba(255,255,255,0.1)',
+                        color: 'rgba(255,255,255,0.4)',
+                        fontSize: '0.7rem',
+                        fontFamily: 'monospace',
+                      }}>
+                        {ips.join(' | ')}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                    {new Date(conn.lastUsed).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </DashboardCard>
         )}
