@@ -2116,6 +2116,26 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               rolls.map(function(r) { return '<span style="background:rgba(96,165,250,0.3);padding:0.5rem 1rem;border-radius:8px;font-weight:700;color:#fff">' + r + '</span>'; }).join('') +
             '</div>';
         }
+        case 'coin_flip': {
+          var result = data.result || 'heads';
+          var isHeads = result === 'heads';
+          var coinColor = isHeads ? '#fbbf24' : '#9ca3af';
+          var coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
+          var borderColor = isHeads ? '#b45309' : '#4b5563';
+          var textColor = isHeads ? '#92400e' : '#374151';
+          var count = data.count || 1;
+          return '<div class="header">🪙 Coin Flip</div>' +
+            '<div style="text-align:center;margin:1rem 0">' +
+              '<div style="width:80px;height:80px;border-radius:50%;background:' + coinBg + ';display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ' + borderColor + '">' +
+                '<span style="font-size:2rem;font-weight:800;color:' + textColor + '">' + (isHeads ? 'H' : 'T') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="big-number" style="color:' + coinColor + ';font-size:2rem">' + result.toUpperCase() + '</div>' +
+            (count > 1 ? '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">' + data.headsCount + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">' + data.tailsCount + '</div></div>' +
+            '</div>' : '');
+        }
         case 'tip': {
           return '<div class="header">💵 Tip Calculator</div>' +
             '<div class="big-number" style="color:#10b981">$' + Number(data.total).toFixed(2) + '</div>' +
