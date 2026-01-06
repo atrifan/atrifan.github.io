@@ -9,6 +9,7 @@ import {
   DonationEligibilityInput, BloodCompatibilityInput, BabyBloodTypeInput,
   Gender, UnitSystem, BloodTypeABO, RhFactor
 } from '@/src/utils/BloodCalculator';
+import { calculateFlip, FlipCalculatorInput, FlipMode } from '@/src/utils/FlipCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -686,9 +687,6 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         savingsRate: round2((plan.monthlyTargetSavings / plan.monthlyDisposable) * 100),
       };
     }
-    case 'calculate_date_info': {
-      return DateCalculator.calculate(args.date as string);
-    }
     case 'days_between_dates': {
       const [y1, m1, d1] = (args.date1 as string).split('-').map(Number);
       const [y2, m2, d2] = (args.date2 as string).split('-').map(Number);
@@ -1053,24 +1051,14 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       const max = (args.max as number) || 2147483647;
       return { luckyNumber: Math.floor(Math.random() * max) + 1, max };
     }
-    case 'roll_dice': {
-      const sides = (args.sides as number) || 6;
-      const count = (args.count as number) || 1;
-      const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
-      return { sides, count, rolls, total: rolls.reduce((a, b) => a + b, 0) };
-    }
-    case 'flip_coin': {
-      const count = Math.min(Math.max((args.count as number) || 1, 1), 100);
-      const results = Array.from({ length: count }, () => Math.random() < 0.5 ? 'heads' : 'tails');
-      const headsCount = results.filter(r => r === 'heads').length;
-      const tailsCount = results.filter(r => r === 'tails').length;
-      return {
-        result: results[0],
-        results,
-        headsCount,
-        tailsCount,
-        count,
+    case 'flip_tool': {
+      // Use shared FlipCalculator - single source of truth for flip/roll logic
+      const input: FlipCalculatorInput = {
+        flipMode: args.flipMode as FlipMode | undefined,
+        count: args.count as number | undefined,
+        sides: args.sides as number | undefined,
       };
+      return calculateFlip(input);
     }
     case 'calculate_iq_score': {
       const testMode = (args.testMode as TestMode) || 'quick';
@@ -1329,7 +1317,6 @@ function getWidgetType(toolName: string): string {
     'calculate_bmr': 'bmr',
     'generate_weight_loss_plan': 'weight_loss_plan',
     'calculate_savings_plan': 'savings_plan',
-    'calculate_date_info': 'date_info',
     'days_between_dates': 'days_between',
     'random_number': 'random_number',
     'pick_random': 'pick_random',
@@ -1348,8 +1335,7 @@ function getWidgetType(toolName: string): string {
     'convert_timezone': 'timezone',
     'generate_unique_id': 'unique_id',
     'lucky_number': 'lucky_number',
-    'roll_dice': 'dice',
-    'flip_coin': 'coin_flip',
+    'flip_tool': 'flip',
     'calculate_iq_score': 'iq_score',
     'calculate_uniqueness': 'uniqueness',
     'when_date_info': 'when_date',
@@ -1522,38 +1508,38 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         </div>`;
       break;
     }
-    case 'dice': {
-      const rolls = data.rolls as number[];
-      const diceEmoji = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-      content = `
-        <div class="header">🎲 Dice Roll</div>
-        <div style="text-align:center;font-size:3rem;margin:1rem 0">${rolls.map(r => (data.sides === 6 && r <= 6) ? diceEmoji[r] : r).join(' ')}</div>
-        <div class="big-number" style="color:#a78bfa">${data.total}</div>
-        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">Total from ${rolls.length} ${data.sides}-sided dice</div>`;
-      break;
-    }
-    case 'coin_flip': {
-      const result = data.result as string;
-      const results = data.results as string[];
-      const count = data.count as number;
-      const headsCount = data.headsCount as number;
-      const tailsCount = data.tailsCount as number;
-      const isHeads = result === 'heads';
-      const coinColor = isHeads ? '#fbbf24' : '#9ca3af';
-      const coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
-      content = `
-        <div class="header">🪙 Coin Flip</div>
-        <div style="text-align:center;margin:1rem 0">
-          <div style="width:80px;height:80px;border-radius:50%;background:${coinBg};display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ${isHeads ? '#b45309' : '#4b5563'}">
-            <span style="font-size:2rem;font-weight:800;color:${isHeads ? '#92400e' : '#374151'}">${isHeads ? 'H' : 'T'}</span>
+    case 'flip': {
+      // Unified flip widget - renders based on flipMode
+      if (data.flipMode === 'dice') {
+        const rolls = data.rolls as number[];
+        const diceEmoji = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+        content = `
+          <div class="header">🎲 Dice Roll</div>
+          <div style="text-align:center;font-size:3rem;margin:1rem 0">${rolls.map(r => (data.sides === 6 && r <= 6) ? diceEmoji[r] : r).join(' ')}</div>
+          <div class="big-number" style="color:#a78bfa">${data.total}</div>
+          <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">Total from ${rolls.length} ${data.sides}-sided dice</div>`;
+      } else {
+        const result = data.result as string;
+        const count = data.count as number;
+        const headsCount = data.headsCount as number;
+        const tailsCount = data.tailsCount as number;
+        const isHeads = result === 'heads';
+        const coinColor = isHeads ? '#fbbf24' : '#9ca3af';
+        const coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
+        content = `
+          <div class="header">🪙 Coin Flip</div>
+          <div style="text-align:center;margin:1rem 0">
+            <div style="width:80px;height:80px;border-radius:50%;background:${coinBg};display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ${isHeads ? '#b45309' : '#4b5563'}">
+              <span style="font-size:2rem;font-weight:800;color:${isHeads ? '#92400e' : '#374151'}">${isHeads ? 'H' : 'T'}</span>
+            </div>
           </div>
-        </div>
-        <div class="big-number" style="color:${coinColor};font-size:2rem">${result.toUpperCase()}</div>
-        ${count > 1 ? `
-        <div class="stats">
-          <div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">${headsCount}</div></div>
-          <div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">${tailsCount}</div></div>
-        </div>` : ''}`;
+          <div class="big-number" style="color:${coinColor};font-size:2rem">${result.toUpperCase()}</div>
+          ${count > 1 ? `
+          <div class="stats">
+            <div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">${headsCount}</div></div>
+            <div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">${tailsCount}</div></div>
+          </div>` : ''}`;
+      }
       break;
     }
     case 'age': {
@@ -1694,18 +1680,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         </div>`;
       break;
     }
-    case 'date_info': {
-      content = `
-        <div class="header">📅 Date Info</div>
-        <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.formatted || data.date}</div>
-        <div class="stats">
-          <div class="stat-box"><div class="stat-label">Day</div><div class="stat-value">${data.dayOfWeek}</div></div>
-          <div class="stat-box"><div class="stat-label">Week</div><div class="stat-value">${data.weekNumber}</div></div>
-          <div class="stat-box"><div class="stat-label">Day of Year</div><div class="stat-value">${data.dayOfYear}</div></div>
-          <div class="stat-box"><div class="stat-label">Quarter</div><div class="stat-value">Q${data.quarter}</div></div>
-        </div>`;
-      break;
-    }
     case 'days_between': {
       content = `
         <div class="header">📆 Days Between</div>
@@ -1834,14 +1808,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'when_date': {
+      const tenseColor = data.isPast ? '#ef4444' : data.isToday ? '#22c55e' : '#3b82f6';
+      const tenseLabel = data.isPast ? 'Past' : data.isToday ? 'Today' : 'Future';
+      const absDays = Math.abs(data.daysFromToday as number);
       content = `
-        <div class="header">📅 When?</div>
-        <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.date}</div>
-        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.dayOfWeek}</div>
+        <div class="header">📅 Date Info</div>
+        <div class="big-number" style="color:#60a5fa;font-size:1.3rem">${data.formattedDate || data.date}</div>
+        <div class="label" style="background:${tenseColor}33;color:${tenseColor}">${data.dayOfWeek} • ${tenseLabel}</div>
         <div class="stats">
-          <div class="stat-box"><div class="stat-label">Days Away</div><div class="stat-value">${data.daysAway}</div></div>
-          <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${data.weeksAway}</div></div>
-        </div>`;
+          <div class="stat-box"><div class="stat-label">Days</div><div class="stat-value">${absDays}</div></div>
+          <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${data.weeks}</div></div>
+          <div class="stat-box"><div class="stat-label">Week #</div><div class="stat-value">${data.weekOfYear}</div></div>
+          <div class="stat-box"><div class="stat-label">Q</div><div class="stat-value">${data.quarter}</div></div>
+        </div>
+        <div style="margin-top:0.5rem;font-size:0.75rem;color:rgba(255,255,255,0.6)">${data.zodiacSign} • Day ${data.dayOfYear}${data.isLeapYear ? ' • Leap Year' : ''}</div>`;
       break;
     }
     case 'blood': {
@@ -2052,34 +2032,36 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               '<div class="stat-box"><div class="stat-label">Next Birthday</div><div class="stat-value">' + data.daysUntilNextBirthday + ' days</div></div>' +
             '</div>';
         }
-        case 'dice': {
-          const rolls = data.rolls || [];
-          return '<div class="header">🎲 Dice Roll</div>' +
-            '<div class="big-number" style="color:#60a5fa">' + data.total + '</div>' +
-            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Total</div>' +
-            '<div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:0.5rem">' +
-              rolls.map(function(r) { return '<span style="background:rgba(96,165,250,0.3);padding:0.5rem 1rem;border-radius:8px;font-weight:700;color:#fff">' + r + '</span>'; }).join('') +
-            '</div>';
-        }
-        case 'coin_flip': {
-          var result = data.result || 'heads';
-          var isHeads = result === 'heads';
-          var coinColor = isHeads ? '#fbbf24' : '#9ca3af';
-          var coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
-          var borderColor = isHeads ? '#b45309' : '#4b5563';
-          var textColor = isHeads ? '#92400e' : '#374151';
-          var count = data.count || 1;
-          return '<div class="header">🪙 Coin Flip</div>' +
-            '<div style="text-align:center;margin:1rem 0">' +
-              '<div style="width:80px;height:80px;border-radius:50%;background:' + coinBg + ';display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ' + borderColor + '">' +
-                '<span style="font-size:2rem;font-weight:800;color:' + textColor + '">' + (isHeads ? 'H' : 'T') + '</span>' +
+        case 'flip': {
+          // Unified flip widget - renders based on flipMode
+          if (data.flipMode === 'dice') {
+            var rolls = data.rolls || [];
+            return '<div class="header">🎲 Dice Roll</div>' +
+              '<div class="big-number" style="color:#60a5fa">' + data.total + '</div>' +
+              '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Total</div>' +
+              '<div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:0.5rem">' +
+                rolls.map(function(r) { return '<span style="background:rgba(96,165,250,0.3);padding:0.5rem 1rem;border-radius:8px;font-weight:700;color:#fff">' + r + '</span>'; }).join('') +
+              '</div>';
+          } else {
+            var result = data.result || 'heads';
+            var isHeads = result === 'heads';
+            var coinColor = isHeads ? '#fbbf24' : '#9ca3af';
+            var coinBg = isHeads ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)' : 'linear-gradient(135deg, #f3f4f6 0%, #9ca3af 50%, #6b7280 100%)';
+            var borderColor = isHeads ? '#b45309' : '#4b5563';
+            var textColor = isHeads ? '#92400e' : '#374151';
+            var count = data.count || 1;
+            return '<div class="header">🪙 Coin Flip</div>' +
+              '<div style="text-align:center;margin:1rem 0">' +
+                '<div style="width:80px;height:80px;border-radius:50%;background:' + coinBg + ';display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:3px solid ' + borderColor + '">' +
+                  '<span style="font-size:2rem;font-weight:800;color:' + textColor + '">' + (isHeads ? 'H' : 'T') + '</span>' +
+                '</div>' +
               '</div>' +
-            '</div>' +
-            '<div class="big-number" style="color:' + coinColor + ';font-size:2rem">' + result.toUpperCase() + '</div>' +
-            (count > 1 ? '<div class="stats">' +
-              '<div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">' + data.headsCount + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">' + data.tailsCount + '</div></div>' +
-            '</div>' : '');
+              '<div class="big-number" style="color:' + coinColor + ';font-size:2rem">' + result.toUpperCase() + '</div>' +
+              (count > 1 ? '<div class="stats">' +
+                '<div class="stat-box"><div class="stat-label">Heads</div><div class="stat-value" style="color:#fbbf24">' + data.headsCount + '</div></div>' +
+                '<div class="stat-box"><div class="stat-label">Tails</div><div class="stat-value" style="color:#9ca3af">' + data.tailsCount + '</div></div>' +
+              '</div>' : '');
+          }
         }
         case 'tip': {
           return '<div class="header">💵 Tip Calculator</div>' +
@@ -2143,16 +2125,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
                 '<div class="stat-box"><div class="stat-label">Target Date</div><div class="stat-value">' + (data.targetDate || 'N/A') + '</div></div>' +
                 '<div class="stat-box"><div class="stat-label">Achievable</div><div class="stat-value">' + (data.isAchievable ? '✅ Yes' : '⚠️ Stretch') + '</div></div>'
               ) +
-            '</div>';
-        }
-        case 'date_info': {
-          return '<div class="header">📅 Date Info</div>' +
-            '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + (data.formatted || data.date) + '</div>' +
-            '<div class="stats">' +
-              '<div class="stat-box"><div class="stat-label">Day</div><div class="stat-value">' + data.dayOfWeek + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Week</div><div class="stat-value">' + data.weekNumber + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Day of Year</div><div class="stat-value">' + data.dayOfYear + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Quarter</div><div class="stat-value">Q' + data.quarter + '</div></div>' +
             '</div>';
         }
         case 'days_between': {
@@ -2294,13 +2266,19 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="label" style="background:' + uColor + '33;color:' + uColor + '">' + data.category + '</div>';
         }
         case 'when_date': {
-          return '<div class="header">📅 When?</div>' +
-            '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + data.date + '</div>' +
-            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.dayOfWeek + '</div>' +
+          var tenseColor = data.isPast ? '#ef4444' : data.isToday ? '#22c55e' : '#3b82f6';
+          var tenseLabel = data.isPast ? 'Past' : data.isToday ? 'Today' : 'Future';
+          var absDays = Math.abs(data.daysFromToday || 0);
+          return '<div class="header">📅 Date Info</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:1.3rem">' + (data.formattedDate || data.date) + '</div>' +
+            '<div class="label" style="background:' + tenseColor + '33;color:' + tenseColor + '">' + data.dayOfWeek + ' • ' + tenseLabel + '</div>' +
             '<div class="stats">' +
-              '<div class="stat-box"><div class="stat-label">Days Away</div><div class="stat-value">' + data.daysAway + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeksAway + '</div></div>' +
-            '</div>';
+              '<div class="stat-box"><div class="stat-label">Days</div><div class="stat-value">' + absDays + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeks + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Week #</div><div class="stat-value">' + data.weekOfYear + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Q</div><div class="stat-value">' + data.quarter + '</div></div>' +
+            '</div>' +
+            '<div style="margin-top:0.5rem;font-size:0.75rem;color:rgba(255,255,255,0.6)">' + data.zodiacSign + ' • Day ' + data.dayOfYear + (data.isLeapYear ? ' • Leap Year' : '') + '</div>';
         }
         case 'blood_donation': {
           var eligibleColor = data.eligible ? '#22c55e' : '#ef4444';
@@ -2394,14 +2372,16 @@ function formatResultText(toolName: string, result: unknown): string {
       return `BMI: ${r.bmi} (${r.category})`;
     case 'calculate_tip':
       return `Bill: $${r.billAmount} + Tip (${r.tipPercent}%): $${r.tipAmount} = Total: $${r.total}${(r.splitWays as number) > 1 ? ` ($${r.perPerson} per person)` : ''}`;
-    case 'roll_dice':
-      return `🎲 Rolled: ${(r.rolls as number[]).join(', ')} (Total: ${r.total})`;
-    case 'flip_coin': {
-      const count = r.count as number;
-      if (count === 1) {
-        return `🪙 Flipped: ${(r.result as string).toUpperCase()}`;
+    case 'flip_tool': {
+      if (r.flipMode === 'dice') {
+        return `🎲 Rolled: ${(r.rolls as number[]).join(', ')} (Total: ${r.total})`;
+      } else {
+        const count = r.count as number;
+        if (count === 1) {
+          return `🪙 Flipped: ${(r.result as string).toUpperCase()}`;
+        }
+        return `🪙 Flipped ${count} coins: ${r.headsCount} heads, ${r.tailsCount} tails`;
       }
-      return `🪙 Flipped ${count} coins: ${r.headsCount} heads, ${r.tailsCount} tails`;
     }
     case 'calculate_age':
       return `Age: ${r.years} years, ${r.months} months, ${r.days} days (${r.totalDays} total days). Next birthday in ${r.daysUntilNextBirthday} days.`;
@@ -2460,7 +2440,6 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_bmr: { bmr: 1650, tdee: 2275, activityLevel: 'moderate' },
     generate_weight_loss_plan: { currentWeight: 80, targetWeight: 70, weeksToGoal: 20, dailyCalories: 1800, weeklyWeightLoss: 0.5, bmr: 1700, tdee: 2300 },
     calculate_savings_plan: { savingsMode: 'goal', monthlyTargetSavings: 500, monthsToGoal: 24, finalBalance: 12000, monthlyDisposable: 2000, savingsRate: 25, currency: 'USD', interestEnabled: false, totalInterestEarned: 0, targetDate: '2028-01-01', isAchievable: true },
-    calculate_date_info: { dayOfWeek: 'Monday', weekNumber: 1, isLeapYear: false, dayOfYear: 1, date: '2026-01-01' },
     days_between_dates: { days: 30, weeks: 4, months: 1, startDate: '2026-01-01', endDate: '2026-01-31' },
     random_number: { result: 42, min: 1, max: 100 },
     pick_random: { result: 'Option A', options: ['Option A', 'Option B', 'Option C'] },
@@ -2483,8 +2462,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     convert_timezone: { result: '15:00', fromTime: '10:00', fromTimezone: 'America/New_York', toTimezone: 'Europe/London' },
     generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
     lucky_number: { number: 7, min: 1, max: 100 },
-    roll_dice: { rolls: [4, 6], total: 10, sides: 6, count: 2 },
-    flip_coin: { result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
+    flip_tool: { flipMode: 'coin', result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
     calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
     calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },
     when_date_info: { date: '2026-06-15', dayOfWeek: 'Monday', daysFromToday: 164, zodiacSign: 'Gemini' },

@@ -509,32 +509,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  {
-    name: 'calculate_date_info',
-    description: 'Get information about a specific date (day of week, leap year, week number, etc.)',
-    category: TOOL_CATEGORIES.DATE_TIME,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
-      },
-      required: ['date'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        formatted: { type: 'string' },
-        dayOfWeek: { type: 'string' },
-        dayOfYear: { type: 'number' },
-        weekNumber: { type: 'number' },
-        quarter: { type: 'number' },
-        isLeapYear: { type: 'boolean' },
-        daysInMonth: { type: 'number' },
-      },
-    },
-  },
+
   {
     name: 'when_date_info',
     description: 'Get comprehensive information about a date including day of week, zodiac sign, time calculations from today (days, hours, minutes, weeks), and calendar info (day of year, week number, quarter, leap year).',
@@ -600,49 +575,34 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'flip_coin',
-    description: 'Flip a coin and get heads or tails',
+    name: 'flip_tool',
+    description: 'Flip coins or roll dice. Use flipMode to select: "coin" for coin flips (heads/tails), "dice" for dice rolls.',
     category: TOOL_CATEGORIES.FUN,
     hasWidget: true,
-    invocationMessages: { invoking: 'Flipping coin...', invoked: 'Coin flipped' },
+    invocationMessages: { invoking: 'Flipping...', invoked: 'Result ready' },
     inputSchema: {
       type: 'object',
       properties: {
-        count: { type: 'number', description: 'Number of flips (default: 1, max: 100)' },
+        flipMode: { type: 'string', enum: ['coin', 'dice'], description: 'Mode: "coin" for coin flip, "dice" for dice roll (default: coin)' },
+        count: { type: 'number', description: 'Number of coins to flip or dice to roll (default: 1, max: 6 for dice, 100 for coins)' },
+        sides: { type: 'number', description: 'Number of sides on dice (default: 6, only used in dice mode)' },
       },
       required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        result: { type: 'string' },
-        results: { type: 'array', items: { type: 'string' } },
-        headsCount: { type: 'number' },
-        tailsCount: { type: 'number' },
-      },
-    },
-  },
-  {
-    name: 'roll_dice',
-    description: 'Roll dice with customizable sides and count',
-    category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Rolling dice...', invoked: 'Dice rolled' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sides: { type: 'number', description: 'Number of sides (default: 6)' },
-        count: { type: 'number', description: 'Number of dice (default: 1)' },
-      },
-      required: [],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        rolls: { type: 'array', items: { type: 'number' } },
-        total: { type: 'number' },
-        sides: { type: 'number' },
-        count: { type: 'number' },
+        flipMode: { type: 'string', description: 'Mode used: coin or dice' },
+        // Coin mode outputs
+        result: { type: 'string', description: 'Single coin result (heads/tails)' },
+        results: { type: 'array', items: { type: 'string' }, description: 'All coin flip results' },
+        headsCount: { type: 'number', description: 'Number of heads (coin mode)' },
+        tailsCount: { type: 'number', description: 'Number of tails (coin mode)' },
+        // Dice mode outputs
+        rolls: { type: 'array', items: { type: 'number' }, description: 'All dice roll results' },
+        total: { type: 'number', description: 'Sum of all dice rolls' },
+        sides: { type: 'number', description: 'Number of sides on dice' },
+        count: { type: 'number', description: 'Number of coins/dice used' },
       },
     },
   },

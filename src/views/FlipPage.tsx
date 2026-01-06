@@ -9,6 +9,7 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { flipCoin, rollDice } from '../utils/FlipCalculator';
 
 interface FlipPageState {
   mode: 'coin' | 'dice';
@@ -56,7 +57,8 @@ export class FlipPage extends Component<{}, FlipPageState> {
   private flipCoin = () => {
     this.setState({ isFlipping: true, coinResult: null });
     setTimeout(() => {
-      const result = Math.random() < 0.5 ? 'heads' : 'tails';
+      // Use shared FlipCalculator - single source of truth
+      const result = flipCoin();
       this.setState(prev => ({
         isFlipping: false, coinResult: result,
         history: [`Coin: ${result.toUpperCase()}`, ...prev.history.slice(0, 9)]
@@ -67,7 +69,8 @@ export class FlipPage extends Component<{}, FlipPageState> {
   private rollDice = () => {
     this.setState({ isFlipping: true, diceResults: [] });
     setTimeout(() => {
-      const results = Array.from({ length: this.state.diceCount }, () => Math.floor(Math.random() * 6) + 1);
+      // Use shared FlipCalculator - single source of truth
+      const results = rollDice(this.state.diceCount);
       this.setState(prev => ({
         isFlipping: false, diceResults: results,
         history: [`Dice: ${results.join(', ')} (Total: ${results.reduce((a, b) => a + b, 0)})`, ...prev.history.slice(0, 9)]
