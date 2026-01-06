@@ -14,6 +14,7 @@
 
 import { TIMEZONE_IDS } from '../utils/ZoneCalculator';
 import { ALL_UNITS } from '../utils/UnitConverter';
+import { PERCENT_OPERATIONS } from '../utils/PercentCalculator';
 
 /**
  *
@@ -715,25 +716,32 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'calculate_percentage',
-    description: 'Calculate percentages (what is X% of Y, X is what % of Y, etc.)',
+    description: 'Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).',
     category: TOOL_CATEGORIES.UTILITIES,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating percentage...', invoked: 'Percentage calculated' },
     inputSchema: {
       type: 'object',
       properties: {
-        mode: { type: 'string', enum: ['percentOf', 'whatPercent', 'percentChange'], description: 'Calculation mode' },
-        value1: { type: 'number', description: 'First value' },
-        value2: { type: 'number', description: 'Second value' },
+        operation: {
+          type: 'string',
+          enum: [...PERCENT_OPERATIONS],
+          description: 'Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)',
+        },
+        value1: { type: 'number', description: 'First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange' },
+        value2: { type: 'number', description: 'Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange' },
       },
-      required: ['mode', 'value1', 'value2'],
+      required: ['operation', 'value1', 'value2'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        result: { type: 'number' },
-        mode: { type: 'string' },
-        explanation: { type: 'string' },
+        result: { type: 'number', description: 'The calculated result' },
+        operation: { type: 'string', description: 'The operation performed' },
+        value1: { type: 'number', description: 'First input value' },
+        value2: { type: 'number', description: 'Second input value' },
+        explanation: { type: 'string', description: 'Human-readable explanation of the calculation' },
+        resultIsPercent: { type: 'boolean', description: 'Whether the result is a percentage' },
       },
     },
   },

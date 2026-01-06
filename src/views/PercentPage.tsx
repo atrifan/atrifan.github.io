@@ -8,12 +8,22 @@ import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { calculatePercent, PercentOperation } from '../utils/PercentCalculator';
+
+// Map UI mode to shared calculator operation
+const MODE_TO_OPERATION: Record<string, PercentOperation> = {
+  whatIs: 'whatIsXPercentOfY',
+  percentOf: 'xIsWhatPercentOfY',
+  increase: 'increaseByPercent',
+  decrease: 'decreaseByPercent',
+};
 
 interface PercentPageState {
   mode: 'whatIs' | 'percentOf' | 'increase' | 'decrease';
   value1: string;
   value2: string;
   result: string | null;
+  resultIsPercent: boolean;
 }
 
 export class PercentPage extends Component<{}, PercentPageState> {
@@ -21,7 +31,7 @@ export class PercentPage extends Component<{}, PercentPageState> {
 
   constructor(props: {}) {
     super(props);
-    this.state = { mode: 'whatIs', value1: '', value2: '', result: null };
+    this.state = { mode: 'whatIs', value1: '', value2: '', result: null, resultIsPercent: false };
   }
 
   componentDidMount() {
@@ -35,7 +45,7 @@ export class PercentPage extends Component<{}, PercentPageState> {
   };
 
   private reset = () => {
-    this.setState({ value1: '', value2: '', result: null });
+    this.setState({ value1: '', value2: '', result: null, resultIsPercent: false });
   };
 
   private calculate = () => {
@@ -44,19 +54,18 @@ export class PercentPage extends Component<{}, PercentPageState> {
     const v2 = parseFloat(value2);
     if (isNaN(v1) || isNaN(v2)) return;
 
-    let result: number;
-    switch (mode) {
-      case 'whatIs': result = (v1 / 100) * v2; break;
-      case 'percentOf': result = (v1 / v2) * 100; break;
-      case 'increase': result = v2 * (1 + v1 / 100); break;
-      case 'decrease': result = v2 * (1 - v1 / 100); break;
-      default: return;
+    try {
+      const operation = MODE_TO_OPERATION[mode];
+      const output = calculatePercent({ operation, value1: v1, value2: v2 });
+      this.setState({ result: output.result.toFixed(2), resultIsPercent: output.resultIsPercent }, this.scrollToResults);
+    } catch {
+      // Handle division by zero or other errors
+      this.setState({ result: 'Error', resultIsPercent: false });
     }
-    this.setState({ result: result.toFixed(2) }, this.scrollToResults);
   };
 
   render() {
-    const { mode, value1, value2, result } = this.state;
+    const { mode, value1, value2, result, resultIsPercent } = this.state;
     const gradient = 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%)';
     const modes = [
       { id: 'whatIs', label: 'What is X% of Y?' },
@@ -130,7 +139,7 @@ export class PercentPage extends Component<{}, PercentPageState> {
             <div ref={this.resultsRef} id="percent-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(2, 132, 199, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
               <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '0.5rem' }}>Result</div>
               <div style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', fontWeight: 800, color: '#0ea5e9' }}>
-                {result}{mode === 'percentOf' ? '%' : ''}
+                {result}{resultIsPercent ? '%' : ''}
               </div>
             </div>
           )}

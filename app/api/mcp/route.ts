@@ -17,6 +17,7 @@ import { calculateCountdown as calculateCountdownShared, CountdownCalculatorInpu
 import { calculateCycle as calculateCycleShared, CycleCalculatorInput } from '@/src/utils/CycleCalculator';
 import { convertUnits as convertUnitsShared, ConvertInput } from '@/src/utils/UnitConverter';
 import { calculateAge as calculateAgeShared, AgeCalculatorInput } from '@/src/utils/AgeCalculator';
+import { calculatePercent as calculatePercentShared, PercentCalculatorInput, PercentOperation } from '@/src/utils/PercentCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -738,27 +739,13 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'calculate_percentage': {
-      const op = args.operation as string;
-      const value = args.value as number;
-      const percent = args.percent as number;
-      let result: number;
-      switch (op) {
-        case 'of':
-          result = value * (percent / 100);
-          break;
-        case 'change':
-          result = ((percent - value) / value) * 100;
-          break;
-        case 'increase':
-          result = value * (1 + percent / 100);
-          break;
-        case 'decrease':
-          result = value * (1 - percent / 100);
-          break;
-        default:
-          throw new Error(`Unknown operation: ${op}`);
-      }
-      return { operation: op, value, percent, result: Math.round(result * 100) / 100 };
+      // Use shared PercentCalculator - single source of truth for percentage calculations
+      const input: PercentCalculatorInput = {
+        operation: args.operation as PercentOperation,
+        value1: args.value1 as number,
+        value2: args.value2 as number,
+      };
+      return calculatePercentShared(input);
     }
     case 'calculate_age': {
       // Use shared AgeCalculator - single source of truth for age calculations
@@ -1622,19 +1609,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'percentage': {
+      const percentSuffix = data.resultIsPercent ? '%' : '';
       content = `
         <div class="header">📊 Percentage</div>
-        <div class="big-number" style="color:#f472b6">${data.result}%</div>
-        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">${data.value} of ${data.total}</div>`;
+        <div class="big-number" style="color:#f472b6">${data.result}${percentSuffix}</div>
+        <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6;font-size:0.9rem;padding:0.75rem 1rem">${data.explanation || `${data.value1} → ${data.value2}`}</div>`;
       break;
     }
     case 'convert_units': {
       content = `
         <div class="header">🔄 Unit Converter</div>
         <div class="big-number" style="color:#60a5fa;font-size:2rem">${data.result}</div>
-        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.toUnit}</div>
+        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.to || data.toUnit}</div>
         <div class="stats">
-          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">${data.value} ${data.fromUnit}</div></div>
+          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">${data.value} ${data.from || data.fromUnit}</div></div>
         </div>`;
       break;
     }
@@ -2087,16 +2075,18 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Winner from ' + spinOptions.length + ' options</div>';
         }
         case 'percentage': {
+          var pctSuffix = data.resultIsPercent ? '%' : '';
+          var pctExplanation = data.explanation || (data.value1 + ' → ' + data.value2);
           return '<div class="header">📊 Percentage</div>' +
-            '<div class="big-number" style="color:#f472b6">' + data.result + '%</div>' +
-            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">' + data.value + ' of ' + data.total + '</div>';
+            '<div class="big-number" style="color:#f472b6">' + data.result + pctSuffix + '</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6;font-size:0.9rem;padding:0.75rem 1rem">' + pctExplanation + '</div>';
         }
         case 'convert_units': {
           return '<div class="header">🔄 Unit Converter</div>' +
             '<div class="big-number" style="color:#60a5fa;font-size:2rem">' + data.result + '</div>' +
-            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.toUnit + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + (data.to || data.toUnit) + '</div>' +
             '<div class="stats">' +
-              '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">' + data.value + ' ' + data.fromUnit + '</div></div>' +
+              '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">' + data.value + ' ' + (data.from || data.fromUnit) + '</div></div>' +
             '</div>';
         }
         case 'countdown': {
@@ -2404,9 +2394,9 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     random_number: { result: 42, min: 1, max: 100 },
     pick_random: { result: 'Option A', options: ['Option A', 'Option B', 'Option C'] },
     calculate_tip: { billAmount: 50, tipPercent: 18, tipAmount: 9, total: 59, perPerson: 59, splitWays: 1 },
-    calculate_percentage: { result: 25, operation: 'percentage_of', value: 100, percentage: 25 },
-    calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilBirthday: 180 },
-    convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
+    calculate_percentage: { result: 25, operation: 'whatIsXPercentOfY', value1: 25, value2: 100, explanation: '25% of 100 = 25.00', resultIsPercent: false },
+    calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilNextBirthday: 180 },
+    convert_units: { result: 2.2, value: 1, from: 'kg', to: 'lbs' },
     calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified', periodStartDate: '2025-12-23', phaseInfo: { name: 'Follicular Phase', emoji: '🌱', color: '#22c55e', description: 'Egg develops in ovary' } },
     calculate_countdown: { eventName: 'Summer Vacation', eventDate: '2026-04-16', days: 100, absoluteDays: 100, weeks: 14, months: 3, isPast: false, isToday: false, direction: 'until', summary: '100 days until Summer Vacation' },
     make_decision: { decision: 'Go for it! 🚀', mode: 'yesNo', confidence: 85, icon: '🚀' },
