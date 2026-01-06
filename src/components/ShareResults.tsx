@@ -108,12 +108,11 @@ export const ShareResults: React.FC<ShareResultsProps> = ({
     }
   }, [targetRef]);
 
-  // Pre-capture when modal opens
+  // Pre-capture when modal opens - always re-capture to get fresh content
   const handleOpenModal = async () => {
     setIsOpen(true);
-    if (!imageDataUrl) {
-      await captureScreenshot();
-    }
+    setImageDataUrl(null); // Clear cached image to force fresh capture
+    await captureScreenshot();
   };
 
   // Native share (mobile/supported browsers)

@@ -1,9 +1,10 @@
-import { Component } from 'react';
+import { Component, createRef, RefObject } from 'react';
 import { View } from '@adobe/react-spectrum';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
+import { ShareResults } from '../components/ShareResults';
 import { WhenIcon } from '../components/WhenIcon';
 import { DateCalculator, DateResult } from '../utils/DateCalculator';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -15,6 +16,8 @@ interface WhenPageState {
 }
 
 export class WhenPage extends Component<object, WhenPageState> {
+  private resultRef: RefObject<HTMLDivElement> = createRef();
+
   constructor(props: object) {
     super(props);
 
@@ -253,6 +256,17 @@ export class WhenPage extends Component<object, WhenPageState> {
     );
   }
 
+  private getShareText(result: DateResult): string {
+    const absDays = Math.abs(result.daysFromToday);
+    if (result.isToday) {
+      return `Today is ${result.dayOfWeek}! 📅`;
+    } else if (result.isPast) {
+      return `${result.formattedDate} was a ${result.dayOfWeek} (${absDays} days ago) 📅`;
+    } else {
+      return `${result.formattedDate} will be a ${result.dayOfWeek} (${absDays} days from now) 📅`;
+    }
+  }
+
   private renderResult(result: DateResult) {
     const tenseColors = {
       past: { bg: 'rgba(239, 68, 68, 0.2)', border: '#ef4444', text: '#fca5a5' },
@@ -262,6 +276,8 @@ export class WhenPage extends Component<object, WhenPageState> {
     const colors = tenseColors[result.tense];
 
     return (
+      <>
+      <div ref={this.resultRef}>
       <View
         UNSAFE_style={{
           background: colors.bg,
@@ -398,6 +414,15 @@ export class WhenPage extends Component<object, WhenPageState> {
           </div>
         </div>
       </View>
+      </div>
+      <div style={{ marginTop: '0.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+        <ShareResults
+          targetRef={this.resultRef}
+          title="Date Calculator - Tulzo"
+          text={this.getShareText(result)}
+        />
+      </div>
+      </>
     );
   }
 }
