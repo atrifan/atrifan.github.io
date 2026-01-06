@@ -549,6 +549,28 @@ const TOOLS = TOOL_DEFINITIONS.map(tool => ({
   _meta: generateToolMeta(tool.name),
 }));
 
+// Pre-compute resources list for resources/list (avoid recomputing on each request)
+const RESOURCES_LIST = TOOLS.map(tool => {
+  const title = tool.name.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const messages = getInvocationMessages(tool.name);
+  return {
+    uri: `ui://widget/${tool.name}.html`,
+    name: title,
+    title: title,
+    description: tool.description,
+    mimeType: 'text/html',
+    _meta: {
+      'openai/outputTemplate': `ui://widget/${tool.name}.html`,
+      'openai/mimeType': 'text/html+skybridge',
+      'openai/toolInvocation/invoking': messages.invoking,
+      'openai/toolInvocation/invoked': messages.invoked,
+      'openai/widgetAccessible': true,
+      'openai/resultCanProduceWidget': true,
+      'openai/widgetPrefersBorder': true,
+    },
+  };
+});
+
 // TOTAL_TOOL_COUNT is available from '@/src/config/tools-definitions'
 // Do not re-export from route files as Next.js only allows route handlers
 
@@ -877,21 +899,38 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { decision: options[Math.floor(Math.random() * options.length)], mode, options };
     }
     case 'zodiac_compatibility': {
-      const parseSign = (input: string): ZodiacSign => {
-        if (input.includes('-')) {
-          const [y, m, d] = input.split('-').map(Number);
-          return getSignFromDate(m, d);
-        }
-        return input.toLowerCase() as ZodiacSign;
+      // Get sign from date (YYYY-MM-DD)
+      const signFromDate = (date: string): ZodiacSign => {
+        const [, m, d] = date.split('-').map(Number);
+        return getSignFromDate(m, d);
       };
-      const sign1 = parseSign(args.person1 as string);
-      const sign2 = parseSign(args.person2 as string);
-      const compat = getCompatibility(sign1, sign2);
-      const info1 = getSignInfo(sign1);
-      const info2 = getSignInfo(sign2);
+
+      // Determine sign1: prefer sign1, fallback to date1
+      let zodiacSign1: ZodiacSign;
+      if (args.sign1) {
+        zodiacSign1 = (args.sign1 as string).toLowerCase() as ZodiacSign;
+      } else if (args.date1) {
+        zodiacSign1 = signFromDate(args.date1 as string);
+      } else {
+        throw new Error('Either sign1 or date1 is required');
+      }
+
+      // Determine sign2: prefer sign2, fallback to date2
+      let zodiacSign2: ZodiacSign;
+      if (args.sign2) {
+        zodiacSign2 = (args.sign2 as string).toLowerCase() as ZodiacSign;
+      } else if (args.date2) {
+        zodiacSign2 = signFromDate(args.date2 as string);
+      } else {
+        throw new Error('Either sign2 or date2 is required');
+      }
+
+      const compat = getCompatibility(zodiacSign1, zodiacSign2);
+      const info1 = getSignInfo(zodiacSign1);
+      const info2 = getSignInfo(zodiacSign2);
       return {
-        person1: { sign: sign1, name: info1?.name, symbol: info1?.symbol, element: info1?.element },
-        person2: { sign: sign2, name: info2?.name, symbol: info2?.symbol, element: info2?.element },
+        person1: { sign: zodiacSign1, name: info1?.name, symbol: info1?.symbol, element: info1?.element },
+        person2: { sign: zodiacSign2, name: info2?.name, symbol: info2?.symbol, element: info2?.element },
         compatibility: compat,
         level: compat >= 80 ? 'Excellent' : compat >= 60 ? 'Good' : compat >= 40 ? 'Moderate' : 'Challenging',
       };
@@ -2026,18 +2065,42 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
     }
     case 'generic':
     default: {
-      // Generic widget for any tool - display key-value pairs
-      const entries = Object.entries(data).slice(0, 6);
-      content = `
-        <div class="header">🔧 Result</div>
-        <div class="stats" style="grid-template-columns:1fr">
-          ${entries.map(([k, v]) => `<div class="stat-box"><div class="stat-label">${k.replace(/([A-Z])/g, ' $1').trim()}</div><div class="stat-value">${typeof v === 'object' ? JSON.stringify(v) : v}</div></div>`).join('')}
-        </div>`;
+      // Check if we have meaningful data or just placeholder
+      const entries = Object.entries(data).filter(([k]) => k !== 'message');
+      const hasData = entries.length > 0 && !data.message;
+
+      if (hasData) {
+        // Show key-value pairs for actual data
+        content = `
+          <div class="header">🔧 Result</div>
+          <div class="stats" style="grid-template-columns:1fr">
+            ${entries.slice(0, 6).map(([k, v]) => `<div class="stat-box"><div class="stat-label">${k.replace(/([A-Z])/g, ' $1').trim()}</div><div class="stat-value">${typeof v === 'object' ? JSON.stringify(v) : v}</div></div>`).join('')}
+          </div>`;
+      } else {
+        // Show awaiting state for placeholder/empty data
+        content = `
+          <div class="header">⏳ Awaiting Data</div>
+          <div style="text-align:center;padding:2rem 1rem;color:rgba(255,255,255,0.6)">
+            <div style="font-size:2.5rem;margin-bottom:0.5rem">🔄</div>
+            <div>Waiting for tool execution...</div>
+          </div>`;
+      }
       break;
     }
   }
 
   // Generate HTML with OpenAI SDK support and Claude fallback
+  // Start with LOADING state, then:
+  // - OpenAI: wait for openai:set_globals to get real data
+  // - Claude: render embedded data after short timeout (no OpenAI env)
+  const loadingContent = `
+    <div class="header">⏳ Loading...</div>
+    <div style="text-align:center;padding:2rem 1rem;color:rgba(255,255,255,0.6)">
+      <div style="font-size:2.5rem;margin-bottom:0.5rem;animation:pulse 1.5s ease-in-out infinite">🔄</div>
+      <div>Awaiting results...</div>
+    </div>
+    <style>@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }</style>`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -2046,12 +2109,12 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
   <style>${WIDGET_STYLES}</style>
 </head>
 <body>
-  <div class="card" id="widget-container">${content}<div class="footer">tulzo.vercel.app</div></div>
+  <div class="card" id="widget-container">${loadingContent}<div class="footer">tulzo.vercel.app</div></div>
   <script>
     // Embedded data for Claude (fallback)
     const embeddedData = ${JSON.stringify({ tool: toolName, data })};
     const widgetType = "${widgetType}";
-    let widgetData = embeddedData;
+    let dataReceived = false;
 
     // OpenAI SDK integration - listen for set_globals event
     window.addEventListener("openai:set_globals", function(ev) {
@@ -2059,16 +2122,24 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       const toolOutput = window.openai?.toolOutput?.result;
       if (toolOutput) {
         console.log("📦 Got OpenAI tool output:", toolOutput);
-        widgetData = { tool: embeddedData.tool, data: toolOutput };
-        updateWidget(widgetData);
+        dataReceived = true;
+        updateWidget({ tool: embeddedData.tool, data: toolOutput });
       }
     });
 
     // Check if OpenAI data is already available
     if (window.openai?.toolOutput?.result) {
       console.log("📦 OpenAI data already available");
-      widgetData = { tool: embeddedData.tool, data: window.openai.toolOutput.result };
-      updateWidget(widgetData);
+      dataReceived = true;
+      updateWidget({ tool: embeddedData.tool, data: window.openai.toolOutput.result });
+    } else {
+      // Fallback for Claude: if no OpenAI data after 100ms, use embedded data
+      setTimeout(function() {
+        if (!dataReceived) {
+          console.log("📦 Using embedded data (Claude fallback)");
+          updateWidget(embeddedData);
+        }
+      }, 100);
     }
 
     function updateWidget(wd) {
@@ -2146,6 +2217,33 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               (Number(data.splitWays) > 1 ? '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">Per Person (' + data.splitWays + ' ways)</div><div class="stat-value">$' + Number(data.perPerson).toFixed(2) + '</div></div>' : '') +
             '</div>';
         }
+        case 'ideal_weight': {
+          return '<div class="header">⚖️ Ideal Weight</div>' +
+            '<div class="big-number" style="color:#10b981">' + Number(data.idealWeight).toFixed(1) + '</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">kg (' + (data.formula || 'Devine') + ')</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">' + data.height + ' cm</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Gender</div><div class="stat-value">' + data.gender + '</div></div>' +
+            '</div>';
+        }
+        case 'bmr': {
+          return '<div class="header">🔥 BMR Calculator</div>' +
+            '<div class="big-number" style="color:#f59e0b">' + Math.round(data.bmr) + '</div>' +
+            '<div class="label" style="background:rgba(245,158,11,0.2);color:#f59e0b">calories/day</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">TDEE</div><div class="stat-value">' + Math.round(data.tdee) + ' cal</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Activity</div><div class="stat-value">' + (data.activityLevel || 'moderate') + '</div></div>' +
+            '</div>';
+        }
+        case 'weight_loss_plan': {
+          return '<div class="header">📉 Weight Loss Plan</div>' +
+            '<div class="big-number" style="color:#10b981;font-size:2rem">' + data.targetWeight + ' kg</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Target in ' + data.weeksToGoal + ' weeks</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Current</div><div class="stat-value">' + data.currentWeight + ' kg</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Daily Cal</div><div class="stat-value">' + data.dailyCalories + '</div></div>' +
+            '</div>';
+        }
         case 'savings_plan': {
           var currencySymbols = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', RON: 'lei ' };
           var sym = currencySymbols[data.currency] || '$';
@@ -2173,16 +2271,230 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               ) +
             '</div>';
         }
-        default: {
-          // Generic widget - display key-value pairs
-          const entries = Object.entries(data).slice(0, 6);
-          return '<div class="header">🔧 Result</div>' +
-            '<div class="stats" style="grid-template-columns:1fr">' +
-              entries.map(function(e) {
-                const k = e[0], v = e[1];
-                return '<div class="stat-box"><div class="stat-label">' + k.replace(/([A-Z])/g, ' $1').trim() + '</div><div class="stat-value">' + (typeof v === 'object' ? JSON.stringify(v) : v) + '</div></div>';
-              }).join('') +
+        case 'date_info': {
+          return '<div class="header">📅 Date Info</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + (data.formatted || data.date) + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Day</div><div class="stat-value">' + data.dayOfWeek + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Week</div><div class="stat-value">' + data.weekNumber + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Day of Year</div><div class="stat-value">' + data.dayOfYear + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Quarter</div><div class="stat-value">Q' + data.quarter + '</div></div>' +
             '</div>';
+        }
+        case 'days_between': {
+          return '<div class="header">📆 Days Between</div>' +
+            '<div class="big-number" style="color:#a78bfa">' + Math.abs(data.days) + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">days</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeks + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">' + data.months + '</div></div>' +
+            '</div>';
+        }
+        case 'random_number': {
+          return '<div class="header">🎲 Random Number</div>' +
+            '<div class="big-number" style="color:#60a5fa">' + data.result + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Range: ' + data.min + ' - ' + data.max + '</div>';
+        }
+        case 'lucky_number': {
+          return '<div class="header">🍀 Lucky Number</div>' +
+            '<div class="big-number" style="color:#22c55e">' + data.luckyNumber + '</div>' +
+            '<div class="label" style="background:rgba(34,197,94,0.2);color:#22c55e">Your lucky number today!</div>';
+        }
+        case 'pick_random': {
+          var options = data.options || [];
+          return '<div class="header">🎯 Random Pick</div>' +
+            '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + data.result + '</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">from ' + options.length + ' options</div>';
+        }
+        case 'percentage': {
+          return '<div class="header">📊 Percentage</div>' +
+            '<div class="big-number" style="color:#f472b6">' + data.result + '%</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">' + data.value + ' of ' + data.total + '</div>';
+        }
+        case 'convert_units': {
+          return '<div class="header">🔄 Unit Converter</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:2rem">' + data.result + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.toUnit + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">' + data.value + ' ' + data.fromUnit + '</div></div>' +
+            '</div>';
+        }
+        case 'countdown': {
+          var isPast = data.isPast || data.days < 0;
+          var absDays = Math.abs(data.days);
+          return '<div class="header">⏳ Countdown</div>' +
+            '<div class="big-number" style="color:#f59e0b">' + absDays + '</div>' +
+            '<div class="label" style="background:rgba(245,158,11,0.2);color:#f59e0b">days ' + (isPast ? 'ago' : 'remaining') + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Event</div><div class="stat-value">' + (data.eventName || 'Target') + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Date</div><div class="stat-value">' + data.targetDate + '</div></div>' +
+            '</div>';
+        }
+        case 'decision': {
+          return '<div class="header">🎱 Decision</div>' +
+            '<div class="big-number" style="color:#a78bfa;font-size:1.8rem">' + data.decision + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">The answer is clear!</div>';
+        }
+        case 'zodiac': {
+          return '<div class="header">💕 Zodiac Compatibility</div>' +
+            '<div class="big-number" style="color:#f472b6">' + data.compatibility + '%</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">' + data.level + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">' + (data.person1 && data.person1.symbol || '⭐') + '</div><div class="stat-value">' + (data.person1 && data.person1.name || data.sign1) + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">' + (data.person2 && data.person2.symbol || '⭐') + '</div><div class="stat-value">' + (data.person2 && data.person2.name || data.sign2) + '</div></div>' +
+            '</div>';
+        }
+        case 'zodiac_sign': {
+          return '<div class="header">⭐ Zodiac Sign</div>' +
+            '<div style="text-align:center;font-size:4rem;margin:0.5rem 0">' + (data.symbol || '⭐') + '</div>' +
+            '<div class="big-number" style="color:#a78bfa;font-size:2rem">' + (data.sign || data.name || 'Unknown') + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + (data.element || 'Element') + ' • ' + (data.dates || '') + '</div>';
+        }
+        case 'cycle': {
+          var phaseColors = { menstrual: '#ef4444', follicular: '#22c55e', ovulation: '#f59e0b', luteal: '#8b5cf6' };
+          var phaseColor = phaseColors[data.phase] || '#f472b6';
+          return '<div class="header">🌸 Cycle Tracker</div>' +
+            '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + (data.nextPeriodStart || data.nextPeriod) + '</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period' + (data.daysUntilNextPeriod ? ' (in ' + data.daysUntilNextPeriod + ' days)' : '') + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">' + (data.currentDay || '—') + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Phase</div><div class="stat-value" style="color:' + phaseColor + '">' + (data.phase || '—') + '</div></div>' +
+            '</div>';
+        }
+        case 'names': {
+          var names = data.names || [];
+          return '<div class="header">👶 Name Generator</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin:1rem 0">' +
+              names.slice(0, 8).map(function(n) { return '<span style="background:rgba(244,114,182,0.2);color:#f472b6;padding:0.5rem 1rem;border-radius:20px;font-weight:600">' + n + '</span>'; }).join('') +
+            '</div>' +
+            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">' + data.gender + ' names</div>';
+        }
+        case 'position_size': {
+          return '<div class="header">📈 Position Size</div>' +
+            '<div class="big-number" style="color:#10b981">$' + Number(data.positionSize).toLocaleString() + '</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + data.shares + ' shares</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Risk</div><div class="stat-value">' + data.riskPercent + '%</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Stop Loss</div><div class="stat-value">$' + data.stopLoss + '</div></div>' +
+            '</div>';
+        }
+        case 'sleep_times': {
+          var times = data.sleepTimes || data.wakeTimes || [];
+          return '<div class="header">😴 Sleep Calculator</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin:1rem 0">' +
+              times.slice(0, 4).map(function(t) { return '<span style="background:rgba(139,92,246,0.2);color:#8b5cf6;padding:0.5rem 1rem;border-radius:20px;font-weight:600">' + t + '</span>'; }).join('') +
+            '</div>' +
+            '<div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Optimal ' + (data.sleepTimes ? 'bedtimes' : 'wake times') + '</div>';
+        }
+        case 'timezone': {
+          return '<div class="header">🌍 Timezone</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:2rem">' + data.convertedTime + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.toTimezone + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">' + data.originalTime + ' ' + data.fromTimezone + '</div></div>' +
+            '</div>';
+        }
+        case 'unique_id': {
+          return '<div class="header">🔑 Unique ID</div>' +
+            '<div style="background:rgba(16,185,129,0.1);padding:1rem;border-radius:8px;margin:1rem 0;word-break:break-all;text-align:center">' +
+              '<code style="color:#10b981;font-size:0.9rem">' + data.id + '</code>' +
+            '</div>' +
+            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + (data.type || 'UUID') + '</div>';
+        }
+        case 'iq_score': {
+          var iq = Number(data.iqScore || data.iq);
+          var iqColor = iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b';
+          return '<div class="header">🧠 IQ Score</div>' +
+            '<div class="big-number" style="color:' + iqColor + '">' + iq + '</div>' +
+            '<div class="label" style="background:' + iqColor + '33;color:' + iqColor + '">' + data.category + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">' + data.percentile + '%</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Rarity</div><div class="stat-value">1 in ' + data.rarity + '</div></div>' +
+            '</div>';
+        }
+        case 'uniqueness': {
+          var score = Number(data.uniquenessScore);
+          var uColor = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+          return '<div class="header">🦄 Uniqueness</div>' +
+            '<div class="big-number" style="color:' + uColor + '">' + score + '%</div>' +
+            '<div class="label" style="background:' + uColor + '33;color:' + uColor + '">' + data.category + '</div>';
+        }
+        case 'when_date': {
+          return '<div class="header">📅 When?</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + data.date + '</div>' +
+            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.dayOfWeek + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Days Away</div><div class="stat-value">' + data.daysAway + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeksAway + '</div></div>' +
+            '</div>';
+        }
+        case 'blood_donation': {
+          var eligibleColor = data.eligible ? '#22c55e' : '#ef4444';
+          var eligibleIcon = data.eligible ? '✅' : '❌';
+          var eligibleText = data.eligible ? 'Eligible to Donate' : 'Not Eligible';
+          return '<div class="header">🩸 Blood Donation</div>' +
+            '<div class="big-number" style="color:' + eligibleColor + '">' + eligibleIcon + '</div>' +
+            '<div class="label" style="background:' + eligibleColor + '33;color:' + eligibleColor + '">' + eligibleText + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Blood Volume</div><div class="stat-value">' + data.bloodVolume + ' L</div></div>' +
+              '<div class="stat-box"><div class="stat-label">' + (data.eligible ? 'Recommended' : 'Max Safe') + '</div><div class="stat-value">' + (data.amount || data.maxSafeAmount) + ' ml</div></div>' +
+            '</div>';
+        }
+        case 'blood_compatibility': {
+          var donateTo = data.canDonateTo || [];
+          var receiveFrom = data.canReceiveFrom || [];
+          return '<div class="header">🩸 Blood Compatibility</div>' +
+            '<div class="big-number" style="color:#ef4444;font-size:2.5rem">' + (data.fullBloodType || '') + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box" style="background:rgba(34,197,94,0.1)"><div class="stat-label" style="color:#22c55e">Can Donate To</div><div class="stat-value" style="font-size:0.8rem">' + (donateTo.join(', ') || 'None') + '</div></div>' +
+              '<div class="stat-box" style="background:rgba(59,130,246,0.1)"><div class="stat-label" style="color:#3b82f6">Can Receive From</div><div class="stat-value" style="font-size:0.8rem">' + (receiveFrom.join(', ') || 'None') + '</div></div>' +
+            '</div>';
+        }
+        case 'baby_blood': {
+          var topTypes = (data.possibleTypes || []).slice(0, 4);
+          return '<div class="header">👶 Baby Blood Type</div>' +
+            '<div class="stats" style="grid-template-columns:repeat(' + Math.min(topTypes.length, 2) + ', 1fr)">' +
+              topTypes.map(function(t) { return '<div class="stat-box"><div class="stat-value" style="font-size:1.5rem;color:#a78bfa">' + t.type + '</div><div class="stat-label">' + t.percentage + '%</div></div>'; }).join('') +
+            '</div>';
+        }
+        case 'next_eclipse': {
+          var eclipseIcon = data.type === 'solar' ? '☀️' : '🌙';
+          return '<div class="header">' + eclipseIcon + ' Next Eclipse</div>' +
+            '<div class="big-number" style="color:#a78bfa;font-size:1.5rem">' + (data.date || 'Unknown') + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + (data.subtype || '') + ' ' + (data.type || '') + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Days Until</div><div class="stat-value">' + (data.daysUntil || '?') + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Peak Time</div><div class="stat-value">' + (data.peakTimeUTC || '?') + ' UTC</div></div>' +
+            '</div>';
+        }
+        case 'eclipse_list': {
+          var eclipses = (data.eclipses || []).slice(0, 3);
+          return '<div class="header">🌓 Upcoming Eclipses</div>' +
+            '<div class="label">' + (data.totalCount || 0) + ' eclipses found</div>' +
+            '<div style="margin-top:0.5rem">' +
+              eclipses.map(function(e) { return '<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)"><span>' + (e.type === 'solar' ? '☀️' : '🌙') + ' ' + e.subtype + '</span><span style="color:rgba(255,255,255,0.6)">' + e.date + '</span></div>'; }).join('') +
+            '</div>';
+        }
+        default: {
+          // Check if we have meaningful data
+          var entries = Object.entries(data).filter(function(e) { return e[0] !== 'message'; });
+          var hasData = entries.length > 0 && !data.message;
+
+          if (hasData) {
+            return '<div class="header">🔧 Result</div>' +
+              '<div class="stats" style="grid-template-columns:1fr">' +
+                entries.slice(0, 6).map(function(e) {
+                  var k = e[0], v = e[1];
+                  return '<div class="stat-box"><div class="stat-label">' + k.replace(/([A-Z])/g, ' $1').trim() + '</div><div class="stat-value">' + (typeof v === 'object' ? JSON.stringify(v) : v) + '</div></div>';
+                }).join('') +
+              '</div>';
+          } else {
+            return '<div class="header">⏳ Awaiting Data</div>' +
+              '<div style="text-align:center;padding:2rem 1rem;color:rgba(255,255,255,0.6)">' +
+                '<div style="font-size:2.5rem;margin-bottom:0.5rem">🔄</div>' +
+                '<div>Waiting for tool execution...</div>' +
+              '</div>';
+          }
         }
       }
     }
@@ -2322,28 +2634,8 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         };
 
       case 'resources/list': {
-        // Return list of widget template resources with _meta (no HTML content - that's in resources/read)
-        const resources = TOOLS.map(tool => {
-          const title = tool.name.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-          const messages = getInvocationMessages(tool.name);
-          return {
-            uri: `ui://widget/${tool.name}.html`,
-            name: title,
-            title: title,
-            description: tool.description,
-            mimeType: 'text/html',
-            _meta: {
-              'openai/outputTemplate': `ui://widget/${tool.name}.html`,
-              'openai/mimeType': 'text/html+skybridge',
-              'openai/toolInvocation/invoking': messages.invoking,
-              'openai/toolInvocation/invoked': messages.invoked,
-              'openai/widgetAccessible': true,
-              'openai/resultCanProduceWidget': true,
-              'openai/widgetPrefersBorder': true,
-            },
-          };
-        });
-        return { jsonrpc: '2.0', id, result: { resources } };
+        // Return pre-computed list of widget template resources
+        return { jsonrpc: '2.0', id, result: { resources: RESOURCES_LIST } };
       }
 
       case 'resources/read': {

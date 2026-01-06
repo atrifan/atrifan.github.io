@@ -1048,26 +1048,27 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'zodiac_compatibility',
-    description: 'Check zodiac compatibility between two signs',
+    description: 'Check zodiac compatibility between two people. Provide either sign names or birth dates for each person.',
     category: TOOL_CATEGORIES.FUN,
     hasWidget: true,
     invocationMessages: { invoking: 'Checking compatibility...', invoked: 'Compatibility calculated' },
     inputSchema: {
       type: 'object',
       properties: {
-        sign1: { type: 'string', description: 'First zodiac sign' },
-        sign2: { type: 'string', description: 'Second zodiac sign' },
+        sign1: { type: 'string', description: 'First zodiac sign name', enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'] },
+        sign2: { type: 'string', description: 'Second zodiac sign name', enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'] },
+        date1: { type: 'string', description: 'First person birth date (YYYY-MM-DD) - alternative to sign1' },
+        date2: { type: 'string', description: 'Second person birth date (YYYY-MM-DD) - alternative to sign2' },
       },
-      required: ['sign1', 'sign2'],
+      required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
         compatibility: { type: 'number' },
         level: { type: 'string' },
-        description: { type: 'string' },
-        sign1: { type: 'string' },
-        sign2: { type: 'string' },
+        person1: { type: 'object' },
+        person2: { type: 'object' },
       },
     },
   },
@@ -1097,9 +1098,13 @@ const DEFAULT_INVOCATION_MESSAGES: InvocationMessages = {
   invoked: 'Complete',
 };
 
-// Helper to get invocation messages for a tool
+// Pre-computed lookup map for O(1) access (built once at module load)
+const INVOCATION_MESSAGES_MAP = new Map<string, InvocationMessages>(
+  TOOL_DEFINITIONS.map(t => [t.name, t.invocationMessages || DEFAULT_INVOCATION_MESSAGES])
+);
+
+// Helper to get invocation messages for a tool - O(1) lookup
 export const getInvocationMessages = (toolName: string): InvocationMessages => {
-  const tool = TOOL_DEFINITIONS.find(t => t.name === toolName);
-  return tool?.invocationMessages || DEFAULT_INVOCATION_MESSAGES;
+  return INVOCATION_MESSAGES_MAP.get(toolName) || DEFAULT_INVOCATION_MESSAGES;
 };
 
