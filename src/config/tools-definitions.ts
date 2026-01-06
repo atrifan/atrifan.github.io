@@ -771,30 +771,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  {
-    name: 'analyze_vibe',
-    description: 'Analyze the vibe/mood of text or situation',
-    category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Checking vibe...', invoked: 'Vibe checked' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: { type: 'string', description: 'Text to analyze' },
-        context: { type: 'string', description: 'Additional context (optional)' },
-      },
-      required: ['text'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        vibe: { type: 'string' },
-        score: { type: 'number' },
-        emoji: { type: 'string' },
-        description: { type: 'string' },
-      },
-    },
-  },
+
   // ============ ASTRONOMY ============
   {
     name: 'find_next_eclipse',
@@ -871,27 +848,135 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  // ============ ADDITIONAL TOOLS ============
+  // ============ PERSONALITY & QUIZ TOOLS ============
   {
-    name: 'calculate_iq_score',
-    description: 'Calculate and interpret IQ score with percentile ranking',
+    name: 'vibe_quiz',
+    description: `Cat vs Dog personality quiz. Present these 10 questions to the user one by one, collect all answers, then call this tool with the answers array.
+
+QUESTIONS (A=cat-leaning, B=dog-leaning):
+1. How do you prefer to spend a Saturday? A: Cozy at home with a book or movie 📚 | B: Out and about, exploring or socializing 🎉
+2. When meeting new people, you are: A: Reserved at first, warm up slowly 🤔 | B: Friendly and open right away 😄
+3. Your ideal living space is: A: Clean, organized, minimal ✨ | B: Lived-in, cozy, a bit messy is fine 🏠
+4. How do you handle stress? A: Need alone time to recharge 🧘 | B: Talk it out with friends/family 💬
+5. Your approach to exercise: A: Solo activities (yoga, gym, walks) 🚶 | B: Team sports or group activities ⚽
+6. When it comes to routines: A: I like flexibility and doing things my way 🎨 | B: I thrive on consistent schedules 📅
+7. Your communication style: A: Subtle hints and body language 👀 | B: Direct and expressive 🗣️
+8. How do you show affection? A: Quality time, being present 💝 | B: Physical touch, hugs, enthusiasm 🤗
+9. Your sleep preference: A: Night owl, love late nights 🌙 | B: Early bird, up with the sun 🌅
+10. When someone annoys you: A: Give them the cold shoulder ❄️ | B: Confront them directly 🔥`,
     category: TOOL_CATEGORIES.FUN,
     hasWidget: true,
-    invocationMessages: { invoking: 'Calculating IQ...', invoked: 'IQ estimated' },
+    invocationMessages: { invoking: 'Analyzing your vibe...', invoked: 'Vibe calculated!' },
     inputSchema: {
       type: 'object',
       properties: {
-        score: { type: 'number', description: 'IQ score to analyze' },
+        answers: {
+          type: 'array',
+          items: { type: 'string', enum: ['A', 'B'] },
+          description: 'Array of exactly 10 answers (A or B) corresponding to each question above'
+        },
       },
-      required: ['score'],
+      required: ['answers'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        score: { type: 'number' },
-        percentile: { type: 'number' },
-        classification: { type: 'string' },
-        description: { type: 'string' },
+        type: { type: 'string', enum: ['cat', 'dog'], description: 'Personality type result' },
+        percentage: { type: 'number', description: 'Match percentage (0-100)' },
+        catScore: { type: 'number', description: 'Number of cat-leaning answers' },
+        dogScore: { type: 'number', description: 'Number of dog-leaning answers' },
+        title: { type: 'string', description: 'Result title (e.g., "Total Cat Person!")' },
+        description: { type: 'string', description: 'Detailed personality description' },
+        emoji: { type: 'string', description: 'Result emoji' },
+      },
+    },
+  },
+  {
+    name: 'sleep_calculator',
+    description: 'Calculate optimal sleep and wake times based on sleep cycles. Supports three modes: sleepNow (when to wake if sleeping now), wakeAt (when to sleep for target wake time), sleepAt (when to wake for target sleep time). Adjusts for different age groups.',
+    category: TOOL_CATEGORIES.HEALTH,
+    hasWidget: true,
+    invocationMessages: { invoking: 'Calculating sleep cycles...', invoked: 'Sleep times ready!' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        calculatorMode: {
+          type: 'string',
+          enum: ['sleepNow', 'wakeAt', 'sleepAt'],
+          description: 'sleepNow: calculate wake times from now. wakeAt: calculate sleep times for target wake. sleepAt: calculate wake times for target sleep.'
+        },
+        targetTime: { type: 'string', description: 'Target time in HH:MM format (required for wakeAt and sleepAt modes)' },
+        ageGroup: {
+          type: 'string',
+          enum: ['adult', 'teen', 'child', 'toddler', 'infant'],
+          description: 'Age group for sleep recommendations (default: adult)'
+        },
+      },
+      required: ['calculatorMode'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', description: 'Calculator mode used' },
+        ageGroup: { type: 'string', description: 'Age group used' },
+        recommendation: { type: 'object', description: 'Sleep recommendation for age group (min, max, optimal hours)' },
+        results: { type: 'array', items: { type: 'object' }, description: 'Array of sleep/wake time options with cycles and quality' },
+        inputTime: { type: 'string', description: 'Input time if provided' },
+      },
+    },
+  },
+  {
+    name: 'calculate_iq_score',
+    description: `IQ assessment quiz. Present questions to user one by one, collect all answers (0-3 index), then call with answers array.
+
+TEST MODES:
+- quick: 15 questions (~5 min) - Questions 1-15 below
+- standard: 30 questions (~12 min) - Questions 1-30 below
+- comprehensive: 50 questions (~20 min) - All 50 questions
+
+QUESTIONS (answer index 0-3 for options A-D):
+
+PATTERN: 1. 2,4,8,16,? [24|32|30|20] 2. 3,6,11,18,? [25|27|26|24] 3. 1,1,2,3,5,8,? [11|12|13|15] 4. 81,27,9,3,? [0|1|2|6] 5. If 2=6,3=12,4=20, 5=? [25|30|35|40] 6. 1,4,9,16,25,? [30|36|49|35] 7. 2,6,12,20,30,? [40|42|44|38] 8. 1,2,4,7,11,16,? [20|21|22|23] 9. 3,5,9,17,33,? [49|57|65|66] 10. 1,3,6,10,15,21,? [25|27|28|30]
+
+LOGIC: 11. All Bloops are Razzies, all Razzies are Lazzies. All Bloops are Lazzies? [True|False|Cannot determine|Sometimes] 12. 5 machines make 5 widgets in 5 min. 100 machines for 100 widgets? [100min|5min|20min|1min] 13. Bat+ball=$1.10, bat costs $1 more. Ball cost? [$0.10|$0.05|$0.15|$0.20] 14. Mary's father has 5 daughters: Nana,Nene,Nini,Nono. 5th name? [Nunu|Mary|Nana|None] 15. Some cats are dogs, some dogs are birds. Can cats be birds? [Yes|No|Possibly|Sometimes] 16. Farmer has 17 sheep, all but 9 die. Left? [8|9|17|0] 17. 3 people dig 3 holes in 3 hours. 1 person dig half hole? [1hr|1.5hr|3hr|Impossible] 18. Take pill every 30min, 3 pills. How long? [1.5hr|1hr|2hr|30min] 19. Subtract 5 from 25 how many times? [5|1|4|Infinite] 20. 6 apples, take 4. How many do you have? [2|4|6|0]
+
+MATH: 21. 15% of 200? [25|30|35|40] 22. x+5=12, x=? [5|6|7|8] 23. 144÷12? [10|11|12|14] 24. √169? [11|12|13|14] 25. 3x-7=14, x=? [5|6|7|8] 26. 25% of 80? [15|20|25|30] 27. 7×8+6÷2? [56|59|31|62] 28. 120km in 2hr, speed? [50|55|60|65] 29. 2³+3²? [13|15|17|19] 30. Boys:girls=3:5, 24 boys. Girls? [30|35|40|45]
+
+SPATIAL: 31. ○□△○□? [○|□|△|◇] 32. Fold square twice, cut corner. Holes? [1|2|4|8] 33. Cube faces? [4|6|8|12] 34. Rotate N 180°? [Z|N|M|W] 35. Cube edges? [6|8|10|12] 36. Most sides: hexagon/pentagon/octagon? [Hexagon|Pentagon|Octagon|Equal] 37. 3:15 clock angle? [0°|7.5°|15°|22.5°] 38. Triangles in Star of David? [2|6|8|12] 39. AMBULANCE mirror image? [AMBULANCE|ECNALUBMA|Reversed|Upside down] 40. Tetrahedron vertices? [3|4|5|6]
+
+VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [City|Animal|Ocean|Country] 43. BOOK:READING as FORK:? [Drawing|Eating|Writing|Cooking] 44. Doesn't belong: Apple,Banana,Carrot,Orange? [Apple|Banana|Carrot|Orange] 45. DOCTOR:HOSPITAL as TEACHER:? [Student|School|Book|Classroom] 46. Opposite of BENEVOLENT? [Kind|Malevolent|Generous|Helpful] 47. BIRD:NEST as BEE:? [Honey|Flower|Hive|Sting] 48. EALGER rearranged=? [Bird|Color|Country|Fruit] 49. EPHEMERAL means? [Eternal|Temporary|Solid|Ancient] 50. WATER:THIRST as FOOD:? [Eat|Hunger|Cook|Taste]`,
+    category: TOOL_CATEGORIES.FUN,
+    hasWidget: true,
+    invocationMessages: { invoking: 'Calculating IQ...', invoked: 'IQ estimated!' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        testMode: {
+          type: 'string',
+          enum: ['quick', 'standard', 'comprehensive'],
+          description: 'Test mode determining which questions to use. quick=Q1-15, standard=Q1-30, comprehensive=Q1-50'
+        },
+        answers: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Array of answer indices (0-3) for each question. Length must match testMode: 15 for quick, 30 for standard, 50 for comprehensive.'
+        },
+      },
+      required: ['testMode', 'answers'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        testMode: { type: 'string', description: 'Test mode used' },
+        testInfo: { type: 'object', description: 'Test configuration (name, questionCount, estimatedMinutes)' },
+        iqScore: { type: 'number', description: 'Estimated IQ score' },
+        category: { type: 'string', description: 'IQ category (e.g., "Superior", "Average")' },
+        percentile: { type: 'number', description: 'Percentile ranking (0-100)' },
+        correctAnswers: { type: 'number', description: 'Number of correct answers' },
+        totalQuestions: { type: 'number', description: 'Total questions in test' },
+        accuracy: { type: 'number', description: 'Accuracy percentage' },
+        categoryScores: { type: 'object', description: 'Breakdown by category (pattern, logic, math, spatial, verbal)' },
+        emoji: { type: 'string', description: 'Result emoji' },
       },
     },
   },

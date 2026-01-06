@@ -31,6 +31,9 @@ import {
 import {
   TestMode, TEST_MODE_CONFIG, getQuestionsForMode, calculateIQScore, getIQLabel
 } from '@/src/data/iqQuestions';
+import { calculateVibe, getVibeQuestions, VibeAnswer } from '@/src/utils/VibeCalculator';
+
+import { calculateSleepNow, calculateWakeAt, calculateSleepAt, getQualityInfo, AgeGroup, SleepMode } from '@/src/utils/SleepCalculator';
 import { isHigherOrEqualTo } from '@/src/config/billing.config';
 
 // Auth types
@@ -790,6 +793,59 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
       return calculateFlip(input);
     }
+    case 'vibe_quiz': {
+      const answers = (args.answers as string[]) || [];
+      const vibeAnswers: VibeAnswer[] = answers.map(a => (a === 'A' || a === 'B') ? a : null);
+      const result = calculateVibe(vibeAnswers);
+      return {
+        type: result.type,
+        percentage: result.percentage,
+        catScore: result.catScore,
+        dogScore: result.dogScore,
+        title: result.title,
+        description: result.description,
+        emoji: result.emoji,
+        color: result.color,
+        totalQuestions: getVibeQuestions().length,
+      };
+    }
+
+    case 'sleep_calculator': {
+      const mode = (args.calculatorMode as SleepMode) || 'sleepNow';
+      const ageGroup = (args.ageGroup as AgeGroup) || 'adult';
+      const targetTime = args.targetTime as string | undefined;
+
+      let result;
+      switch (mode) {
+        case 'sleepNow':
+          result = calculateSleepNow(ageGroup);
+          break;
+        case 'wakeAt':
+          if (!targetTime) throw new Error('targetTime is required for wakeAt mode');
+          result = calculateWakeAt(targetTime, ageGroup);
+          break;
+        case 'sleepAt':
+          if (!targetTime) throw new Error('targetTime is required for sleepAt mode');
+          result = calculateSleepAt(targetTime, ageGroup);
+          break;
+        default:
+          throw new Error(`Invalid calculatorMode: ${mode}`);
+      }
+
+      // Enhance results with quality info
+      const enhancedResults = result.results.map(r => ({
+        ...r,
+        ...getQualityInfo(r.quality),
+      }));
+
+      return {
+        mode: result.mode,
+        ageGroup: result.ageGroup,
+        recommendation: result.recommendation,
+        results: enhancedResults,
+        inputTime: result.inputTime,
+      };
+    }
     case 'calculate_iq_score': {
       const testMode = (args.testMode as TestMode) || 'quick';
       const modeConfig = TEST_MODE_CONFIG[testMode];
@@ -803,9 +859,11 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         const labelInfo = getIQLabel(result.iq);
         return {
           testMode,
-          testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes },
+          testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes, emoji: modeConfig.emoji },
           iqScore: result.iq,
           category: labelInfo.label,
+          emoji: labelInfo.emoji,
+          color: labelInfo.color,
           percentile: result.percentile,
           correctAnswers: result.correctCount,
           totalQuestions,
@@ -829,9 +887,11 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
 
       return {
         testMode,
-        testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes },
+        testInfo: { name: modeConfig.name, questionCount: modeConfig.questionCount, estimatedMinutes: modeConfig.estimatedMinutes, emoji: modeConfig.emoji },
         iqScore: iq,
         category: labelInfo.label,
+        emoji: labelInfo.emoji,
+        color: labelInfo.color,
         percentile,
         correctAnswers: correct,
         totalQuestions,
@@ -1019,6 +1079,8 @@ function getWidgetType(toolName: string): string {
     'zone_calculator': 'zone',
     'lucky_number': 'lucky_number',
     'flip_tool': 'flip',
+    'vibe_quiz': 'vibe_quiz',
+    'sleep_calculator': 'sleep_calculator',
     'calculate_iq_score': 'iq_score',
     'calculate_uniqueness': 'uniqueness',
     'when_date_info': 'when_date',
@@ -1496,16 +1558,48 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div style="margin-top:1rem">${conversionRows}</div>`;
       break;
     }
+    case 'vibe_quiz': {
+      const vibeType = data.type as string;
+      const vibeColor = vibeType === 'cat' ? '#a78bfa' : '#f59e0b';
+      content = `
+        <div class="header">${data.emoji} ${data.title}</div>
+        <div class="big-number" style="color:${vibeColor}">${data.percentage}%</div>
+        <div class="label" style="background:${vibeColor}33;color:${vibeColor}">${vibeType === 'cat' ? 'Cat Person' : 'Dog Person'}</div>
+        <div class="stats">
+          <div class="stat-box"><div class="stat-label">🐱 Cat</div><div class="stat-value">${data.catScore}</div></div>
+          <div class="stat-box"><div class="stat-label">🐕 Dog</div><div class="stat-value">${data.dogScore}</div></div>
+        </div>
+        <div style="margin-top:0.75rem;font-size:0.85rem;color:rgba(255,255,255,0.8);line-height:1.4">${data.description}</div>`;
+      break;
+    }
+
+    case 'sleep_calculator': {
+      const sleepResults = (data.results as Array<{ time: string; cycles: number; hours: number; quality: string; emoji: string; color: string }>) || [];
+      const optimalResult = sleepResults.find(r => r.quality === 'optimal') || sleepResults[0];
+      const sleepRows = sleepResults.slice(0, 4).map(r =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)">
+          <span>${r.emoji} ${r.time}</span>
+          <span style="color:${r.color}">${r.cycles} cycles • ${r.hours.toFixed(1)}h</span>
+        </div>`
+      ).join('');
+      content = `
+        <div class="header">😴 Sleep Calculator</div>
+        <div class="big-number" style="color:#a78bfa;font-size:1.8rem">${optimalResult?.time || 'N/A'}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${data.mode === 'wakeAt' ? 'Go to sleep at' : 'Wake up at'}</div>
+        <div style="margin-top:0.75rem">${sleepRows}</div>`;
+      break;
+    }
     case 'iq_score': {
       const iq = data.iqScore as number;
-      const iqColor = iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b';
+      const iqColor = data.color as string || (iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b');
       content = `
         <div class="header">🧠 IQ Score</div>
         <div class="big-number" style="color:${iqColor}">${iq}</div>
-        <div class="label" style="background:${iqColor}33;color:${iqColor}">${data.category}</div>
+        <div class="label" style="background:${iqColor}33;color:${iqColor}">${data.emoji || ''} ${data.category}</div>
         <div class="stats">
-          <div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">${data.percentile}%</div></div>
-          <div class="stat-box"><div class="stat-label">Rarity</div><div class="stat-value">1 in ${data.rarity}</div></div>
+          <div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">Top ${100 - (data.percentile as number)}%</div></div>
+          <div class="stat-box"><div class="stat-label">Correct</div><div class="stat-value">${data.correctAnswers}/${data.totalQuestions}</div></div>
+          <div class="stat-box"><div class="stat-label">Accuracy</div><div class="stat-value">${data.accuracy}%</div></div>
         </div>`;
       break;
     }
@@ -2005,15 +2099,43 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + data.sourceTime + ' ' + (data.sourceCity || data.sourceTimezone) + '</div>' +
             '<div style="margin-top:1rem">' + conversionRows + '</div>';
         }
+        case 'vibe_quiz': {
+          var vibeType = data.type;
+          var vibeColor = vibeType === 'cat' ? '#a78bfa' : '#f59e0b';
+          return '<div class="header">' + data.emoji + ' ' + data.title + '</div>' +
+            '<div class="big-number" style="color:' + vibeColor + '">' + data.percentage + '%</div>' +
+            '<div class="label" style="background:' + vibeColor + '33;color:' + vibeColor + '">' + (vibeType === 'cat' ? 'Cat Person' : 'Dog Person') + '</div>' +
+            '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">🐱 Cat</div><div class="stat-value">' + data.catScore + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">🐕 Dog</div><div class="stat-value">' + data.dogScore + '</div></div>' +
+            '</div>' +
+            '<div style="margin-top:0.75rem;font-size:0.85rem;color:rgba(255,255,255,0.8);line-height:1.4">' + data.description + '</div>';
+        }
+
+        case 'sleep_calculator': {
+          var sleepResults = data.results || [];
+          var optimalResult = sleepResults.find(function(r) { return r.quality === 'optimal'; }) || sleepResults[0];
+          var sleepRows = sleepResults.slice(0, 4).map(function(r) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)">' +
+              '<span>' + r.emoji + ' ' + r.time + '</span>' +
+              '<span style="color:' + r.color + '">' + r.cycles + ' cycles • ' + r.hours.toFixed(1) + 'h</span>' +
+            '</div>';
+          }).join('');
+          return '<div class="header">😴 Sleep Calculator</div>' +
+            '<div class="big-number" style="color:#a78bfa;font-size:1.8rem">' + (optimalResult ? optimalResult.time : 'N/A') + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + (data.mode === 'wakeAt' ? 'Go to sleep at' : 'Wake up at') + '</div>' +
+            '<div style="margin-top:0.75rem">' + sleepRows + '</div>';
+        }
         case 'iq_score': {
           var iq = Number(data.iqScore || data.iq);
-          var iqColor = iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b';
+          var iqColor = data.color || (iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b');
           return '<div class="header">🧠 IQ Score</div>' +
             '<div class="big-number" style="color:' + iqColor + '">' + iq + '</div>' +
-            '<div class="label" style="background:' + iqColor + '33;color:' + iqColor + '">' + data.category + '</div>' +
+            '<div class="label" style="background:' + iqColor + '33;color:' + iqColor + '">' + (data.emoji || '') + ' ' + data.category + '</div>' +
             '<div class="stats">' +
-              '<div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">' + data.percentile + '%</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Rarity</div><div class="stat-value">1 in ' + data.rarity + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Percentile</div><div class="stat-value">Top ' + (100 - data.percentile) + '%</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Correct</div><div class="stat-value">' + data.correctAnswers + '/' + data.totalQuestions + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Accuracy</div><div class="stat-value">' + data.accuracy + '%</div></div>' +
             '</div>';
         }
         case 'uniqueness': {
@@ -2230,6 +2352,20 @@ function formatResultText(toolName: string, result: unknown): string {
       const cycPhaseName = cycPhaseInfo?.name || r.phase;
       return `🌸 Next period: ${r.nextPeriodStart} (in ${r.daysUntilNextPeriod} days). Currently day ${r.currentDay} - ${cycEmoji} ${cycPhaseName}. Ovulation: ${r.ovulationDate}`;
     }
+    case 'vibe_quiz': {
+      const vibeEmoji = r.type === 'cat' ? '🐱' : '🐕';
+      return `${vibeEmoji} ${r.title} - ${r.percentage}% ${r.type} person! (Cat: ${r.catScore}, Dog: ${r.dogScore}). ${r.description}`;
+    }
+    case 'sleep_calculator': {
+      const sleepResults = (r.results as Array<{ time: string; cycles: number; hours: number; quality: string }>) || [];
+      const optimal = sleepResults.find(res => res.quality === 'optimal');
+      const modeLabel = r.mode === 'wakeAt' ? 'Go to sleep at' : 'Wake up at';
+      const times = sleepResults.slice(0, 3).map(res => `${res.time} (${res.cycles} cycles)`).join(', ');
+      return `😴 ${modeLabel}: ${optimal ? `${optimal.time} (optimal)` : times}. Age group: ${r.ageGroup}. Recommended: ${(r.recommendation as { min: number; max: number }).min}-${(r.recommendation as { min: number; max: number }).max}h`;
+    }
+    case 'calculate_iq_score': {
+      return `🧠 IQ Score: ${r.iqScore} (${r.category}) ${r.emoji || ''}. Top ${100 - (r.percentile as number)}% of population. ${r.correctAnswers}/${r.totalQuestions} correct (${r.accuracy}% accuracy). Test: ${(r.testInfo as { name: string }).name}`;
+    }
     default:
       return JSON.stringify(result, null, 2);
   }
@@ -2264,7 +2400,9 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
     lucky_number: { luckyNumber: 7, numbers: [7], min: 1, max: 100, count: 1, range: '1 - 100' },
     flip_tool: { flipMode: 'coin', result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
-    calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
+    vibe_quiz: { type: 'cat', percentage: 70, catScore: 7, dogScore: 3, title: 'Mostly Cat Person', description: "You lean towards independence but can be social when you want. You're selective about your inner circle.", emoji: '😺', color: '#8b5cf6', totalQuestions: 10 },
+    sleep_calculator: { mode: 'sleepNow', ageGroup: 'adult', recommendation: { min: 7, max: 9, optimal: 8, cycleLength: 90, fallAsleep: 14 }, results: [{ time: '06:30', cycles: 6, hours: 9, quality: 'optimal', label: 'Optimal', emoji: '🌟', color: '#10b981' }, { time: '05:00', cycles: 5, hours: 7.5, quality: 'good', label: 'Good', emoji: '✅', color: '#22c55e' }], inputTime: null },
+    calculate_iq_score: { testMode: 'quick', testInfo: { name: 'Quick Test', questionCount: 15, estimatedMinutes: 5, emoji: '⚡' }, iqScore: 115, category: 'High Average', emoji: '👍', color: '#84cc16', percentile: 84, correctAnswers: 12, totalQuestions: 15, accuracy: 80 },
     calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },
     when_date_info: { date: '2026-06-15', dayOfWeek: 'Monday', daysFromToday: 164, zodiacSign: 'Gemini' },
     find_next_eclipse: { date: '2025-03-14', type: 'lunar', subtype: 'total', peakTimeUTC: '06:58', duration: '1h 05m', magnitude: 1.178, daysUntil: 70, bestVisibleFrom: 'Americas', visibleRegions: ['Americas', 'Europe', 'Africa', 'Pacific'], visibleFromLocation: null, visibilityScore: null, coordinates: { lat: -3, lon: -95 } },

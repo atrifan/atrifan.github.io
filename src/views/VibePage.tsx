@@ -8,26 +8,7 @@ import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-interface VibeQuestion {
-  id: number;
-  question: string;
-  optionA: { text: string; emoji: string }; // Cat-leaning
-  optionB: { text: string; emoji: string }; // Dog-leaning
-}
-
-const VIBE_QUESTIONS: VibeQuestion[] = [
-  { id: 1, question: 'How do you prefer to spend a Saturday?', optionA: { text: 'Cozy at home with a book or movie', emoji: '📚' }, optionB: { text: 'Out and about, exploring or socializing', emoji: '🎉' } },
-  { id: 2, question: 'When meeting new people, you are:', optionA: { text: 'Reserved at first, warm up slowly', emoji: '🤔' }, optionB: { text: 'Friendly and open right away', emoji: '😄' } },
-  { id: 3, question: 'Your ideal living space is:', optionA: { text: 'Clean, organized, minimal', emoji: '✨' }, optionB: { text: 'Lived-in, cozy, a bit messy is fine', emoji: '🏠' } },
-  { id: 4, question: 'How do you handle stress?', optionA: { text: 'Need alone time to recharge', emoji: '🧘' }, optionB: { text: 'Talk it out with friends/family', emoji: '💬' } },
-  { id: 5, question: 'Your approach to exercise:', optionA: { text: 'Solo activities (yoga, gym, walks)', emoji: '🚶' }, optionB: { text: 'Team sports or group activities', emoji: '⚽' } },
-  { id: 6, question: 'When it comes to routines:', optionA: { text: 'I like flexibility and doing things my way', emoji: '🎨' }, optionB: { text: 'I thrive on consistent schedules', emoji: '📅' } },
-  { id: 7, question: 'Your communication style:', optionA: { text: 'Subtle hints and body language', emoji: '👀' }, optionB: { text: 'Direct and expressive', emoji: '🗣️' } },
-  { id: 8, question: 'How do you show affection?', optionA: { text: 'Quality time, being present', emoji: '💝' }, optionB: { text: 'Physical touch, hugs, enthusiasm', emoji: '🤗' } },
-  { id: 9, question: 'Your sleep preference:', optionA: { text: 'Night owl, love late nights', emoji: '🌙' }, optionB: { text: 'Early bird, up with the sun', emoji: '🌅' } },
-  { id: 10, question: 'When someone annoys you:', optionA: { text: 'Give them the cold shoulder', emoji: '❄️' }, optionB: { text: 'Confront them directly', emoji: '🔥' } },
-];
+import { calculateVibe, getVibeQuestions, VibeAnswer, VibeQuestion, VIBE_QUESTIONS } from '../utils/VibeCalculator';
 
 interface VibePageState {
   currentQuestion: number;
@@ -62,24 +43,13 @@ export class VibePage extends Component<{}, VibePageState> {
     });
   };
 
-  private calculateResult = (): { type: 'cat' | 'dog'; percentage: number; catScore: number; dogScore: number } => {
-    const catScore = this.state.answers.filter(a => a === 'A').length;
-    const dogScore = this.state.answers.filter(a => a === 'B').length;
-    const total = catScore + dogScore;
-    const catPercentage = Math.round((catScore / total) * 100);
-    return { type: catScore >= dogScore ? 'cat' : 'dog', percentage: catScore >= dogScore ? catPercentage : 100 - catPercentage, catScore, dogScore };
+  private calculateResult = () => {
+    return calculateVibe(this.state.answers);
   };
 
   private getResultDetails = (type: 'cat' | 'dog', percentage: number) => {
-    if (type === 'cat') {
-      if (percentage >= 80) return { title: 'Total Cat Person! 🐱', desc: 'You\'re independent, mysterious, and value your personal space. You appreciate the finer things in life and don\'t need constant validation.', color: '#a78bfa' };
-      if (percentage >= 60) return { title: 'Mostly Cat Person 😺', desc: 'You lean towards independence but can be social when you want. You\'re selective about your inner circle.', color: '#8b5cf6' };
-      return { title: 'Cat-Leaning 🐈', desc: 'You have a nice balance but slightly prefer the cat lifestyle - independent yet affectionate on your terms.', color: '#7c3aed' };
-    } else {
-      if (percentage >= 80) return { title: 'Total Dog Person! 🐕', desc: 'You\'re loyal, enthusiastic, and love being around people. Your energy is contagious and you wear your heart on your sleeve!', color: '#f59e0b' };
-      if (percentage >= 60) return { title: 'Mostly Dog Person 🐶', desc: 'You\'re social and friendly but also appreciate some downtime. You\'re the life of the party when you want to be!', color: '#d97706' };
-      return { title: 'Dog-Leaning 🦮', desc: 'You have a nice balance but slightly prefer the dog lifestyle - social, active, and always ready for adventure.', color: '#b45309' };
-    }
+    const result = calculateVibe(this.state.answers);
+    return { title: `${result.title} ${result.emoji}`, desc: result.description, color: result.color };
   };
 
   private restartQuiz = () => { this.setState({ currentQuestion: 0, answers: new Array(VIBE_QUESTIONS.length).fill(null), showResults: false, started: false }); };

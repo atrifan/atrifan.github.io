@@ -9,15 +9,18 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-type AgeGroup = 'adult' | 'teen' | 'child' | 'toddler' | 'infant';
-
-interface SleepResult {
-  time: string;
-  cycles: number;
-  hours: number;
-  quality: 'optimal' | 'good' | 'fair' | 'poor';
-}
+import {
+  AgeGroup,
+  SleepResult,
+  SleepQuality,
+  calculateSleepNow,
+  calculateWakeAt,
+  calculateSleepAt,
+  getQualityInfo,
+  getSleepQuality,
+  SLEEP_RECOMMENDATIONS,
+  AGE_GROUP_LABELS,
+} from '../utils/SleepCalculator';
 
 interface SleepPageState {
   mode: 'wakeUp' | 'sleepNow' | 'sleepAt';
@@ -26,23 +29,6 @@ interface SleepPageState {
   ageGroup: AgeGroup;
   results: SleepResult[];
 }
-
-// Sleep recommendations by age group (hours per day)
-const SLEEP_RECOMMENDATIONS: Record<AgeGroup, { min: number; max: number; optimal: number; cycleLength: number; fallAsleep: number }> = {
-  adult: { min: 7, max: 9, optimal: 8, cycleLength: 90, fallAsleep: 14 },
-  teen: { min: 8, max: 10, optimal: 9, cycleLength: 90, fallAsleep: 15 },
-  child: { min: 9, max: 12, optimal: 10, cycleLength: 90, fallAsleep: 20 },
-  toddler: { min: 11, max: 14, optimal: 12, cycleLength: 60, fallAsleep: 20 },
-  infant: { min: 12, max: 16, optimal: 14, cycleLength: 50, fallAsleep: 15 },
-};
-
-const AGE_GROUP_LABELS: Record<AgeGroup, string> = {
-  adult: 'Adult (18+)',
-  teen: 'Teen (13-17)',
-  child: 'Child (6-12)',
-  toddler: 'Toddler (1-5)',
-  infant: 'Infant (0-1)',
-};
 
 export class SleepPage extends Component<{}, SleepPageState> {
   private resultsRef: RefObject<HTMLDivElement> = createRef();
@@ -72,126 +58,28 @@ export class SleepPage extends Component<{}, SleepPageState> {
     this.setState({ wakeTime: '07:00', sleepTime: '22:00', ageGroup: 'adult', results: [] });
   };
 
-  private getQuality = (hours: number): SleepResult['quality'] => {
-    const { ageGroup } = this.state;
-    const rec = SLEEP_RECOMMENDATIONS[ageGroup];
-
-    if (hours >= rec.min && hours <= rec.max) {
-      // Within recommended range
-      const optimalDiff = Math.abs(hours - rec.optimal);
-      if (optimalDiff <= 0.5) return 'optimal';
-      if (optimalDiff <= 1) return 'good';
-      return 'fair';
-    } else if (hours >= rec.min - 1 && hours <= rec.max + 1) {
-      return 'fair';
-    }
-    return 'poor';
+  private getQuality = (hours: number): SleepQuality => {
+    return getSleepQuality(hours, this.state.ageGroup);
   };
 
-  private calculateSleepNow = () => {
-    const { ageGroup } = this.state;
-    const rec = SLEEP_RECOMMENDATIONS[ageGroup];
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + rec.fallAsleep);
-
-    const results: SleepResult[] = [];
-    // Calculate cycles based on age group
-    const maxCycles = Math.ceil((rec.max * 60) / rec.cycleLength);
-    const minCycles = Math.floor((rec.min * 60) / rec.cycleLength);
-
-    for (let cycles = maxCycles; cycles >= Math.max(2, minCycles - 2); cycles--) {
-      const sleepMinutes = cycles * rec.cycleLength;
-      const hours = sleepMinutes / 60;
-      const wake = new Date(now.getTime() + sleepMinutes * 60 * 1000);
-      results.push({
-        time: wake.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cycles,
-        hours,
-        quality: this.getQuality(hours),
-      });
-    }
-    this.setState({ results }, this.scrollToResults);
+  private calculateSleepNowHandler = () => {
+    const result = calculateSleepNow(this.state.ageGroup);
+    this.setState({ results: result.results }, this.scrollToResults);
   };
 
   private calculateWakeUp = () => {
-    const { wakeTime, ageGroup } = this.state;
-    const rec = SLEEP_RECOMMENDATIONS[ageGroup];
-    const [hours, minutes] = wakeTime.split(':').map(Number);
-    const wake = new Date();
-    wake.setHours(hours, minutes, 0, 0);
-    if (wake < new Date()) wake.setDate(wake.getDate() + 1);
-
-    const results: SleepResult[] = [];
-    const maxCycles = Math.ceil((rec.max * 60) / rec.cycleLength);
-    const minCycles = Math.floor((rec.min * 60) / rec.cycleLength);
-
-    for (let cycles = maxCycles; cycles >= Math.max(2, minCycles - 2); cycles--) {
-      const sleepMinutes = cycles * rec.cycleLength;
-      const sleepHours = sleepMinutes / 60;
-      const sleep = new Date(wake.getTime() - sleepMinutes * 60 * 1000 - rec.fallAsleep * 60 * 1000);
-      results.push({
-        time: sleep.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cycles,
-        hours: sleepHours,
-        quality: this.getQuality(sleepHours),
-      });
-    }
-    this.setState({ results }, this.scrollToResults);
+    const result = calculateWakeAt(this.state.wakeTime, this.state.ageGroup);
+    this.setState({ results: result.results }, this.scrollToResults);
   };
 
-  private calculateSleepAt = () => {
-    const { sleepTime, ageGroup } = this.state;
-    const rec = SLEEP_RECOMMENDATIONS[ageGroup];
-    const [hours, minutes] = sleepTime.split(':').map(Number);
-    const sleep = new Date();
-    sleep.setHours(hours, minutes, 0, 0);
-    // Add fall asleep time
-    sleep.setMinutes(sleep.getMinutes() + rec.fallAsleep);
-
-    const results: SleepResult[] = [];
-    const maxCycles = Math.ceil((rec.max * 60) / rec.cycleLength);
-    const minCycles = Math.floor((rec.min * 60) / rec.cycleLength);
-
-    for (let cycles = maxCycles; cycles >= Math.max(2, minCycles - 2); cycles--) {
-      const sleepMinutes = cycles * rec.cycleLength;
-      const sleepHours = sleepMinutes / 60;
-      const wake = new Date(sleep.getTime() + sleepMinutes * 60 * 1000);
-      results.push({
-        time: wake.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cycles,
-        hours: sleepHours,
-        quality: this.getQuality(sleepHours),
-      });
-    }
-    this.setState({ results }, this.scrollToResults);
+  private calculateSleepAtHandler = () => {
+    const result = calculateSleepAt(this.state.sleepTime, this.state.ageGroup);
+    this.setState({ results: result.results }, this.scrollToResults);
   };
 
-  private getQualityColor = (quality: SleepResult['quality']): string => {
-    switch (quality) {
-      case 'optimal': return '#10b981'; // green
-      case 'good': return '#22c55e'; // light green
-      case 'fair': return '#eab308'; // yellow
-      case 'poor': return '#ef4444'; // red
-    }
-  };
-
-  private getQualityEmoji = (quality: SleepResult['quality']): string => {
-    switch (quality) {
-      case 'optimal': return '🌟';
-      case 'good': return '✅';
-      case 'fair': return '⚠️';
-      case 'poor': return '❌';
-    }
-  };
-
-  private getQualityLabel = (quality: SleepResult['quality']): string => {
-    switch (quality) {
-      case 'optimal': return 'Optimal';
-      case 'good': return 'Good';
-      case 'fair': return 'Fair';
-      case 'poor': return 'Not Recommended';
-    }
-  };
+  private getQualityColor = (quality: SleepQuality): string => getQualityInfo(quality).color;
+  private getQualityEmoji = (quality: SleepQuality): string => getQualityInfo(quality).emoji;
+  private getQualityLabel = (quality: SleepQuality): string => getQualityInfo(quality).label;
 
   render() {
     const { mode, wakeTime, sleepTime, ageGroup, results } = this.state;
@@ -274,7 +162,7 @@ export class SleepPage extends Component<{}, SleepPageState> {
                 </>
               )}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button onClick={mode === 'sleepNow' ? this.calculateSleepNow : mode === 'wakeUp' ? this.calculateWakeUp : this.calculateSleepAt}
+                <button onClick={mode === 'sleepNow' ? this.calculateSleepNowHandler : mode === 'wakeUp' ? this.calculateWakeUp : this.calculateSleepAtHandler}
                   style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
                   {mode === 'sleepNow' ? 'Calculate Wake Times' : mode === 'wakeUp' ? 'Calculate Sleep Times' : 'Calculate Wake Times'}
                 </button>

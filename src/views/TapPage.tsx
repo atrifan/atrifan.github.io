@@ -7,13 +7,14 @@ import { Footer } from '../components/Footer';
 import { TapIcon } from '../components/TapIcon';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-interface TapRecord {
-  tapNumber: number;
-  timestamp: number;
-  interval: number | null; // ms since previous tap
-  diff: number | null; // difference from previous interval
-}
+import {
+  TapRecord,
+  calculateTapStats,
+  getTapRatingInfo,
+  formatTapTime,
+  formatInterval,
+  createTapRecord
+} from '../utils/TapCalculator';
 
 interface TapPageState {
   isStarted: boolean;
@@ -84,20 +85,7 @@ export class TapPage extends Component<object, TapPageState> {
     const { taps } = this.state;
 
     const lastTap = taps.length > 0 ? taps[taps.length - 1] : null;
-    const interval = lastTap ? now - lastTap.timestamp : null;
-
-    // Calculate diff from previous interval
-    let diff: number | null = null;
-    if (interval !== null && lastTap && lastTap.interval !== null) {
-      diff = interval - lastTap.interval;
-    }
-
-    const newTap: TapRecord = {
-      tapNumber: taps.length + 1,
-      timestamp: now,
-      interval,
-      diff,
-    };
+    const newTap = createTapRecord(taps.length + 1, now, lastTap);
 
     this.setState(prev => ({
       taps: [...prev.taps, newTap],
@@ -118,35 +106,23 @@ export class TapPage extends Component<object, TapPageState> {
     });
   };
 
-  private formatTime = (ms: number): string => {
-    const totalSecs = Math.floor(ms / 1000);
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    const tenths = Math.floor((ms % 1000) / 100);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
-  };
+  private formatTime = (ms: number): string => formatTapTime(ms);
 
-  private formatInterval = (ms: number): string => {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
-  };
+  private formatIntervalValue = (ms: number): string => formatInterval(ms);
 
   private getStats = () => {
     const { taps, elapsedTime } = this.state;
-    const intervals = taps.filter(t => t.interval !== null).map(t => t.interval as number);
-
-    const count = taps.length;
-    const avgInterval = intervals.length > 0
-      ? intervals.reduce((a, b) => a + b, 0) / intervals.length
-      : 0;
-
-    const elapsedSecs = elapsedTime / 1000;
-    const elapsedMins = elapsedTime / 60000;
-
-    const tapsPerSecond = elapsedSecs > 0 ? count / elapsedSecs : 0;
-    const tapsPerMinute = elapsedMins > 0 ? count / elapsedMins : 0;
-
-    return { count, avgInterval, tapsPerSecond, tapsPerMinute };
+    const stats = calculateTapStats(taps, elapsedTime);
+    const ratingInfo = getTapRatingInfo(stats.rating);
+    return {
+      count: stats.count,
+      avgInterval: stats.averageInterval || 0,
+      tapsPerSecond: stats.tapsPerSecond,
+      tapsPerMinute: stats.tapsPerMinute,
+      consistency: stats.consistency,
+      rating: stats.rating,
+      ratingInfo,
+    };
   };
 
   render() {
@@ -371,7 +347,7 @@ export class TapPage extends Component<object, TapPageState> {
           </div>
           <div style={statBoxStyle}>
             <div style={labelStyle}>Avg Gap</div>
-            <div style={valueStyle}>{stats.avgInterval ? this.formatInterval(stats.avgInterval) : '-'}</div>
+            <div style={valueStyle}>{stats.avgInterval ? this.formatIntervalValue(stats.avgInterval) : '-'}</div>
           </div>
         </div>
       </View>
@@ -426,12 +402,12 @@ export class TapPage extends Component<object, TapPageState> {
                   @{this.formatTime(timeSinceStart)}
                 </span>
                 <span style={{ color: '#fff', fontWeight: 600, flex: 1, textAlign: 'center' }}>
-                  {tap.interval !== null ? this.formatInterval(tap.interval) : 'First tap'}
+                  {tap.interval !== null ? this.formatIntervalValue(tap.interval) : 'First tap'}
                 </span>
                 <span style={{ color: diffColor, fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>
                   {tap.diff !== null ? (
                     <>
-                      {tap.diff > 0 ? '+' : ''}{this.formatInterval(Math.abs(tap.diff))}
+                      {tap.diff > 0 ? '+' : ''}{this.formatIntervalValue(Math.abs(tap.diff))}
                       {tap.diff < 0 ? ' ⚡' : tap.diff > 0 ? ' 🐢' : ''}
                     </>
                   ) : '-'}
