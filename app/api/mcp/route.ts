@@ -10,6 +10,7 @@ import {
   Gender, UnitSystem, BloodTypeABO, RhFactor
 } from '@/src/utils/BloodCalculator';
 import { calculateFlip, FlipCalculatorInput, FlipMode } from '@/src/utils/FlipCalculator';
+import { calculateZone, ZoneCalculatorInput } from '@/src/utils/ZoneCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -995,34 +996,14 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       const index = Math.floor(Math.random() * options.length);
       return { result: options[index], index, totalOptions: options.length, options };
     }
-    case 'convert_timezone': {
-      const time = args.time as string;
-      const fromTz = args.fromTimezone as string;
-      const toTzs = args.toTimezones as string[];
-      const [h, m] = time.split(':').map(Number);
-      const getOffset = (tz: string): number => {
-        if (tz === 'UTC') return 0;
-        const match = tz.match(/UTC([+-])(\d+)/);
-        if (match) return parseInt(match[1] + match[2]);
-        const cityOffsets: Record<string, number> = {
-          'America/New_York': -5, 'America/Los_Angeles': -8, 'America/Chicago': -6,
-          'Europe/London': 0, 'Europe/Paris': 1, 'Europe/Berlin': 1,
-          'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Singapore': 8,
-          'Australia/Sydney': 10,
-        };
-        return cityOffsets[tz] || 0;
+    case 'zone_calculator': {
+      // Use shared ZoneCalculator - single source of truth for timezone conversion
+      const input: ZoneCalculatorInput = {
+        time: args.time as string,
+        fromTimezone: args.fromTimezone as string,
+        toTimezones: args.toTimezones as string[],
       };
-      const fromOffset = getOffset(fromTz);
-      const results = toTzs.map(tz => {
-        const toOffset = getOffset(tz);
-        const diff = toOffset - fromOffset;
-        let newH = h + diff;
-        let dayChange = '';
-        if (newH >= 24) { newH -= 24; dayChange = ' (+1 day)'; }
-        if (newH < 0) { newH += 24; dayChange = ' (-1 day)'; }
-        return { timezone: tz, time: `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}${dayChange}` };
-      });
-      return { sourceTime: time, sourceTimezone: fromTz, conversions: results };
+      return calculateZone(input);
     }
     case 'generate_unique_id': {
       const type = args.type as string;
@@ -1332,7 +1313,7 @@ function getWidgetType(toolName: string): string {
     'generate_names': 'names',
     'calculate_position_size': 'position_size',
     'spin_wheel': 'pick_random',
-    'convert_timezone': 'timezone',
+    'zone_calculator': 'zone',
     'generate_unique_id': 'unique_id',
     'lucky_number': 'lucky_number',
     'flip_tool': 'flip',
@@ -1766,14 +1747,18 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Optimal ${data.sleepTimes ? 'bedtimes' : 'wake times'}</div>`;
       break;
     }
-    case 'timezone': {
+    case 'zone': {
+      const conversions = (data.conversions || []) as Array<{ city: string; time: string; dayChange?: string }>;
+      const conversionRows = conversions.slice(0, 4).map(c =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:rgba(96,165,250,0.1);border-radius:8px;margin-bottom:0.25rem">
+          <span style="color:rgba(255,255,255,0.8)">${c.city}</span>
+          <span style="color:#60a5fa;font-weight:700">${c.time}${c.dayChange ? ` <span style="font-size:0.75rem;color:#f59e0b">(${c.dayChange})</span>` : ''}</span>
+        </div>`
+      ).join('');
       content = `
-        <div class="header">🌍 Timezone</div>
-        <div class="big-number" style="color:#60a5fa;font-size:2rem">${data.convertedTime}</div>
-        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">${data.toTimezone}</div>
-        <div class="stats">
-          <div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">${data.originalTime} ${data.fromTimezone}</div></div>
-        </div>`;
+        <div class="header">🌍 Timezone Converter</div>
+        <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.sourceTime} ${data.sourceCity || data.sourceTimezone}</div>
+        <div style="margin-top:1rem">${conversionRows}</div>`;
       break;
     }
     case 'unique_id': {
@@ -2232,13 +2217,17 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '</div>' +
             '<div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Optimal ' + (data.sleepTimes ? 'bedtimes' : 'wake times') + '</div>';
         }
-        case 'timezone': {
-          return '<div class="header">🌍 Timezone</div>' +
-            '<div class="big-number" style="color:#60a5fa;font-size:2rem">' + data.convertedTime + '</div>' +
-            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">' + data.toTimezone + '</div>' +
-            '<div class="stats">' +
-              '<div class="stat-box" style="grid-column:span 2"><div class="stat-label">From</div><div class="stat-value">' + data.originalTime + ' ' + data.fromTimezone + '</div></div>' +
+        case 'zone': {
+          var conversions = data.conversions || [];
+          var conversionRows = conversions.slice(0, 4).map(function(c) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:rgba(96,165,250,0.1);border-radius:8px;margin-bottom:0.25rem">' +
+              '<span style="color:rgba(255,255,255,0.8)">' + c.city + '</span>' +
+              '<span style="color:#60a5fa;font-weight:700">' + c.time + (c.dayChange ? ' <span style="font-size:0.75rem;color:#f59e0b">(' + c.dayChange + ')</span>' : '') + '</span>' +
             '</div>';
+          }).join('');
+          return '<div class="header">🌍 Timezone Converter</div>' +
+            '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + data.sourceTime + ' ' + (data.sourceCity || data.sourceTimezone) + '</div>' +
+            '<div style="margin-top:1rem">' + conversionRows + '</div>';
         }
         case 'unique_id': {
           return '<div class="header">🔑 Unique ID</div>' +
@@ -2459,7 +2448,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
     calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
     spin_wheel: { result: 'Winner!', options: ['Winner!', 'Try Again', 'Bonus'] },
-    convert_timezone: { result: '15:00', fromTime: '10:00', fromTimezone: 'America/New_York', toTimezone: 'Europe/London' },
+    zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
     generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
     lucky_number: { number: 7, min: 1, max: 100 },
     flip_tool: { flipMode: 'coin', result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },

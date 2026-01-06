@@ -10,6 +10,11 @@
  * 3. Add widget HTML generator in app/api/mcp/route.ts (generateWidgetHtml function)
  * 4. Add template data in app/api/mcp/route.ts (getTemplateData function)
  * 5. Add formatResultText in app/api/mcp/route.ts
+ */
+
+import { TIMEZONE_IDS } from '../utils/ZoneCalculator';
+
+/**
  *
  * GUIDELINE FOR UNIFYING MCP TOOLS WITH UI:
  * When a tool has both MCP and UI implementations, follow this pattern (see calculate_tip as example):
@@ -57,7 +62,7 @@ export interface SchemaProperty {
   enum?: string[];
   minimum?: number;
   maximum?: number;
-  items?: { type: string; properties?: Record<string, SchemaProperty> };
+  items?: { type: string; enum?: string[]; properties?: Record<string, SchemaProperty> };
 }
 
 export interface ToolInputSchema {
@@ -459,27 +464,40 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'convert_timezone',
-    description: 'Convert time between timezones',
+    name: 'zone_calculator',
+    description: 'Convert time between timezones. Supports UTC offsets (e.g., UTC+5, UTC-8) and major city timezones (e.g., America/New_York, Europe/London, Asia/Tokyo). Returns converted times with day change indicators.',
     category: TOOL_CATEGORIES.DATE_TIME,
     hasWidget: true,
     invocationMessages: { invoking: 'Converting timezone...', invoked: 'Timezone converted' },
     inputSchema: {
       type: 'object',
       properties: {
-        time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
-        fromTimezone: { type: 'string', description: 'Source timezone' },
-        toTimezones: { type: 'array', items: { type: 'string' }, description: 'Target timezones' },
-        date: { type: 'string', description: 'Date in YYYY-MM-DD format (optional)' },
+        time: { type: 'string', description: 'Time in HH:MM format (24-hour), e.g., "14:30"' },
+        fromTimezone: { type: 'string', enum: TIMEZONE_IDS, description: 'Source timezone. Use UTC offsets (UTC-5, UTC+8) or IANA timezone IDs (America/New_York, Europe/London, Asia/Tokyo)' },
+        toTimezones: { type: 'array', items: { type: 'string', enum: TIMEZONE_IDS }, description: 'Target timezones to convert to. Use UTC offsets or IANA timezone IDs' },
       },
       required: ['time', 'fromTimezone', 'toTimezones'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        originalTime: { type: 'string' },
-        fromTimezone: { type: 'string' },
-        conversions: { type: 'array', items: { type: 'object' } },
+        sourceTime: { type: 'string', description: 'Original time in HH:MM format' },
+        sourceTimezone: { type: 'string', description: 'Source timezone ID' },
+        sourceCity: { type: 'string', description: 'Source city name' },
+        conversions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              timezone: { type: 'string', description: 'Target timezone ID' },
+              city: { type: 'string', description: 'Target city name' },
+              time: { type: 'string', description: 'Converted time in HH:MM format' },
+              offset: { type: 'number', description: 'UTC offset of target timezone' },
+              offsetDiff: { type: 'number', description: 'Offset difference from source' },
+              dayChange: { type: 'string', description: 'Day change indicator (+1 day, -1 day, or empty)' },
+            },
+          },
+        },
       },
     },
   },

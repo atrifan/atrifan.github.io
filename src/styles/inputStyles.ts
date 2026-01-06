@@ -32,7 +32,7 @@ export const inputStyles = {
   // Select dropdown
   select: {
     width: '100%',
-    padding: '1rem',
+    padding: '1rem 2.5rem 1rem 1rem',
     fontSize: '1.1rem',
     borderRadius: '12px',
     border: '1px solid rgba(255,255,255,0.2)',
@@ -40,6 +40,11 @@ export const inputStyles = {
     color: '#fff',
     boxSizing: 'border-box' as const,
     cursor: 'pointer',
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 1rem center',
   },
 
   // Small select (inline)
