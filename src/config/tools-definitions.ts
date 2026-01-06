@@ -4,46 +4,21 @@
  * This file is the SINGLE SOURCE OF TRUTH for all MCP tool definitions.
  * Both the MCP API route (/api/mcp) and the tools documentation API (/api/tools) use these.
  *
- * To add a new tool:
- * 1. Add the tool definition to TOOL_DEFINITIONS array below (including invocationMessages)
- * 2. Add the execution handler in app/api/mcp/route.ts (executeTool function)
- * 3. Add widget HTML generator in app/api/mcp/route.ts (generateWidgetHtml function)
- * 4. Add template data in app/api/mcp/route.ts (getTemplateData function)
- * 5. Add formatResultText in app/api/mcp/route.ts
+ * Each tool definition includes:
+ * - Schema (input/output)
+ * - Type (NATIVE, MCP, REST, GQL, A2A)
+ * - Execute handler (for NATIVE tools)
+ * - Widget renderers (Claude Desktop & OpenAI)
+ * - Text formatter
+ * - Template data for previews
+ *
+ * For non-NATIVE tools (MCP, REST, GQL, A2A), the execute handler is determined
+ * dynamically based on type and configuration stored in the database.
  */
 
 import { TIMEZONE_IDS } from '../utils/ZoneCalculator';
 import { ALL_UNITS } from '../utils/UnitConverter';
 import { PERCENT_OPERATIONS } from '../utils/PercentCalculator';
-
-/**
- *
- * GUIDELINE FOR UNIFYING MCP TOOLS WITH UI:
- * When a tool has both MCP and UI implementations, follow this pattern (see calculate_tip as example):
- *
- * 1. CREATE SHARED CALCULATOR: Create a shared function in src/utils/<ToolName>Calculator.ts
- *    - Define input/output types with all parameters
- *    - Use enums for categorical parameters (e.g., 'static' | 'mood')
- *    - Handle defaults inside the function
- *    - Only billAmount-like core params should be required; rest computed with defaults
- *
- * 2. UPDATE THIS FILE (tools-definitions.ts):
- *    - inputSchema properties must match the shared function's input type
- *    - Use enum arrays for categorical params
- *    - Only truly required params in 'required' array
- *    - Description should explain mode behavior
- *
- * 3. UPDATE MCP EXECUTION (route.ts):
- *    - Import and call the shared function
- *    - Map args to the shared function's input type
- *    - Return result (may need field name mapping for widget compatibility)
- *
- * 4. UPDATE UI COMPONENT:
- *    - Import and use the shared function
- *    - Remove duplicate calculation logic
- *
- * Example: calculate_tip uses src/utils/TipCalculator.ts
- */
 
 // Tool categories
 export const TOOL_CATEGORIES = {
@@ -56,6 +31,17 @@ export const TOOL_CATEGORIES = {
 } as const;
 
 export type ToolCategory = typeof TOOL_CATEGORIES[keyof typeof TOOL_CATEGORIES];
+
+// Tool types - determines how the tool is executed
+export const TOOL_TYPES = {
+  NATIVE: 'NATIVE',   // Built-in tool with local handler
+  MCP: 'MCP',         // External MCP server
+  REST: 'REST',       // REST API endpoint
+  GQL: 'GQL',         // GraphQL endpoint
+  A2A: 'A2A',         // Agent-to-Agent protocol
+} as const;
+
+export type ToolType = typeof TOOL_TYPES[keyof typeof TOOL_TYPES];
 
 // Schema types
 export interface SchemaProperty {
@@ -83,14 +69,44 @@ export interface InvocationMessages {
   invoked: string;
 }
 
+// Widget type for mapping tool names to widget renderers
+export type WidgetType = string;
+
+// Tool execution context passed to handlers
+export interface ToolExecutionContext {
+  userId?: string;
+  plan?: string;
+  isSubscribed?: boolean;
+}
+
+// Tool result - generic object returned by execute handlers
+// Using a more permissive type to allow specific output types from calculators
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ToolResult = Record<string, any>;
+
+// Tool handler functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ToolExecuteHandler = (args: Record<string, unknown>, context?: ToolExecutionContext) => Promise<any> | any;
+export type ToolWidgetRenderer = (data: ToolResult) => string;
+export type ToolTextFormatter = (result: ToolResult) => string;
+
 export interface ToolDefinition {
   name: string;
   description: string;
   category: ToolCategory;
+  type: ToolType;
   hasWidget: boolean;
   inputSchema: ToolInputSchema;
   outputSchema: ToolOutputSchema;
   invocationMessages?: InvocationMessages;
+  // Widget type for renderer lookup (defaults to tool name if not specified)
+  widgetType?: WidgetType;
+  // Handler functions (required for NATIVE tools, optional for others)
+  execute?: ToolExecuteHandler;
+  renderWidget?: ToolWidgetRenderer;        // Claude Desktop widget
+  renderWidgetOpenAI?: ToolWidgetRenderer;  // OpenAI widget (ES5 compatible)
+  formatText?: ToolTextFormatter;           // Plain text format for non-widget clients
+  templateData?: ToolResult;                // Sample data for widget previews
 }
 
 /**
@@ -102,6 +118,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_ideal_weight',
     description: 'Calculate ideal weight using the Devine formula',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating ideal weight...', invoked: 'Ideal weight calculated' },
     inputSchema: {
@@ -127,6 +144,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'generate_weight_loss_plan',
     description: 'Generate a complete weight loss plan with calorie targets and fasting recommendations',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Generating weight loss plan...', invoked: 'Plan generated' },
     inputSchema: {
@@ -159,6 +177,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_sleep',
     description: 'Calculate optimal sleep and wake times based on sleep cycles',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating sleep times...', invoked: 'Sleep times ready' },
     inputSchema: {
@@ -182,6 +201,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_cycle',
     description: 'Calculate menstrual cycle predictions including next period date, fertile window, ovulation date, and current cycle phase. Supports both simplified mode (average 28-day cycle) and advanced mode with custom cycle/period lengths.',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating cycle predictions...', invoked: 'Cycle predictions ready!' },
     inputSchema: {
@@ -217,6 +237,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'blood_calculator',
     description: 'Blood calculator with three modes: "donation" (check donation eligibility), "compatibility" (blood type transfusion compatibility), "baby" (predict baby blood type from parents). Mode determines required fields - tool will error with missing fields for each mode.',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating blood info...', invoked: 'Blood calculation complete' },
     inputSchema: {
@@ -273,6 +294,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_tip',
     description: 'Calculate tip amount and total bill. Supports two modes: "static" (provide tipPercentage directly) or "mood" (compute tip from serviceQuality, mood, and budgetSituation). If tipPercentage is not provided, mood mode is used automatically.',
     category: TOOL_CATEGORIES.FINANCE,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating tip...', invoked: 'Tip calculated' },
     inputSchema: {
@@ -306,6 +328,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_compound_interest',
     description: 'Calculate compound interest growth over time',
     category: TOOL_CATEGORIES.FINANCE,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating compound interest...', invoked: 'Interest calculated' },
     inputSchema: {
@@ -333,6 +356,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_position_size',
     description: 'Calculate trading position size based on risk management. Supports 4 modes: riskOnly (get suggestions), riskAndSL (calculate quantity), riskAndQty (calculate stop loss), slAndQty (calculate risk %). Direction can be long (buy) or short (sell).',
     category: TOOL_CATEGORIES.FINANCE,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating position size...', invoked: 'Position size ready' },
     inputSchema: {
@@ -379,6 +403,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_savings_plan',
     description: 'Calculate a budget and savings plan. Supports two modes: (1) Goal mode - save until you reach a target amount, (2) Duration mode - save for a specific number of months. Optionally include compound interest from a savings account.',
     category: TOOL_CATEGORIES.FINANCE,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating savings plan...', invoked: 'Savings plan ready' },
     inputSchema: {
@@ -417,6 +442,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_age',
     description: 'Calculate age from birthdate with detailed breakdown',
     category: TOOL_CATEGORIES.DATE_TIME,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating age...', invoked: 'Age calculated' },
     inputSchema: {
@@ -442,6 +468,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'zone_calculator',
     description: 'Convert time between timezones. Supports UTC offsets (e.g., UTC+5, UTC-8) and major city timezones (e.g., America/New_York, Europe/London, Asia/Tokyo). Returns converted times with day change indicators.',
     category: TOOL_CATEGORIES.DATE_TIME,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Converting timezone...', invoked: 'Timezone converted' },
     inputSchema: {
@@ -480,6 +507,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_countdown',
     description: 'Calculate the number of days, weeks, and months until or since a specific date. Perfect for tracking upcoming events, anniversaries, deadlines, or calculating how long ago something happened.',
     category: TOOL_CATEGORIES.DATE_TIME,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Counting the days...', invoked: 'Countdown calculated!' },
     inputSchema: {
@@ -511,6 +539,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'when_date_info',
     description: 'Get comprehensive information about a date including day of week, zodiac sign, time calculations from today (days, hours, minutes, weeks), and calendar info (day of year, week number, quarter, leap year).',
     category: TOOL_CATEGORIES.DATE_TIME,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
     inputSchema: {
@@ -552,6 +581,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'flip_tool',
     description: 'Flip coins or roll dice. Use flipMode to select: "coin" for coin flips (heads/tails), "dice" for dice rolls.',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Flipping...', invoked: 'Result ready' },
     inputSchema: {
@@ -584,6 +614,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'spin_wheel',
     description: 'Spin a wheel to randomly select from custom options. Great for making decisions, picking winners, or choosing randomly between choices. Requires at least 2 options.',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Spinning the wheel...', invoked: 'The wheel has stopped!' },
     inputSchema: {
@@ -609,6 +640,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'make_decision',
     description: 'Help make a decision. Supports three modes: "yesNo" for yes/no questions (no options needed), "pickOne" for random selection from options, and "weighted" for weighted random selection. Great for making choices, answering questions, or picking randomly.',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Consulting the oracle...', invoked: 'The oracle has spoken!' },
     inputSchema: {
@@ -637,6 +669,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'generate_password',
     description: 'Generate a secure random password',
     category: TOOL_CATEGORIES.UTILITIES,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Generating password...', invoked: 'Password generated' },
     inputSchema: {
@@ -663,6 +696,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_percentage',
     description: 'Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).',
     category: TOOL_CATEGORIES.UTILITIES,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating percentage...', invoked: 'Percentage calculated' },
     inputSchema: {
@@ -694,6 +728,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'convert_units',
     description: 'Convert between different units of measurement. Supports weight (kg, lbs, oz, g), length (cm, in, m, ft, km, mi, mm), and temperature (c, f, k).',
     category: TOOL_CATEGORIES.UTILITIES,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Converting units...', invoked: 'Conversion complete' },
     inputSchema: {
@@ -720,6 +755,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_uniqueness',
     description: 'Calculate how unique/rare a person is based on physical characteristics',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating uniqueness...', invoked: 'Uniqueness calculated' },
     inputSchema: {
@@ -751,6 +787,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'calculate_risk',
     description: 'Calculate risk score for various activities or decisions',
     category: TOOL_CATEGORIES.UTILITIES,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating risk...', invoked: 'Risk calculated' },
     inputSchema: {
@@ -777,6 +814,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'find_next_eclipse',
     description: 'Find the next upcoming solar or lunar eclipse with visibility info, countdown, and best viewing locations. Supports filtering by eclipse type and checking visibility from a specific location.',
     category: TOOL_CATEGORIES.ASTRONOMY,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Finding next eclipse...', invoked: 'Eclipse found' },
     inputSchema: {
@@ -820,6 +858,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'list_upcoming_eclipses',
     description: 'List upcoming solar and lunar eclipses with dates, visibility info, and countdown. Returns multiple eclipses with filtering options.',
     category: TOOL_CATEGORIES.ASTRONOMY,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Listing upcoming eclipses...', invoked: 'Eclipses listed' },
     inputSchema: {
@@ -865,6 +904,7 @@ QUESTIONS (A=cat-leaning, B=dog-leaning):
 9. Your sleep preference: A: Night owl, love late nights 🌙 | B: Early bird, up with the sun 🌅
 10. When someone annoys you: A: Give them the cold shoulder ❄️ | B: Confront them directly 🔥`,
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Analyzing your vibe...', invoked: 'Vibe calculated!' },
     inputSchema: {
@@ -895,6 +935,7 @@ QUESTIONS (A=cat-leaning, B=dog-leaning):
     name: 'sleep_calculator',
     description: 'Calculate optimal sleep and wake times based on sleep cycles. Supports three modes: sleepNow (when to wake if sleeping now), wakeAt (when to sleep for target wake time), sleepAt (when to wake for target sleep time). Adjusts for different age groups.',
     category: TOOL_CATEGORIES.HEALTH,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating sleep cycles...', invoked: 'Sleep times ready!' },
     inputSchema: {
@@ -946,6 +987,7 @@ SPATIAL: 31. ○□△○□? [○|□|△|◇] 32. Fold square twice, cut corne
 
 VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [City|Animal|Ocean|Country] 43. BOOK:READING as FORK:? [Drawing|Eating|Writing|Cooking] 44. Doesn't belong: Apple,Banana,Carrot,Orange? [Apple|Banana|Carrot|Orange] 45. DOCTOR:HOSPITAL as TEACHER:? [Student|School|Book|Classroom] 46. Opposite of BENEVOLENT? [Kind|Malevolent|Generous|Helpful] 47. BIRD:NEST as BEE:? [Honey|Flower|Hive|Sting] 48. EALGER rearranged=? [Bird|Color|Country|Fruit] 49. EPHEMERAL means? [Eternal|Temporary|Solid|Ancient] 50. WATER:THIRST as FOOD:? [Eat|Hunger|Cook|Taste]`,
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating IQ...', invoked: 'IQ estimated!' },
     inputSchema: {
@@ -985,6 +1027,7 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
     name: 'generate_names',
     description: 'Generate random names or numbers. Supports two modes: "names" for generating human names (first, full, or fantasy) and pet names (dog, cat, or other), or "numbers" for generating random numbers within a range.',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Generating...', invoked: 'Generated successfully' },
     inputSchema: {
@@ -1050,6 +1093,7 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
     name: 'lucky_number',
     description: 'Generate random lucky number(s) within a range. Default range is 1 to 2,147,483,647. Can generate multiple numbers at once (up to 10).',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Finding lucky number...', invoked: 'Lucky number found' },
     inputSchema: {
@@ -1078,6 +1122,7 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
     name: 'zodiac_compatibility',
     description: 'Check zodiac compatibility between two people. Provide either sign names or birth dates for each person.',
     category: TOOL_CATEGORIES.FUN,
+    type: TOOL_TYPES.NATIVE,
     hasWidget: true,
     invocationMessages: { invoking: 'Checking compatibility...', invoked: 'Compatibility calculated' },
     inputSchema: {
@@ -1131,8 +1176,27 @@ const INVOCATION_MESSAGES_MAP = new Map<string, InvocationMessages>(
   TOOL_DEFINITIONS.map(t => [t.name, t.invocationMessages || DEFAULT_INVOCATION_MESSAGES])
 );
 
+// Tool definitions map for O(1) lookup
+const TOOL_DEFINITIONS_MAP = new Map<string, ToolDefinition>(
+  TOOL_DEFINITIONS.map(t => [t.name, t])
+);
+
 // Helper to get invocation messages for a tool - O(1) lookup
 export const getInvocationMessages = (toolName: string): InvocationMessages => {
   return INVOCATION_MESSAGES_MAP.get(toolName) || DEFAULT_INVOCATION_MESSAGES;
 };
 
+// Helper to get a tool definition by name - O(1) lookup
+export const getToolDefinition = (toolName: string): ToolDefinition | undefined => {
+  return TOOL_DEFINITIONS_MAP.get(toolName);
+};
+
+// Helper to get all tool names
+export const getToolNames = (): string[] => {
+  return TOOL_DEFINITIONS.map(t => t.name);
+};
+
+// Helper to check if a tool exists
+export const hasToolDefinition = (toolName: string): boolean => {
+  return TOOL_DEFINITIONS_MAP.has(toolName);
+};
