@@ -9,33 +9,16 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-interface CycleResult {
-  nextPeriodStart: Date;
-  nextPeriodEnd: Date;
-  fertileWindowStart: Date;
-  fertileWindowEnd: Date;
-  ovulationDate: Date;
-  safeDaysBeforeFertile: { start: Date; end: Date };
-  safeDaysAfterFertile: { start: Date; end: Date };
-  cycleDay: number;
-  phase: 'menstrual' | 'follicular' | 'ovulation' | 'luteal';
-}
+import { calculateCycleForUI, CycleCalculatorUIOutput, CyclePhase, PHASE_INFO } from '../utils/CycleCalculator';
 
 interface CyclePageState {
   lastPeriodDate: string;
   cycleLength: number;
   periodLength: number;
-  result: CycleResult | null;
+  result: CycleCalculatorUIOutput | null;
   simplified: boolean;
   isFirstDay: boolean;
 }
-
-// Medical research constants
-// Ovulation typically occurs 14 days before the next period (luteal phase is fairly constant)
-// Fertile window: 5 days before ovulation + ovulation day (sperm can survive 5 days)
-const LUTEAL_PHASE_DAYS = 14;
-const SPERM_SURVIVAL_DAYS = 5;
 
 export class CyclePage extends Component<object, CyclePageState> {
   private resultsRef: RefObject<HTMLDivElement> = createRef();
@@ -79,91 +62,18 @@ export class CyclePage extends Component<object, CyclePageState> {
   };
 
   private calculateCycle = () => {
-    const { lastPeriodDate, simplified, isFirstDay } = this.state;
-    // In simplified mode, use average values
-    const cycleLength = simplified ? 28 : this.state.cycleLength;
-    const periodLength = simplified ? 5 : this.state.periodLength;
+    const { lastPeriodDate, simplified, isFirstDay, cycleLength, periodLength } = this.state;
 
-    // Calculate the actual period start date
-    let periodStartDate = new Date(lastPeriodDate);
-    periodStartDate.setHours(0, 0, 0, 0);
+    // Use shared calculateCycleForUI from CycleCalculator
+    const result = calculateCycleForUI({
+      date: lastPeriodDate,
+      isFirstDay,
+      simplified,
+      cycleLength,
+      periodLength,
+    });
 
-    // If user entered last day of bleeding, calculate first day
-    if (!isFirstDay) {
-      periodStartDate.setDate(periodStartDate.getDate() - (periodLength - 1));
-    }
-
-    const lastPeriod = periodStartDate;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Calculate next period start
-    let nextPeriodStart = new Date(lastPeriod);
-    while (nextPeriodStart <= today) {
-      nextPeriodStart.setDate(nextPeriodStart.getDate() + cycleLength);
-    }
-
-    // Period end date
-    const nextPeriodEnd = new Date(nextPeriodStart);
-    nextPeriodEnd.setDate(nextPeriodEnd.getDate() + periodLength - 1);
-
-    // Ovulation date (14 days before next period - luteal phase)
-    const ovulationDate = new Date(nextPeriodStart);
-    ovulationDate.setDate(ovulationDate.getDate() - LUTEAL_PHASE_DAYS);
-
-    // Fertile window (5 days before ovulation + ovulation day + 1 day after for egg survival)
-    const fertileWindowStart = new Date(ovulationDate);
-    fertileWindowStart.setDate(fertileWindowStart.getDate() - SPERM_SURVIVAL_DAYS);
-    const fertileWindowEnd = new Date(ovulationDate);
-    fertileWindowEnd.setDate(fertileWindowEnd.getDate() + 1); // Egg survives ~24h
-
-    // Safe days (before fertile window and after)
-    // Current cycle's period end
-    const currentPeriodEnd = new Date(nextPeriodStart);
-    currentPeriodEnd.setDate(currentPeriodEnd.getDate() - cycleLength + periodLength - 1);
-    
-    const safeDaysBeforeFertile = {
-      start: new Date(currentPeriodEnd),
-      end: new Date(fertileWindowStart),
-    };
-    safeDaysBeforeFertile.start.setDate(safeDaysBeforeFertile.start.getDate() + 1);
-    safeDaysBeforeFertile.end.setDate(safeDaysBeforeFertile.end.getDate() - 1);
-
-    const safeDaysAfterFertile = {
-      start: new Date(fertileWindowEnd),
-      end: new Date(nextPeriodStart),
-    };
-    safeDaysAfterFertile.start.setDate(safeDaysAfterFertile.start.getDate() + 1);
-    safeDaysAfterFertile.end.setDate(safeDaysAfterFertile.end.getDate() - 1);
-
-    // Calculate current cycle day and phase
-    const daysSinceLastPeriod = Math.floor((today.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
-    const cycleDay = (daysSinceLastPeriod % cycleLength) + 1;
-    
-    let phase: CycleResult['phase'];
-    if (cycleDay <= periodLength) {
-      phase = 'menstrual';
-    } else if (cycleDay <= cycleLength - LUTEAL_PHASE_DAYS - 1) {
-      phase = 'follicular';
-    } else if (cycleDay <= cycleLength - LUTEAL_PHASE_DAYS + 1) {
-      phase = 'ovulation';
-    } else {
-      phase = 'luteal';
-    }
-
-    this.setState({
-      result: {
-        nextPeriodStart,
-        nextPeriodEnd,
-        fertileWindowStart,
-        fertileWindowEnd,
-        ovulationDate,
-        safeDaysBeforeFertile,
-        safeDaysAfterFertile,
-        cycleDay,
-        phase,
-      },
-    }, this.scrollToResults);
+    this.setState({ result }, this.scrollToResults);
   };
 
   private formatDate = (date: Date): string => {
@@ -176,14 +86,10 @@ export class CyclePage extends Component<object, CyclePageState> {
     return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  private getPhaseInfo = (phase: CycleResult['phase']) => {
-    const phases = {
-      menstrual: { name: 'Menstrual Phase', emoji: '🩸', color: '#ef4444', desc: 'Period days - uterine lining sheds' },
-      follicular: { name: 'Follicular Phase', emoji: '🌱', color: '#22c55e', desc: 'Egg develops in ovary' },
-      ovulation: { name: 'Ovulation Phase', emoji: '🥚', color: '#f59e0b', desc: 'Peak fertility - egg released' },
-      luteal: { name: 'Luteal Phase', emoji: '🌙', color: '#8b5cf6', desc: 'Post-ovulation, preparing for next cycle' },
-    };
-    return phases[phase];
+  private getPhaseInfo = (phase: CyclePhase) => {
+    // Use shared PHASE_INFO from CycleCalculator
+    const info = PHASE_INFO[phase];
+    return { ...info, desc: info.description };
   };
 
   render() {
@@ -291,11 +197,11 @@ export class CyclePage extends Component<object, CyclePageState> {
     );
   }
 
-  private renderResults(result: CycleResult) {
+  private renderResults(result: CycleCalculatorUIOutput) {
     const phaseInfo = this.getPhaseInfo(result.phase);
-    const daysUntilPeriod = this.getDaysUntil(result.nextPeriodStart);
-    const daysUntilOvulation = this.getDaysUntil(result.ovulationDate);
-    const daysUntilFertile = this.getDaysUntil(result.fertileWindowStart);
+    const daysUntilPeriod = this.getDaysUntil(result.nextPeriodStartDate);
+    const daysUntilOvulation = this.getDaysUntil(result.ovulationDateObj);
+    const daysUntilFertile = this.getDaysUntil(result.fertileWindowStartDate);
 
     const cardStyle = { background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1rem' };
     const titleStyle = { fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' };
@@ -310,7 +216,7 @@ export class CyclePage extends Component<object, CyclePageState> {
             <div style={{ ...titleStyle, color: phaseInfo.color }}>{phaseInfo.emoji} Current Phase</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.25rem' }}>{phaseInfo.name}</div>
             <div style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>{phaseInfo.desc}</div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Day {result.cycleDay} of your cycle</div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Day {result.currentDay} of your cycle</div>
           </div>
 
           {/* Key Dates Grid */}
@@ -319,7 +225,7 @@ export class CyclePage extends Component<object, CyclePageState> {
             <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #ef444433 0%, #ef44441a 100%)', border: '1px solid #ef444466' }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🩸</div>
               <div style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.85rem' }}>Next Period</div>
-              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.nextPeriodStart)}</div>
+              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.nextPeriodStartDate)}</div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilPeriod <= 0 ? 'Today!' : `In ${daysUntilPeriod} days`}</div>
             </div>
 
@@ -327,7 +233,7 @@ export class CyclePage extends Component<object, CyclePageState> {
             <div style={{ ...cardStyle, marginBottom: 0, background: 'linear-gradient(135deg, #f59e0b33 0%, #f59e0b1a 100%)', border: '1px solid #f59e0b66' }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🥚</div>
               <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '0.85rem' }}>Ovulation</div>
-              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.ovulationDate)}</div>
+              <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>{this.formatDate(result.ovulationDateObj)}</div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{daysUntilOvulation <= 0 ? 'Today!' : daysUntilOvulation < 0 ? 'Passed' : `In ${daysUntilOvulation} days`}</div>
             </div>
           </div>
@@ -337,7 +243,7 @@ export class CyclePage extends Component<object, CyclePageState> {
             <div style={{ ...titleStyle, color: '#22c55e' }}>💚 Fertile Window (High Chance of Conception)</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <div style={{ color: '#fff', fontWeight: 700 }}>{this.formatDate(result.fertileWindowStart)} → {this.formatDate(result.fertileWindowEnd)}</div>
+                <div style={{ color: '#fff', fontWeight: 700 }}>{this.formatDate(result.fertileWindowStartDate)} → {this.formatDate(result.fertileWindowEndDate)}</div>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{daysUntilFertile <= 0 ? 'Currently in fertile window' : `Starts in ${daysUntilFertile} days`}</div>
               </div>
               <div style={{ background: '#22c55e', color: '#fff', padding: '0.5rem 1rem', borderRadius: '20px', fontWeight: 700, fontSize: '0.85rem' }}>
@@ -362,7 +268,7 @@ export class CyclePage extends Component<object, CyclePageState> {
           <ShareResults
             targetRef={this.resultsRef}
             title="My Cycle Tracker - Tulzo"
-            text={`Next period: ${this.formatDate(result.nextPeriodStart)} | Ovulation: ${this.formatDate(result.ovulationDate)} 🌸`}
+            text={`Next period: ${this.formatDate(result.nextPeriodStartDate)} | Ovulation: ${this.formatDate(result.ovulationDateObj)} 🌸`}
           />
         </div>
       </div>

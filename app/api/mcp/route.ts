@@ -14,6 +14,7 @@ import { calculateZone, ZoneCalculatorInput } from '@/src/utils/ZoneCalculator';
 import { calculateSpin, SpinCalculatorInput, WHEEL_COLORS } from '@/src/utils/SpinCalculator';
 import { makeDecision, DecisionCalculatorInput, DecisionMode } from '@/src/utils/DecisionCalculator';
 import { calculateCountdown as calculateCountdownShared, CountdownCalculatorInput } from '@/src/utils/CountdownCalculator';
+import { calculateCycle as calculateCycleShared, CycleCalculatorInput } from '@/src/utils/CycleCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -797,83 +798,20 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { value: val, from, to, result: Math.round(converter(val) * 10000) / 10000 };
     }
     case 'calculate_cycle': {
-      const isSimplified = args.simplified === true;
-      const cycleLength = isSimplified ? 28 : ((args.cycleLength as number) || 28);
-      const periodLength = isSimplified ? 5 : ((args.periodLength as number) || 5);
-
-      // Determine the period start date
-      let periodStartDate: string;
-
-      if (args.date) {
-        // New simplified/flexible input
-        const isFirstDay = args.isFirstDay !== false; // default true
-        if (isFirstDay) {
-          // Date is first day of bleeding
-          periodStartDate = args.date as string;
-        } else {
-          // Date is last day of bleeding - calculate first day by subtracting period length
-          const [y, m, d] = (args.date as string).split('-').map(Number);
-          const lastDayDate = new Date(y, m - 1, d);
-          const firstDayDate = new Date(lastDayDate.getTime() - (periodLength - 1) * 24 * 60 * 60 * 1000);
-          periodStartDate = firstDayDate.toISOString().split('T')[0];
-        }
-      } else if (args.lastPeriodDate) {
-        // Legacy input - lastPeriodDate is always first day
-        periodStartDate = args.lastPeriodDate as string;
-      } else {
+      // Use shared CycleCalculator - single source of truth for cycle logic
+      // Support legacy lastPeriodDate input
+      const dateInput = (args.date as string) || (args.lastPeriodDate as string);
+      if (!dateInput) {
         throw new Error('Either date or lastPeriodDate is required');
       }
-
-      const [y, m, d] = periodStartDate.split('-').map(Number);
-      const lastPeriod = new Date(y, m - 1, d);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Calculate next period (find the next one after today)
-      let nextPeriod = new Date(lastPeriod.getTime() + cycleLength * 24 * 60 * 60 * 1000);
-      while (nextPeriod <= today) {
-        nextPeriod = new Date(nextPeriod.getTime() + cycleLength * 24 * 60 * 60 * 1000);
-      }
-
-      // Ovulation is ~14 days before next period (luteal phase)
-      const ovulationDate = new Date(nextPeriod.getTime() - 14 * 24 * 60 * 60 * 1000);
-      // Fertile window: 5 days before ovulation + ovulation day + 1 day after
-      const fertileStart = new Date(ovulationDate.getTime() - 5 * 24 * 60 * 60 * 1000);
-      const fertileEnd = new Date(ovulationDate.getTime() + 1 * 24 * 60 * 60 * 1000);
-      const periodEnd = new Date(nextPeriod.getTime() + periodLength * 24 * 60 * 60 * 1000);
-
-      // Calculate current cycle day and phase
-      const daysSinceLastPeriod = Math.floor((today.getTime() - lastPeriod.getTime()) / (1000 * 60 * 60 * 24));
-      const currentDay = (daysSinceLastPeriod % cycleLength) + 1;
-
-      let phase: string;
-      if (currentDay <= periodLength) {
-        phase = 'menstrual';
-      } else if (currentDay <= cycleLength - 14 - 1) {
-        phase = 'follicular';
-      } else if (currentDay <= cycleLength - 14 + 1) {
-        phase = 'ovulation';
-      } else {
-        phase = 'luteal';
-      }
-
-      const daysUntilNextPeriod = Math.ceil((nextPeriod.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-      return {
-        nextPeriodStart: nextPeriod.toISOString().split('T')[0],
-        nextPeriodEnd: periodEnd.toISOString().split('T')[0],
-        ovulationDate: ovulationDate.toISOString().split('T')[0],
-        fertileWindowStart: fertileStart.toISOString().split('T')[0],
-        fertileWindowEnd: fertileEnd.toISOString().split('T')[0],
-        currentDay,
-        phase,
-        daysUntilNextPeriod,
-        cycleLength,
-        periodLength,
-        mode: isSimplified ? 'simplified' : 'advanced',
-        inputDate: periodStartDate,
-        isFirstDayInput: args.date ? (args.isFirstDay !== false) : true,
+      const input: CycleCalculatorInput = {
+        date: dateInput,
+        isFirstDay: args.isFirstDay !== false, // default true
+        simplified: args.simplified === true,
+        cycleLength: args.cycleLength as number | undefined,
+        periodLength: args.periodLength as number | undefined,
       };
+      return calculateCycleShared(input);
     }
     case 'calculate_countdown': {
       // Use shared CountdownCalculator - single source of truth for countdown logic
@@ -1716,20 +1654,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'cycle': {
-      const phaseColors: Record<string, string> = { menstrual: '#ef4444', follicular: '#22c55e', ovulation: '#f59e0b', luteal: '#8b5cf6' };
-      const phaseEmojis: Record<string, string> = { menstrual: '🩸', follicular: '🌱', ovulation: '🥚', luteal: '🌙' };
-      const phaseColor = phaseColors[data.phase as string] || '#f472b6';
-      const phaseEmoji = phaseEmojis[data.phase as string] || '🌸';
-      const modeLabel = data.mode === 'simplified' ? '(Simplified)' : '';
+      // Use phaseInfo from shared calculator if available, otherwise fallback
+      const cyclePhaseInfo = data.phaseInfo as { emoji?: string; color?: string; name?: string } | undefined;
+      const cyclePhaseColor = cyclePhaseInfo?.color || '#f472b6';
+      const cyclePhaseEmoji = cyclePhaseInfo?.emoji || '🌸';
+      const cycleModeLabel = data.mode === 'simplified' ? ' (Simplified)' : '';
       content = `
-        <div class="header">🌸 Cycle Tracker ${modeLabel}</div>
-        <div class="big-number" style="color:#f472b6;font-size:1.5rem">${data.nextPeriodStart || data.nextPeriod}</div>
+        <div class="header">🌸 Cycle Tracker${cycleModeLabel}</div>
+        <div class="big-number" style="color:#f472b6;font-size:1.5rem">${data.nextPeriodStart}</div>
         <div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period${data.daysUntilNextPeriod ? ` (in ${data.daysUntilNextPeriod} days)` : ''}</div>
         <div class="stats">
           <div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">${data.currentDay || '—'}</div></div>
-          <div class="stat-box"><div class="stat-label">Phase ${phaseEmoji}</div><div class="stat-value" style="color:${phaseColor}">${data.phase || '—'}</div></div>
+          <div class="stat-box"><div class="stat-label">Phase ${cyclePhaseEmoji}</div><div class="stat-value" style="color:${cyclePhaseColor}">${cyclePhaseInfo?.name || data.phase || '—'}</div></div>
           <div class="stat-box"><div class="stat-label">🥚 Ovulation</div><div class="stat-value">${data.ovulationDate || '—'}</div></div>
-          <div class="stat-box"><div class="stat-label">💚 Fertile Window</div><div class="stat-value">${data.fertileWindowStart || data.fertileStart || '—'} - ${data.fertileWindowEnd || data.fertileEnd || '—'}</div></div>
+          <div class="stat-box"><div class="stat-label">💚 Fertile Window</div><div class="stat-value">${data.fertileWindowStart} - ${data.fertileWindowEnd}</div></div>
         </div>`;
       break;
     }
@@ -2212,14 +2150,15 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '</div>';
         }
         case 'cycle': {
-          var phaseColors = { menstrual: '#ef4444', follicular: '#22c55e', ovulation: '#f59e0b', luteal: '#8b5cf6' };
-          var phaseColor = phaseColors[data.phase] || '#f472b6';
+          var cycPhaseInfo = data.phaseInfo || {};
+          var cycPhaseColor = cycPhaseInfo.color || '#f472b6';
+          var cycPhaseEmoji = cycPhaseInfo.emoji || '🌸';
           return '<div class="header">🌸 Cycle Tracker</div>' +
-            '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + (data.nextPeriodStart || data.nextPeriod) + '</div>' +
+            '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + data.nextPeriodStart + '</div>' +
             '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Next Period' + (data.daysUntilNextPeriod ? ' (in ' + data.daysUntilNextPeriod + ' days)' : '') + '</div>' +
             '<div class="stats">' +
               '<div class="stat-box"><div class="stat-label">Cycle Day</div><div class="stat-value">' + (data.currentDay || '—') + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Phase</div><div class="stat-value" style="color:' + phaseColor + '">' + (data.phase || '—') + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">' + cycPhaseEmoji + ' Phase</div><div class="stat-value" style="color:' + cycPhaseColor + '">' + (cycPhaseInfo.name || data.phase || '—') + '</div></div>' +
             '</div>';
         }
         case 'names': {
@@ -2457,6 +2396,12 @@ function formatResultText(toolName: string, result: unknown): string {
       const summary = eclipses.slice(0, 3).map(e => `${e.type === 'solar' ? '☀️' : '🌙'} ${e.subtype} ${e.type} on ${e.date}`).join(', ');
       return `🌓 Found ${r.totalCount} upcoming eclipses: ${summary}${eclipses.length > 3 ? '...' : ''}`;
     }
+    case 'calculate_cycle': {
+      const cycPhaseInfo = r.phaseInfo as { emoji?: string; name?: string } | undefined;
+      const cycEmoji = cycPhaseInfo?.emoji || '🌸';
+      const cycPhaseName = cycPhaseInfo?.name || r.phase;
+      return `🌸 Next period: ${r.nextPeriodStart} (in ${r.daysUntilNextPeriod} days). Currently day ${r.currentDay} - ${cycEmoji} ${cycPhaseName}. Ovulation: ${r.ovulationDate}`;
+    }
     default:
       return JSON.stringify(result, null, 2);
   }
@@ -2477,7 +2422,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_percentage: { result: 25, operation: 'percentage_of', value: 100, percentage: 25 },
     calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilBirthday: 180 },
     convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
-    calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified' },
+    calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified', periodStartDate: '2025-12-23', phaseInfo: { name: 'Follicular Phase', emoji: '🌱', color: '#22c55e', description: 'Egg develops in ovary' } },
     calculate_countdown: { eventName: 'Summer Vacation', eventDate: '2026-04-16', days: 100, absoluteDays: 100, weeks: 14, months: 3, isPast: false, isToday: false, direction: 'until', summary: '100 days until Summer Vacation' },
     make_decision: { decision: 'Go for it! 🚀', mode: 'yesNo', confidence: 85, icon: '🚀' },
     zodiac_compatibility: {
