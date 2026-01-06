@@ -8,6 +8,7 @@ import { LuckIcon } from '../components/LuckIcon';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { generateLuckyNumber, MAX_INT } from '../utils/LuckyNumberCalculator';
 
 interface LuckPageState {
   maxValue: string;
@@ -16,8 +17,6 @@ interface LuckPageState {
   result: number | null;
   holdDuration: number;
 }
-
-const MAX_INT = 2147483647;
 
 export class LuckPage extends Component<{}, LuckPageState> {
   private holdInterval: number | null = null;
@@ -73,27 +72,23 @@ export class LuckPage extends Component<{}, LuckPageState> {
   private endHold = () => {
     const { holdStartTime, maxValue } = this.state;
     if (this.holdInterval) clearInterval(this.holdInterval);
-    
+
     if (!holdStartTime) return;
-    
+
     const duration = Date.now() - holdStartTime;
     const max = maxValue ? Math.min(parseInt(maxValue, 10) || MAX_INT, MAX_INT) : MAX_INT;
-    
-    // Use duration as seed for randomness
-    const seed = duration * Date.now();
-    const random = this.seededRandom(seed);
-    const result = Math.floor(random * max) + 1;
-    
-    this.setState({ isHolding: false, holdStartTime: null, result, holdDuration: duration }, () => {
+
+    // Use shared calculator with duration as seed for randomness
+    const output = generateLuckyNumber({
+      max,
+      seed: duration * Date.now(),
+    });
+
+    this.setState({ isHolding: false, holdStartTime: null, result: output.luckyNumber, holdDuration: duration }, () => {
       setTimeout(() => {
         document.getElementById('luck-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     });
-  };
-
-  private seededRandom = (seed: number): number => {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
   };
 
   private handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {

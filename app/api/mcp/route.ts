@@ -18,6 +18,7 @@ import { calculateCycle as calculateCycleShared, CycleCalculatorInput } from '@/
 import { convertUnits as convertUnitsShared, ConvertInput } from '@/src/utils/UnitConverter';
 import { calculateAge as calculateAgeShared, AgeCalculatorInput } from '@/src/utils/AgeCalculator';
 import { calculatePercent as calculatePercentShared, PercentCalculatorInput, PercentOperation } from '@/src/utils/PercentCalculator';
+import { generateLuckyNumber, LuckyNumberInput } from '@/src/utils/LuckyNumberCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -929,8 +930,13 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { type, count, length: type === 'uuid' ? 36 : length, ids };
     }
     case 'lucky_number': {
-      const max = (args.max as number) || 2147483647;
-      return { luckyNumber: Math.floor(Math.random() * max) + 1, max };
+      // Use shared LuckyNumberCalculator - single source of truth for lucky number generation
+      const input: LuckyNumberInput = {
+        min: args.min as number | undefined,
+        max: args.max as number | undefined,
+        count: args.count as number | undefined,
+      };
+      return generateLuckyNumber(input);
     }
     case 'flip_tool': {
       // Use shared FlipCalculator - single source of truth for flip/roll logic
@@ -1487,10 +1493,13 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'lucky_number': {
+      const luckyNumbers = (data.numbers as number[]) || [data.luckyNumber];
+      const luckyCount = data.count as number || 1;
       content = `
-        <div class="header">🍀 Lucky Number</div>
+        <div class="header">🍀 Lucky Number${luckyCount > 1 ? 's' : ''}</div>
         <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🍀</div>
-        <div class="big-number" style="color:#10b981">${data.luckyNumber}</div>`;
+        <div class="big-number" style="color:#10b981">${luckyCount > 1 ? luckyNumbers.join(', ') : data.luckyNumber}</div>
+        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Range: ${data.range || `${data.min} - ${data.max}`}</div>`;
       break;
     }
     case 'pick_random': {
@@ -2055,9 +2064,13 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Range: ' + data.min + ' - ' + data.max + '</div>';
         }
         case 'lucky_number': {
-          return '<div class="header">🍀 Lucky Number</div>' +
-            '<div class="big-number" style="color:#22c55e">' + data.luckyNumber + '</div>' +
-            '<div class="label" style="background:rgba(34,197,94,0.2);color:#22c55e">Your lucky number today!</div>';
+          var luckyNums = data.numbers || [data.luckyNumber];
+          var luckyCount = data.count || 1;
+          var luckyDisplay = luckyCount > 1 ? luckyNums.join(', ') : data.luckyNumber;
+          var luckyRange = data.range || (data.min + ' - ' + data.max);
+          return '<div class="header">🍀 Lucky Number' + (luckyCount > 1 ? 's' : '') + '</div>' +
+            '<div class="big-number" style="color:#22c55e">' + luckyDisplay + '</div>' +
+            '<div class="label" style="background:rgba(34,197,94,0.2);color:#22c55e">Range: ' + luckyRange + '</div>';
         }
         case 'pick_random': {
           var options = data.options || [];
@@ -2336,8 +2349,13 @@ function formatResultText(toolName: string, result: unknown): string {
     }
     case 'random_number':
       return `Random number (${r.min}-${r.max}): ${r.result}`;
-    case 'lucky_number':
-      return `🍀 Lucky number: ${r.luckyNumber}`;
+    case 'lucky_number': {
+      const luckyNums = (r.numbers as number[]) || [r.luckyNumber];
+      const luckyCountVal = (r.count as number) || 1;
+      return luckyCountVal > 1
+        ? `🍀 Lucky numbers: ${luckyNums.join(', ')} (range: ${r.range})`
+        : `🍀 Lucky number: ${r.luckyNumber} (range: ${r.range})`;
+    }
     case 'pick_random':
       return `🎯 Selected: ${r.result || r.selected}`;
     case 'spin_wheel':
@@ -2410,7 +2428,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
     generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
-    lucky_number: { number: 7, min: 1, max: 100 },
+    lucky_number: { luckyNumber: 7, numbers: [7], min: 1, max: 100, count: 1, range: '1 - 100' },
     flip_tool: { flipMode: 'coin', result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
     calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
     calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },

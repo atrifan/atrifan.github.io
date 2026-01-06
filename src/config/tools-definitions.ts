@@ -1003,25 +1003,28 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'lucky_number',
-    description: 'Generate lucky numbers based on various methods',
+    description: 'Generate random lucky number(s) within a range. Default range is 1 to 2,147,483,647. Can generate multiple numbers at once (up to 10).',
     category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
+    hasWidget: true,a
     invocationMessages: { invoking: 'Finding lucky number...', invoked: 'Lucky number found' },
     inputSchema: {
       type: 'object',
       properties: {
-        method: { type: 'string', enum: ['random', 'birthdate', 'name'], description: 'Method to generate lucky number' },
-        birthDate: { type: 'string', description: 'Birth date for birthdate method' },
-        name: { type: 'string', description: 'Name for name method' },
-        count: { type: 'number', description: 'Number of lucky numbers (1-10)' },
+        min: { type: 'number', description: 'Minimum value (default: 1)' },
+        max: { type: 'number', description: 'Maximum value (default: 2147483647)' },
+        count: { type: 'number', description: 'Number of lucky numbers to generate (1-10, default: 1)' },
       },
       required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        numbers: { type: 'array', items: { type: 'number' } },
-        method: { type: 'string' },
+        luckyNumber: { type: 'number', description: 'The primary lucky number' },
+        numbers: { type: 'array', items: { type: 'number' }, description: 'All generated lucky numbers' },
+        min: { type: 'number', description: 'Minimum value used' },
+        max: { type: 'number', description: 'Maximum value used' },
+        count: { type: 'number', description: 'Number of numbers generated' },
+        range: { type: 'string', description: 'Human-readable range description' },
       },
     },
   },
