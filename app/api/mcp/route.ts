@@ -906,29 +906,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
       return calculateZone(input);
     }
-    case 'generate_unique_id': {
-      const type = args.type as string;
-      const count = (args.count as number) || 1;
-      const length = (args.length as number) || 8;
-      const ids: string[] = [];
-      for (let i = 0; i < count; i++) {
-        if (type === 'uuid') {
-          ids.push('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0;
-            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-          }));
-        } else if (type === 'short') {
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          ids.push(Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join(''));
-        } else if (type === 'numeric') {
-          ids.push(Array.from({ length }, () => Math.floor(Math.random() * 10)).join(''));
-        } else if (type === 'alphanumeric') {
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-          ids.push(Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join(''));
-        }
-      }
-      return { type, count, length: type === 'uuid' ? 36 : length, ids };
-    }
+
     case 'lucky_number': {
       // Use shared LuckyNumberCalculator - single source of truth for lucky number generation
       const input: LuckyNumberInput = {
@@ -1219,7 +1197,6 @@ function getWidgetType(toolName: string): string {
     'calculate_position_size': 'position_size',
     'spin_wheel': 'spin_wheel',
     'zone_calculator': 'zone',
-    'generate_unique_id': 'unique_id',
     'lucky_number': 'lucky_number',
     'flip_tool': 'flip',
     'calculate_iq_score': 'iq_score',
@@ -1696,15 +1673,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div class="header">🌍 Timezone Converter</div>
         <div class="big-number" style="color:#60a5fa;font-size:1.5rem">${data.sourceTime} ${data.sourceCity || data.sourceTimezone}</div>
         <div style="margin-top:1rem">${conversionRows}</div>`;
-      break;
-    }
-    case 'unique_id': {
-      content = `
-        <div class="header">🔑 Unique ID</div>
-        <div style="background:rgba(16,185,129,0.1);padding:1rem;border-radius:8px;margin:1rem 0;word-break:break-all;text-align:center">
-          <code style="color:#10b981;font-size:0.9rem">${data.id}</code>
-        </div>
-        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">${data.type || 'UUID'}</div>`;
       break;
     }
     case 'iq_score': {
@@ -2186,13 +2154,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="big-number" style="color:#60a5fa;font-size:1.5rem">' + data.sourceTime + ' ' + (data.sourceCity || data.sourceTimezone) + '</div>' +
             '<div style="margin-top:1rem">' + conversionRows + '</div>';
         }
-        case 'unique_id': {
-          return '<div class="header">🔑 Unique ID</div>' +
-            '<div style="background:rgba(16,185,129,0.1);padding:1rem;border-radius:8px;margin:1rem 0;word-break:break-all;text-align:center">' +
-              '<code style="color:#10b981;font-size:0.9rem">' + data.id + '</code>' +
-            '</div>' +
-            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + (data.type || 'UUID') + '</div>';
-        }
         case 'iq_score': {
           var iq = Number(data.iqScore || data.iq);
           var iqColor = iq >= 130 ? '#10b981' : iq >= 100 ? '#60a5fa' : '#f59e0b';
@@ -2427,7 +2388,6 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
     spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
-    generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
     lucky_number: { luckyNumber: 7, numbers: [7], min: 1, max: 100, count: 1, range: '1 - 100' },
     flip_tool: { flipMode: 'coin', result: 'heads', results: ['heads'], headsCount: 1, tailsCount: 0, count: 1 },
     calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },

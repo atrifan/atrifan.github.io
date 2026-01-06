@@ -980,28 +980,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'generate_unique_id',
-    description: 'Generate unique identifiers (UUID, nanoid, etc.)',
-    category: TOOL_CATEGORIES.UTILITIES,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Generating ID...', invoked: 'ID generated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        type: { type: 'string', enum: ['uuid', 'nanoid', 'timestamp', 'random'], description: 'Type of ID to generate' },
-        count: { type: 'number', description: 'Number of IDs to generate (1-10)' },
-      },
-      required: [],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        ids: { type: 'array', items: { type: 'string' } },
-        type: { type: 'string' },
-      },
-    },
-  },
-  {
     name: 'lucky_number',
     description: 'Generate random lucky number(s) within a range. Default range is 1 to 2,147,483,647. Can generate multiple numbers at once (up to 10).',
     category: TOOL_CATEGORIES.FUN,
