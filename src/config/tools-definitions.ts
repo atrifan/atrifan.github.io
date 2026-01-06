@@ -99,30 +99,6 @@ export interface ToolDefinition {
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   // ============ HEALTH & FITNESS ============
   {
-    name: 'calculate_bmi',
-    description: 'Calculate Body Mass Index (BMI) from weight and height',
-    category: TOOL_CATEGORIES.HEALTH,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Calculating BMI...', invoked: 'BMI calculated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        weight: { type: 'number', description: 'Weight in kilograms' },
-        height: { type: 'number', description: 'Height in centimeters' },
-      },
-      required: ['weight', 'height'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        bmi: { type: 'number', description: 'Calculated BMI value' },
-        category: { type: 'string', enum: ['Underweight', 'Normal', 'Overweight', 'Obese'], description: 'BMI category' },
-        weight: { type: 'number', description: 'Input weight in kg' },
-        height: { type: 'number', description: 'Input height in cm' },
-      },
-    },
-  },
-  {
     name: 'calculate_ideal_weight',
     description: 'Calculate ideal weight using the Devine formula',
     category: TOOL_CATEGORIES.HEALTH,
@@ -146,32 +122,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  {
-    name: 'calculate_bmr',
-    description: 'Calculate Basal Metabolic Rate using Mifflin-St Jeor equation and TDEE',
-    category: TOOL_CATEGORIES.HEALTH,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Calculating metabolic rate...', invoked: 'BMR calculated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        weight: { type: 'number', description: 'Weight in kilograms' },
-        height: { type: 'number', description: 'Height in centimeters' },
-        age: { type: 'number', description: 'Age in years' },
-        sex: { type: 'string', enum: ['male', 'female', 'other'], description: 'Biological sex' },
-        activityLevel: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'active', 'veryActive'], description: 'Activity level' },
-      },
-      required: ['weight', 'height', 'age', 'sex'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        bmr: { type: 'number', description: 'Basal Metabolic Rate in calories/day' },
-        tdee: { type: 'number', description: 'Total Daily Energy Expenditure' },
-        activityLevel: { type: 'string' },
-      },
-    },
-  },
+
   {
     name: 'generate_weight_loss_plan',
     description: 'Generate a complete weight loss plan with calorie targets and fasting recommendations',
@@ -598,29 +549,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   // ============ FUN & GAMES ============
   {
-    name: 'random_number',
-    description: 'Generate a random integer between min and max (inclusive)',
-    category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Generating random number...', invoked: 'Number generated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        min: { type: 'number', description: 'Minimum value (inclusive)' },
-        max: { type: 'number', description: 'Maximum value (inclusive)' },
-      },
-      required: ['min', 'max'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        result: { type: 'number' },
-        min: { type: 'number' },
-        max: { type: 'number' },
-      },
-    },
-  },
-  {
     name: 'flip_tool',
     description: 'Flip coins or roll dice. Use flipMode to select: "coin" for coin flips (heads/tails), "dice" for dice rolls.',
     category: TOOL_CATEGORIES.FUN,
@@ -947,52 +875,69 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  {
-    name: 'days_between_dates',
-    description: 'Calculate the number of days between two dates',
-    category: TOOL_CATEGORIES.DATE_TIME,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Calculating days...', invoked: 'Days calculated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        startDate: { type: 'string', description: 'Start date in YYYY-MM-DD format' },
-        endDate: { type: 'string', description: 'End date in YYYY-MM-DD format' },
-      },
-      required: ['startDate', 'endDate'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        days: { type: 'number' },
-        weeks: { type: 'number' },
-        months: { type: 'number' },
-        years: { type: 'number' },
-        startDate: { type: 'string' },
-        endDate: { type: 'string' },
-      },
-    },
-  },
+
   {
     name: 'generate_names',
-    description: 'Generate random names for characters, projects, or businesses',
+    description: 'Generate random names or numbers. Supports two modes: "names" for generating human names (first, full, or fantasy) and pet names (dog, cat, or other), or "numbers" for generating random numbers within a range.',
     category: TOOL_CATEGORIES.FUN,
     hasWidget: true,
-    invocationMessages: { invoking: 'Generating names...', invoked: 'Names generated' },
+    invocationMessages: { invoking: 'Generating...', invoked: 'Generated successfully' },
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['person', 'business', 'project', 'fantasy'], description: 'Type of name to generate' },
-        count: { type: 'number', description: 'Number of names to generate (1-10)' },
-        gender: { type: 'string', enum: ['male', 'female', 'neutral'], description: 'Gender for person names' },
+        mode: {
+          type: 'string',
+          enum: ['names', 'numbers'],
+          description: 'Generation mode: "names" for name generation, "numbers" for random number generation',
+        },
+        nameCategory: {
+          type: 'string',
+          enum: ['human', 'pet'],
+          description: 'Category of names to generate (only for names mode). "human" for people names, "pet" for animal names',
+        },
+        humanNameType: {
+          type: 'string',
+          enum: ['first', 'full', 'fantasy'],
+          description: 'Type of human name (only when nameCategory is "human"). "first" = first name only, "full" = first + last name, "fantasy" = fantasy/fictional names',
+        },
+        petType: {
+          type: 'string',
+          enum: ['dog', 'cat', 'other'],
+          description: 'Type of pet (only when nameCategory is "pet"). "dog" = dog names, "cat" = cat names, "other" = hamster/rabbit/etc names',
+        },
+        gender: {
+          type: 'string',
+          enum: ['any', 'male', 'female'],
+          description: 'Gender preference for names. "any" = random mix, "male" = masculine names, "female" = feminine names. For pets: male=boy, female=girl',
+        },
+        min: {
+          type: 'number',
+          description: 'Minimum value for random numbers (only for numbers mode, default: 1)',
+        },
+        max: {
+          type: 'number',
+          description: 'Maximum value for random numbers (only for numbers mode, default: 100)',
+        },
+        count: {
+          type: 'number',
+          description: 'Number of names or numbers to generate (1-100, default: 5)',
+        },
       },
-      required: ['type'],
+      required: ['mode'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        names: { type: 'array', items: { type: 'string' } },
-        type: { type: 'string' },
+        mode: { type: 'string', enum: ['names', 'numbers'], description: 'The generation mode used' },
+        results: { type: 'array', items: { type: 'string' }, description: 'Array of generated names or numbers' },
+        count: { type: 'number', description: 'Number of results generated' },
+        nameCategory: { type: 'string', enum: ['human', 'pet'], description: 'Category of names (names mode only)' },
+        humanNameType: { type: 'string', enum: ['first', 'full', 'fantasy'], description: 'Type of human name (names mode, human category only)' },
+        petType: { type: 'string', enum: ['dog', 'cat', 'other'], description: 'Type of pet (names mode, pet category only)' },
+        gender: { type: 'string', enum: ['any', 'male', 'female'], description: 'Gender used for generation' },
+        min: { type: 'number', description: 'Minimum value (numbers mode only)' },
+        max: { type: 'number', description: 'Maximum value (numbers mode only)' },
+        range: { type: 'string', description: 'Range string like "1 - 100" (numbers mode only)' },
       },
     },
   },
@@ -1023,29 +968,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
-  {
-    name: 'pick_random',
-    description: 'Pick random items from a list',
-    category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Picking random item...', invoked: 'Item selected' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        items: { type: 'array', items: { type: 'string' }, description: 'List of items to pick from' },
-        count: { type: 'number', description: 'Number of items to pick (default: 1)' },
-        allowDuplicates: { type: 'boolean', description: 'Allow picking same item multiple times' },
-      },
-      required: ['items'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        picked: { type: 'array', items: { type: 'string' } },
-        totalItems: { type: 'number' },
-      },
-    },
-  },
+
   {
     name: 'zodiac_compatibility',
     description: 'Check zodiac compatibility between two people. Provide either sign names or birth dates for each person.',

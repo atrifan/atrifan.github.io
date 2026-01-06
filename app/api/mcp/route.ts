@@ -20,6 +20,7 @@ import { calculateAge as calculateAgeShared, AgeCalculatorInput } from '@/src/ut
 import { calculatePercent as calculatePercentShared, PercentCalculatorInput, PercentOperation } from '@/src/utils/PercentCalculator';
 import { generateLuckyNumber, LuckyNumberInput } from '@/src/utils/LuckyNumberCalculator';
 import { calculatePositionSize, PositionSizeInput, CalculationMode, TradeDirection } from '@/src/utils/PositionSizeCalculator';
+import { generateNames, NamesGeneratorInput, GeneratorMode, NameCategory, HumanNameType, PetType, Gender as NameGender } from '@/src/utils/NamesGenerator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -604,11 +605,6 @@ const RESOURCES_LIST = TOOLS.map(tool => {
 // Tool execution handlers
 function executeTool(name: string, args: Record<string, unknown>): unknown {
   switch (name) {
-    case 'calculate_bmi': {
-      const bmi = WeightCalculator.calculateBMI(args.weight as number, args.height as number);
-      const result = WeightCalculator.getBMIResult(bmi);
-      return { bmi: result.value.toFixed(1), category: result.category };
-    }
     case 'calculate_ideal_weight': {
       const idealWeight = WeightCalculator.calculateIdealWeight(
         args.height as number,
@@ -616,16 +612,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       );
       return { idealWeight: Math.round(idealWeight * 10) / 10, unit: 'kg' };
     }
-    case 'calculate_bmr': {
-      const bmr = WeightCalculator.calculateBMR(
-        args.weight as number,
-        args.height as number,
-        args.age as number,
-        args.sex as 'male' | 'female' | 'other'
-      );
-      const tdee = WeightCalculator.calculateTDEE(bmr);
-      return { bmr: Math.round(bmr), tdee: Math.round(tdee), unit: 'calories/day' };
-    }
+
     case 'generate_weight_loss_plan': {
       const plan = WeightCalculator.generatePlan({
         age: args.age as number,
@@ -697,25 +684,7 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         savingsRate: round2((plan.monthlyTargetSavings / plan.monthlyDisposable) * 100),
       };
     }
-    case 'days_between_dates': {
-      const [y1, m1, d1] = (args.date1 as string).split('-').map(Number);
-      const [y2, m2, d2] = (args.date2 as string).split('-').map(Number);
-      const date1 = new Date(y1, m1 - 1, d1);
-      const date2 = new Date(y2, m2 - 1, d2);
-      const days = DateCalculator.daysBetween(date1, date2);
-      return { days, absoluteDays: Math.abs(days) };
-    }
-    case 'random_number': {
-      const min = args.min as number;
-      const max = args.max as number;
-      const result = Math.floor(Math.random() * (max - min + 1)) + min;
-      return { result, min, max };
-    }
-    case 'pick_random': {
-      const items = args.items as string[];
-      const index = Math.floor(Math.random() * items.length);
-      return { selected: items[index], index, totalItems: items.length };
-    }
+
     case 'calculate_tip': {
       // Use shared TipCalculator - single source of truth for tip calculation logic
       const input: TipCalculatorInput = {
@@ -842,34 +811,18 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'generate_names': {
-      const type = args.type as string;
-      const gender = (args.gender as string) || 'any';
-      const count = (args.count as number) || 5;
-      const maleFirst = ['James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles', 'Daniel', 'Matthew', 'Anthony', 'Mark', 'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth'];
-      const femaleFirst = ['Mary', 'Patricia', 'Jennifer', 'Linda', 'Barbara', 'Elizabeth', 'Susan', 'Jessica', 'Sarah', 'Karen', 'Lisa', 'Nancy', 'Betty', 'Margaret', 'Sandra', 'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle'];
-      const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
-      const fantasyPrefixes = ['Aer', 'Bal', 'Cor', 'Dra', 'El', 'Fae', 'Gal', 'Ith', 'Kal', 'Lor', 'Mal', 'Nar', 'Ori', 'Pyr', 'Quel', 'Rav', 'Syl', 'Thal', 'Val', 'Zar'];
-      const fantasySuffixes = ['ius', 'ara', 'eon', 'ith', 'orn', 'wyn', 'dor', 'iel', 'ath', 'rix', 'oth', 'ael', 'ion', 'ira', 'oth'];
-      const dogNames = ['Max', 'Buddy', 'Charlie', 'Cooper', 'Rocky', 'Bear', 'Duke', 'Tucker', 'Jack', 'Milo', 'Bella', 'Luna', 'Lucy', 'Daisy', 'Sadie', 'Molly', 'Bailey', 'Maggie', 'Sophie', 'Chloe'];
-      const catNames = ['Oliver', 'Leo', 'Milo', 'Charlie', 'Simba', 'Max', 'Jack', 'Loki', 'Tiger', 'Jasper', 'Luna', 'Bella', 'Chloe', 'Lucy', 'Nala', 'Kitty', 'Cleo', 'Willow', 'Lily', 'Gracie'];
-      const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-      const names: string[] = [];
-      for (let i = 0; i < count; i++) {
-        if (type === 'first') {
-          const pool = gender === 'male' ? maleFirst : gender === 'female' ? femaleFirst : [...maleFirst, ...femaleFirst];
-          names.push(pick(pool));
-        } else if (type === 'full') {
-          const pool = gender === 'male' ? maleFirst : gender === 'female' ? femaleFirst : [...maleFirst, ...femaleFirst];
-          names.push(`${pick(pool)} ${pick(lastNames)}`);
-        } else if (type === 'fantasy') {
-          names.push(`${pick(fantasyPrefixes)}${pick(fantasySuffixes)}`);
-        } else if (type === 'pet') {
-          const petType = args.petType as string;
-          const pool = petType === 'dog' ? dogNames : petType === 'cat' ? catNames : [...dogNames, ...catNames];
-          names.push(pick(pool));
-        }
-      }
-      return { type, gender, count, names };
+      // Use shared NamesGenerator - single source of truth for name/number generation
+      const input: NamesGeneratorInput = {
+        mode: (args.mode as GeneratorMode) || 'names',
+        nameCategory: args.nameCategory as NameCategory | undefined,
+        humanNameType: args.humanNameType as HumanNameType | undefined,
+        petType: args.petType as PetType | undefined,
+        gender: args.gender as NameGender | undefined,
+        min: args.min as number | undefined,
+        max: args.max as number | undefined,
+        count: args.count as number | undefined,
+      };
+      return generateNames(input);
     }
     case 'calculate_position_size': {
       // Use shared PositionSizeCalculator - single source of truth for position sizing
@@ -1171,14 +1124,9 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
 // Map tool names to widget types - all tools get widgets
 function getWidgetType(toolName: string): string {
   const widgetMap: Record<string, string> = {
-    'calculate_bmi': 'bmi',
     'calculate_ideal_weight': 'ideal_weight',
-    'calculate_bmr': 'bmr',
     'generate_weight_loss_plan': 'weight_loss_plan',
     'calculate_savings_plan': 'savings_plan',
-    'days_between_dates': 'days_between',
-    'random_number': 'random_number',
-    'pick_random': 'pick_random',
     'calculate_tip': 'tip',
     'calculate_percentage': 'percentage',
     'calculate_age': 'age',
@@ -1456,13 +1404,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         ${data.totalOptions ? `<div class="stats"><div class="stat-box"><div class="stat-label">Options</div><div class="stat-value">${data.totalOptions}</div></div><div class="stat-box"><div class="stat-label">Confidence</div><div class="stat-value">${data.confidence}%</div></div></div>` : ''}`;
       break;
     }
-    case 'random_number': {
-      content = `
-        <div class="header">🔢 Random Number</div>
-        <div class="big-number" style="color:#60a5fa">${data.result}</div>
-        <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Range: ${data.min} - ${data.max}</div>`;
-      break;
-    }
     case 'lucky_number': {
       const luckyNumbers = (data.numbers as number[]) || [data.luckyNumber];
       const luckyCount = data.count as number || 1;
@@ -1471,15 +1412,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🍀</div>
         <div class="big-number" style="color:#10b981">${luckyCount > 1 ? luckyNumbers.join(', ') : data.luckyNumber}</div>
         <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Range: ${data.range || `${data.min} - ${data.max}`}</div>`;
-      break;
-    }
-    case 'pick_random': {
-      const selected = data.selected || data.result;
-      content = `
-        <div class="header">🎯 Random Pick</div>
-        <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🎯</div>
-        <div class="big-number" style="color:#f472b6;font-size:1.8rem">${selected}</div>
-        ${data.totalItems ? `<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Selected from ${data.totalItems} items</div>` : ''}`;
       break;
     }
     case 'spin_wheel': {
@@ -2037,11 +1969,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               '<div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">' + data.months + '</div></div>' +
             '</div>';
         }
-        case 'random_number': {
-          return '<div class="header">🎲 Random Number</div>' +
-            '<div class="big-number" style="color:#60a5fa">' + data.result + '</div>' +
-            '<div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">Range: ' + data.min + ' - ' + data.max + '</div>';
-        }
         case 'lucky_number': {
           var luckyNums = data.numbers || [data.luckyNumber];
           var luckyCount = data.count || 1;
@@ -2050,12 +1977,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
           return '<div class="header">🍀 Lucky Number' + (luckyCount > 1 ? 's' : '') + '</div>' +
             '<div class="big-number" style="color:#22c55e">' + luckyDisplay + '</div>' +
             '<div class="label" style="background:rgba(34,197,94,0.2);color:#22c55e">Range: ' + luckyRange + '</div>';
-        }
-        case 'pick_random': {
-          var options = data.options || [];
-          return '<div class="header">🎯 Random Pick</div>' +
-            '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + data.result + '</div>' +
-            '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">from ' + options.length + ' options</div>';
         }
         case 'spin_wheel': {
           var spinOptions = data.options || [];
@@ -2299,8 +2220,6 @@ function formatResultText(toolName: string, result: unknown): string {
   const r = result as Record<string, unknown>;
 
   switch (toolName) {
-    case 'calculate_bmi':
-      return `BMI: ${r.bmi} (${r.category})`;
     case 'calculate_tip':
       return `Bill: $${r.billAmount} + Tip (${r.tipPercent}%): $${r.tipAmount} = Total: $${r.total}${(r.splitWays as number) > 1 ? ` ($${r.perPerson} per person)` : ''}`;
     case 'flip_tool': {
@@ -2332,8 +2251,6 @@ function formatResultText(toolName: string, result: unknown): string {
       }
       return `🎱 Decision: ${r.decision} (${r.confidence}% confidence from ${r.totalOptions} options)`;
     }
-    case 'random_number':
-      return `Random number (${r.min}-${r.max}): ${r.result}`;
     case 'lucky_number': {
       const luckyNums = (r.numbers as number[]) || [r.luckyNumber];
       const luckyCountVal = (r.count as number) || 1;
@@ -2341,8 +2258,6 @@ function formatResultText(toolName: string, result: unknown): string {
         ? `🍀 Lucky numbers: ${luckyNums.join(', ')} (range: ${r.range})`
         : `🍀 Lucky number: ${r.luckyNumber} (range: ${r.range})`;
     }
-    case 'pick_random':
-      return `🎯 Selected: ${r.result || r.selected}`;
     case 'spin_wheel':
       return `🎡 The wheel landed on: ${r.result} (option ${(r.index as number) + 1} of ${r.totalOptions})`;
     case 'blood_calculator': {
@@ -2408,7 +2323,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
       person2: { sign: 'leo', name: 'Leo', symbol: '♌', element: 'Fire' },
       compatibility: 85, level: 'Excellent'
     },
-    generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
+    generate_names: { mode: 'names', results: ['Alex', 'Jordan', 'Taylor'], count: 3, nameCategory: 'human', humanNameType: 'first', gender: 'any' },
     calculate_position_size: { mode: 'riskAndSL', direction: 'long', entryPrice: 100, capital: 10000, calculatedField: 'quantity', riskPercent: 2, riskAmount: 200, stopLoss: 95, slDistance: 5, slDistancePercent: 5, quantity: 40, positionValue: 4000, riskLabel: 'Moderate Risk', riskColor: '#eab308' },
     spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
@@ -2506,10 +2421,7 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         });
 
         // Prepare widget data with input args for context
-        let widgetData: Record<string, unknown> = result as Record<string, unknown>;
-        if (toolName === 'calculate_bmi') {
-          widgetData = { ...widgetData, weight: toolArgs.weight, height: toolArgs.height };
-        }
+        const widgetData: Record<string, unknown> = result as Record<string, unknown>;
 
         // Build response text
         const responseText = formatResultText(toolName, result);

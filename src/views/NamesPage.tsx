@@ -8,46 +8,26 @@ import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-type NameCategory = 'human' | 'pet';
-type HumanNameType = 'first' | 'full' | 'fantasy';
-type PetType = 'dog' | 'cat' | 'other';
+import {
+  generateNames,
+  GeneratorMode,
+  NameCategory,
+  HumanNameType,
+  PetType,
+  Gender,
+} from '../utils/NamesGenerator';
 
 interface NamesPageState {
-  mode: 'names' | 'numbers';
+  mode: GeneratorMode;
   nameCategory: NameCategory;
   humanNameType: HumanNameType;
   petType: PetType;
-  gender: 'any' | 'male' | 'female';
+  gender: Gender;
   count: number;
   minNum: string;
   maxNum: string;
   results: string[];
 }
-
-const FIRST_NAMES = {
-  male: ['James', 'John', 'Robert', 'Michael', 'William', 'David', 'Joseph', 'Charles', 'Thomas', 'Daniel', 'Matthew', 'Anthony', 'Mark', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth', 'Kevin', 'Brian'],
-  female: ['Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen', 'Lisa', 'Nancy', 'Betty', 'Margaret', 'Sandra', 'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle']
-};
-const LAST_NAMES = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson', 'Martin', 'Lee', 'Thompson', 'White'];
-const FANTASY_PREFIXES = ['Aer', 'Bal', 'Cor', 'Dra', 'El', 'Fen', 'Gal', 'Hor', 'Ith', 'Jor', 'Kal', 'Lor', 'Mor', 'Nar', 'Ori', 'Pyr', 'Qua', 'Rav', 'Syl', 'Thr', 'Ul', 'Val', 'Wyr', 'Xan', 'Yor', 'Zar'];
-const FANTASY_SUFFIXES = ['ion', 'ius', 'ara', 'iel', 'oth', 'wyn', 'dor', 'rin', 'las', 'mir', 'ven', 'thos', 'gar', 'nak', 'zul'];
-
-// Pet names by type and gender
-const DOG_NAMES = {
-  male: ['Max', 'Charlie', 'Buddy', 'Cooper', 'Rocky', 'Bear', 'Duke', 'Tucker', 'Jack', 'Leo', 'Milo', 'Zeus', 'Finn', 'Apollo', 'Bruno', 'Rex', 'Buster', 'Diesel', 'Thor', 'Ace'],
-  female: ['Bella', 'Luna', 'Lucy', 'Daisy', 'Sadie', 'Molly', 'Lola', 'Bailey', 'Stella', 'Maggie', 'Chloe', 'Penny', 'Zoey', 'Lily', 'Roxy', 'Ruby', 'Rosie', 'Gracie', 'Coco', 'Nala']
-};
-
-const CAT_NAMES = {
-  male: ['Oliver', 'Leo', 'Milo', 'Charlie', 'Simba', 'Max', 'Loki', 'Oscar', 'Jasper', 'Buddy', 'Tiger', 'Shadow', 'Smokey', 'Felix', 'Oreo', 'Gizmo', 'Salem', 'Binx', 'Whiskers', 'Mittens'],
-  female: ['Luna', 'Bella', 'Lily', 'Chloe', 'Lucy', 'Nala', 'Kitty', 'Cleo', 'Willow', 'Stella', 'Daisy', 'Mia', 'Zoe', 'Pepper', 'Ginger', 'Misty', 'Princess', 'Callie', 'Sophie', 'Olive']
-};
-
-const OTHER_PET_NAMES = {
-  male: ['Nibbles', 'Peanut', 'Coco', 'Biscuit', 'Gizmo', 'Oreo', 'Patches', 'Bubbles', 'Ziggy', 'Pip', 'Thumper', 'Whiskers', 'Scooter', 'Bandit', 'Chewy', 'Nugget', 'Pickles', 'Waffles', 'Mochi', 'Tofu'],
-  female: ['Daisy', 'Honey', 'Cookie', 'Buttercup', 'Snowball', 'Pebbles', 'Cupcake', 'Sprinkles', 'Tinkerbell', 'Pixie', 'Maple', 'Hazel', 'Clover', 'Poppy', 'Rosie', 'Sunny', 'Peaches', 'Jellybean', 'Marshmallow', 'Twinkle']
-};
 
 export class NamesPage extends Component<{}, NamesPageState> {
   constructor(props: {}) {
@@ -69,51 +49,19 @@ export class NamesPage extends Component<{}, NamesPageState> {
     applySEO('names');
   }
 
-  private generateNames = () => {
-    const { nameCategory, humanNameType, petType, gender, count } = this.state;
-    const results: string[] = [];
-
-    for (let i = 0; i < count; i++) {
-      const genderChoice = gender === 'any' ? (Math.random() < 0.5 ? 'male' : 'female') : gender;
-
-      if (nameCategory === 'pet') {
-        // Pet names
-        let petNames: { male: string[]; female: string[] };
-        switch (petType) {
-          case 'dog': petNames = DOG_NAMES; break;
-          case 'cat': petNames = CAT_NAMES; break;
-          default: petNames = OTHER_PET_NAMES; break;
-        }
-        const name = petNames[genderChoice][Math.floor(Math.random() * petNames[genderChoice].length)];
-        results.push(name);
-      } else {
-        // Human names
-        if (humanNameType === 'fantasy') {
-          const prefix = FANTASY_PREFIXES[Math.floor(Math.random() * FANTASY_PREFIXES.length)];
-          const suffix = FANTASY_SUFFIXES[Math.floor(Math.random() * FANTASY_SUFFIXES.length)];
-          results.push(prefix + suffix);
-        } else {
-          const firstName = FIRST_NAMES[genderChoice][Math.floor(Math.random() * FIRST_NAMES[genderChoice].length)];
-          if (humanNameType === 'first') {
-            results.push(firstName);
-          } else {
-            const lastName = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
-            results.push(`${firstName} ${lastName}`);
-          }
-        }
-      }
-    }
-    this.setState({ results });
-  };
-
-  private generateNumbers = () => {
-    const { count, minNum, maxNum } = this.state;
-    const min = parseInt(minNum) || 1;
-    const max = parseInt(maxNum) || 100;
-    const results = Array.from({ length: count }, () => 
-      (Math.floor(Math.random() * (max - min + 1)) + min).toString()
-    );
-    this.setState({ results });
+  private generate = () => {
+    const { mode, nameCategory, humanNameType, petType, gender, count, minNum, maxNum } = this.state;
+    const result = generateNames({
+      mode,
+      nameCategory,
+      humanNameType,
+      petType,
+      gender,
+      count,
+      min: parseInt(minNum) || 1,
+      max: parseInt(maxNum) || 100,
+    });
+    this.setState({ results: result.results });
   };
 
   render() {
@@ -229,7 +177,7 @@ export class NamesPage extends Component<{}, NamesPageState> {
                   {[1, 3, 5, 10, 20].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
-              <button onClick={mode === 'names' ? this.generateNames : this.generateNumbers}
+              <button onClick={this.generate}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
                 Generate {mode === 'names' ? '👤' : '🔢'}
               </button>
