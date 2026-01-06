@@ -9,9 +9,10 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { makeDecision, parseDecisionOptions, DecisionMode } from '../utils/DecisionCalculator';
 
 interface DecidePageState {
-  mode: 'yesNo' | 'pickOne';
+  mode: DecisionMode;
   options: string;
   result: string | null;
   isAnimating: boolean;
@@ -49,23 +50,27 @@ export class DecidePage extends Component<{}, DecidePageState> {
 
   private decide = () => {
     this.setState({ isAnimating: true, result: null });
-    
+
     setTimeout(() => {
       const { mode, options } = this.state;
       let result: string;
-      
+
       if (mode === 'yesNo') {
-        const answers = ['YES! ✅', 'NO! ❌', 'Maybe... 🤔', 'Definitely! 💯', 'Not now ⏳', 'Go for it! 🚀'];
-        result = answers[Math.floor(Math.random() * answers.length)];
+        // Use shared makeDecision from DecisionCalculator
+        const decision = makeDecision({ mode: 'yesNo' });
+        result = decision.decision;
       } else {
-        const optionList = options.split('\n').map(o => o.trim()).filter(o => o);
+        // Use shared parseDecisionOptions from DecisionCalculator
+        const optionList = parseDecisionOptions(options);
         if (optionList.length < 2) {
           result = 'Add at least 2 options!';
         } else {
-          result = optionList[Math.floor(Math.random() * optionList.length)];
+          // Use shared makeDecision from DecisionCalculator
+          const decision = makeDecision({ mode: 'pickOne', options: optionList });
+          result = decision.decision;
         }
       }
-      
+
       this.setState({ result, isAnimating: false });
     }, 1000);
   };

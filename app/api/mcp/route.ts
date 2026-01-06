@@ -12,6 +12,7 @@ import {
 import { calculateFlip, FlipCalculatorInput, FlipMode } from '@/src/utils/FlipCalculator';
 import { calculateZone, ZoneCalculatorInput } from '@/src/utils/ZoneCalculator';
 import { calculateSpin, SpinCalculatorInput, WHEEL_COLORS } from '@/src/utils/SpinCalculator';
+import { makeDecision, DecisionCalculatorInput, DecisionMode } from '@/src/utils/DecisionCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -890,13 +891,13 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'make_decision': {
-      const mode = args.mode as string;
-      if (mode === 'yesNo') {
-        return { decision: Math.random() < 0.5 ? 'Yes' : 'No', mode };
-      }
-      const options = args.options as string[];
-      if (!options || options.length === 0) throw new Error('Options required for custom mode');
-      return { decision: options[Math.floor(Math.random() * options.length)], mode, options };
+      // Use shared DecisionCalculator - single source of truth for decision logic
+      const input: DecisionCalculatorInput = {
+        mode: (args.mode as DecisionMode) || 'pickOne',
+        options: args.options as string[] | undefined,
+        weights: args.weights as number[] | undefined,
+      };
+      return makeDecision(input);
     }
     case 'zodiac_compatibility': {
       // Get sign from date (YYYY-MM-DD)
@@ -1570,10 +1571,15 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'decision': {
+      const decisionIcon = data.icon || '🎱';
+      const decisionMode = data.mode as string;
+      const modeLabel = decisionMode === 'yesNo' ? 'Yes/No Oracle' : decisionMode === 'weighted' ? 'Weighted Choice' : 'Random Pick';
       content = `
         <div class="header">🎱 Decision Maker</div>
-        <div style="text-align:center;font-size:4rem;margin:1rem 0">🎱</div>
-        <div class="big-number" style="color:#a78bfa;font-size:1.8rem">${data.decision}</div>`;
+        <div style="text-align:center;font-size:4rem;margin:1rem 0">${decisionIcon}</div>
+        <div class="big-number" style="color:#a78bfa;font-size:1.8rem">${data.decision}</div>
+        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${modeLabel}</div>
+        ${data.totalOptions ? `<div class="stats"><div class="stat-box"><div class="stat-label">Options</div><div class="stat-value">${data.totalOptions}</div></div><div class="stat-box"><div class="stat-label">Confidence</div><div class="stat-value">${data.confidence}%</div></div></div>` : ''}`;
       break;
     }
     case 'random_number': {
@@ -2204,9 +2210,13 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '</div>';
         }
         case 'decision': {
-          return '<div class="header">🎱 Decision</div>' +
-            '<div class="big-number" style="color:#a78bfa;font-size:1.8rem">' + data.decision + '</div>' +
-            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">The answer is clear!</div>';
+          var decIcon = data.icon || '🎱';
+          var decMode = data.mode || 'pickOne';
+          var decModeLabel = decMode === 'yesNo' ? 'Yes/No Oracle' : decMode === 'weighted' ? 'Weighted Choice' : 'Random Pick';
+          return '<div class="header">🎱 Decision Maker</div>' +
+            '<div style="text-align:center;font-size:3rem;margin:0.5rem 0">' + decIcon + '</div>' +
+            '<div class="big-number" style="color:#a78bfa;font-size:1.5rem">' + data.decision + '</div>' +
+            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + decModeLabel + '</div>';
         }
         case 'zodiac': {
           return '<div class="header">💕 Zodiac Compatibility</div>' +
@@ -2420,8 +2430,13 @@ function formatResultText(toolName: string, result: unknown): string {
       return `${(r.person1 as { name: string }).name} ❤️ ${(r.person2 as { name: string }).name}: ${r.compatibility}% compatibility (${r.level})`;
     case 'calculate_countdown':
       return `${r.eventName}: ${Math.abs(r.days as number)} days ${r.isPast ? 'ago' : 'to go'} (${r.weeks} weeks, ${r.months} months)`;
-    case 'make_decision':
-      return `Decision: ${r.decision}`;
+    case 'make_decision': {
+      const decMode = r.mode as string;
+      if (decMode === 'yesNo') {
+        return `🎱 The oracle says: ${r.decision}`;
+      }
+      return `🎱 Decision: ${r.decision} (${r.confidence}% confidence from ${r.totalOptions} options)`;
+    }
     case 'random_number':
       return `Random number (${r.min}-${r.max}): ${r.result}`;
     case 'lucky_number':
@@ -2481,7 +2496,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
     calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified' },
     calculate_countdown: { days: 100, weeks: 14, months: 3, targetDate: '2026-04-11', direction: 'until' },
-    make_decision: { decision: 'Yes', options: ['Yes', 'No'] },
+    make_decision: { decision: 'Go for it! 🚀', mode: 'yesNo', confidence: 85, icon: '🚀' },
     zodiac_compatibility: {
       person1: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire' },
       person2: { sign: 'leo', name: 'Leo', symbol: '♌', element: 'Fire' },
