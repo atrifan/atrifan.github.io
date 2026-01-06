@@ -798,56 +798,76 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   // ============ ASTRONOMY ============
   {
     name: 'find_next_eclipse',
-    description: 'Find the next upcoming solar or lunar eclipse with visibility info',
+    description: 'Find the next upcoming solar or lunar eclipse with visibility info, countdown, and best viewing locations. Supports filtering by eclipse type and checking visibility from a specific location.',
     category: TOOL_CATEGORIES.ASTRONOMY,
     hasWidget: true,
     invocationMessages: { invoking: 'Finding next eclipse...', invoked: 'Eclipse found' },
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['solar', 'lunar', 'any'], description: 'Type of eclipse to find' },
-        latitude: { type: 'number', description: 'Latitude for visibility check (-90 to 90)' },
-        longitude: { type: 'number', description: 'Longitude for visibility check (-180 to 180)' },
+        type: {
+          type: 'string',
+          enum: ['solar', 'lunar', 'any'],
+          description: 'Type of eclipse to find: solar (sun blocked by moon), lunar (moon in Earth shadow), or any'
+        },
+        latitude: {
+          type: 'number',
+          description: 'User latitude for visibility check (-90 to 90). Provide with longitude for personalized visibility info.'
+        },
+        longitude: {
+          type: 'number',
+          description: 'User longitude for visibility check (-180 to 180). Provide with latitude for personalized visibility info.'
+        },
       },
       required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        date: { type: 'string' },
-        type: { type: 'string' },
-        subtype: { type: 'string' },
-        peakTimeUTC: { type: 'string' },
-        duration: { type: 'string' },
-        magnitude: { type: 'number' },
-        bestVisibleFrom: { type: 'string' },
-        visibleRegions: { type: 'array', items: { type: 'string' } },
-        daysUntil: { type: 'number' },
-        visibleFromLocation: { type: 'boolean' },
+        date: { type: 'string', description: 'Eclipse date in YYYY-MM-DD format' },
+        type: { type: 'string', enum: ['solar', 'lunar'], description: 'Eclipse type' },
+        subtype: { type: 'string', enum: ['total', 'partial', 'annular', 'penumbral', 'hybrid'], description: 'Eclipse subtype' },
+        peakTimeUTC: { type: 'string', description: 'Peak time in UTC (HH:MM)' },
+        duration: { type: 'string', description: 'Duration of totality/maximum phase' },
+        magnitude: { type: 'number', description: 'Eclipse magnitude (0-1+)' },
+        bestVisibleFrom: { type: 'string', description: 'Best viewing location description' },
+        visibleRegions: { type: 'array', items: { type: 'string' }, description: 'List of regions where eclipse is visible' },
+        daysUntil: { type: 'number', description: 'Days until the eclipse' },
+        visibleFromLocation: { type: 'boolean', description: 'Whether visible from provided coordinates' },
+        visibilityScore: { type: 'string', description: 'Visibility quality from provided location' },
+        coordinates: { type: 'object', description: 'Greatest eclipse point coordinates {lat, lon}' },
       },
     },
   },
   {
     name: 'list_upcoming_eclipses',
-    description: 'List upcoming solar and lunar eclipses with dates and visibility',
+    description: 'List upcoming solar and lunar eclipses with dates, visibility info, and countdown. Returns multiple eclipses with filtering options.',
     category: TOOL_CATEGORIES.ASTRONOMY,
     hasWidget: true,
     invocationMessages: { invoking: 'Listing upcoming eclipses...', invoked: 'Eclipses listed' },
     inputSchema: {
       type: 'object',
       properties: {
-        count: { type: 'number', description: 'Number of eclipses to return (1-10)' },
-        type: { type: 'string', enum: ['solar', 'lunar', 'any'], description: 'Filter by eclipse type' },
-        latitude: { type: 'number', description: 'Latitude for visibility check' },
-        longitude: { type: 'number', description: 'Longitude for visibility check' },
+        count: { type: 'number', description: 'Number of eclipses to return (1-10, default 5)' },
+        type: {
+          type: 'string',
+          enum: ['solar', 'lunar', 'any'],
+          description: 'Filter by eclipse type: solar, lunar, or any (default)'
+        },
+        latitude: { type: 'number', description: 'User latitude for visibility check (-90 to 90)' },
+        longitude: { type: 'number', description: 'User longitude for visibility check (-180 to 180)' },
       },
       required: [],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        eclipses: { type: 'array', items: { type: 'object' } },
-        totalCount: { type: 'number' },
+        eclipses: {
+          type: 'array',
+          items: { type: 'object' },
+          description: 'List of upcoming eclipses with details (date, type, subtype, peakTimeUTC, duration, magnitude, bestVisibleFrom, visibleRegions, daysUntil, visibleFromLocation, visibilityScore)'
+        },
+        totalCount: { type: 'number', description: 'Total number of eclipses returned' },
       },
     },
   },

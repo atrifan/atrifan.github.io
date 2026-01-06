@@ -3,6 +3,7 @@ import { clerkClient, verifyToken } from '@clerk/nextjs/server';
 import { WeightCalculator } from '@/src/utils/WeightCalculator';
 import { BudgetCalculator } from '@/src/utils/BudgetCalculator';
 import { DateCalculator } from '@/src/utils/DateCalculator';
+import { EclipseCalculator, EclipseFilter, EclipseLocation } from '@/src/utils/EclipseCalculator';
 import { calculateTip, TipCalculatorInput, CalculatorMode, ServiceQuality, MoodLevel, BudgetSituation } from '@/src/utils/TipCalculator';
 import {
   calculateDonationEligibility, calculateBloodCompatibility, calculateBabyBloodType,
@@ -447,89 +448,6 @@ const READ_ONLY_ANNOTATIONS = {
   idempotentHint: true,
   openWorldHint: false,
 };
-
-// Eclipse data from NASA - verified upcoming eclipses 2025-2030
-interface EclipseData {
-  date: string;
-  type: 'solar' | 'lunar';
-  subtype: 'total' | 'partial' | 'annular' | 'penumbral' | 'hybrid';
-  peakTime: string;
-  duration?: string;
-  visibility: string[];
-  coordinates: { lat: number; lon: number };
-  magnitude: number;
-}
-
-const ECLIPSE_DATA: EclipseData[] = [
-  { date: '2025-03-14', type: 'lunar', subtype: 'total', peakTime: '06:58', duration: '1h 05m', visibility: ['Americas', 'Europe', 'Africa', 'Pacific'], coordinates: { lat: -3, lon: -95 }, magnitude: 1.178 },
-  { date: '2025-03-29', type: 'solar', subtype: 'partial', peakTime: '10:47', visibility: ['Northwest Africa', 'Europe', 'Northern Russia'], coordinates: { lat: 64, lon: -20 }, magnitude: 0.938 },
-  { date: '2025-09-07', type: 'lunar', subtype: 'total', peakTime: '18:11', duration: '1h 22m', visibility: ['Europe', 'Africa', 'Asia', 'Australia'], coordinates: { lat: 3, lon: 82 }, magnitude: 1.362 },
-  { date: '2025-09-21', type: 'solar', subtype: 'partial', peakTime: '19:42', visibility: ['South Pacific', 'New Zealand', 'Antarctica'], coordinates: { lat: -66, lon: -125 }, magnitude: 0.855 },
-  { date: '2026-02-17', type: 'solar', subtype: 'annular', peakTime: '12:13', visibility: ['Antarctica', 'Southern Argentina', 'Chile'], coordinates: { lat: -65, lon: -30 }, magnitude: 0.963 },
-  { date: '2026-03-03', type: 'lunar', subtype: 'total', peakTime: '11:33', duration: '58m', visibility: ['East Asia', 'Australia', 'Pacific', 'Americas'], coordinates: { lat: 7, lon: 170 }, magnitude: 1.151 },
-  { date: '2026-08-12', type: 'solar', subtype: 'total', peakTime: '17:46', duration: '2m 18s', visibility: ['Arctic', 'Greenland', 'Iceland', 'Spain', 'Portugal'], coordinates: { lat: 65, lon: -25 }, magnitude: 1.039 },
-  { date: '2026-08-28', type: 'lunar', subtype: 'partial', peakTime: '04:13', visibility: ['Americas', 'Europe', 'Africa'], coordinates: { lat: -10, lon: -60 }, magnitude: 0.930 },
-  { date: '2027-02-06', type: 'solar', subtype: 'annular', peakTime: '16:00', visibility: ['South America', 'Antarctica', 'South Atlantic'], coordinates: { lat: -55, lon: -45 }, magnitude: 0.928 },
-  { date: '2027-08-02', type: 'solar', subtype: 'total', peakTime: '10:07', duration: '6m 23s', visibility: ['Morocco', 'Spain', 'Algeria', 'Libya', 'Egypt', 'Saudi Arabia'], coordinates: { lat: 25, lon: 33 }, magnitude: 1.079 },
-  { date: '2028-01-12', type: 'lunar', subtype: 'partial', peakTime: '04:13', visibility: ['Americas', 'Europe', 'Africa'], coordinates: { lat: 20, lon: -60 }, magnitude: 0.066 },
-  { date: '2028-07-22', type: 'solar', subtype: 'total', peakTime: '02:55', duration: '5m 10s', visibility: ['Australia', 'New Zealand', 'South Pacific'], coordinates: { lat: -25, lon: 175 }, magnitude: 1.056 },
-  { date: '2029-01-01', type: 'lunar', subtype: 'total', peakTime: '22:23', duration: '1h 11m', visibility: ['Europe', 'Africa', 'Asia', 'Americas'], coordinates: { lat: 23, lon: -25 }, magnitude: 1.245 },
-  { date: '2029-06-26', type: 'lunar', subtype: 'total', peakTime: '03:22', duration: '1h 42m', visibility: ['Americas', 'Europe', 'Africa'], coordinates: { lat: -23, lon: -45 }, magnitude: 1.844 },
-  { date: '2029-12-20', type: 'lunar', subtype: 'total', peakTime: '22:42', duration: '53m', visibility: ['Americas', 'Europe', 'Africa', 'Asia'], coordinates: { lat: 23, lon: -30 }, magnitude: 1.117 },
-  { date: '2030-06-01', type: 'solar', subtype: 'annular', peakTime: '06:29', visibility: ['Algeria', 'Tunisia', 'Greece', 'Turkey', 'Russia', 'China', 'Japan'], coordinates: { lat: 45, lon: 75 }, magnitude: 0.944 },
-  { date: '2030-11-25', type: 'solar', subtype: 'total', peakTime: '06:51', duration: '3m 44s', visibility: ['Southern Africa', 'Indian Ocean', 'Australia'], coordinates: { lat: -44, lon: 72 }, magnitude: 1.047 },
-];
-
-function getBestVisibleLocation(eclipse: EclipseData): string {
-  const { lat, lon } = eclipse.coordinates;
-  if (lat > 60) return 'Arctic region';
-  if (lat > 35) {
-    if (lon >= -130 && lon <= -60) return 'North America';
-    if (lon >= -25 && lon <= 60) return 'Europe';
-    if (lon >= 60 && lon <= 150) return 'Northern Asia';
-    return 'Northern Pacific';
-  }
-  if (lat > 0) {
-    if (lon >= -130 && lon <= -30) return 'Central America / Caribbean';
-    if (lon >= -20 && lon <= 55) return 'North Africa / Middle East';
-    if (lon >= 55 && lon <= 150) return 'South Asia / Southeast Asia';
-    return 'Pacific Ocean';
-  }
-  if (lat > -35) {
-    if (lon >= -90 && lon <= -30) return 'South America';
-    if (lon >= -20 && lon <= 55) return 'Central/Southern Africa';
-    if (lon >= 100 && lon <= 180) return 'Australia / Indonesia';
-    return 'Indian Ocean';
-  }
-  if (lat > -60) {
-    if (lon >= -90 && lon <= -30) return 'Southern South America';
-    if (lon >= 100 && lon <= 180) return 'Southern Australia / New Zealand';
-    return 'Southern Ocean';
-  }
-  return 'Antarctica';
-}
-
-function isVisibleFromLocation(eclipse: EclipseData, lat: number, lon: number): boolean {
-  const regionMap: Record<string, { latRange: [number, number]; lonRange: [number, number] }> = {
-    'Americas': { latRange: [-60, 70], lonRange: [-170, -30] },
-    'North America': { latRange: [15, 70], lonRange: [-170, -50] },
-    'South America': { latRange: [-60, 15], lonRange: [-90, -30] },
-    'Europe': { latRange: [35, 72], lonRange: [-25, 60] },
-    'Africa': { latRange: [-35, 37], lonRange: [-20, 55] },
-    'Asia': { latRange: [0, 75], lonRange: [25, 180] },
-    'Australia': { latRange: [-50, -10], lonRange: [110, 180] },
-    'Pacific': { latRange: [-50, 50], lonRange: [140, 180] },
-  };
-  for (const region of eclipse.visibility) {
-    const bounds = regionMap[region];
-    if (bounds) {
-      const inLat = lat >= bounds.latRange[0] && lat <= bounds.latRange[1];
-      const inLon = lon >= bounds.lonRange[0] && lon <= bounds.lonRange[1];
-      if (inLat && inLon) return true;
-    }
-  }
-  return false;
-}
 
 // OpenAI widget metadata for tool definitions
 const OPENAI_WIDGET_META = {
@@ -1052,69 +970,29 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       throw new Error(`Invalid calculatorMode: ${mode}. Must be one of: donation, compatibility, baby`);
     }
     case 'find_next_eclipse': {
-      const filterType = (args.type as string) || 'any';
+      const filterType = (args.type as EclipseFilter) || 'any';
       const lat = args.latitude as number | undefined;
       const lon = args.longitude as number | undefined;
+      const location: EclipseLocation | undefined = (lat !== undefined && lon !== undefined)
+        ? { latitude: lat, longitude: lon }
+        : undefined;
 
-      const now = new Date();
-      const upcoming = ECLIPSE_DATA
-        .filter(e => new Date(e.date) > now)
-        .filter(e => filterType === 'any' || e.type === filterType);
-
-      if (upcoming.length === 0) {
+      const result = EclipseCalculator.findNextEclipse(filterType, location);
+      if (!result) {
         return { error: 'No upcoming eclipses found' };
       }
-
-      const eclipse = upcoming[0];
-      const eclipseDate = new Date(eclipse.date);
-      const daysUntil = Math.ceil((eclipseDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-      return {
-        date: eclipse.date,
-        type: eclipse.type,
-        subtype: eclipse.subtype,
-        peakTimeUTC: eclipse.peakTime,
-        duration: eclipse.duration || null,
-        magnitude: eclipse.magnitude,
-        bestVisibleFrom: getBestVisibleLocation(eclipse),
-        visibleRegions: eclipse.visibility,
-        daysUntil,
-        visibleFromLocation: lat !== undefined && lon !== undefined ? isVisibleFromLocation(eclipse, lat, lon) : null,
-      };
+      return result;
     }
     case 'list_upcoming_eclipses': {
       const count = Math.min(Math.max((args.count as number) || 5, 1), 10);
-      const filterType = (args.type as string) || 'any';
+      const filterType = (args.type as EclipseFilter) || 'any';
       const lat = args.latitude as number | undefined;
       const lon = args.longitude as number | undefined;
+      const location: EclipseLocation | undefined = (lat !== undefined && lon !== undefined)
+        ? { latitude: lat, longitude: lon }
+        : undefined;
 
-      const now = new Date();
-      const upcoming = ECLIPSE_DATA
-        .filter(e => new Date(e.date) > now)
-        .filter(e => filterType === 'any' || e.type === filterType)
-        .slice(0, count);
-
-      const eclipses = upcoming.map(eclipse => {
-        const eclipseDate = new Date(eclipse.date);
-        const daysUntil = Math.ceil((eclipseDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return {
-          date: eclipse.date,
-          type: eclipse.type,
-          subtype: eclipse.subtype,
-          peakTimeUTC: eclipse.peakTime,
-          duration: eclipse.duration || null,
-          magnitude: eclipse.magnitude,
-          bestVisibleFrom: getBestVisibleLocation(eclipse),
-          visibleRegions: eclipse.visibility,
-          daysUntil,
-          visibleFromLocation: lat !== undefined && lon !== undefined ? isVisibleFromLocation(eclipse, lat, lon) : null,
-        };
-      });
-
-      return {
-        eclipses,
-        totalCount: eclipses.length,
-      };
+      return EclipseCalculator.listUpcomingEclipses(filterType, count, location);
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -1719,9 +1597,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'next_eclipse': {
-      const eclipseData = data as { date?: string; type?: string; subtype?: string; peakTimeUTC?: string; daysUntil?: number; bestVisibleFrom?: string; visibleFromLocation?: boolean | null };
-      const icon = eclipseData.type === 'solar' ? (eclipseData.subtype === 'total' ? '🌑' : eclipseData.subtype === 'annular' ? '🔆' : '🌘') : (eclipseData.subtype === 'total' ? '🌕' : '🌗');
-      const visibleBadge = eclipseData.visibleFromLocation === true ? '<span style="color:#22c55e">✓ Visible from your location</span>' : eclipseData.visibleFromLocation === false ? '<span style="color:#ef4444">✗ Not visible from your location</span>' : '';
+      const eclipseData = data as {
+        date?: string; type?: string; subtype?: string; peakTimeUTC?: string;
+        daysUntil?: number; bestVisibleFrom?: string; visibleFromLocation?: boolean | null;
+        visibilityScore?: string; magnitude?: number; duration?: string;
+        visibleRegions?: string[];
+      };
+      const icon = eclipseData.type === 'solar'
+        ? (eclipseData.subtype === 'total' ? '🌑' : eclipseData.subtype === 'annular' ? '🔆' : '🌘')
+        : (eclipseData.subtype === 'total' ? '🌕' : eclipseData.subtype === 'penumbral' ? '🌖' : '🌗');
+      const visibleBadge = eclipseData.visibleFromLocation === true
+        ? `<span style="color:#22c55e">✓ ${eclipseData.visibilityScore || 'Visible from your location'}</span>`
+        : eclipseData.visibleFromLocation === false
+          ? '<span style="color:#ef4444">✗ Not visible from your location</span>'
+          : '';
       content = `
         <div class="header">${icon} Next ${eclipseData.subtype || ''} ${eclipseData.type || ''} Eclipse</div>
         <div class="value" style="font-size:1.2rem">${eclipseData.date || 'Unknown'}</div>
@@ -1729,12 +1618,24 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
           <div class="stat-box"><div class="stat-label">Days Until</div><div class="stat-value" style="color:#a78bfa">${eclipseData.daysUntil || '?'}</div></div>
           <div class="stat-box"><div class="stat-label">Peak Time</div><div class="stat-value">${eclipseData.peakTimeUTC || '?'} UTC</div></div>
         </div>
+        ${eclipseData.duration || eclipseData.magnitude ? `
+        <div class="stats" style="margin-top:0.5rem">
+          ${eclipseData.duration ? `<div class="stat-box"><div class="stat-label">Duration</div><div class="stat-value">${eclipseData.duration}</div></div>` : ''}
+          ${eclipseData.magnitude ? `<div class="stat-box"><div class="stat-label">Magnitude</div><div class="stat-value">${eclipseData.magnitude.toFixed(3)}</div></div>` : ''}
+        </div>` : ''}
         <div class="label" style="margin-top:0.5rem">🌍 Best visible from: ${eclipseData.bestVisibleFrom || 'Unknown'}</div>
+        ${eclipseData.visibleRegions && eclipseData.visibleRegions.length > 0 ? `<div class="label" style="margin-top:0.25rem;font-size:0.75rem;color:rgba(255,255,255,0.6)">Regions: ${eclipseData.visibleRegions.join(', ')}</div>` : ''}
         ${visibleBadge ? `<div class="label" style="margin-top:0.25rem">${visibleBadge}</div>` : ''}`;
       break;
     }
     case 'eclipse_list': {
-      const listData = data as { eclipses?: Array<{ date: string; type: string; subtype: string; daysUntil: number; bestVisibleFrom: string }>; totalCount?: number };
+      const listData = data as {
+        eclipses?: Array<{
+          date: string; type: string; subtype: string; daysUntil: number;
+          bestVisibleFrom: string; visibleFromLocation?: boolean | null; visibilityScore?: string;
+        }>;
+        totalCount?: number
+      };
       const eclipses = (listData.eclipses || []).slice(0, 5);
       content = `
         <div class="header">🌓 Upcoming Eclipses</div>
@@ -1742,9 +1643,14 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div style="margin-top:0.5rem">
           ${eclipses.map(e => {
             const icon = e.type === 'solar' ? '☀️' : '🌙';
-            return `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)">
+            const visIcon = e.visibleFromLocation === true ? '✓' : e.visibleFromLocation === false ? '✗' : '';
+            const visColor = e.visibleFromLocation === true ? '#22c55e' : e.visibleFromLocation === false ? '#ef4444' : '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)">
               <span>${icon} ${e.subtype} ${e.type}</span>
-              <span style="color:rgba(255,255,255,0.6)">${e.date} (${e.daysUntil}d)</span>
+              <span style="display:flex;align-items:center;gap:0.5rem">
+                ${visIcon ? `<span style="color:${visColor}">${visIcon}</span>` : ''}
+                <span style="color:rgba(255,255,255,0.6)">${e.date} (${e.daysUntil}d)</span>
+              </span>
             </div>`;
           }).join('')}
         </div>`;
@@ -2162,21 +2068,40 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '</div>';
         }
         case 'next_eclipse': {
-          var eclipseIcon = data.type === 'solar' ? '☀️' : '🌙';
-          return '<div class="header">' + eclipseIcon + ' Next Eclipse</div>' +
+          var eclipseIcon = data.type === 'solar'
+            ? (data.subtype === 'total' ? '🌑' : data.subtype === 'annular' ? '🔆' : '🌘')
+            : (data.subtype === 'total' ? '🌕' : data.subtype === 'penumbral' ? '🌖' : '🌗');
+          var visibleBadge = data.visibleFromLocation === true
+            ? '<div class="label" style="margin-top:0.25rem;color:#22c55e">✓ ' + (data.visibilityScore || 'Visible') + '</div>'
+            : data.visibleFromLocation === false
+              ? '<div class="label" style="margin-top:0.25rem;color:#ef4444">✗ Not visible from your location</div>'
+              : '';
+          return '<div class="header">' + eclipseIcon + ' Next ' + (data.subtype || '') + ' ' + (data.type || '') + ' Eclipse</div>' +
             '<div class="big-number" style="color:#a78bfa;font-size:1.5rem">' + (data.date || 'Unknown') + '</div>' +
-            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + (data.subtype || '') + ' ' + (data.type || '') + '</div>' +
             '<div class="stats">' +
               '<div class="stat-box"><div class="stat-label">Days Until</div><div class="stat-value">' + (data.daysUntil || '?') + '</div></div>' +
               '<div class="stat-box"><div class="stat-label">Peak Time</div><div class="stat-value">' + (data.peakTimeUTC || '?') + ' UTC</div></div>' +
-            '</div>';
+            '</div>' +
+            '<div class="label" style="margin-top:0.5rem">🌍 Best visible from: ' + (data.bestVisibleFrom || 'Unknown') + '</div>' +
+            visibleBadge;
         }
         case 'eclipse_list': {
           var eclipses = (data.eclipses || []).slice(0, 3);
           return '<div class="header">🌓 Upcoming Eclipses</div>' +
             '<div class="label">' + (data.totalCount || 0) + ' eclipses found</div>' +
             '<div style="margin-top:0.5rem">' +
-              eclipses.map(function(e) { return '<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)"><span>' + (e.type === 'solar' ? '☀️' : '🌙') + ' ' + e.subtype + '</span><span style="color:rgba(255,255,255,0.6)">' + e.date + '</span></div>'; }).join('') +
+              eclipses.map(function(e) {
+                var icon = e.type === 'solar' ? '☀️' : '🌙';
+                var visIcon = e.visibleFromLocation === true ? '✓' : e.visibleFromLocation === false ? '✗' : '';
+                var visColor = e.visibleFromLocation === true ? '#22c55e' : e.visibleFromLocation === false ? '#ef4444' : '';
+                return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.1)">' +
+                  '<span>' + icon + ' ' + e.subtype + '</span>' +
+                  '<span style="display:flex;align-items:center;gap:0.5rem">' +
+                    (visIcon ? '<span style="color:' + visColor + '">' + visIcon + '</span>' : '') +
+                    '<span style="color:rgba(255,255,255,0.6)">' + e.date + ' (' + e.daysUntil + 'd)</span>' +
+                  '</span>' +
+                '</div>';
+              }).join('') +
             '</div>';
         }
         default: {
@@ -2282,11 +2207,21 @@ function formatResultText(toolName: string, result: unknown): string {
     }
     case 'find_next_eclipse': {
       const icon = r.type === 'solar' ? '☀️' : '🌙';
-      return `${icon} Next ${r.subtype} ${r.type} eclipse: ${r.date} at ${r.peakTimeUTC} UTC (${r.daysUntil} days away). Best visible from: ${r.bestVisibleFrom}`;
+      const visibilityInfo = r.visibleFromLocation === true
+        ? ` (${r.visibilityScore || 'Visible from your location'})`
+        : r.visibleFromLocation === false
+          ? ' (Not visible from your location)'
+          : '';
+      const durationInfo = r.duration ? ` Duration: ${r.duration}.` : '';
+      return `${icon} Next ${r.subtype} ${r.type} eclipse: ${r.date} at ${r.peakTimeUTC} UTC (${r.daysUntil} days away).${durationInfo} Best visible from: ${r.bestVisibleFrom}.${visibilityInfo}`;
     }
     case 'list_upcoming_eclipses': {
-      const eclipses = (r.eclipses as Array<{ date: string; type: string; subtype: string; daysUntil: number }>) || [];
-      const summary = eclipses.slice(0, 3).map(e => `${e.type === 'solar' ? '☀️' : '🌙'} ${e.subtype} ${e.type} on ${e.date}`).join(', ');
+      const eclipses = (r.eclipses as Array<{ date: string; type: string; subtype: string; daysUntil: number; visibleFromLocation?: boolean | null }>) || [];
+      const summary = eclipses.slice(0, 3).map(e => {
+        const icon = e.type === 'solar' ? '☀️' : '🌙';
+        const vis = e.visibleFromLocation === true ? '✓' : e.visibleFromLocation === false ? '✗' : '';
+        return `${icon} ${e.subtype} ${e.type} on ${e.date}${vis ? ` ${vis}` : ''}`;
+      }).join(', ');
       return `🌓 Found ${r.totalCount} upcoming eclipses: ${summary}${eclipses.length > 3 ? '...' : ''}`;
     }
     case 'calculate_cycle': {
@@ -2332,8 +2267,8 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_iq_score: { iq: 115, percentile: 84, category: 'Above Average', correctAnswers: 8, totalQuestions: 10 },
     calculate_uniqueness: { uniquenessScore: 0.001, rarity: '1 in 100,000', traits: { eyeColor: 'green', hairColor: 'red' } },
     when_date_info: { date: '2026-06-15', dayOfWeek: 'Monday', daysFromToday: 164, zodiacSign: 'Gemini' },
-    find_next_eclipse: { date: '2025-03-14', type: 'lunar', subtype: 'total', peakTimeUTC: '06:58', daysUntil: 70, bestVisibleFrom: 'Americas', visibleRegions: ['Americas', 'Europe', 'Africa'] },
-    list_upcoming_eclipses: { eclipses: [{ date: '2025-03-14', type: 'lunar', subtype: 'total', daysUntil: 70, bestVisibleFrom: 'Americas' }, { date: '2025-03-29', type: 'solar', subtype: 'partial', daysUntil: 85, bestVisibleFrom: 'Europe' }], totalCount: 2 },
+    find_next_eclipse: { date: '2025-03-14', type: 'lunar', subtype: 'total', peakTimeUTC: '06:58', duration: '1h 05m', magnitude: 1.178, daysUntil: 70, bestVisibleFrom: 'Americas', visibleRegions: ['Americas', 'Europe', 'Africa', 'Pacific'], visibleFromLocation: null, visibilityScore: null, coordinates: { lat: -3, lon: -95 } },
+    list_upcoming_eclipses: { eclipses: [{ date: '2025-03-14', type: 'lunar', subtype: 'total', peakTimeUTC: '06:58', duration: '1h 05m', magnitude: 1.178, daysUntil: 70, bestVisibleFrom: 'Americas', visibleFromLocation: null, visibilityScore: null }, { date: '2025-03-29', type: 'solar', subtype: 'partial', peakTimeUTC: '10:47', magnitude: 0.938, daysUntil: 85, bestVisibleFrom: 'Europe', visibleFromLocation: null, visibilityScore: null }], totalCount: 2 },
   };
   return defaults[toolName] || { message: 'Widget ready' };
 }
