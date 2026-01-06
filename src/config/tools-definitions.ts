@@ -1005,7 +1005,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'lucky_number',
     description: 'Generate random lucky number(s) within a range. Default range is 1 to 2,147,483,647. Can generate multiple numbers at once (up to 10).',
     category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,a
+    hasWidget: true,
     invocationMessages: { invoking: 'Finding lucky number...', invoked: 'Lucky number found' },
     inputSchema: {
       type: 'object',
