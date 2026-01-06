@@ -1167,25 +1167,12 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'when_date_info': {
+      // Use shared DateCalculator - single source of truth
       const dateStr = args.date as string;
-      const result = DateCalculator.calculate(dateStr);
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
-      const now = new Date(); now.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      const totalHours = Math.abs(diffDays) * 24;
-      const totalMinutes = totalHours * 60;
-      const weeks = Math.abs(diffDays) / 7;
-      return {
-        ...result,
-        daysFromToday: diffDays,
-        isPast: diffDays < 0,
-        isFuture: diffDays > 0,
-        isToday: diffDays === 0,
-        totalHours,
-        totalMinutes,
-        weeks: Math.round(weeks * 10) / 10,
-      };
+      if (!dateStr) {
+        throw new Error('Missing required field: date (YYYY-MM-DD format)');
+      }
+      return DateCalculator.calculate(dateStr);
     }
     case 'blood_calculator': {
       // Unified blood calculator with mode-based validation

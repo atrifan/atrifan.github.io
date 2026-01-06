@@ -537,31 +537,41 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'when_date_info',
-    description: 'Get comprehensive information about a date including zodiac and time calculations from today',
+    description: 'Get comprehensive information about a date including day of week, zodiac sign, time calculations from today (days, hours, minutes, weeks), and calendar info (day of year, week number, quarter, leap year).',
     category: TOOL_CATEGORIES.DATE_TIME,
     hasWidget: true,
     invocationMessages: { invoking: 'Analyzing date...', invoked: 'Date info ready' },
     inputSchema: {
       type: 'object',
       properties: {
-        date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (required)' },
       },
       required: ['date'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        date: { type: 'string' },
-        dayOfWeek: { type: 'string' },
-        dayOfYear: { type: 'number' },
-        weekNumber: { type: 'number' },
-        quarter: { type: 'number' },
-        isLeapYear: { type: 'boolean' },
-        zodiacSign: { type: 'string' },
-        daysFromToday: { type: 'number' },
+        // Core date info
+        date: { type: 'string', description: 'Input date in YYYY-MM-DD format' },
+        dayOfWeek: { type: 'string', description: 'Full day name (e.g., Monday)' },
+        dayOfWeekShort: { type: 'string', description: 'Short day name (e.g., Mon)' },
+        formattedDate: { type: 'string', description: 'Human-readable date (e.g., January 15th, 2026)' },
+        message: { type: 'string', description: 'Contextual message about the date' },
+        // Days calculation
+        daysFromToday: { type: 'number', description: 'Days from today (negative = past, positive = future)' },
         isPast: { type: 'boolean' },
         isFuture: { type: 'boolean' },
         isToday: { type: 'boolean' },
+        // Time breakdowns
+        totalHours: { type: 'number', description: 'Total hours from today' },
+        totalMinutes: { type: 'number', description: 'Total minutes from today' },
+        weeks: { type: 'number', description: 'Weeks from today (rounded to 1 decimal)' },
+        // Calendar info
+        dayOfYear: { type: 'number', description: 'Day of year (1-366)' },
+        weekOfYear: { type: 'number', description: 'Week of year (1-53)' },
+        quarter: { type: 'number', description: 'Quarter of year (1-4)' },
+        isLeapYear: { type: 'boolean' },
+        zodiacSign: { type: 'string', description: 'Zodiac sign for the date' },
       },
     },
   },

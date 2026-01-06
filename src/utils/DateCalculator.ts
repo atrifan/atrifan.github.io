@@ -1,18 +1,40 @@
 /**
  * Date Calculator Utility
- * Calculates day of week for any date, handles leap years correctly
+ *
+ * This is the SINGLE SOURCE OF TRUTH for date calculation logic.
+ * Used by both the MCP API (/api/mcp when_date_info) and the UI (WhenPage.tsx).
+ *
+ * GUIDELINE FOR MODIFYING:
+ * 1. Ensure MCP tool definition (tools-definitions.ts) matches the output
+ * 2. Ensure MCP execution (route.ts) calls DateCalculator.calculate()
+ * 3. Ensure UI component uses the same function
+ * 4. Update outputSchema in tools-definitions.ts if return type changes
  */
 
 export interface DateResult {
+  // Core date info
+  date: string;
   dayOfWeek: string;
   dayOfWeekShort: string;
   formattedDate: string;
   tense: 'past' | 'present' | 'future';
   message: string;
+  // Days calculation
   daysFromToday: number;
+  isPast: boolean;
+  isFuture: boolean;
+  isToday: boolean;
+  // Time breakdowns
+  totalHours: number;
+  totalMinutes: number;
+  weeks: number;
+  // Calendar info
   isLeapYear: boolean;
   dayOfYear: number;
   weekOfYear: number;
+  quarter: number;
+  // Zodiac
+  zodiacSign: string;
 }
 
 const DAYS_OF_WEEK = [
@@ -88,39 +110,86 @@ export class DateCalculator {
   }
 
   /**
+   * Get zodiac sign for a date
+   */
+  public static getZodiacSign(month: number, day: number): string {
+    const signs = [
+      { name: 'Capricorn', end: [1, 19] },
+      { name: 'Aquarius', end: [2, 18] },
+      { name: 'Pisces', end: [3, 20] },
+      { name: 'Aries', end: [4, 19] },
+      { name: 'Taurus', end: [5, 20] },
+      { name: 'Gemini', end: [6, 20] },
+      { name: 'Cancer', end: [7, 22] },
+      { name: 'Leo', end: [8, 22] },
+      { name: 'Virgo', end: [9, 22] },
+      { name: 'Libra', end: [10, 22] },
+      { name: 'Scorpio', end: [11, 21] },
+      { name: 'Sagittarius', end: [12, 21] },
+      { name: 'Capricorn', end: [12, 31] },
+    ];
+
+    for (const sign of signs) {
+      if (month < sign.end[0] || (month === sign.end[0] && day <= sign.end[1])) {
+        return sign.name;
+      }
+    }
+    return 'Capricorn';
+  }
+
+  /**
+   * Get quarter of year (1-4)
+   */
+  public static getQuarter(month: number): number {
+    return Math.ceil(month / 3);
+  }
+
+  /**
    * Main calculation - get all info about a date
+   * This is the SINGLE SOURCE OF TRUTH for date calculations
    */
   public static calculate(dateString: string): DateResult {
     // Parse date string (YYYY-MM-DD format)
     const [year, month, day] = dateString.split('-').map(Number);
     const targetDate = new Date(year, month - 1, day, 12, 0, 0);
-    
+
     // Get today at midnight for comparison
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const targetMidnight = new Date(year, month - 1, day, 0, 0, 0);
-    
+
     // Calculate days from today
     const daysFromToday = this.daysBetween(today, targetMidnight);
-    
+
+    // Boolean flags
+    const isPast = daysFromToday < 0;
+    const isFuture = daysFromToday > 0;
+    const isToday = daysFromToday === 0;
+
     // Determine tense
     let tense: 'past' | 'present' | 'future';
-    if (daysFromToday === 0) {
+    if (isToday) {
       tense = 'present';
-    } else if (daysFromToday < 0) {
+    } else if (isPast) {
       tense = 'past';
     } else {
       tense = 'future';
     }
-    
+
+    // Time breakdowns
+    const absDays = Math.abs(daysFromToday);
+    const totalHours = absDays * 24;
+    const totalMinutes = totalHours * 60;
+    const weeks = Math.round((absDays / 7) * 10) / 10;
+
     // Get day of week
     const dayOfWeek = DAYS_OF_WEEK[targetDate.getDay()];
     const dayOfWeekShort = DAYS_SHORT[targetDate.getDay()];
-    
+
     // Format date
     const formattedDate = this.formatDate(targetDate);
-    
+
     // Build message
     let message: string;
     if (tense === 'present') {
@@ -130,17 +199,26 @@ export class DateCalculator {
     } else {
       message = `${formattedDate} will be a ${dayOfWeek}`;
     }
-    
+
     return {
+      date: dateString,
       dayOfWeek,
       dayOfWeekShort,
       formattedDate,
       tense,
       message,
       daysFromToday,
+      isPast,
+      isFuture,
+      isToday,
+      totalHours,
+      totalMinutes,
+      weeks,
       isLeapYear: this.isLeapYear(year),
       dayOfYear: this.getDayOfYear(targetDate),
       weekOfYear: this.getWeekOfYear(targetDate),
+      quarter: this.getQuarter(month),
+      zodiacSign: this.getZodiacSign(month, day),
     };
   }
 }
