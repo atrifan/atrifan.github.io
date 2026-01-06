@@ -11,42 +11,10 @@ import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { MeasurementSystem } from '../types/preferences';
-
-// Blood type genetics data
-const BLOOD_TYPE_ALLELES: Record<string, string[]> = {
-  'A': ['AA', 'AO'],
-  'B': ['BB', 'BO'],
-  'AB': ['AB'],
-  'O': ['OO'],
-};
-
-const RH_ALLELES: Record<string, string[]> = {
-  '+': ['++', '+-'],
-  '-': ['--'],
-};
-
-// Blood compatibility matrix
-const DONATION_COMPATIBILITY: Record<string, string[]> = {
-  'O-': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
-  'O+': ['O+', 'A+', 'B+', 'AB+'],
-  'A-': ['A-', 'A+', 'AB-', 'AB+'],
-  'A+': ['A+', 'AB+'],
-  'B-': ['B-', 'B+', 'AB-', 'AB+'],
-  'B+': ['B+', 'AB+'],
-  'AB-': ['AB-', 'AB+'],
-  'AB+': ['AB+'],
-};
-
-const RECEIVE_COMPATIBILITY: Record<string, string[]> = {
-  'O-': ['O-'],
-  'O+': ['O-', 'O+'],
-  'A-': ['O-', 'A-'],
-  'A+': ['O-', 'O+', 'A-', 'A+'],
-  'B-': ['O-', 'B-'],
-  'B+': ['O-', 'O+', 'B-', 'B+'],
-  'AB-': ['O-', 'A-', 'B-', 'AB-'],
-  'AB+': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
-};
+import {
+  calculateDonationEligibility, calculateBloodCompatibility, calculateBabyBloodType,
+  BloodTypeABO, RhFactor
+} from '../utils/BloodCalculator';
 
 type CalculatorMode = 'donation' | 'compatibility' | 'baby';
 
@@ -158,82 +126,51 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
     });
   };
 
-  // Calculate blood volume (Nadler's formula)
-  private calculateBloodVolume = (weight: number, height: number, gender: 'male' | 'female'): number => {
-    const heightM = height / 100;
-    if (gender === 'male') {
-      return 0.3669 * Math.pow(heightM, 3) + 0.03219 * weight + 0.6041;
-    }
-    return 0.3561 * Math.pow(heightM, 3) + 0.03308 * weight + 0.1833;
-  };
-
+  // Use shared BloodCalculator - single source of truth
   private calculateDonation = () => {
     const { age, weight, height, heightFeet, heightInches, gender, unitSystem } = this.state;
-    const ageNum = parseInt(age);
 
-    // Convert to metric if imperial
-    let weightKg: number;
-    let heightCm: number;
+    // Call shared calculator
+    const result = calculateDonationEligibility({
+      age: parseInt(age),
+      weight: parseFloat(weight),
+      height: parseFloat(height),
+      gender,
+      unitSystem,
+      heightFeet: parseFloat(heightFeet) || undefined,
+      heightInches: parseFloat(heightInches) || undefined,
+    });
 
-    if (unitSystem === 'imperial') {
-      weightKg = parseFloat(weight) * 0.453592; // lbs to kg
-      const feet = parseFloat(heightFeet) || 0;
-      const inches = parseFloat(heightInches) || 0;
-      heightCm = (feet * 12 + inches) * 2.54; // feet/inches to cm
-    } else {
-      weightKg = parseFloat(weight);
-      heightCm = parseFloat(height);
-    }
-
-    const warnings: string[] = [];
-    const restrictions: string[] = [];
-    const tips: string[] = [];
-    let eligible = true;
-
-    // Age check (minimum 17, some places 16 with consent)
-    if (ageNum < 17) {
-      eligible = false;
+    // UI-specific: show warning modals
+    if (parseInt(age) < 17) {
       this.setState({ showAgeWarning: true });
-      warnings.push('You must be at least 17 years old to donate blood (16 with parental consent in some regions).');
-    } else if (ageNum > 65) {
-      warnings.push('First-time donors should be under 66. Regular donors can continue until 70+.');
     }
-
-    // Weight check (minimum 110 lbs / 50 kg)
-    if (weightKg < 50) {
-      eligible = false;
+    if (unitSystem === 'imperial') {
+      const weightKg = parseFloat(weight) * 0.453592;
+      if (weightKg < 50) this.setState({ showWeightWarning: true });
+    } else if (parseFloat(weight) < 50) {
       this.setState({ showWeightWarning: true });
-      warnings.push('You must weigh at least 50 kg (110 lbs) to donate blood safely.');
     }
 
-    // Calculate safe donation amount
-    const bloodVolume = this.calculateBloodVolume(weightKg, heightCm, gender);
-    const bloodVolumeML = bloodVolume * 1000;
-    // Standard donation is 450-500ml, max 10.5% of blood volume
-    const maxSafeDonation = Math.min(500, bloodVolumeML * 0.105);
-    const recommendedDonation = Math.round(Math.max(0, Math.min(maxSafeDonation, 470)));
+    // UI-specific: add restrictions (not in shared calculator)
+    const restrictions: string[] = [
+      'No blood-borne diseases (HIV, Hepatitis B/C, etc.)',
+      'Not currently sick or feeling unwell',
+      'No recent tattoos or piercings (wait 3-12 months depending on region)',
+      'No recent travel to malaria-endemic areas',
+      'Not pregnant or recently given birth (wait 6 months)',
+    ];
 
-    // Add standard restrictions
-    restrictions.push('No blood-borne diseases (HIV, Hepatitis B/C, etc.)');
-    restrictions.push('Not currently sick or feeling unwell');
-    restrictions.push('No recent tattoos or piercings (wait 3-12 months depending on region)');
-    restrictions.push('No recent travel to malaria-endemic areas');
-    restrictions.push('Not pregnant or recently given birth (wait 6 months)');
-
-    // Add tips
-    tips.push('Eat a healthy meal before donating');
-    tips.push('Stay well hydrated - drink plenty of water');
-    tips.push('Avoid alcohol 24 hours before donation');
-    tips.push('Get a good night\'s sleep');
-    tips.push('Bring ID and list of medications');
+    // UI-specific: add extra tip
+    const tips = [...result.tips, 'Bring ID and list of medications'];
 
     this.setState({
       donationResult: {
-        eligible,
-        amount: eligible ? recommendedDonation : 0,
-        maxSafeAmount: Math.round(maxSafeDonation),
-        bloodVolumeLiters: Math.round(bloodVolume * 100) / 100,
-        warnings,
+        eligible: result.eligible,
+        amount: result.amount,
+        maxSafeAmount: result.maxSafeAmount,
+        bloodVolumeLiters: result.bloodVolume,
+        warnings: result.warnings,
         restrictions,
         tips,
       },
@@ -242,18 +179,20 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
 
   private calculateCompatibility = () => {
     const { bloodType, rhFactor } = this.state;
-    const fullType = `${bloodType}${rhFactor}`;
 
-    const canDonateTo = DONATION_COMPATIBILITY[fullType] || [];
-    const canReceiveFrom = RECEIVE_COMPATIBILITY[fullType] || [];
+    // Call shared calculator
+    const result = calculateBloodCompatibility({
+      bloodType: bloodType as BloodTypeABO,
+      rhFactor: rhFactor as RhFactor,
+    });
 
     this.setState({
       compatibilityResult: {
-        bloodType: fullType,
-        canDonateTo,
-        canReceiveFrom,
-        isUniversalDonor: fullType === 'O-',
-        isUniversalRecipient: fullType === 'AB+',
+        bloodType: result.fullBloodType,
+        canDonateTo: result.canDonateTo,
+        canReceiveFrom: result.canReceiveFrom,
+        isUniversalDonor: result.isUniversalDonor,
+        isUniversalRecipient: result.isUniversalRecipient,
       },
     }, this.scrollToResult);
   };
@@ -261,92 +200,24 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
   private calculateBabyBlood = () => {
     const { fatherBloodType, fatherRh, motherBloodType, motherRh } = this.state;
 
-    // Calculate possible ABO types using Punnett square
-    const fatherAlleles = BLOOD_TYPE_ALLELES[fatherBloodType];
-    const motherAlleles = BLOOD_TYPE_ALLELES[motherBloodType];
+    // Call shared calculator
+    const result = calculateBabyBloodType({
+      fatherBloodType: fatherBloodType as BloodTypeABO,
+      fatherRh: fatherRh as RhFactor,
+      motherBloodType: motherBloodType as BloodTypeABO,
+      motherRh: motherRh as RhFactor,
+    });
 
-    const possibleGenotypes: Record<string, number> = {};
-    let totalCombinations = 0;
-
-    for (const fAllele of fatherAlleles) {
-      for (const mAllele of motherAlleles) {
-        // Each parent contributes one allele
-        for (const f of fAllele.split('')) {
-          for (const m of mAllele.split('')) {
-            const combo = [f, m].sort().join('');
-            possibleGenotypes[combo] = (possibleGenotypes[combo] || 0) + 1;
-            totalCombinations++;
-          }
-        }
-      }
-    }
-
-    // Convert genotypes to phenotypes
-    const phenotypes: Record<string, number> = {};
-    for (const [genotype, count] of Object.entries(possibleGenotypes)) {
-      let phenotype: string;
-      if (genotype === 'AA' || genotype === 'AO') phenotype = 'A';
-      else if (genotype === 'BB' || genotype === 'BO') phenotype = 'B';
-      else if (genotype === 'AB') phenotype = 'AB';
-      else phenotype = 'O';
-      phenotypes[phenotype] = (phenotypes[phenotype] || 0) + count;
-    }
-
-    // Calculate Rh possibilities
-    const fatherRhAlleles = RH_ALLELES[fatherRh];
-    const motherRhAlleles = RH_ALLELES[motherRh];
-
-    let rhPositiveChance = 0;
-    let rhNegativeChance = 0;
-    let rhCombinations = 0;
-
-    for (const fRh of fatherRhAlleles) {
-      for (const mRh of motherRhAlleles) {
-        for (const f of fRh.split('')) {
-          for (const m of mRh.split('')) {
-            rhCombinations++;
-            if (f === '+' || m === '+') rhPositiveChance++;
-            else rhNegativeChance++;
-          }
-        }
-      }
-    }
-
-    // Combine ABO and Rh
-    const possibleTypes: { type: string; percentage: number }[] = [];
-    for (const [type, count] of Object.entries(phenotypes)) {
-      const aboPercentage = (count / totalCombinations) * 100;
-      if (rhPositiveChance > 0) {
-        possibleTypes.push({
-          type: `${type}+`,
-          percentage: Math.round(aboPercentage * (rhPositiveChance / rhCombinations)),
-        });
-      }
-      if (rhNegativeChance > 0) {
-        possibleTypes.push({
-          type: `${type}-`,
-          percentage: Math.round(aboPercentage * (rhNegativeChance / rhCombinations)),
-        });
-      }
-    }
-
-    // Sort by percentage descending
-    possibleTypes.sort((a, b) => b.percentage - a.percentage);
-
-    // Check for Rh incompatibility risk
-    const rhIncompatibilityRisk = motherRh === '-' && fatherRh === '+';
-    let rhWarning: string | null = null;
-
-    if (rhIncompatibilityRisk) {
-      rhWarning = 'Rh incompatibility detected! If the mother is Rh-negative and the father is Rh-positive, the baby may be Rh-positive. This can cause the mother\'s immune system to produce antibodies against the baby\'s blood cells. Consult with a doctor about RhoGAM injection.';
+    // UI-specific: show warning modal
+    if (result.rhIncompatibilityRisk) {
       this.setState({ showRhWarning: true });
     }
 
     this.setState({
       babyResult: {
-        possibleTypes: possibleTypes.filter(t => t.percentage > 0),
-        rhIncompatibilityRisk,
-        rhWarning,
+        possibleTypes: result.possibleTypes,
+        rhIncompatibilityRisk: result.rhIncompatibilityRisk,
+        rhWarning: result.rhWarning,
       },
     }, this.scrollToResult);
   };

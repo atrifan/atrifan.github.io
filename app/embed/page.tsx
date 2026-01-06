@@ -14,6 +14,7 @@ import {
   RandomNumberWidget,
   LuckyNumberWidget,
   PickRandomWidget,
+  BloodWidget,
 } from '@/src/components/widgets';
 
 // Extend window for OpenAI
@@ -185,6 +186,22 @@ function renderWidget(tool: string, data: Record<string, unknown>) {
       return <PickRandomWidget
         selected={(data.selected || data.result) as string}
         totalItems={data.totalItems as number}
+      />;
+    case 'blood':
+      return <BloodWidget
+        calculatorMode={data.calculatorMode as 'donation' | 'compatibility' | 'baby'}
+        eligible={data.eligible as boolean}
+        amount={data.amount as number}
+        maxSafeAmount={data.maxSafeAmount as number}
+        bloodVolume={data.bloodVolume as number}
+        warnings={data.warnings as string[]}
+        fullBloodType={data.fullBloodType as string}
+        canDonateTo={data.canDonateTo as string[]}
+        canReceiveFrom={data.canReceiveFrom as string[]}
+        isUniversalDonor={data.isUniversalDonor as boolean}
+        isUniversalRecipient={data.isUniversalRecipient as boolean}
+        possibleTypes={data.possibleTypes as { type: string; percentage: number }[]}
+        rhIncompatibilityRisk={data.rhIncompatibilityRisk as boolean}
       />;
     default:
       return (

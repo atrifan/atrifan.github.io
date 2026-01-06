@@ -251,76 +251,55 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'blood_donation_eligibility',
-    description: 'Calculate blood donation eligibility based on weight, height, age, and sex',
+    name: 'blood_calculator',
+    description: 'Blood calculator with three modes: "donation" (check donation eligibility), "compatibility" (blood type transfusion compatibility), "baby" (predict baby blood type from parents). Mode determines required fields - tool will error with missing fields for each mode.',
     category: TOOL_CATEGORIES.HEALTH,
     hasWidget: true,
-    invocationMessages: { invoking: 'Checking donation eligibility...', invoked: 'Eligibility checked' },
+    invocationMessages: { invoking: 'Calculating blood info...', invoked: 'Blood calculation complete' },
     inputSchema: {
       type: 'object',
       properties: {
-        weight: { type: 'number', description: 'Weight in kilograms' },
-        height: { type: 'number', description: 'Height in centimeters' },
-        age: { type: 'number', description: 'Age in years' },
-        sex: { type: 'string', enum: ['male', 'female'] },
+        // Mode selector
+        calculatorMode: { type: 'string', enum: ['donation', 'compatibility', 'baby'], description: 'Calculator mode: "donation" for eligibility, "compatibility" for transfusion matching, "baby" for predicting baby blood type' },
+        // Donation mode fields
+        age: { type: 'number', description: 'Age in years (donation mode)' },
+        weight: { type: 'number', description: 'Weight in kg (metric) or lbs (imperial) (donation mode)' },
+        height: { type: 'number', description: 'Height in cm (metric only) (donation mode)' },
+        gender: { type: 'string', enum: ['male', 'female'], description: 'Gender for blood volume calculation (donation mode)' },
+        unitSystem: { type: 'string', enum: ['metric', 'imperial'], description: 'Unit system. Default: metric (donation mode)' },
+        heightFeet: { type: 'number', description: 'Height feet component (imperial only) (donation mode)' },
+        heightInches: { type: 'number', description: 'Height inches component (imperial only) (donation mode)' },
+        // Compatibility mode fields
+        bloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'ABO blood type (compatibility mode)' },
+        rhFactor: { type: 'string', enum: ['+', '-'], description: 'Rh factor positive or negative (compatibility mode)' },
+        // Baby mode fields
+        fatherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Father\'s ABO blood type (baby mode)' },
+        fatherRh: { type: 'string', enum: ['+', '-'], description: 'Father\'s Rh factor (baby mode)' },
+        motherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'], description: 'Mother\'s ABO blood type (baby mode)' },
+        motherRh: { type: 'string', enum: ['+', '-'], description: 'Mother\'s Rh factor (baby mode)' },
       },
-      required: ['weight', 'height', 'age', 'sex'],
+      required: ['calculatorMode'],
     },
     outputSchema: {
       type: 'object',
       properties: {
+        // Common
+        calculatorMode: { type: 'string' },
+        // Donation mode output
         eligible: { type: 'boolean' },
-        bloodVolume: { type: 'number' },
-        maxSafeAmount: { type: 'number' },
         amount: { type: 'number' },
+        maxSafeAmount: { type: 'number' },
+        bloodVolume: { type: 'number' },
         warnings: { type: 'array', items: { type: 'string' } },
-      },
-    },
-  },
-  {
-    name: 'blood_type_compatibility',
-    description: 'Check blood type compatibility for transfusions',
-    category: TOOL_CATEGORIES.HEALTH,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Checking blood compatibility...', invoked: 'Compatibility ready' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        bloodType: { type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
-      },
-      required: ['bloodType'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        bloodType: { type: 'string' },
+        tips: { type: 'array', items: { type: 'string' } },
+        // Compatibility mode output
+        fullBloodType: { type: 'string' },
         canDonateTo: { type: 'array', items: { type: 'string' } },
         canReceiveFrom: { type: 'array', items: { type: 'string' } },
         isUniversalDonor: { type: 'boolean' },
         isUniversalRecipient: { type: 'boolean' },
-      },
-    },
-  },
-  {
-    name: 'baby_blood_type',
-    description: 'Predict possible blood types for a baby based on parents blood types',
-    category: TOOL_CATEGORIES.HEALTH,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Predicting baby blood type...', invoked: 'Prediction ready' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        fatherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'] },
-        fatherRh: { type: 'string', enum: ['+', '-'] },
-        motherBloodType: { type: 'string', enum: ['A', 'B', 'AB', 'O'] },
-        motherRh: { type: 'string', enum: ['+', '-'] },
-      },
-      required: ['fatherBloodType', 'fatherRh', 'motherBloodType', 'motherRh'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        possibleTypes: { type: 'array', items: { type: 'object' } },
+        // Baby mode output
+        possibleTypes: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, percentage: { type: 'number' } } } },
         rhIncompatibilityRisk: { type: 'boolean' },
         rhWarning: { type: 'string' },
       },

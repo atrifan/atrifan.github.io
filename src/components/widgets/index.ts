@@ -8,4 +8,5 @@ export * from './ZodiacWidget';
 export * from './CountdownWidget';
 export * from './DecisionWidget';
 export * from './RandomWidget';
+export * from './BloodWidget';
 
