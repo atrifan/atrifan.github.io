@@ -9,6 +9,7 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { calculateTip } from '../utils/TipCalculator';
 
 interface TipPageState {
   mode: 'quick' | 'suggest';
@@ -56,23 +57,37 @@ export class TipPage extends Component<{}, TipPageState> {
   private calculateSuggestedTip = () => {
     this.setState({ isCalculating: true, suggestedTip: null });
     setTimeout(() => {
-      const { serviceQuality, mood, budget } = this.state;
-      const serviceBase = 5 + (serviceQuality - 1) * 5;
-      const moodMod = (mood - 3) * 1.5;
-      const budgetMod = budget === 1 ? -5 : budget === 2 ? -2 : budget === 3 ? 0 : budget === 4 ? 1 : 2;
-      let suggested = serviceBase + moodMod + budgetMod;
-      suggested += (Math.random() * 2 - 1);
-      suggested = Math.max(5, Math.min(30, Math.round(suggested)));
-      this.setState({ suggestedTip: suggested, isCalculating: false, tipPercent: suggested }, this.scrollToResult);
+      const { billAmount, serviceQuality, mood, budget, splitCount } = this.state;
+      // Use shared TipCalculator in mood mode
+      const result = calculateTip({
+        billAmount: parseFloat(billAmount) || 0,
+        splitBetween: splitCount,
+        calculatorMode: 'mood',
+        serviceQuality: serviceQuality,
+        mood: mood,
+        budgetSituation: budget,
+      });
+      this.setState({
+        suggestedTip: result.tipPercentage,
+        isCalculating: false,
+        tipPercent: result.tipPercentage
+      }, this.scrollToResult);
     }, 1500);
   };
 
   render() {
     const { mode, billAmount, tipPercent, splitCount, serviceQuality, mood, budget, suggestedTip, isCalculating } = this.state;
     const bill = parseFloat(billAmount) || 0;
-    const tipAmount = bill * (tipPercent / 100);
-    const total = bill + tipAmount;
-    const perPerson = total / splitCount;
+    // Use shared TipCalculator for consistent calculation
+    const tipResult = calculateTip({
+      billAmount: bill,
+      tipPercentage: tipPercent,
+      splitBetween: splitCount,
+      calculatorMode: 'static',
+    });
+    const tipAmount = tipResult.tipAmount;
+    const total = tipResult.total;
+    const perPerson = tipResult.perPerson;
     const gradient = 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%)';
 
     const sliderStyle = { width: '100%', accentColor: '#f59e0b' };

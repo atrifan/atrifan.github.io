@@ -3,6 +3,7 @@ import { clerkClient, verifyToken } from '@clerk/nextjs/server';
 import { WeightCalculator } from '@/src/utils/WeightCalculator';
 import { BudgetCalculator } from '@/src/utils/BudgetCalculator';
 import { DateCalculator } from '@/src/utils/DateCalculator';
+import { calculateTip, TipCalculatorInput, CalculatorMode, ServiceQuality, MoodLevel, BudgetSituation } from '@/src/utils/TipCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -703,33 +704,27 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { selected: items[index], index, totalItems: items.length };
     }
     case 'calculate_tip': {
-      const bill = args.billAmount as number;
-      let tipPercent = args.tipPercent as number | undefined;
-      const splitWays = (args.splitWays as number) || 1;
-      let suggested = false;
-
-      // If tipPercent not provided, calculate from serviceQuality, mood, budget
-      if (tipPercent === undefined || tipPercent === null) {
-        const serviceQuality = (args.serviceQuality as number) || 3;
-        const mood = (args.mood as number) || 3;
-        const budget = (args.budget as number) || 3;
-        // Calculate suggested tip: base 10% + adjustments
-        const avgScore = (serviceQuality + mood + budget) / 3;
-        tipPercent = Math.round(5 + avgScore * 4); // 9% to 25% range
-        suggested = true;
-      }
-
-      const tipAmount = bill * (tipPercent / 100);
-      const total = bill + tipAmount;
-      const perPerson = total / splitWays;
+      // Use shared TipCalculator - single source of truth for tip calculation logic
+      const input: TipCalculatorInput = {
+        billAmount: args.billAmount as number,
+        tipPercentage: args.tipPercentage as number | undefined,
+        splitBetween: args.splitBetween as number | undefined,
+        calculatorMode: args.calculatorMode as CalculatorMode | undefined,
+        serviceQuality: args.serviceQuality as ServiceQuality | number | undefined,
+        mood: args.mood as MoodLevel | number | undefined,
+        budgetSituation: args.budgetSituation as BudgetSituation | number | undefined,
+      };
+      const result = calculateTip(input);
+      // Return with legacy field names for widget compatibility
       return {
-        billAmount: bill,
-        tipPercent,
-        tipAmount: Math.round(tipAmount * 100) / 100,
-        total: Math.round(total * 100) / 100,
-        perPerson: Math.round(perPerson * 100) / 100,
-        splitWays,
-        suggested,
+        billAmount: result.billAmount,
+        tipPercent: result.tipPercentage,
+        tipAmount: result.tipAmount,
+        total: result.total,
+        perPerson: result.perPerson,
+        splitWays: result.splitBetween,
+        calculatorMode: result.calculatorMode,
+        suggested: result.suggested,
       };
     }
     case 'calculate_percentage': {

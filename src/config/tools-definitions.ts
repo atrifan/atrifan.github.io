@@ -10,6 +10,32 @@
  * 3. Add widget HTML generator in app/api/mcp/route.ts (generateWidgetHtml function)
  * 4. Add template data in app/api/mcp/route.ts (getTemplateData function)
  * 5. Add formatResultText in app/api/mcp/route.ts
+ *
+ * GUIDELINE FOR UNIFYING MCP TOOLS WITH UI:
+ * When a tool has both MCP and UI implementations, follow this pattern (see calculate_tip as example):
+ *
+ * 1. CREATE SHARED CALCULATOR: Create a shared function in src/utils/<ToolName>Calculator.ts
+ *    - Define input/output types with all parameters
+ *    - Use enums for categorical parameters (e.g., 'static' | 'mood')
+ *    - Handle defaults inside the function
+ *    - Only billAmount-like core params should be required; rest computed with defaults
+ *
+ * 2. UPDATE THIS FILE (tools-definitions.ts):
+ *    - inputSchema properties must match the shared function's input type
+ *    - Use enum arrays for categorical params
+ *    - Only truly required params in 'required' array
+ *    - Description should explain mode behavior
+ *
+ * 3. UPDATE MCP EXECUTION (route.ts):
+ *    - Import and call the shared function
+ *    - Map args to the shared function's input type
+ *    - Return result (may need field name mapping for widget compatibility)
+ *
+ * 4. UPDATE UI COMPONENT:
+ *    - Import and use the shared function
+ *    - Remove duplicate calculation logic
+ *
+ * Example: calculate_tip uses src/utils/TipCalculator.ts
  */
 
 // Tool categories
@@ -303,27 +329,34 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   // ============ FINANCE ============
   {
     name: 'calculate_tip',
-    description: 'Calculate tip amount and total bill',
+    description: 'Calculate tip amount and total bill. Supports two modes: "static" (provide tipPercentage directly) or "mood" (compute tip from serviceQuality, mood, and budgetSituation). If tipPercentage is not provided, mood mode is used automatically.',
     category: TOOL_CATEGORIES.FINANCE,
     hasWidget: true,
     invocationMessages: { invoking: 'Calculating tip...', invoked: 'Tip calculated' },
     inputSchema: {
       type: 'object',
       properties: {
-        billAmount: { type: 'number', description: 'Bill amount before tip' },
-        tipPercentage: { type: 'number', description: 'Tip percentage (e.g., 15, 18, 20)' },
+        billAmount: { type: 'number', description: 'Bill amount before tip (required)' },
+        tipPercentage: { type: 'number', description: 'Tip percentage (e.g., 15, 18, 20). Required for static mode, ignored in mood mode.' },
         splitBetween: { type: 'number', description: 'Number of people to split between (default: 1)' },
+        calculatorMode: { type: 'string', enum: ['static', 'mood'], description: 'Calculator mode: "static" uses tipPercentage directly, "mood" computes from feelings. Default: "static" if tipPercentage provided, else "mood".' },
+        serviceQuality: { type: 'string', enum: ['terrible', 'poor', 'okay', 'good', 'amazing'], description: 'How was the service? Used in mood mode. Default: "okay".' },
+        mood: { type: 'string', enum: ['awful', 'meh', 'neutral', 'happy', 'great'], description: 'How are you feeling? Used in mood mode. Default: "neutral".' },
+        budgetSituation: { type: 'string', enum: ['very_tight', 'tight', 'normal', 'comfortable', 'generous'], description: 'Budget situation. Used in mood mode. Default: "normal".' },
       },
-      required: ['billAmount', 'tipPercentage'],
+      required: ['billAmount'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        tipAmount: { type: 'number' },
-        totalAmount: { type: 'number' },
-        perPerson: { type: 'number' },
         billAmount: { type: 'number' },
         tipPercentage: { type: 'number' },
+        tipAmount: { type: 'number' },
+        total: { type: 'number' },
+        perPerson: { type: 'number' },
+        splitBetween: { type: 'number' },
+        calculatorMode: { type: 'string' },
+        suggested: { type: 'boolean' },
       },
     },
   },
