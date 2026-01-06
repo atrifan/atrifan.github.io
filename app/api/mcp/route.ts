@@ -19,6 +19,7 @@ import { convertUnits as convertUnitsShared, ConvertInput } from '@/src/utils/Un
 import { calculateAge as calculateAgeShared, AgeCalculatorInput } from '@/src/utils/AgeCalculator';
 import { calculatePercent as calculatePercentShared, PercentCalculatorInput, PercentOperation } from '@/src/utils/PercentCalculator';
 import { generateLuckyNumber, LuckyNumberInput } from '@/src/utils/LuckyNumberCalculator';
+import { calculatePositionSize, PositionSizeInput, CalculationMode, TradeDirection } from '@/src/utils/PositionSizeCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -871,24 +872,17 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       return { type, gender, count, names };
     }
     case 'calculate_position_size': {
-      const capital = args.capital as number;
-      const entry = args.entryPrice as number;
-      const stopLoss = args.stopLossPrice as number;
-      const riskPercent = args.riskPercent as number;
-      const direction = args.direction as string;
-      const riskAmount = capital * (riskPercent / 100);
-      const priceDiff = direction === 'long' ? entry - stopLoss : stopLoss - entry;
-      if (priceDiff <= 0) throw new Error('Invalid stop loss for direction');
-      const positionSize = riskAmount / priceDiff;
-      const positionValue = positionSize * entry;
-      return {
-        positionSize: Math.round(positionSize * 100) / 100,
-        positionValue: Math.round(positionValue * 100) / 100,
-        riskAmount: Math.round(riskAmount * 100) / 100,
-        riskPercent,
-        stopLossDistance: Math.round(priceDiff * 100) / 100,
-        stopLossPercent: Math.round((priceDiff / entry) * 10000) / 100,
+      // Use shared PositionSizeCalculator - single source of truth for position sizing
+      const input: PositionSizeInput = {
+        mode: (args.mode as CalculationMode) || 'riskAndSL',
+        capital: args.capital as number,
+        entryPrice: args.entryPrice as number,
+        direction: args.direction as TradeDirection,
+        riskPercent: args.riskPercent as number | undefined,
+        stopLossPrice: args.stopLossPrice as number | undefined,
+        quantity: args.quantity as number | undefined,
       };
+      return calculatePositionSize(input);
     }
     case 'spin_wheel': {
       // Use shared SpinCalculator - single source of truth for spin wheel logic
@@ -1641,14 +1635,31 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'position_size': {
-      content = `
-        <div class="header">📈 Position Size</div>
-        <div class="big-number" style="color:#10b981">$${Number(data.positionSize).toLocaleString()}</div>
-        <div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">${data.shares} shares</div>
-        <div class="stats">
-          <div class="stat-box"><div class="stat-label">Risk</div><div class="stat-value">${data.riskPercent}%</div></div>
-          <div class="stat-box"><div class="stat-label">Stop Loss</div><div class="stat-value">$${data.stopLoss}</div></div>
-        </div>`;
+      const posRiskColor = data.riskColor || '#eab308';
+      const posDir = data.direction === 'short' ? '🔴 SHORT' : '🟢 LONG';
+      if (data.calculatedField === 'suggestions' && data.suggestions) {
+        // riskOnly mode - show suggestions
+        const suggRows = (data.suggestions as Array<{slDistancePercent: number; stopLoss: number; quantity: number}>)
+          .slice(0, 3).map((s) => `<div style="display:flex;justify-content:space-between;padding:0.5rem;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:0.25rem"><span style="color:#ef4444">SL: $${s.stopLoss}</span><span style="color:#60a5fa">Qty: ${s.quantity}</span></div>`).join('');
+        content = `
+          <div class="header">📈 Position Suggestions</div>
+          <div class="big-number" style="color:${posRiskColor}">${data.riskPercent}% Risk</div>
+          <div class="label" style="background:rgba(234,179,8,0.2);color:#eab308">${posDir} | $${data.riskAmount} at risk</div>
+          <div style="margin-top:1rem">${suggRows}</div>`;
+      } else {
+        // Other modes - show calculated result
+        const calcLabel = data.calculatedField === 'quantity' ? '📦 Quantity' : data.calculatedField === 'stopLoss' ? '🛑 Stop Loss' : '⚠️ Risk %';
+        content = `
+          <div class="header">📈 Position Size</div>
+          <div class="big-number" style="color:${posRiskColor}">${data.riskPercent}%</div>
+          <div class="label" style="background:${posRiskColor}33;color:${posRiskColor}">${data.riskLabel} | ${posDir}</div>
+          <div class="stats">
+            <div class="stat-box"><div class="stat-label">🛑 Stop Loss</div><div class="stat-value" style="color:#ef4444">$${data.stopLoss}</div></div>
+            <div class="stat-box"><div class="stat-label">📦 Quantity</div><div class="stat-value" style="color:#60a5fa">${data.quantity}</div></div>
+            <div class="stat-box"><div class="stat-label">💰 Risk Amt</div><div class="stat-value">$${data.riskAmount}</div></div>
+            <div class="stat-box"><div class="stat-label">${calcLabel}</div><div class="stat-value">✨ Calculated</div></div>
+          </div>`;
+      }
       break;
     }
     case 'sleep_times': {
@@ -2126,13 +2137,26 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">' + data.gender + ' names</div>';
         }
         case 'position_size': {
-          return '<div class="header">📈 Position Size</div>' +
-            '<div class="big-number" style="color:#10b981">$' + Number(data.positionSize).toLocaleString() + '</div>' +
-            '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + data.shares + ' shares</div>' +
-            '<div class="stats">' +
-              '<div class="stat-box"><div class="stat-label">Risk</div><div class="stat-value">' + data.riskPercent + '%</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Stop Loss</div><div class="stat-value">$' + data.stopLoss + '</div></div>' +
-            '</div>';
+          var posRiskColor = data.riskColor || '#eab308';
+          var posDir = data.direction === 'short' ? '🔴 SHORT' : '🟢 LONG';
+          if (data.calculatedField === 'suggestions' && data.suggestions) {
+            var suggRows = data.suggestions.slice(0, 3).map(function(s) {
+              return '<div style="display:flex;justify-content:space-between;padding:0.5rem;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:0.25rem"><span style="color:#ef4444">SL: $' + s.stopLoss + '</span><span style="color:#60a5fa">Qty: ' + s.quantity + '</span></div>';
+            }).join('');
+            return '<div class="header">📈 Position Suggestions</div>' +
+              '<div class="big-number" style="color:' + posRiskColor + '">' + data.riskPercent + '% Risk</div>' +
+              '<div class="label" style="background:rgba(234,179,8,0.2);color:#eab308">' + posDir + ' | $' + data.riskAmount + ' at risk</div>' +
+              '<div style="margin-top:1rem">' + suggRows + '</div>';
+          } else {
+            return '<div class="header">📈 Position Size</div>' +
+              '<div class="big-number" style="color:' + posRiskColor + '">' + data.riskPercent + '%</div>' +
+              '<div class="label" style="background:' + posRiskColor + '33;color:' + posRiskColor + '">' + data.riskLabel + ' | ' + posDir + '</div>' +
+              '<div class="stats">' +
+                '<div class="stat-box"><div class="stat-label">🛑 Stop Loss</div><div class="stat-value" style="color:#ef4444">$' + data.stopLoss + '</div></div>' +
+                '<div class="stat-box"><div class="stat-label">📦 Quantity</div><div class="stat-value" style="color:#60a5fa">' + data.quantity + '</div></div>' +
+                '<div class="stat-box"><div class="stat-label">💰 Risk Amt</div><div class="stat-value">$' + data.riskAmount + '</div></div>' +
+              '</div>';
+          }
         }
         case 'sleep_times': {
           var times = data.sleepTimes || data.wakeTimes || [];
@@ -2385,7 +2409,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
       compatibility: 85, level: 'Excellent'
     },
     generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
-    calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
+    calculate_position_size: { mode: 'riskAndSL', direction: 'long', entryPrice: 100, capital: 10000, calculatedField: 'quantity', riskPercent: 2, riskAmount: 200, stopLoss: 95, slDistance: 5, slDistancePercent: 5, quantity: 40, positionValue: 4000, riskLabel: 'Moderate Risk', riskColor: '#eab308' },
     spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
     lucky_number: { luckyNumber: 7, numbers: [7], min: 1, max: 100, count: 1, range: '1 - 100' },

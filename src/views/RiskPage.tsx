@@ -8,33 +8,13 @@ import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
-
-type TradeDirection = 'long' | 'short';
-// 4 modes:
-// riskOnly - given risk%, suggest multiple SL/Qty combinations
-// riskAndSL - given risk% and SL, calculate quantity
-// riskAndQty - given risk% and quantity, calculate SL
-// slAndQty - given SL and quantity, calculate risk%
-type CalculationMode = 'riskOnly' | 'riskAndSL' | 'riskAndQty' | 'slAndQty';
-
-interface RiskResult {
-  stopLoss: number;
-  quantity: number;
-  riskAmount: number;
-  riskPercent: number;
-  slDistance: number;
-  slDistancePercent: number;
-  takeProfits: { rr: number; price: number; profit: number }[];
-  direction: TradeDirection;
-  calculatedField: 'both' | 'quantity' | 'stopLoss' | 'riskPercent';
-}
-
-interface SuggestedPosition {
-  slDistancePercent: number;
-  stopLoss: number;
-  quantity: number;
-  slDistance: number;
-}
+import {
+  calculatePositionSize,
+  CalculationMode,
+  TradeDirection,
+  PositionSizeOutput,
+  SuggestedPosition,
+} from '../utils/PositionSizeCalculator';
 
 interface RiskPageState {
   mode: CalculationMode;
@@ -44,8 +24,7 @@ interface RiskPageState {
   riskPercent: string;
   stopLossPrice: string;
   quantity: string;
-  result: RiskResult | null;
-  suggestions: SuggestedPosition[] | null;
+  result: PositionSizeOutput | null;
 }
 
 export class RiskPage extends Component<object, RiskPageState> {
@@ -62,7 +41,6 @@ export class RiskPage extends Component<object, RiskPageState> {
       stopLossPrice: '',
       quantity: '',
       result: null,
-      suggestions: null,
     };
   }
 
@@ -76,167 +54,37 @@ export class RiskPage extends Component<object, RiskPageState> {
     }, 100);
   };
 
-  // Mode 1: Risk % only → suggest multiple SL/Qty combinations
-  private calculateRiskOnly = () => {
-    const { capital, entryPrice, direction, riskPercent } = this.state;
-    const cap = parseFloat(capital);
-    const entry = parseFloat(entryPrice);
-    const riskPct = parseFloat(riskPercent);
-
-    if (!cap || !entry || !riskPct || riskPct <= 0) return;
-
-    const riskAmount = (cap * riskPct) / 100;
-    const slDistances = [1, 2, 3, 5, 10]; // Common SL distance percentages
-
-    const suggestions: SuggestedPosition[] = slDistances.map(slPct => {
-      const slDistance = entry * (slPct / 100);
-      const stopLoss = direction === 'long' ? entry - slDistance : entry + slDistance;
-      const quantity = riskAmount / slDistance;
-      return { slDistancePercent: slPct, stopLoss, quantity, slDistance };
-    });
-
-    this.setState({ suggestions, result: null }, this.scrollToResults);
-  };
-
-  // Mode 2: Risk % + SL → Calculate Quantity
-  private calculateQuantityFromRiskAndSL = () => {
-    const { capital, entryPrice, direction, riskPercent, stopLossPrice } = this.state;
+  // Unified calculation using shared calculator
+  private calculate = () => {
+    const { mode, capital, entryPrice, direction, riskPercent, stopLossPrice, quantity } = this.state;
     const cap = parseFloat(capital);
     const entry = parseFloat(entryPrice);
     const riskPct = parseFloat(riskPercent);
     const sl = parseFloat(stopLossPrice);
-
-    if (!cap || !entry || !riskPct || !sl) return;
-
-    // Validate SL direction
-    if (direction === 'long' && sl >= entry) {
-      alert('For LONG positions, Stop Loss must be below Entry Price');
-      return;
-    }
-    if (direction === 'short' && sl <= entry) {
-      alert('For SHORT positions, Stop Loss must be above Entry Price');
-      return;
-    }
-
-    const riskAmount = (cap * riskPct) / 100;
-    const slDistance = Math.abs(entry - sl);
-    const slDistancePercent = (slDistance / entry) * 100;
-    const quantity = riskAmount / slDistance;
-
-    const takeProfits = this.calculateTakeProfits(entry, sl, direction, quantity);
-
-    this.setState({
-      result: {
-        stopLoss: sl,
-        quantity,
-        riskAmount,
-        riskPercent: riskPct,
-        slDistance,
-        slDistancePercent,
-        takeProfits,
-        direction,
-        calculatedField: 'quantity',
-      },
-      suggestions: null,
-    }, this.scrollToResults);
-  };
-
-  // Mode 3: Risk % + Quantity → Calculate SL
-  private calculateSLFromRiskAndQty = () => {
-    const { capital, entryPrice, direction, riskPercent, quantity } = this.state;
-    const cap = parseFloat(capital);
-    const entry = parseFloat(entryPrice);
-    const riskPct = parseFloat(riskPercent);
     const qty = parseFloat(quantity);
 
-    if (!cap || !entry || !riskPct || !qty) return;
-
-    const riskAmount = (cap * riskPct) / 100;
-    const slDistance = riskAmount / qty;
-    const slDistancePercent = (slDistance / entry) * 100;
-    const stopLoss = direction === 'long' ? entry - slDistance : entry + slDistance;
-
-    const takeProfits = this.calculateTakeProfits(entry, stopLoss, direction, qty);
-
-    this.setState({
-      result: {
-        stopLoss,
-        quantity: qty,
-        riskAmount,
-        riskPercent: riskPct,
-        slDistance,
-        slDistancePercent,
-        takeProfits,
-        direction,
-        calculatedField: 'stopLoss',
-      },
-      suggestions: null,
-    }, this.scrollToResults);
-  };
-
-  // Mode 4: SL + Quantity → Calculate Risk %
-  private calculateRiskFromSLAndQty = () => {
-    const { capital, entryPrice, direction, stopLossPrice, quantity } = this.state;
-    const cap = parseFloat(capital);
-    const entry = parseFloat(entryPrice);
-    const sl = parseFloat(stopLossPrice);
-    const qty = parseFloat(quantity);
-
-    if (!cap || !entry || !sl || !qty) return;
-
-    // Validate SL direction
-    if (direction === 'long' && sl >= entry) {
-      alert('For LONG positions, Stop Loss must be below Entry Price');
-      return;
-    }
-    if (direction === 'short' && sl <= entry) {
-      alert('For SHORT positions, Stop Loss must be above Entry Price');
+    if (!cap || !entry) {
+      alert('Please enter capital and entry price');
       return;
     }
 
-    const slDistance = Math.abs(entry - sl);
-    const slDistancePercent = (slDistance / entry) * 100;
-    const riskAmount = slDistance * qty;
-    const riskPct = (riskAmount / cap) * 100;
-
-    const takeProfits = this.calculateTakeProfits(entry, sl, direction, qty);
-
-    this.setState({
-      result: {
-        stopLoss: sl,
-        quantity: qty,
-        riskAmount,
-        riskPercent: riskPct,
-        slDistance,
-        slDistancePercent,
-        takeProfits,
+    try {
+      const result = calculatePositionSize({
+        mode,
+        capital: cap,
+        entryPrice: entry,
         direction,
-        calculatedField: 'riskPercent',
-      },
-      suggestions: null,
-    }, this.scrollToResults);
+        riskPercent: riskPct || undefined,
+        stopLossPrice: sl || undefined,
+        quantity: qty || undefined,
+      });
+      this.setState({ result }, this.scrollToResults);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Calculation error');
+    }
   };
 
-  private calculateTakeProfits = (entry: number, sl: number, direction: TradeDirection, qty?: number) => {
-    const slDistance = Math.abs(entry - sl);
-    const rrLevels = [1.5, 2, 3];
-    const quantity = qty || parseFloat(this.state.quantity) || 1;
-
-    return rrLevels.map(rr => {
-      const tpDistance = slDistance * rr;
-      const price = direction === 'long' ? entry + tpDistance : entry - tpDistance;
-      const profit = tpDistance * quantity;
-      return { rr, price, profit };
-    });
-  };
-
-  private getRiskColor = (riskPct: number): string => {
-    if (riskPct <= 1) return '#22c55e'; // Green
-    if (riskPct <= 3) return '#eab308'; // Yellow
-    return '#ef4444'; // Red
-  };
-
-  private getRiskLabel = (riskPct: number): string => {
+  private getRiskLabelWithEmoji = (riskPct: number): string => {
     if (riskPct <= 1) return 'Low Risk ✓';
     if (riskPct <= 3) return 'Moderate Risk ⚠️';
     return 'High Risk ⛔';
@@ -293,7 +141,7 @@ export class RiskPage extends Component<object, RiskPageState> {
                   slAndQty: '⚖️ SL + Qty → Risk %',
                 };
                 return (
-                  <button key={m} onClick={() => this.setState({ mode: m, result: null, suggestions: null })}
+                  <button key={m} onClick={() => this.setState({ mode: m, result: null })}
                     style={{ padding: '0.75rem', fontSize: '0.8rem', fontWeight: 600, background: mode === m ? gradient : 'rgba(255,255,255,0.1)', color: '#fff', border: mode === m ? 'none' : '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', cursor: 'pointer' }}>
                     {labels[m]}
                   </button>
@@ -354,19 +202,14 @@ export class RiskPage extends Component<object, RiskPageState> {
               </div>
             )}
 
-            <button onClick={() => {
-              if (mode === 'riskOnly') this.calculateRiskOnly();
-              else if (mode === 'riskAndSL') this.calculateQuantityFromRiskAndSL();
-              else if (mode === 'riskAndQty') this.calculateSLFromRiskAndQty();
-              else this.calculateRiskFromSLAndQty();
-            }}
+            <button onClick={this.calculate}
               style={{ width: '100%', padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
               Calculate
             </button>
           </View>
 
-          {this.state.suggestions && this.renderSuggestions()}
-          {result && this.renderResults(result)}
+          {result && result.calculatedField === 'suggestions' && this.renderSuggestions(result)}
+          {result && result.calculatedField !== 'suggestions' && this.renderResults(result)}
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><AdBanner slot={ADS_CONFIG.slots.riskFooter} format="horizontal" /></View>
           <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}><Footer /></View>
@@ -375,11 +218,8 @@ export class RiskPage extends Component<object, RiskPageState> {
     );
   }
 
-  private renderSuggestions() {
-    const { suggestions, capital, riskPercent, direction, entryPrice } = this.state;
-    if (!suggestions) return null;
-
-    const riskAmount = (parseFloat(capital) * parseFloat(riskPercent)) / 100;
+  private renderSuggestions(result: PositionSizeOutput) {
+    const suggestions = result.suggestions || [];
     const cardStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1rem' };
 
     return (
@@ -390,10 +230,10 @@ export class RiskPage extends Component<object, RiskPageState> {
         <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #eab30833 0%, #f59e0b1a 100%)', border: '2px solid #eab308' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#eab308', marginBottom: '0.5rem' }}>
-              {riskPercent}% Risk = ${this.formatNumber(riskAmount)}
+              {result.riskPercent}% Risk = ${this.formatNumber(result.riskAmount)}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.7)' }}>
-              Entry: ${entryPrice} | Direction: {direction.toUpperCase()}
+              Entry: ${result.entryPrice} | Direction: {result.direction.toUpperCase()}
             </div>
           </div>
         </div>
@@ -437,10 +277,12 @@ export class RiskPage extends Component<object, RiskPageState> {
     );
   }
 
-  private renderResults(result: RiskResult) {
-    const riskColor = this.getRiskColor(result.riskPercent);
+  private renderResults(result: PositionSizeOutput) {
+    const riskColor = result.riskColor;
     const cardStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1rem' };
     const highlightColor = result.calculatedField === 'quantity' ? '#60a5fa' : result.calculatedField === 'stopLoss' ? '#ef4444' : '#eab308';
+
+    const takeProfits = result.takeProfits || [];
 
     return (
       <div ref={this.resultsRef} style={{ width: '100%', maxWidth: '38rem' }}>
@@ -450,7 +292,7 @@ export class RiskPage extends Component<object, RiskPageState> {
         <div style={{ ...cardStyle, background: `linear-gradient(135deg, ${riskColor}33 0%, ${riskColor}1a 100%)`, border: `2px solid ${riskColor}` }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '3rem', fontWeight: 900, color: riskColor }}>{result.riskPercent.toFixed(2)}%</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: riskColor, marginBottom: '0.5rem' }}>{this.getRiskLabel(result.riskPercent)}</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: riskColor, marginBottom: '0.5rem' }}>{this.getRiskLabelWithEmoji(result.riskPercent)}</div>
             <div style={{ color: 'rgba(255,255,255,0.7)' }}>Risk Amount: <strong style={{ color: '#fff' }}>${this.formatNumber(result.riskAmount)}</strong></div>
           </div>
         </div>
@@ -461,12 +303,12 @@ export class RiskPage extends Component<object, RiskPageState> {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
             <div style={{ background: result.calculatedField === 'stopLoss' ? `${highlightColor}22` : 'rgba(255,255,255,0.08)', padding: '1rem', borderRadius: '12px', textAlign: 'center', border: result.calculatedField === 'stopLoss' ? `2px solid ${highlightColor}` : 'none' }}>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>🛑 Stop Loss {result.calculatedField === 'stopLoss' && '✨'}</div>
-              <div style={{ color: '#ef4444', fontSize: '1.3rem', fontWeight: 700 }}>${this.formatNumber(result.stopLoss)}</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>-{result.slDistancePercent.toFixed(2)}% from entry</div>
+              <div style={{ color: '#ef4444', fontSize: '1.3rem', fontWeight: 700 }}>${this.formatNumber(result.stopLoss || 0)}</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>-{(result.slDistancePercent || 0).toFixed(2)}% from entry</div>
             </div>
             <div style={{ background: result.calculatedField === 'quantity' ? `${highlightColor}22` : 'rgba(255,255,255,0.08)', padding: '1rem', borderRadius: '12px', textAlign: 'center', border: result.calculatedField === 'quantity' ? `2px solid ${highlightColor}` : 'none' }}>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>📦 Quantity {result.calculatedField === 'quantity' && '✨'}</div>
-              <div style={{ color: '#60a5fa', fontSize: '1.3rem', fontWeight: 700 }}>{this.formatNumber(result.quantity, 4)}</div>
+              <div style={{ color: '#60a5fa', fontSize: '1.3rem', fontWeight: 700 }}>{this.formatNumber(result.quantity || 0, 4)}</div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>units</div>
             </div>
           </div>
@@ -476,7 +318,7 @@ export class RiskPage extends Component<object, RiskPageState> {
         <div style={cardStyle}>
           <h3 style={{ color: '#fff', margin: '0 0 1rem 0', fontSize: '1rem' }}>🎯 Take Profit Zones (Risk:Reward)</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {result.takeProfits.map((tp, i) => {
+            {takeProfits.map((tp, i) => {
               const colors = ['#22c55e', '#10b981', '#059669'];
               return (
                 <div key={tp.rr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: `${colors[i]}22`, padding: '1rem', borderRadius: '12px', border: `1px solid ${colors[i]}66` }}>
