@@ -13,6 +13,7 @@ import { calculateFlip, FlipCalculatorInput, FlipMode } from '@/src/utils/FlipCa
 import { calculateZone, ZoneCalculatorInput } from '@/src/utils/ZoneCalculator';
 import { calculateSpin, SpinCalculatorInput, WHEEL_COLORS } from '@/src/utils/SpinCalculator';
 import { makeDecision, DecisionCalculatorInput, DecisionMode } from '@/src/utils/DecisionCalculator';
+import { calculateCountdown as calculateCountdownShared, CountdownCalculatorInput } from '@/src/utils/CountdownCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -875,20 +876,12 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'calculate_countdown': {
-      const [y, m, d] = (args.eventDate as string).split('-').map(Number);
-      const eventDate = new Date(y, m - 1, d);
-      const now = new Date(); now.setHours(0, 0, 0, 0);
-      const diffMs = eventDate.getTime() - now.getTime();
-      const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-      const weeks = Math.floor(Math.abs(days) / 7);
-      const months = Math.floor(Math.abs(days) / 30.44);
-      return {
-        eventName: args.eventName || 'Event',
-        eventDate: args.eventDate,
-        days, weeks, months,
-        isPast: days < 0,
-        isToday: days === 0,
+      // Use shared CountdownCalculator - single source of truth for countdown logic
+      const input: CountdownCalculatorInput = {
+        eventDate: args.eventDate as string,
+        eventName: args.eventName as string | undefined,
       };
+      return calculateCountdownShared(input);
     }
     case 'make_decision': {
       // Use shared DecisionCalculator - single source of truth for decision logic
@@ -1549,17 +1542,18 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
       break;
     }
     case 'countdown': {
-      const isPast = data.isPast as boolean;
-      const isToday = data.isToday as boolean;
+      const countdownIsPast = data.isPast as boolean;
+      const countdownIsToday = data.isToday as boolean;
+      const countdownAbsDays = data.absoluteDays ?? Math.abs(data.days as number);
       content = `
-        <div class="header">📅 Countdown</div>
+        <div class="header">⏳ Countdown</div>
         <div style="text-align:center;color:#fff;font-size:1.1rem;margin-bottom:0.5rem">${data.eventName}</div>
-        ${isToday ? `<div class="big-number" style="color:#10b981">🎉</div><div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Today!</div>` : `
-          <div class="big-number" style="color:${isPast ? '#94a3b8' : '#60a5fa'}">${Math.abs(data.days as number)}</div>
-          <div class="label" style="background:rgba(96,165,250,0.2);color:#60a5fa">days ${isPast ? 'ago' : 'to go'}</div>
+        ${countdownIsToday ? `<div class="big-number" style="color:#10b981">🎉</div><div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">Today!</div>` : `
+          <div class="big-number" style="color:${countdownIsPast ? '#94a3b8' : '#06b6d4'}">${countdownAbsDays}</div>
+          <div class="label" style="background:rgba(6,182,212,0.2);color:#06b6d4">days ${countdownIsPast ? 'ago' : 'to go'}</div>
           <div class="stats">
-            <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${Math.abs(data.weeks as number)}</div></div>
-            <div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">${Math.abs(data.months as number)}</div></div>
+            <div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">${data.weeks}</div></div>
+            <div class="stat-box"><div class="stat-label">Months</div><div class="stat-value">${data.months}</div></div>
           </div>`}`;
       break;
     }
@@ -2183,14 +2177,20 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '</div>';
         }
         case 'countdown': {
-          var isPast = data.isPast || data.days < 0;
-          var absDays = Math.abs(data.days);
+          var cdIsPast = data.isPast || data.days < 0;
+          var cdIsToday = data.isToday || data.days === 0;
+          var cdAbsDays = data.absoluteDays || Math.abs(data.days);
+          if (cdIsToday) {
+            return '<div class="header">⏳ Countdown</div>' +
+              '<div class="big-number" style="color:#10b981">🎉</div>' +
+              '<div class="label" style="background:rgba(16,185,129,0.2);color:#10b981">' + (data.eventName || 'Event') + ' is Today!</div>';
+          }
           return '<div class="header">⏳ Countdown</div>' +
-            '<div class="big-number" style="color:#f59e0b">' + absDays + '</div>' +
-            '<div class="label" style="background:rgba(245,158,11,0.2);color:#f59e0b">days ' + (isPast ? 'ago' : 'remaining') + '</div>' +
+            '<div class="big-number" style="color:#06b6d4">' + cdAbsDays + '</div>' +
+            '<div class="label" style="background:rgba(6,182,212,0.2);color:#06b6d4">days ' + (cdIsPast ? 'ago' : 'to go') + '</div>' +
             '<div class="stats">' +
               '<div class="stat-box"><div class="stat-label">Event</div><div class="stat-value">' + (data.eventName || 'Target') + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Date</div><div class="stat-value">' + data.targetDate + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeks + '</div></div>' +
             '</div>';
         }
         case 'decision': {
@@ -2406,8 +2406,13 @@ function formatResultText(toolName: string, result: unknown): string {
       return `Age: ${r.years} years, ${r.months} months, ${r.days} days (${r.totalDays} total days). Next birthday in ${r.daysUntilNextBirthday} days.`;
     case 'zodiac_compatibility':
       return `${(r.person1 as { name: string }).name} ❤️ ${(r.person2 as { name: string }).name}: ${r.compatibility}% compatibility (${r.level})`;
-    case 'calculate_countdown':
-      return `${r.eventName}: ${Math.abs(r.days as number)} days ${r.isPast ? 'ago' : 'to go'} (${r.weeks} weeks, ${r.months} months)`;
+    case 'calculate_countdown': {
+      if (r.isToday) {
+        return `⏳ ${r.eventName} is today! 🎉`;
+      }
+      const cdAbsDays = r.absoluteDays ?? Math.abs(r.days as number);
+      return `⏳ ${r.eventName}: ${cdAbsDays} days ${r.isPast ? 'ago' : 'to go'} (${r.weeks} weeks, ${r.months} months)`;
+    }
     case 'make_decision': {
       const decMode = r.mode as string;
       if (decMode === 'yesNo') {
@@ -2473,7 +2478,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     calculate_age: { years: 30, months: 6, days: 15, totalDays: 11138, daysUntilBirthday: 180 },
     convert_units: { result: 2.2, fromValue: 1, fromUnit: 'kg', toUnit: 'lb' },
     calculate_cycle: { nextPeriodStart: '2026-01-28', nextPeriodEnd: '2026-02-02', fertileWindowStart: '2026-01-10', fertileWindowEnd: '2026-01-16', ovulationDate: '2026-01-14', currentDay: 10, phase: 'follicular', daysUntilNextPeriod: 18, cycleLength: 28, periodLength: 5, mode: 'simplified' },
-    calculate_countdown: { days: 100, weeks: 14, months: 3, targetDate: '2026-04-11', direction: 'until' },
+    calculate_countdown: { eventName: 'Summer Vacation', eventDate: '2026-04-16', days: 100, absoluteDays: 100, weeks: 14, months: 3, isPast: false, isToday: false, direction: 'until', summary: '100 days until Summer Vacation' },
     make_decision: { decision: 'Go for it! 🚀', mode: 'yesNo', confidence: 85, icon: '🚀' },
     zodiac_compatibility: {
       person1: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire' },

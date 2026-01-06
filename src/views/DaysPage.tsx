@@ -9,20 +9,12 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { calculateCountdown, CountdownCalculatorOutput } from '../utils/CountdownCalculator';
 
 interface DaysPageState {
   eventName: string;
   eventDate: string;
-  result: CountdownResult | null;
-}
-
-interface CountdownResult {
-  days: number;
-  hours: number;
-  minutes: number;
-  weeks: number;
-  months: number;
-  isPast: boolean;
+  result: CountdownCalculatorOutput | null;
 }
 
 export class DaysPage extends Component<{}, DaysPageState> {
@@ -51,23 +43,18 @@ export class DaysPage extends Component<{}, DaysPageState> {
     this.setState({ eventName: '', eventDate: '', result: null });
   };
 
-  private calculateCountdown = () => {
-    const { eventDate } = this.state;
+  private calculateCountdownHandler = () => {
+    const { eventDate, eventName } = this.state;
     if (!eventDate) return;
 
-    const event = new Date(eventDate);
-    const now = new Date();
-    const diff = event.getTime() - now.getTime();
-    const isPast = diff < 0;
-    const absDiff = Math.abs(diff);
+    // Use shared calculateCountdown from CountdownCalculator
+    const result = calculateCountdown({
+      eventDate,
+      eventName: eventName || 'Event',
+      includeTime: true, // Include hours and minutes for UI display
+    });
 
-    const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const weeks = Math.floor(days / 7);
-    const months = Math.floor(days / 30.44);
-
-    this.setState({ result: { days, hours, minutes, weeks, months, isPast } }, this.scrollToResults);
+    this.setState({ result }, this.scrollToResults);
   };
 
   render() {
@@ -105,7 +92,7 @@ export class DaysPage extends Component<{}, DaysPageState> {
               <input type="date" value={eventDate} onChange={(e) => this.setState({ eventDate: e.target.value })}
                 style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', marginBottom: '1rem', colorScheme: 'dark', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button onClick={this.calculateCountdown}
+                <button onClick={this.calculateCountdownHandler}
                   style={{ flex: 1, padding: '1rem', fontSize: '1.2rem', fontWeight: 700, background: gradient, color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
                   Start Countdown ⏳
                 </button>
@@ -127,9 +114,9 @@ export class DaysPage extends Component<{}, DaysPageState> {
             <>
               <div ref={this.resultsRef} id="days-results" style={{ width: '100%', maxWidth: '38rem', background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(8, 145, 178, 0.3) 100%)', borderRadius: '24px', padding: '2rem', border: '2px solid rgba(255,255,255,0.3)', textAlign: 'center' }}>
                 {eventName && <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginBottom: '0.5rem' }}>{result.isPast ? 'Since' : 'Until'} {eventName}</div>}
-                <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', fontWeight: 800, color: '#06b6d4', marginBottom: '0.5rem' }}>{result.days}</div>
-                <div style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>days {result.isPast ? 'ago' : 'to go'}</div>
-                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.1rem', marginBottom: '1.5rem' }}>{result.days} days, {result.hours} hours, {result.minutes} minutes</div>
+                <div style={{ fontSize: 'clamp(3rem, 10vw, 4rem)', fontWeight: 800, color: result.isToday ? '#10b981' : '#06b6d4', marginBottom: '0.5rem' }}>{result.isToday ? '🎉' : result.absoluteDays}</div>
+                <div style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '1rem' }}>{result.isToday ? 'Today!' : `days ${result.isPast ? 'ago' : 'to go'}`}</div>
+                {!result.isToday && <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.1rem', marginBottom: '1.5rem' }}>{result.absoluteDays} days, {result.hours ?? 0} hours, {result.minutes ?? 0} minutes</div>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                   <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '12px' }}>
                     <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Weeks</div>
@@ -145,7 +132,7 @@ export class DaysPage extends Component<{}, DaysPageState> {
                 <ShareResults
                   targetRef={this.resultsRef}
                   title="Countdown - Tulzo"
-                  text={`${result.days} days ${result.isPast ? 'since' : 'until'} ${eventName || 'my event'}! ⏳`}
+                  text={result.summary}
                 />
               </div>
             </>
