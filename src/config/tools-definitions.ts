@@ -984,30 +984,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'get_zodiac_sign',
-    description: 'Get zodiac sign from birth date with personality traits',
-    category: TOOL_CATEGORIES.FUN,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Looking up zodiac...', invoked: 'Zodiac found' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        birthDate: { type: 'string', description: 'Birth date in YYYY-MM-DD format' },
-      },
-      required: ['birthDate'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        sign: { type: 'string' },
-        element: { type: 'string' },
-        symbol: { type: 'string' },
-        dateRange: { type: 'string' },
-        traits: { type: 'array', items: { type: 'string' } },
-      },
-    },
-  },
-  {
     name: 'lucky_number',
     description: 'Generate lucky numbers based on various methods',
     category: TOOL_CATEGORIES.FUN,

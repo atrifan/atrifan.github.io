@@ -936,12 +936,6 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
         level: compat >= 80 ? 'Excellent' : compat >= 60 ? 'Good' : compat >= 40 ? 'Moderate' : 'Challenging',
       };
     }
-    case 'get_zodiac_sign': {
-      const [, m, d] = (args.birthDate as string).split('-').map(Number);
-      const sign = getSignFromDate(m, d);
-      const info = getSignInfo(sign);
-      return { sign, name: info?.name, symbol: info?.symbol, element: info?.element, traits: info?.traits };
-    }
     case 'generate_names': {
       const type = args.type as string;
       const gender = (args.gender as string) || 'any';
@@ -1312,7 +1306,6 @@ function getWidgetType(toolName: string): string {
     'calculate_countdown': 'countdown',
     'make_decision': 'decision',
     'zodiac_compatibility': 'zodiac',
-    'get_zodiac_sign': 'zodiac_sign',
     'generate_names': 'names',
     'calculate_position_size': 'position_size',
     'spin_wheel': 'spin_wheel',
@@ -1744,15 +1737,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
           <div class="stat-box"><div class="stat-label">🥚 Ovulation</div><div class="stat-value">${data.ovulationDate || '—'}</div></div>
           <div class="stat-box"><div class="stat-label">💚 Fertile Window</div><div class="stat-value">${data.fertileWindowStart || data.fertileStart || '—'} - ${data.fertileWindowEnd || data.fertileEnd || '—'}</div></div>
         </div>`;
-      break;
-    }
-    case 'zodiac_sign': {
-      const sign = data as Record<string, unknown>;
-      content = `
-        <div class="header">⭐ Zodiac Sign</div>
-        <div style="text-align:center;font-size:4rem;margin:0.5rem 0">${sign.symbol || '⭐'}</div>
-        <div class="big-number" style="color:#a78bfa;font-size:2rem">${sign.sign || sign.name || 'Unknown'}</div>
-        <div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">${sign.element || 'Element'} • ${sign.dates || ''}</div>`;
       break;
     }
     case 'names': {
@@ -2227,12 +2211,6 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
               '<div class="stat-box"><div class="stat-label">' + (data.person2 && data.person2.symbol || '⭐') + '</div><div class="stat-value">' + (data.person2 && data.person2.name || data.sign2) + '</div></div>' +
             '</div>';
         }
-        case 'zodiac_sign': {
-          return '<div class="header">⭐ Zodiac Sign</div>' +
-            '<div style="text-align:center;font-size:4rem;margin:0.5rem 0">' + (data.symbol || '⭐') + '</div>' +
-            '<div class="big-number" style="color:#a78bfa;font-size:2rem">' + (data.sign || data.name || 'Unknown') + '</div>' +
-            '<div class="label" style="background:rgba(167,139,250,0.2);color:#a78bfa">' + (data.element || 'Element') + ' • ' + (data.dates || '') + '</div>';
-        }
         case 'cycle': {
           var phaseColors = { menstrual: '#ef4444', follicular: '#22c55e', ovulation: '#f59e0b', luteal: '#8b5cf6' };
           var phaseColor = phaseColors[data.phase] || '#f472b6';
@@ -2502,7 +2480,6 @@ function getTemplateData(toolName: string): Record<string, unknown> {
       person2: { sign: 'leo', name: 'Leo', symbol: '♌', element: 'Fire' },
       compatibility: 85, level: 'Excellent'
     },
-    get_zodiac_sign: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire', traits: ['Bold', 'Ambitious'] },
     generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
     calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
     spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
