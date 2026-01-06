@@ -11,6 +11,7 @@ import {
 } from '@/src/utils/BloodCalculator';
 import { calculateFlip, FlipCalculatorInput, FlipMode } from '@/src/utils/FlipCalculator';
 import { calculateZone, ZoneCalculatorInput } from '@/src/utils/ZoneCalculator';
+import { calculateSpin, SpinCalculatorInput, WHEEL_COLORS } from '@/src/utils/SpinCalculator';
 import { getSignFromDate, getCompatibility, getSignInfo, ZODIAC_SIGNS, ZodiacSign } from '@/src/data/zodiac';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
@@ -991,10 +992,11 @@ function executeTool(name: string, args: Record<string, unknown>): unknown {
       };
     }
     case 'spin_wheel': {
-      const options = args.options as string[];
-      if (!options || options.length === 0) throw new Error('Options required');
-      const index = Math.floor(Math.random() * options.length);
-      return { result: options[index], index, totalOptions: options.length, options };
+      // Use shared SpinCalculator - single source of truth for spin wheel logic
+      const input: SpinCalculatorInput = {
+        options: args.options as string[],
+      };
+      return calculateSpin(input);
     }
     case 'zone_calculator': {
       // Use shared ZoneCalculator - single source of truth for timezone conversion
@@ -1312,7 +1314,7 @@ function getWidgetType(toolName: string): string {
     'get_zodiac_sign': 'zodiac_sign',
     'generate_names': 'names',
     'calculate_position_size': 'position_size',
-    'spin_wheel': 'pick_random',
+    'spin_wheel': 'spin_wheel',
     'zone_calculator': 'zone',
     'generate_unique_id': 'unique_id',
     'lucky_number': 'lucky_number',
@@ -1595,6 +1597,37 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
         <div style="text-align:center;font-size:3rem;margin:0.5rem 0">🎯</div>
         <div class="big-number" style="color:#f472b6;font-size:1.8rem">${selected}</div>
         ${data.totalItems ? `<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">Selected from ${data.totalItems} items</div>` : ''}`;
+      break;
+    }
+    case 'spin_wheel': {
+      const spinOptions = (data.options as string[]) || [];
+      const spinWheelColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+      const spinSegmentAngle = 360 / spinOptions.length;
+      const spinSegments = spinOptions.map((opt: string, i: number) => {
+        const color = spinWheelColors[i % spinWheelColors.length];
+        const startAngle = i * spinSegmentAngle;
+        const endAngle = (i + 1) * spinSegmentAngle;
+        const startRad = (startAngle - 90) * Math.PI / 180;
+        const endRad = (endAngle - 90) * Math.PI / 180;
+        const x1 = 50 + 45 * Math.cos(startRad);
+        const y1 = 50 + 45 * Math.sin(startRad);
+        const x2 = 50 + 45 * Math.cos(endRad);
+        const y2 = 50 + 45 * Math.sin(endRad);
+        const largeArc = spinSegmentAngle > 180 ? 1 : 0;
+        return `<path d="M50,50 L${x1},${y1} A45,45 0 ${largeArc},1 ${x2},${y2} Z" fill="${color}"/>`;
+      }).join('');
+      const spinWinnerColor = spinWheelColors[(data.index as number) % spinWheelColors.length];
+      content = `
+        <div class="header">🎡 Spin Wheel</div>
+        <div style="text-align:center;margin:0.5rem 0">
+          <svg viewBox="0 0 100 100" style="width:120px;height:120px">
+            ${spinSegments}
+            <circle cx="50" cy="50" r="8" fill="#1e1e32" stroke="#fff" stroke-width="2"/>
+            <polygon points="50,5 45,15 55,15" fill="#fff"/>
+          </svg>
+        </div>
+        <div class="big-number" style="color:${spinWinnerColor};font-size:1.8rem">${data.result}</div>
+        <div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Winner from ${spinOptions.length} options</div>`;
       break;
     }
     case 'ideal_weight': {
@@ -2137,6 +2170,15 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
             '<div class="big-number" style="color:#f472b6;font-size:1.5rem">' + data.result + '</div>' +
             '<div class="label" style="background:rgba(244,114,182,0.2);color:#f472b6">from ' + options.length + ' options</div>';
         }
+        case 'spin_wheel': {
+          var spinOptions = data.options || [];
+          var wheelColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+          var winnerColor = wheelColors[data.index % wheelColors.length];
+          return '<div class="header">🎡 Spin Wheel</div>' +
+            '<div style="text-align:center;font-size:3rem;margin:0.5rem 0">🎡</div>' +
+            '<div class="big-number" style="color:' + winnerColor + ';font-size:1.8rem">' + data.result + '</div>' +
+            '<div class="label" style="background:rgba(139,92,246,0.2);color:#8b5cf6">Winner from ' + spinOptions.length + ' options</div>';
+        }
         case 'percentage': {
           return '<div class="header">📊 Percentage</div>' +
             '<div class="big-number" style="color:#f472b6">' + data.result + '%</div>' +
@@ -2385,8 +2427,9 @@ function formatResultText(toolName: string, result: unknown): string {
     case 'lucky_number':
       return `🍀 Lucky number: ${r.luckyNumber}`;
     case 'pick_random':
+      return `🎯 Selected: ${r.result || r.selected}`;
     case 'spin_wheel':
-      return `Selected: ${r.result || r.selected}`;
+      return `🎡 The wheel landed on: ${r.result} (option ${(r.index as number) + 1} of ${r.totalOptions})`;
     case 'blood_calculator': {
       const mode = r.calculatorMode as string;
       if (mode === 'donation') {
@@ -2447,7 +2490,7 @@ function getTemplateData(toolName: string): Record<string, unknown> {
     get_zodiac_sign: { sign: 'aries', name: 'Aries', symbol: '♈', element: 'Fire', traits: ['Bold', 'Ambitious'] },
     generate_names: { names: ['Alex', 'Jordan', 'Taylor'], type: 'first', count: 3 },
     calculate_position_size: { positionSize: 100, riskAmount: 50, shares: 10, entryPrice: 100, stopLoss: 95 },
-    spin_wheel: { result: 'Winner!', options: ['Winner!', 'Try Again', 'Bonus'] },
+    spin_wheel: { result: 'Pizza', index: 0, totalOptions: 4, options: ['Pizza', 'Burger', 'Sushi', 'Tacos'], finalRotation: 2520, segmentAngle: 90 },
     zone_calculator: { sourceTime: '10:00', sourceTimezone: 'America/New_York', sourceCity: 'New York', conversions: [{ timezone: 'Europe/London', city: 'London', time: '15:00', offset: 0, offsetDiff: 5, dayChange: '' }] },
     generate_unique_id: { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', type: 'uuid' },
     lucky_number: { number: 7, min: 1, max: 100 },

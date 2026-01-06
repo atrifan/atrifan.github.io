@@ -626,23 +626,26 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'spin_wheel',
-    description: 'Spin a wheel with custom options',
+    description: 'Spin a wheel to randomly select from custom options. Great for making decisions, picking winners, or choosing randomly between choices. Requires at least 2 options.',
     category: TOOL_CATEGORIES.FUN,
     hasWidget: true,
-    invocationMessages: { invoking: 'Spinning wheel...', invoked: 'Wheel stopped' },
+    invocationMessages: { invoking: 'Spinning the wheel...', invoked: 'The wheel has stopped!' },
     inputSchema: {
       type: 'object',
       properties: {
-        options: { type: 'array', items: { type: 'string' }, description: 'List of options to choose from' },
+        options: { type: 'array', items: { type: 'string' }, description: 'List of options to spin between (minimum 2 required). Examples: ["Pizza", "Burger", "Sushi"] or ["Yes", "No", "Maybe"]' },
       },
       required: ['options'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        result: { type: 'string' },
-        options: { type: 'array', items: { type: 'string' } },
-        index: { type: 'number' },
+        result: { type: 'string', description: 'The winning option selected by the wheel' },
+        index: { type: 'number', description: 'Index of the winning option (0-based)' },
+        totalOptions: { type: 'number', description: 'Total number of options in the wheel' },
+        options: { type: 'array', items: { type: 'string' }, description: 'All options that were in the wheel' },
+        finalRotation: { type: 'number', description: 'Final rotation angle in degrees (for animation)' },
+        segmentAngle: { type: 'number', description: 'Angle of each segment in degrees' },
       },
     },
   },

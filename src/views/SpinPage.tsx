@@ -9,6 +9,11 @@ import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import {
+  WHEEL_COLORS,
+  parseOptionsFromText,
+  getWinningIndexFromRotation,
+} from '../utils/SpinCalculator';
 
 interface SpinPageState {
   options: string;
@@ -16,8 +21,6 @@ interface SpinPageState {
   isSpinning: boolean;
   result: string | null;
 }
-
-const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
 export class SpinPage extends Component<{}, SpinPageState> {
   private resultsRef: RefObject<HTMLDivElement> = createRef();
@@ -44,18 +47,18 @@ export class SpinPage extends Component<{}, SpinPageState> {
   };
 
   private spin = () => {
-    const optionList = this.state.options.split('\n').map(o => o.trim()).filter(o => o);
+    // Use shared parseOptionsFromText from SpinCalculator
+    const optionList = parseOptionsFromText(this.state.options);
     if (optionList.length < 2) return;
 
     this.setState({ isSpinning: true, result: null });
     const spins = 5 + Math.random() * 5;
     const finalRotation = this.state.rotation + spins * 360;
-    
+
     setTimeout(() => {
-      const normalizedRotation = finalRotation % 360;
-      const segmentAngle = 360 / optionList.length;
-      const winningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) % 360 / segmentAngle);
-      this.setState({ rotation: finalRotation, isSpinning: false, result: optionList[winningIndex % optionList.length] });
+      // Use shared getWinningIndexFromRotation from SpinCalculator
+      const winningIndex = getWinningIndexFromRotation(finalRotation, optionList.length);
+      this.setState({ rotation: finalRotation, isSpinning: false, result: optionList[winningIndex] });
     }, 4000);
 
     this.setState({ rotation: finalRotation });
@@ -63,7 +66,8 @@ export class SpinPage extends Component<{}, SpinPageState> {
 
   render() {
     const { options, rotation, isSpinning, result } = this.state;
-    const optionList = options.split('\n').map(o => o.trim()).filter(o => o);
+    // Use shared parseOptionsFromText from SpinCalculator
+    const optionList = parseOptionsFromText(options);
     const gradient = 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)';
 
     return (
@@ -109,7 +113,7 @@ export class SpinPage extends Component<{}, SpinPageState> {
                   const largeArc = angle > 180 ? 1 : 0;
                   return (
                     <g key={i}>
-                      <path d={`M140,140 L${x1},${y1} A130,130 0 ${largeArc},1 ${x2},${y2} Z`} fill={COLORS[i % COLORS.length]} />
+                      <path d={`M140,140 L${x1},${y1} A130,130 0 ${largeArc},1 ${x2},${y2} Z`} fill={WHEEL_COLORS[i % WHEEL_COLORS.length]} />
                       <text x={140 + 80 * Math.cos((startAngle + angle / 2) * Math.PI / 180)} y={140 + 80 * Math.sin((startAngle + angle / 2) * Math.PI / 180)}
                         fill="#fff" fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle"
                         transform={`rotate(${startAngle + angle / 2 + 90}, ${140 + 80 * Math.cos((startAngle + angle / 2) * Math.PI / 180)}, ${140 + 80 * Math.sin((startAngle + angle / 2) * Math.PI / 180)})`}>
