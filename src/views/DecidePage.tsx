@@ -42,12 +42,6 @@ export class DecidePage extends Component<{}, DecidePageState> {
     }
   };
 
-  private handleTap = () => {
-    if (!this.state.isAnimating) {
-      this.decide();
-    }
-  };
-
   private decide = () => {
     this.setState({ isAnimating: true, result: null });
 
@@ -80,7 +74,7 @@ export class DecidePage extends Component<{}, DecidePageState> {
     const gradient = 'linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)';
 
     return (
-      <div onTouchEnd={this.handleTap} style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
         <SideAds
           leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
           leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
@@ -97,7 +91,7 @@ export class DecidePage extends Component<{}, DecidePageState> {
             <div className="animate-float" style={{ marginBottom: '0.5rem' }}><DecideIcon size={80} /></div>
             <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 3rem)', fontWeight: 900, background: gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', margin: 0 }}>DECIDE</h1>
             <p style={{ fontSize: 'clamp(0.85rem, 2.5vw, 1.1rem)', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>Decision Maker 🎯</p>
-            <p style={{ fontSize: 'clamp(0.75rem, 2vw, 0.9rem)', color: 'rgba(255,255,255,0.5)', marginTop: '0.15rem' }}>Press SPACE or tap to decide</p>
+            <p style={{ fontSize: 'clamp(0.75rem, 2vw, 0.9rem)', color: 'rgba(255,255,255,0.5)', marginTop: '0.15rem' }}>Press SPACE or tap the button to decide</p>
           </View>
 
           <View UNSAFE_style={{ width: '100%', maxWidth: '38rem' }}>

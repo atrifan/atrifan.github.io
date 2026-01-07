@@ -7,6 +7,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { Footer } from '../components/Footer';
 import { AlertModal } from '../components/AlertModal';
+import { ShareResults } from '../components/ShareResults';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import {
@@ -177,6 +178,14 @@ export class RankPage extends Component<{}, RankPageState> {
     }
   };
 
+  private getShareText = (): string => {
+    const { funnelSteps } = this.state;
+    if (funnelSteps.length < 2) return 'Check out how unique you are! 🦄';
+    const finalStep = funnelSteps[funnelSteps.length - 1];
+    const rarityRatio = Math.round(WORLD_POPULATION / finalStep.population);
+    return `I'm 1 in ${this.formatNumber(rarityRatio)}! 🦄 Find out how unique YOU are!`;
+  };
+
   private renderFunnel = () => {
     const { funnelSteps } = this.state;
     if (funnelSteps.length === 0) return null;
@@ -204,8 +213,9 @@ export class RankPage extends Component<{}, RankPageState> {
               {/* Funnel segment */}
               <div style={{
                 width: `${widthPercent}%`,
+                minWidth: '200px',
                 background: `linear-gradient(135deg, ${color}dd, ${color}99)`,
-                padding: '1rem',
+                padding: 'clamp(0.5rem, 2vw, 1rem)',
                 borderRadius: index === 0 ? '16px 16px 0 0' : isLast ? '0 0 16px 16px' : '0',
                 position: 'relative',
                 transition: 'all 0.5s ease-out',
@@ -213,18 +223,19 @@ export class RankPage extends Component<{}, RankPageState> {
                 border: `2px solid ${color}`,
                 borderBottom: isLast ? `2px solid ${color}` : 'none',
                 marginTop: index > 0 ? '-2px' : '0',
+                overflow: 'hidden',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#fff', fontSize: '1rem' }}>{step.label}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>{step.description}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: 'clamp(1rem, 3vw, 1.5rem)', flexShrink: 0 }}>{icon}</span>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 700, color: '#fff', fontSize: 'clamp(0.75rem, 2.5vw, 1rem)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.label}</div>
+                      <div style={{ fontSize: 'clamp(0.6rem, 2vw, 0.75rem)', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.description}</div>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 800, color: '#fff', fontSize: '1.2rem' }}>{this.formatNumber(step.population)}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 800, color: '#fff', fontSize: 'clamp(0.85rem, 2.5vw, 1.2rem)' }}>{this.formatNumber(step.population)}</div>
+                    <div style={{ fontSize: 'clamp(0.6rem, 2vw, 0.75rem)', color: 'rgba(255,255,255,0.7)' }}>
                       {step.percentage >= 1 ? `${step.percentage.toFixed(1)}%` : `${step.percentage.toFixed(3)}%`}
                     </div>
                   </div>
@@ -493,6 +504,16 @@ export class RankPage extends Component<{}, RankPageState> {
               </h2>
               {this.renderFunnel()}
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textAlign: 'center', marginTop: '1rem' }}>Data source: {DATA_SOURCE}</p>
+            </div>
+          )}
+
+          {funnelSteps.length > 0 && (
+            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <ShareResults
+                targetRef={this.resultsRef}
+                title="How Unique Are You? - Tulzo"
+                text={this.getShareText()}
+              />
             </div>
           )}
 
