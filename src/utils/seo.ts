@@ -87,9 +87,9 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     keywords: ['love calculator', 'compatibility test', 'love match', 'relationship calculator', 'name compatibility', 'love percentage'],
   },
   when: {
-    title: 'Countdown Timer - Days Until Any Event | Tulzo',
-    description: 'Free countdown timer. Count down days, hours, minutes until any event - holidays, birthdays, vacations, deadlines. Create custom countdowns.',
-    keywords: ['countdown timer', 'days until', 'event countdown', 'holiday countdown', 'birthday countdown', 'deadline timer'],
+    title: 'Date Calculator - Day of Week, Zodiac Sign & Calendar Info | Tulzo',
+    description: 'Free date calculator. Find the day of week for any date, get zodiac sign, week number, day of year, quarter, and leap year info. Calculate days between dates.',
+    keywords: ['date calculator', 'day of week calculator', 'zodiac sign by date', 'what day was', 'week of year', 'day of year', 'leap year calculator', 'calendar calculator', 'date info'],
   },
   convert: {
     title: 'Unit Converter - Length, Weight, Temperature & More | Tulzo',
