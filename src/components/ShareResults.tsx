@@ -148,20 +148,49 @@ export const ShareResults: React.FC<ShareResultsProps> = ({
     setIsOpen(false);
   };
 
-  // Copy image to clipboard
+  // Copy image to clipboard with mobile fallback
   const handleCopyImage = async () => {
     const blob = await captureScreenshot();
     if (!blob) return;
 
+    // Check if ClipboardItem is available and supports image/png
+    const canUseClipboardItem = typeof ClipboardItem !== 'undefined' &&
+      typeof navigator.clipboard?.write === 'function';
+
+    if (canUseClipboardItem) {
+      try {
+        // For Safari, we need to pass a Promise that resolves to the blob
+        // This is because Safari requires the clipboard write to be "synchronous" with user gesture
+        const clipboardItem = new ClipboardItem({
+          'image/png': Promise.resolve(blob),
+        });
+        await navigator.clipboard.write([clipboardItem]);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.warn('ClipboardItem write failed, trying fallback:', err);
+        // Fall through to fallback
+      }
+    }
+
+    // Fallback: Download the image instead
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
-      ]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title.toLowerCase().replace(/\s+/g, '-')}-results.png`;
+      a.click();
+      URL.revokeObjectURL(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setError('Image downloaded (copy not supported on this device)');
+      setTimeout(() => {
+        setCopied(false);
+        setError(null);
+      }, 3000);
     } catch (err) {
-      console.error('Copy failed:', err);
-      setError('Failed to copy image');
+      console.error('Fallback download failed:', err);
+      setError('Failed to copy or download image');
     }
   };
 
@@ -185,9 +214,16 @@ export const ShareResults: React.FC<ShareResultsProps> = ({
     const encodedText = encodeURIComponent(text || title);
 
     if (platform === 'instagram') {
-      // Instagram doesn't have a web share API - copy image and show instructions
+      // Instagram doesn't have a web share API - copy/download image and show instructions
       handleCopyImage().then(() => {
-        alert('Image copied to clipboard! Open Instagram and paste it in a new post or story.');
+        // Check if clipboard is likely supported (the handler sets error message if it fell back to download)
+        setTimeout(() => {
+          if (error && error.includes('downloaded')) {
+            alert('Image saved! Open Instagram and upload it in a new post or story.');
+          } else {
+            alert('Image copied to clipboard! Open Instagram and paste it in a new post or story.');
+          }
+        }, 100);
       });
       return;
     }
@@ -337,7 +373,14 @@ export const ShareResults: React.FC<ShareResultsProps> = ({
             )}
 
             {error && (
-              <p style={{ color: '#ef4444', fontSize: '0.85rem', padding: '0.5rem', margin: '0 0 1rem', background: 'rgba(239,68,68,0.1)', borderRadius: '8px' }}>
+              <p style={{
+                color: error.includes('downloaded') ? '#fbbf24' : '#ef4444',
+                fontSize: '0.85rem',
+                padding: '0.5rem',
+                margin: '0 0 1rem',
+                background: error.includes('downloaded') ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)',
+                borderRadius: '8px'
+              }}>
                 {error}
               </p>
             )}
