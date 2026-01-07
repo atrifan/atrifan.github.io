@@ -58,6 +58,15 @@ export class WhenPage extends Component<object, WhenPageState> {
     return `That was ${absDays} days ago`;
   };
 
+  private getZodiacSymbol = (sign: string): string => {
+    const symbols: Record<string, string> = {
+      'Aries': '♈', 'Taurus': '♉', 'Gemini': '♊', 'Cancer': '♋',
+      'Leo': '♌', 'Virgo': '♍', 'Libra': '♎', 'Scorpio': '♏',
+      'Sagittarius': '♐', 'Capricorn': '♑', 'Aquarius': '♒', 'Pisces': '♓',
+    };
+    return symbols[sign] || '⭐';
+  };
+
   private getTimeBreakdowns = (days: number): string[] => {
     const absDays = Math.abs(days);
     if (days === 0) return [];
@@ -258,12 +267,13 @@ export class WhenPage extends Component<object, WhenPageState> {
 
   private getShareText(result: DateResult): string {
     const absDays = Math.abs(result.daysFromToday);
+    const zodiac = `${this.getZodiacSymbol(result.zodiacSign)} ${result.zodiacSign}`;
     if (result.isToday) {
-      return `Today is ${result.dayOfWeek}! 📅`;
+      return `Today is ${result.dayOfWeek}! ${zodiac} 📅`;
     } else if (result.isPast) {
-      return `${result.formattedDate} was a ${result.dayOfWeek} (${absDays} days ago) 📅`;
+      return `${result.formattedDate} was a ${result.dayOfWeek} (${absDays} days ago) • ${zodiac} 📅`;
     } else {
-      return `${result.formattedDate} will be a ${result.dayOfWeek} (${absDays} days from now) 📅`;
+      return `${result.formattedDate} will be a ${result.dayOfWeek} (${absDays} days from now) • ${zodiac} 📅`;
     }
   }
 
@@ -374,6 +384,19 @@ export class WhenPage extends Component<object, WhenPageState> {
           gap: '1rem',
           marginTop: '1rem',
         }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            padding: '1rem',
+            borderRadius: '12px',
+          }}>
+            <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '0.25rem' }}>
+              Zodiac Sign
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>
+              {this.getZodiacSymbol(result.zodiacSign)} {result.zodiacSign}
+            </div>
+          </div>
+
           <div style={{
             background: 'rgba(255, 255, 255, 0.1)',
             padding: '1rem',

@@ -1137,16 +1137,18 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
           var tenseColor = data.isPast ? '#ef4444' : data.isToday ? '#22c55e' : '#3b82f6';
           var tenseLabel = data.isPast ? 'Past' : data.isToday ? 'Today' : 'Future';
           var absDays = Math.abs(data.daysFromToday || 0);
+          var zodiacSymbols = { 'Aries': '♈', 'Taurus': '♉', 'Gemini': '♊', 'Cancer': '♋', 'Leo': '♌', 'Virgo': '♍', 'Libra': '♎', 'Scorpio': '♏', 'Sagittarius': '♐', 'Capricorn': '♑', 'Aquarius': '♒', 'Pisces': '♓' };
+          var zodiacSymbol = zodiacSymbols[data.zodiacSign] || '⭐';
           return '<div class="header">📅 Date Info</div>' +
             '<div class="big-number" style="color:#60a5fa;font-size:1.3rem">' + (data.formattedDate || data.date) + '</div>' +
             '<div class="label" style="background:' + tenseColor + '33;color:' + tenseColor + '">' + data.dayOfWeek + ' • ' + tenseLabel + '</div>' +
             '<div class="stats">' +
+              '<div class="stat-box"><div class="stat-label">Zodiac</div><div class="stat-value">' + zodiacSymbol + ' ' + data.zodiacSign + '</div></div>' +
               '<div class="stat-box"><div class="stat-label">Days</div><div class="stat-value">' + absDays + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Weeks</div><div class="stat-value">' + data.weeks + '</div></div>' +
               '<div class="stat-box"><div class="stat-label">Week #</div><div class="stat-value">' + data.weekOfYear + '</div></div>' +
-              '<div class="stat-box"><div class="stat-label">Q</div><div class="stat-value">' + data.quarter + '</div></div>' +
+              '<div class="stat-box"><div class="stat-label">Day #</div><div class="stat-value">' + data.dayOfYear + '</div></div>' +
             '</div>' +
-            '<div style="margin-top:0.5rem;font-size:0.75rem;color:rgba(255,255,255,0.6)">' + data.zodiacSign + ' • Day ' + data.dayOfYear + (data.isLeapYear ? ' • Leap Year' : '') + '</div>';
+            '<div style="margin-top:0.5rem;font-size:0.75rem;color:rgba(255,255,255,0.6)">Q' + data.quarter + (data.isLeapYear ? ' • Leap Year' : '') + '</div>';
         }
         case 'blood_donation': {
           var eligibleColor = data.eligible ? '#22c55e' : '#ef4444';
