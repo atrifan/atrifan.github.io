@@ -8,7 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
-import type { MCPTool, SaveModalType, CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
+import type { MCPTool, SaveModalType } from '../types/mcp-composer';
 
 // Category icons
 const categoryIcons: Record<string, string> = {
@@ -249,6 +249,7 @@ export const MCPComposerPage: React.FC = () => {
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [serverName, setServerName] = useState('');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -256,6 +257,8 @@ export const MCPComposerPage: React.FC = () => {
   const [showModal, setShowModal] = useState<SaveModalType>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [allToolNames, setAllToolNames] = useState<string[]>([]);
+  // Map of tool name -> tool ID for Supabase updates
+  const [toolIdMap, setToolIdMap] = useState<Record<string, string>>({});
 
   // Scroll to top on mount
   useEffect(() => {
@@ -269,59 +272,69 @@ export const MCPComposerPage: React.FC = () => {
     }
   }, [router]);
 
-  // Fetch tools first, then load server data
+  // Fetch tools first, then load server data from Supabase
   useEffect(() => {
-    fetch('/api/tools')
-      .then(res => res.json())
-      .then((data: ToolsResponse) => {
-        setTools(data.tools);
-        setCategories(data.categories);
-        const toolNames = data.tools.map((t: MCPTool) => t.name);
+    const loadData = async () => {
+      try {
+        // Fetch all available tools
+        const toolsRes = await fetch('/api/tools');
+        const toolsData: ToolsResponse = await toolsRes.json();
+        setTools(toolsData.tools);
+        setCategories(toolsData.categories);
+        const toolNames = toolsData.tools.map((t: MCPTool) => t.name);
         setAllToolNames(toolNames);
 
         // Now load server data based on edit mode
         if (editServerId) {
-          if (isDefaultServer) {
-            // Editing default server - load disabled tools config
-            try {
-              const defaultConfig = localStorage.getItem('defaultServerConfig');
-              if (defaultConfig) {
-                const config: DefaultServerConfig = JSON.parse(defaultConfig);
-                // Selected tools = all tools minus disabled tools
-                const disabledSet = new Set(config.disabledTools);
-                setSelectedTools(toolNames.filter((name: string) => !disabledSet.has(name)));
+          try {
+            const serverRes = await fetch(`/api/servers/${encodeURIComponent(editServerId)}`);
+            if (serverRes.ok) {
+              const { server } = await serverRes.json();
+
+              // Build tool ID map from server response
+              const idMap: Record<string, string> = {};
+              server.tools.forEach((t: { name: string; toolId: string }) => {
+                idMap[t.name] = t.toolId;
+              });
+              setToolIdMap(idMap);
+
+              // Get enabled tool names
+              const enabledTools = server.tools
+                .filter((t: { isEnabled: boolean }) => t.isEnabled)
+                .map((t: { name: string }) => t.name);
+
+              if (isDefaultServer) {
+                setSelectedTools(enabledTools.length > 0 ? enabledTools : toolNames);
+                setServerName('Default Server');
               } else {
-                // No config yet, all tools are enabled
-                setSelectedTools(toolNames);
+                setServerName(server.name || server.serverName);
+                setSelectedTools(enabledTools);
               }
-            } catch (error) {
-              console.error('Failed to load default server config:', error);
+              setIsEditMode(true);
+            } else if (isDefaultServer) {
+              // No server config yet for default, all tools are enabled
               setSelectedTools(toolNames);
+              setServerName('Default Server');
+              setIsEditMode(true);
             }
-            setServerName('Default Server');
-            setIsEditMode(true);
-          } else {
-            // Editing custom server
-            try {
-              const stored = localStorage.getItem('customMcpServers');
-              if (stored) {
-                const servers: CustomMCPServer[] = JSON.parse(stored);
-                const serverToEdit = servers.find(s => s.id === editServerId);
-                if (serverToEdit) {
-                  setServerName(serverToEdit.name);
-                  setSelectedTools(serverToEdit.tools);
-                  setIsEditMode(true);
-                }
-              }
-            } catch (error) {
-              console.error('Failed to load server for editing:', error);
+          } catch (error) {
+            console.error('Failed to load server config:', error);
+            if (isDefaultServer) {
+              setSelectedTools(toolNames);
+              setServerName('Default Server');
+              setIsEditMode(true);
             }
           }
         }
 
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      } catch (error) {
+        console.error('Failed to load tools:', error);
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [editServerId, isDefaultServer]);
 
   const filteredTools = tools.filter(tool => {
@@ -371,52 +384,49 @@ export const MCPComposerPage: React.FC = () => {
     }
   };
 
-  const confirmSave = () => {
-    if (isDefaultServer) {
-      // Save default server config - store disabled tools
-      const selectedSet = new Set(selectedTools);
-      const disabledTools = allToolNames.filter(name => !selectedSet.has(name));
+  const confirmSave = async () => {
+    setSaving(true);
 
-      const config: DefaultServerConfig = {
-        disabledTools,
-        updatedAt: new Date().toISOString(),
-      };
+    try {
+      if (isEditMode && editServerId) {
+        // Update existing server
+        const selectedSet = new Set(selectedTools);
+        const disabledTools = allToolNames.filter(name => !selectedSet.has(name));
 
-      localStorage.setItem('defaultServerConfig', JSON.stringify(config));
-      router.push('/dashboard');
-      return;
-    }
+        const response = await fetch(`/api/servers/${encodeURIComponent(editServerId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: isDefaultServer ? undefined : serverName.trim(),
+            disabledTools,
+          }),
+        });
 
-    // For custom servers, store in localStorage (later will be API)
-    const customServers: CustomMCPServer[] = JSON.parse(
-      localStorage.getItem('customMcpServers') || '[]'
-    );
+        if (!response.ok) {
+          throw new Error('Failed to update server configuration');
+        }
+      } else {
+        // Create new server
+        const response = await fetch('/api/servers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: serverName.trim(),
+            serverName: serverName.trim().toLowerCase().replace(/\s+/g, '-'),
+            tools: selectedTools,
+          }),
+        });
 
-    if (isEditMode && editServerId) {
-      // Update existing server
-      const serverIndex = customServers.findIndex(s => s.id === editServerId);
-      if (serverIndex !== -1) {
-        customServers[serverIndex] = {
-          ...customServers[serverIndex],
-          name: serverName.trim(),
-          tools: selectedTools,
-          updatedAt: new Date().toISOString(),
-        };
+        if (!response.ok) {
+          throw new Error('Failed to create server');
+        }
       }
-    } else {
-      // Create new server
-      const newServer: CustomMCPServer = {
-        id: `mcp_${Date.now()}`,
-        name: serverName.trim(),
-        tools: selectedTools,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      customServers.push(newServer);
-    }
 
-    localStorage.setItem('customMcpServers', JSON.stringify(customServers));
-    router.push('/dashboard');
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Failed to save server configuration:', error);
+      setSaving(false);
+    }
   };
 
   const formatToolName = (name: string) => {

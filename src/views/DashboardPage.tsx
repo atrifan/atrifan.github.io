@@ -10,7 +10,23 @@ import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isBillingEnabled } from '../config/billing.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
-import type { CustomMCPServer, DefaultServerConfig } from '../types/mcp-composer';
+// Server data from API
+interface ServerFromApi {
+  id: string;
+  name: string;
+  serverName: string;
+  plan: string;
+  isActive: boolean;
+  createdAt: string;
+  tools: {
+    id: string;
+    toolId: string;
+    name: string;
+    description: string;
+    category: string;
+    isEnabled: boolean;
+  }[];
+}
 import { ToolCountWarning } from './MCPComposerPage';
 import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -172,6 +188,7 @@ interface MCPConnection {
   method: 'oauth' | 'header' | 'path' | 'internal';
   lastUsed: string;
   ips?: string[]; // Up to 5 IPs per agent:method
+  serverName?: string; // Server name for this connection
   // Legacy fields for backwards compatibility
   ip?: string;
   authMethod?: 'oauth' | 'header' | 'path';
@@ -186,6 +203,7 @@ export const DashboardPage: React.FC = () => {
   const { has } = useAuth();
   const { preferences, updatePreferences } = usePreferences();
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeySuffix, setApiKeySuffix] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -194,10 +212,15 @@ export const DashboardPage: React.FC = () => {
   const [mcpTab, setMcpTab] = useState<MCPTab>('oauth');
   const [connections, setConnections] = useState<MCPConnection[]>([]);
   const [providerChanged, setProviderChanged] = useState(false);
-  const [customServers, setCustomServers] = useState<CustomMCPServer[]>([]);
-  const [defaultServerConfig, setDefaultServerConfig] = useState<DefaultServerConfig | null>(null);
+  const [needsRegenerate, setNeedsRegenerate] = useState(false);
+  const [storedPlan, setStoredPlan] = useState<string | null>(null);
+  const [servers, setServers] = useState<ServerFromApi[]>([]);
   const [selectedServerView, setSelectedServerView] = useState<SelectedServerView>('default');
   const mcpConfigCardRef = useRef<HTMLDivElement>(null);
+
+  // Get default server and custom servers from the servers list
+  const defaultServer = servers.find(s => s.serverName === 'default');
+  const customServers = servers.filter(s => s.serverName !== 'default');
 
   // Scroll to MCP config card and highlight it
   const viewServerConfig = (serverId: SelectedServerView) => {
@@ -209,18 +232,18 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Get the currently selected server details
-  const getSelectedServer = (): CustomMCPServer | null => {
-    if (selectedServerView === 'default') return null;
-    return customServers.find(s => s.id === selectedServerView) || null;
+  const getSelectedServer = (): ServerFromApi | null => {
+    if (selectedServerView === 'default') return defaultServer || null;
+    return servers.find(s => s.id === selectedServerView) || null;
   };
 
   // Get the server path suffix for MCP URLs
   // Default server: no suffix, Custom server: /<server_name>
   const getServerPathSuffix = (): string => {
     const selectedServer = getSelectedServer();
-    if (!selectedServer) return ''; // Default server - no suffix
-    // URL-encode the server name to handle spaces and special characters
-    return `/${encodeURIComponent(selectedServer.name)}`;
+    if (!selectedServer || selectedServer.serverName === 'default') return '';
+    // Use serverName (URL-safe) for the path
+    return `/${encodeURIComponent(selectedServer.serverName)}`;
   };
 
   // Check if user has Plus plan using Clerk Billing's has() helper
@@ -245,19 +268,32 @@ export const DashboardPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch API key
+  // Fetch API key from Supabase
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
         const response = await fetch('/api/keys/list');
         if (response.ok) {
           const data = await response.json();
-          if (data.hasKey && data.apiKey) {
-            setApiKey(data.apiKey);
+          if (data.hasKey) {
+            if (data.apiKey) {
+              setApiKey(data.apiKey);
+            }
+            if (data.apiKeySuffix) {
+              setApiKeySuffix(data.apiKeySuffix);
+            }
+            if (data.plan) {
+              setStoredPlan(data.plan);
+            }
+            // Explicitly set needsRegenerate based on API response
+            setNeedsRegenerate(data.needsRegenerate === true);
+          } else {
+            // No key - reset states
+            setNeedsRegenerate(false);
+            setStoredPlan(null);
           }
-          if (data.providerChanged) {
-            setProviderChanged(true);
-          }
+          // Explicitly set providerChanged based on API response
+          setProviderChanged(data.providerChanged === true);
         }
       } catch (error) {
         console.error('Failed to fetch API key:', error);
@@ -268,35 +304,62 @@ export const DashboardPage: React.FC = () => {
       fetchApiKey();
     }
 
-    // Load connections from unsafeMetadata (still used for connection tracking)
-    if (user?.unsafeMetadata?.mcpConnections) {
-      setConnections(user.unsafeMetadata.mcpConnections as MCPConnection[]);
+    // Fetch connections from Supabase
+    const fetchConnections = async () => {
+      try {
+        const response = await fetch('/api/connections');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.connections) {
+            setConnections(data.connections);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch connections:', error);
+      }
+    };
+
+    if (user) {
+      fetchConnections();
     }
   }, [user]);
 
-  // Load custom MCP servers and default server config from localStorage
+  // Load servers from Supabase via API
   useEffect(() => {
-    if (isMcpComposerEnabled()) {
+    const fetchServers = async () => {
+      if (!isMcpComposerEnabled() || !user) return;
+
       try {
-        const stored = localStorage.getItem('customMcpServers');
-        if (stored) {
-          setCustomServers(JSON.parse(stored));
-        }
-        const defaultConfig = localStorage.getItem('defaultServerConfig');
-        if (defaultConfig) {
-          setDefaultServerConfig(JSON.parse(defaultConfig));
+        const response = await fetch('/api/servers');
+        if (response.ok) {
+          const data = await response.json();
+          setServers(data.servers || []);
         }
       } catch (error) {
-        console.error('Failed to load MCP server configs:', error);
+        console.error('Failed to load servers:', error);
       }
-    }
-  }, []);
+    };
+
+    fetchServers();
+  }, [user]);
 
   // Delete a custom MCP server
-  const deleteCustomServer = (serverId: string) => {
-    const updated = customServers.filter(s => s.id !== serverId);
-    setCustomServers(updated);
-    localStorage.setItem('customMcpServers', JSON.stringify(updated));
+  const deleteCustomServer = async (serverId: string) => {
+    try {
+      const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setServers(prev => prev.filter(s => s.id !== serverId));
+        // Reset to default view if we deleted the selected server
+        if (selectedServerView === serverId) {
+          setSelectedServerView('default');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete server:', error);
+    }
   };
 
   const copyField = async (value: string, fieldName: string) => {
@@ -310,7 +373,7 @@ export const DashboardPage: React.FC = () => {
     setGenerating(true);
 
     try {
-      // Call server-side API to generate encrypted key
+      // Call server-side API to generate key and store in Supabase
       const response = await fetch('/api/keys/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -322,7 +385,12 @@ export const DashboardPage: React.FC = () => {
 
       const data = await response.json();
       setApiKey(data.apiKey);
+      setApiKeySuffix(data.apiKey?.slice(-4) || null);
+      setStoredPlan(data.plan);
       setShowApiKey(true);
+      // Reset warning states after successful generation
+      setNeedsRegenerate(false);
+      setProviderChanged(false);
     } catch (error) {
       console.error('Failed to generate API key:', error);
     }
@@ -589,7 +657,26 @@ export const DashboardPage: React.FC = () => {
                 </div>
               )}
 
-              {apiKey && !providerChanged ? (
+              {/* Plan change warning - needs regeneration */}
+              {needsRegenerate && !providerChanged && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                }}>
+                  <p style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.25rem' }}>
+                    🔄 Plan Changed - Key Regeneration Required
+                  </p>
+                  <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: 0 }}>
+                    Your plan has changed from <strong>{storedPlan}</strong> to <strong>{planInfo.name.toLowerCase()}</strong>.
+                    Please regenerate your API key to access your new plan features.
+                  </p>
+                </div>
+              )}
+
+              {apiKey && !providerChanged && !needsRegenerate ? (
                 <div>
                   <div style={{
                     background: 'rgba(0,0,0,0.3)',
@@ -726,11 +813,11 @@ export const DashboardPage: React.FC = () => {
               {(() => {
                 const selectedServer = getSelectedServer();
                 const serverName = selectedServer ? selectedServer.name : 'Default Server';
-                const isCustom = selectedServer !== null;
-                // Calculate tool count - for default server, subtract disabled tools from total
-                const defaultToolCount = TOTAL_TOOL_COUNT - (defaultServerConfig?.disabledTools?.length || 0);
-                const toolCount = selectedServer ? selectedServer.tools.length : defaultToolCount;
-                const hasDisabledTools = !isCustom && defaultServerConfig?.disabledTools?.length;
+                const isCustom = selectedServer && selectedServer.serverName !== 'default';
+                // Calculate tool count from enabled tools
+                const enabledTools = selectedServer?.tools.filter(t => t.isEnabled) || [];
+                const toolCount = enabledTools.length || TOTAL_TOOL_COUNT;
+                const hasDisabledTools = selectedServer && selectedServer.tools.some(t => !t.isEnabled);
                 return (
                   <div style={{
                     background: isCustom ? 'rgba(167, 139, 250, 0.1)' : 'rgba(102, 126, 234, 0.1)',
@@ -995,13 +1082,16 @@ export const DashboardPage: React.FC = () => {
                     }}>DEFAULT</span>
                   </div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    {defaultServerConfig?.disabledTools?.length
-                      ? `${defaultServerConfig.disabledTools.length} tools disabled`
-                      : 'All available tools included'}
+                    {(() => {
+                      const disabledCount = defaultServer?.tools.filter(t => !t.isEnabled).length || 0;
+                      return disabledCount > 0
+                        ? `${disabledCount} tools disabled`
+                        : 'All available tools included';
+                    })()}
                   </div>
                 </div>
                 {(() => {
-                  const enabledCount = TOTAL_TOOL_COUNT - (defaultServerConfig?.disabledTools?.length || 0);
+                  const enabledCount = defaultServer?.tools.filter(t => t.isEnabled).length || TOTAL_TOOL_COUNT;
                   const severity = getToolCountSeverity(enabledCount);
                   const color = getToolCountColor(severity);
                   return (
@@ -1061,7 +1151,8 @@ export const DashboardPage: React.FC = () => {
 
               {/* Custom Servers */}
               {customServers.map(server => {
-                const severity = getToolCountSeverity(server.tools.length);
+                const enabledToolCount = server.tools.filter(t => t.isEnabled).length;
+                const severity = getToolCountSeverity(enabledToolCount);
                 const color = getToolCountColor(severity);
                 const isSelected = selectedServerView === server.id;
                 return (
@@ -1082,7 +1173,7 @@ export const DashboardPage: React.FC = () => {
                           <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
                             {server.name}
                           </span>
-                          <ToolCountWarning count={server.tools.length} />
+                          <ToolCountWarning count={enabledToolCount} />
                         </div>
                         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
                           Created {new Date(server.createdAt).toLocaleDateString()}
@@ -1096,7 +1187,7 @@ export const DashboardPage: React.FC = () => {
                         fontSize: '0.75rem',
                         fontWeight: 600,
                       }}>
-                        {server.tools.length} tools
+                        {enabledToolCount} tools
                       </span>
                       <button
                         onClick={() => viewServerConfig(server.id)}
@@ -1225,7 +1316,7 @@ export const DashboardPage: React.FC = () => {
             </svg>
           }>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-              Clients using your MCP server (agent:method)
+              Clients using your MCP server
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {connections.map((conn, i) => {
@@ -1250,7 +1341,7 @@ export const DashboardPage: React.FC = () => {
                     borderRadius: '8px',
                     padding: '0.75rem 1rem',
                   }}>
-                    {/* Top row: Agent | Method | Last Used */}
+                    {/* Top row: Agent | Server | Method | Last Used */}
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1263,7 +1354,20 @@ export const DashboardPage: React.FC = () => {
                           {conn.agent.length > 50 ? conn.agent.slice(0, 50) + '...' : conn.agent}
                         </div>
                       </div>
-                      {/* Method (middle) */}
+                      {/* Server Name */}
+                      {conn.serverName && (
+                        <div style={{
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 500,
+                          background: 'rgba(255,255,255,0.1)',
+                          color: 'rgba(255,255,255,0.7)',
+                        }}>
+                          {conn.serverName}
+                        </div>
+                      )}
+                      {/* Method */}
                       <div style={{
                         padding: '0.25rem 0.5rem',
                         borderRadius: '4px',
@@ -1279,7 +1383,7 @@ export const DashboardPage: React.FC = () => {
                         {lastUsedUTC}
                       </div>
                     </div>
-                    {/* IPs row (under agent:method) */}
+                    {/* IPs row */}
                     {ips.length > 0 && (
                       <div style={{
                         marginTop: '0.5rem',

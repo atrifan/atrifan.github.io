@@ -6,6 +6,14 @@ import { isHigherOrEqualTo } from '@/src/config/billing.config';
 import { WHEEL_COLORS } from '@/src/utils/SpinCalculator';
 // Zodiac signs needed for widget rendering
 import { ZODIAC_SIGNS } from '@/src/data/zodiac';
+// Supabase services for API key validation and connection logging
+import {
+  getApiKeyByHash,
+  getApiKeyByUserAndServer,
+  hashApiKey,
+  logMcpConnection,
+  getEnabledServerTools,
+} from '@/src/lib/supabase-services';
 
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
@@ -13,6 +21,8 @@ type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
 interface AuthResult {
   authenticated: boolean;
   userId?: string;
+  apiKeyId?: string;
+  serverName?: string;
   plan?: string;
   isSubscribed?: boolean;
   authMethod: AuthMethod;
@@ -64,12 +74,6 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
       return { isPro: true, plan: 'pro' };
     }
 
-    // Check unsafeMetadata as fallback
-    if (user.unsafeMetadata?.plan) {
-      const plan = user.unsafeMetadata.plan as string;
-      return { isPro: isHigherOrEqualTo(plan, 'pro'), plan };
-    }
-
     return { isPro: false, plan: 'free' };
   } catch (error) {
     console.error('Error checking subscription:', error);
@@ -78,15 +82,73 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
 }
 
 /**
- * Validate API key - supports both custom encryption and Clerk API Keys
+ * Validate API key against Supabase first, then Clerk if provider is clerk
  *
- * For API keys: If the key validates, assume Pro plan.
- * Only Pro+ users can generate API keys, so a valid key = Pro access.
+ * Flow:
+ * 1. Hash the key and look it up in Supabase api_keys table
+ * 2. If found and active, get plan from DB
+ * 3. If provider is 'clerk', also verify with Clerk API
+ * 4. If not in Supabase, try legacy validation (Clerk or custom encryption)
  */
-async function validateApiKey(key: string): Promise<AuthResult> {
+async function validateApiKey(key: string, serverName: string = 'default'): Promise<AuthResult> {
+  // First, check Supabase by hash
+  try {
+    const keyHash = hashApiKey(key);
+    const supabaseKey = await getApiKeyByHash(keyHash);
+
+    if (supabaseKey) {
+      // Key found in Supabase
+      if (!supabaseKey.is_active) {
+        return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
+      }
+
+      // Check plan - free users cannot use MCP
+      if (supabaseKey.plan === 'free') {
+        return {
+          authenticated: true,
+          userId: supabaseKey.user_id,
+          apiKeyId: supabaseKey.id,
+          serverName: supabaseKey.server_name,
+          plan: 'free',
+          isSubscribed: false,
+          authMethod: 'header',
+        };
+      }
+
+      // If Clerk provider, also verify with Clerk
+      if (supabaseKey.provider === 'clerk' && useClerkApiKeys()) {
+        try {
+          const client = await clerkClient();
+          const clerkKey = await client.apiKeys.verify(key);
+          if (!clerkKey || clerkKey.revoked || clerkKey.expired) {
+            return { authenticated: false, authMethod: 'none', error: 'API key has been revoked or expired' };
+          }
+        } catch (e) {
+          console.error('Clerk verification failed:', e);
+          return { authenticated: false, authMethod: 'none', error: 'API key verification failed' };
+        }
+      }
+
+      // Valid key with pro/plus plan
+      return {
+        authenticated: true,
+        userId: supabaseKey.user_id,
+        apiKeyId: supabaseKey.id,
+        serverName: supabaseKey.server_name,
+        plan: supabaseKey.plan,
+        isSubscribed: true,
+        authMethod: 'header',
+      };
+    }
+  } catch (error) {
+    console.error('Error checking Supabase for API key:', error);
+    // Continue to legacy validation
+  }
+
+  // Legacy validation for keys not in Supabase
   const client = await clerkClient();
 
-  // Try Clerk API Keys first if enabled
+  // Try Clerk API Keys if enabled
   if (useClerkApiKeys()) {
     try {
       const apiKey = await client.apiKeys.verify(key);
@@ -105,8 +167,7 @@ async function validateApiKey(key: string): Promise<AuthResult> {
 
       const userId = apiKey.subject;
 
-      // API key validation success = at least Pro plan
-      // Only Pro+ users can generate API keys, so valid key implies Pro access
+      // Legacy Clerk key - assume Pro (only Pro+ could generate)
       return {
         authenticated: true,
         userId,
@@ -116,39 +177,26 @@ async function validateApiKey(key: string): Promise<AuthResult> {
       };
     } catch (error) {
       console.error('Error validating API key with Clerk:', error);
-      return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
     }
   }
 
-  // Use custom encryption (default)
+  // Try custom encryption (legacy)
   const payload = decryptApiKey(key);
   if (!payload) {
-    return { authenticated: false, authMethod: 'none', error: 'Invalid API key format' };
+    return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
   }
   if (isApiKeyExpired(payload)) {
     return { authenticated: false, authMethod: 'none', error: 'API key expired' };
   }
-  try {
-    const user = await client.users.getUser(payload.userId);
-    if (!user) {
-      return { authenticated: false, authMethod: 'none', error: 'User not found' };
-    }
-    const storedKey = user.unsafeMetadata?.apiKey as string | undefined;
-    if (storedKey && storedKey !== key) {
-      return { authenticated: false, authMethod: 'none', error: 'API key revoked' };
-    }
-    // Custom encrypted keys also imply Pro access (only Pro+ can generate)
-    return {
-      authenticated: true,
-      userId: payload.userId,
-      plan: 'pro',
-      isSubscribed: true,
-      authMethod: 'header',
-    };
-  } catch (error) {
-    console.error('Error validating API key:', error);
-    return { authenticated: false, authMethod: 'none', error: 'Validation failed' };
-  }
+
+  // Legacy custom key - assume Pro
+  return {
+    authenticated: true,
+    userId: payload.userId,
+    plan: 'pro',
+    isSubscribed: true,
+    authMethod: 'header',
+  };
 }
 
 /**
@@ -176,19 +224,19 @@ function getClerkFrontendApi(): string {
  * Validate OAuth bearer token
  *
  * For bearer tokens: First try as Clerk session JWT, then as OAuth access token.
- * - Clerk session JWTs can be verified directly with verifyToken
- * - OAuth access tokens (opaque) need to be validated via userinfo endpoint
+ * After validating identity, check Supabase for API key and plan.
+ * If no API key in Supabase, user cannot use MCP (even if Pro).
  *
  * Results are cached for 5 minutes to avoid repeated API calls.
  */
-async function validateBearerToken(token: string): Promise<AuthResult> {
+async function validateBearerToken(token: string, serverName: string = 'default'): Promise<AuthResult> {
   // Check cache first
   const cached = getCachedAuth(token);
   if (cached) {
     return cached;
   }
 
-  let result: AuthResult;
+  let userId: string | null = null;
 
   // First, try to verify as a Clerk session JWT
   try {
@@ -197,166 +245,126 @@ async function validateBearerToken(token: string): Promise<AuthResult> {
     });
 
     if (payload && payload.sub) {
-      const userId = payload.sub;
-
-      // Check plan from session claims first (if available from Clerk Billing)
-      const sessionPlan = (payload as Record<string, unknown>).plan as string | undefined;
-      const sessionFeatures = (payload as Record<string, unknown>).features as string[] | undefined;
-
-      const hasProFromSession = sessionPlan === 'pro' || sessionPlan === 'plus' ||
-        sessionFeatures?.includes('pro_access') || sessionFeatures?.includes('plus_access');
-
-      if (hasProFromSession) {
-        result = {
-          authenticated: true,
-          userId,
-          plan: sessionPlan || 'pro',
-          isSubscribed: true,
-          authMethod: 'oauth',
-        };
-        setCachedAuth(token, result);
-        return result;
-      }
-
-      // Fallback: Check user subscription using Clerk's authorization
-      const client = await clerkClient();
-      const subscription = await checkProSubscription(client, userId);
-
-      result = {
-        authenticated: true,
-        userId,
-        plan: 'pro',
-        isSubscribed: true,
-        authMethod: 'oauth',
-      };
-      setCachedAuth(token, result);
-      return result;
+      userId = payload.sub;
     }
   } catch (jwtError) {
     // Not a valid JWT, try as OAuth access token
     console.log('Token is not a JWT, trying as OAuth access token...');
   }
 
-  // Try to validate as an OAuth access token via userinfo endpoint
+  // If not a JWT, try OAuth access token via userinfo endpoint
+  if (!userId) {
+    try {
+      const clerkApi = getClerkFrontendApi();
+      const userinfoResponse = await fetch(`${clerkApi}/oauth/userinfo`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!userinfoResponse.ok) {
+        return { authenticated: false, authMethod: 'none', error: 'Invalid OAuth access token' };
+      }
+
+      const userinfo = await userinfoResponse.json();
+
+      if (!userinfo.sub) {
+        return { authenticated: false, authMethod: 'none', error: 'Invalid userinfo response' };
+      }
+
+      userId = userinfo.sub;
+    } catch (error) {
+      console.error('Error validating OAuth access token:', error);
+      return { authenticated: false, authMethod: 'none', error: 'Invalid or expired bearer token' };
+    }
+  }
+
+  if (!userId) {
+    return { authenticated: false, authMethod: 'none', error: 'Could not determine user identity' };
+  }
+
+  // Now check Supabase for user's API key
   try {
-    const clerkApi = getClerkFrontendApi();
-    const userinfoResponse = await fetch(`${clerkApi}/oauth/userinfo`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    const apiKey = await getApiKeyByUserAndServer(userId, serverName);
 
-    if (!userinfoResponse.ok) {
-      result = { authenticated: false, authMethod: 'none', error: 'Invalid OAuth access token' };
-      // Don't cache failed auth - token might be temporarily invalid
-      return result;
+    if (!apiKey) {
+      // No API key in Supabase - user needs to generate one
+      return {
+        authenticated: true,
+        userId,
+        plan: 'unknown',
+        isSubscribed: false,
+        authMethod: 'oauth',
+        error: 'No API key found. Please generate an API key from your dashboard.',
+      };
     }
 
-    const userinfo = await userinfoResponse.json();
-
-    if (!userinfo.sub) {
-      result = { authenticated: false, authMethod: 'none', error: 'Invalid userinfo response' };
-      return result;
+    if (!apiKey.is_active) {
+      return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
     }
 
-    const userId = userinfo.sub;
-    const client = await clerkClient();
+    // Check plan - free users cannot use MCP
+    const isSubscribed = apiKey.plan !== 'free';
 
-    // Check user's subscription status using Clerk's authorization
-    const subscription = await checkProSubscription(client, userId);
-
-    result = {
+    const result: AuthResult = {
       authenticated: true,
       userId,
-      plan: 'pro',
-      isSubscribed: true,
+      apiKeyId: apiKey.id,
+      serverName: apiKey.server_name,
+      plan: apiKey.plan,
+      isSubscribed,
+      authMethod: 'oauth',
+    };
+
+    setCachedAuth(token, result);
+    return result;
+  } catch (error) {
+    console.error('Error checking Supabase for API key:', error);
+
+    // Fallback to Clerk metadata check
+    const client = await clerkClient();
+    const subscription = await checkProSubscription(client, userId);
+
+    const result: AuthResult = {
+      authenticated: true,
+      userId,
+      plan: subscription.plan,
+      isSubscribed: subscription.isPro,
       authMethod: 'oauth',
     };
     setCachedAuth(token, result);
     return result;
-  } catch (error) {
-    console.error('Error validating OAuth access token:', error);
-    return { authenticated: false, authMethod: 'none', error: 'Invalid or expired bearer token' };
   }
 }
 
 /**
- * Log MCP connection to user's unsafeMetadata and Google Analytics
+ * Log MCP connection to Supabase mcp_connections table and Google Analytics
  *
- * Data structure uses agent:method as the composite key.
- * Primary key is agent - if the same agent uses a different method, it creates a new entry.
- * Each entry stores up to 5 unique IPs that have used this agent:method combination.
- * Maximum 10 entries per user, oldest entries are removed when limit is exceeded.
+ * Data structure uses (api_key_id, server_name, agent, auth_method) as composite key.
+ * Each entry stores up to 5 unique IPs and a request count.
  */
-async function logConnection(userId: string, authMethod: AuthMethod, clientIp: string, userAgent: string) {
+async function logConnection(
+  apiKeyId: string | undefined,
+  serverName: string,
+  authMethod: AuthMethod,
+  clientIp: string,
+  userAgent: string
+) {
   // Log to Google Analytics (fire and forget)
   trackMCPEvent('mcp_connection', {
     event_category: 'mcp',
     event_label: 'connection',
     auth_method: authMethod,
     user_agent: userAgent.slice(0, 100), // Truncate for GA
-  }, `user_${userId.slice(0, 20)}`);
+  }, apiKeyId ? `key_${apiKeyId.slice(0, 20)}` : 'unknown');
 
-  try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-
-    // Data structure: agent:method as key, with list of IPs (max 5)
-    const connections = (user.unsafeMetadata?.mcpConnections as Array<{
-      agent: string;
-      method: AuthMethod;
-      lastUsed: string;
-      ips: string[];
-    }>) || [];
-
-    const now = new Date().toISOString();
-
-    // Find existing connection with same agent AND method (composite key)
-    const existingIndex = connections.findIndex(c => c.agent === userAgent && c.method === authMethod);
-
-    if (existingIndex >= 0) {
-      // Update existing connection
-      const conn = connections[existingIndex];
-      conn.lastUsed = now;
-
-      // Add IP if not already present (max 5 IPs per agent:method)
-      if (!conn.ips) conn.ips = [];
-      if (clientIp && clientIp !== 'unknown' && !conn.ips.includes(clientIp)) {
-        conn.ips.unshift(clientIp); // Add to front (most recent)
-        if (conn.ips.length > 5) {
-          conn.ips.pop(); // Remove oldest
-        }
-      }
-
-      // Move to front (most recently used)
-      const [updated] = connections.splice(existingIndex, 1);
-      connections.unshift(updated);
-    } else {
-      // Add new connection at the front
-      const ips: string[] = [];
-      if (clientIp && clientIp !== 'unknown') {
-        ips.push(clientIp);
-      }
-      connections.unshift({
-        agent: userAgent,
-        method: authMethod,
-        lastUsed: now,
-        ips,
-      });
-      // Keep maximum 10 entries - remove oldest (at the end)
-      while (connections.length > 10) {
-        connections.pop();
-      }
+  // Log to Supabase if we have an API key ID and valid auth method
+  if (apiKeyId && authMethod !== 'none') {
+    try {
+      await logMcpConnection(apiKeyId, serverName, userAgent, authMethod, clientIp);
+    } catch (error) {
+      console.error('Error logging connection to Supabase:', error);
     }
-
-    await client.users.updateUser(userId, {
-      unsafeMetadata: {
-        ...user.unsafeMetadata,
-        mcpConnections: connections,
-      },
-    });
-  } catch (error) {
-    console.error('Error logging connection:', error);
   }
 }
 
@@ -1303,8 +1311,16 @@ function getTemplateData(toolName: string): Record<string, unknown> {
   return defaults[toolName] || { message: 'Widget ready' };
 }
 
+// Context for MCP request handling
+interface MCPContext {
+  userId?: string;
+  apiKeyId?: string;
+  serverName: string;
+  isAuthenticated: boolean;
+}
+
 // Handle MCP requests
-function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
+async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Promise<MCPResponse> {
   const { id, method, params } = mcpRequest;
 
   try {
@@ -1364,14 +1380,42 @@ function handleMCPRequest(mcpRequest: MCPRequest): MCPResponse {
         };
       }
 
-      case 'tools/list':
+      case 'tools/list': {
+        // If authenticated with apiKeyId, fetch enabled tools from DB
+        let toolsList: typeof TOOLS = TOOLS;
+
+        if (context.isAuthenticated && context.apiKeyId) {
+          try {
+            const serverTools = await getEnabledServerTools(context.apiKeyId);
+            if (serverTools.length > 0) {
+              // Filter to only NATIVE tools that are enabled, map to MCP format
+              const filteredTools: typeof TOOLS = [];
+              for (const st of serverTools) {
+                if (st.tool.tool_type === 'NATIVE') {
+                  const nativeTool = TOOLS.find(t => t.name === st.tool.name);
+                  if (nativeTool) {
+                    filteredTools.push(nativeTool);
+                  }
+                }
+              }
+              if (filteredTools.length > 0) {
+                toolsList = filteredTools;
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching server tools, using defaults:', error);
+            // Fall back to all TOOLS
+          }
+        }
+
         // Track tools/list event
         trackMCPEvent('mcp_tools_list', {
-          tool_count: TOOLS.length,
+          tool_count: toolsList.length,
           event_category: 'mcp',
           event_label: 'tools_list',
         });
-        return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
+        return { jsonrpc: '2.0', id, result: { tools: toolsList } };
+      }
       case 'tools/call': {
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
@@ -1471,6 +1515,8 @@ export async function POST(request: NextRequest) {
     const internalUserId = request.headers.get('X-User-Id');
     const internalPlan = request.headers.get('X-User-Plan');
     const internalAuthMethod = request.headers.get('X-Auth-Method') as AuthMethod | null;
+    const internalApiKeyId = request.headers.get('X-Api-Key-Id');
+    const internalServerName = request.headers.get('X-Server-Name') || 'default';
 
     if (internalUserId) {
       // Request forwarded from /api/mcp/[key] route - already authenticated
@@ -1480,9 +1526,15 @@ export async function POST(request: NextRequest) {
       const userAgent = request.headers.get('user-agent') || 'unknown';
 
       // Log connection asynchronously (don't await)
-      logConnection(internalUserId, internalAuthMethod || 'path', clientIp, userAgent);
+      logConnection(internalApiKeyId || undefined, internalServerName, internalAuthMethod || 'path', clientIp, userAgent);
 
-      const response = handleMCPRequest(body as MCPRequest);
+      const context: MCPContext = {
+        userId: internalUserId,
+        apiKeyId: internalApiKeyId || undefined,
+        serverName: internalServerName,
+        isAuthenticated: true,
+      };
+      const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);
     }
 
@@ -1524,9 +1576,15 @@ export async function POST(request: NextRequest) {
                        request.headers.get('x-real-ip') ||
                        'unknown';
       const userAgent = request.headers.get('user-agent') || 'unknown';
-      logConnection(authResult.userId!, authResult.authMethod, clientIp, userAgent);
+      logConnection(authResult.apiKeyId, authResult.serverName || 'default', authResult.authMethod, clientIp, userAgent);
 
-      const response = handleMCPRequest(body as MCPRequest);
+      const context: MCPContext = {
+        userId: authResult.userId,
+        apiKeyId: authResult.apiKeyId,
+        serverName: authResult.serverName || 'default',
+        isAuthenticated: true,
+      };
+      const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);
     }
 
@@ -1544,7 +1602,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Allow unauthenticated access to discovery methods
-    const response = handleMCPRequest(body as MCPRequest);
+    const context: MCPContext = {
+      serverName: 'default',
+      isAuthenticated: false,
+    };
+    const response = await handleMCPRequest(body as MCPRequest, context);
     return NextResponse.json(response);
   } catch {
     return NextResponse.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 });

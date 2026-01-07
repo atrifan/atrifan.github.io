@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import { isHigherOrEqualTo } from '@/src/config/billing.config';
+import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
 
 interface ApiKeyUser {
   userId: string;
+  apiKeyId?: string;
+  serverName: string;
   plan: string;
   email?: string;
   isSubscribed: boolean;
@@ -20,12 +23,6 @@ async function getUserPlan(client: Awaited<ReturnType<typeof clerkClient>>, user
     if (user.publicMetadata?.plan) {
       return user.publicMetadata.plan as string;
     }
-
-    // Check unsafeMetadata.plan as fallback
-    if (user.unsafeMetadata?.plan) {
-      return user.unsafeMetadata.plan as string;
-    }
-
     return 'free';
   } catch (error) {
     console.error('Error getting user plan:', error);
@@ -42,80 +39,120 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
 }
 
 /**
- * Validate API key - supports both custom encryption and Clerk API Keys
+ * Validate API key against Supabase first, then Clerk/custom as fallback
  *
- * For API keys (path-based auth): If the key validates with Clerk, assume Pro plan.
- * Only Pro+ users can generate API keys, so a valid key = Pro access.
+ * Flow:
+ * 1. Hash key and look up in Supabase api_keys table
+ * 2. Validate the requested server exists for this user
+ * 3. If Clerk provider, also verify with Clerk
+ * 4. Fallback to legacy validation
  */
-async function validateApiKey(key: string): Promise<{ user: ApiKeyUser | null; error?: string }> {
-  const client = await clerkClient();
+async function validateApiKey(key: string, serverName: string = 'default'): Promise<{ user: ApiKeyUser | null; error?: string }> {
+  // First, check Supabase by hash
+  try {
+    const keyHash = hashApiKey(key);
+    const supabaseKey = await getApiKeyByHash(keyHash);
 
-  // Try Clerk API Keys first if enabled
-  if (useClerkApiKeys()) {
-    try {
-      const apiKey = await client.apiKeys.verify(key);
-
-      if (!apiKey) {
-        return { user: null, error: 'Invalid API key' };
-      }
-
-      if (apiKey.revoked) {
+    if (supabaseKey) {
+      if (!supabaseKey.is_active) {
         return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
       }
 
-      if (apiKey.expired) {
-        return { user: null, error: 'API key has expired. Please generate a new one from your dashboard.' };
+      // Validate that the requested server exists for this user
+      // The API key's server_name must match the requested serverName
+      // OR the user must have a separate API key for that server
+      if (supabaseKey.server_name !== serverName) {
+        // Check if user has a server with the requested name
+        const { getApiKeyByUserAndServer } = await import('@/src/lib/supabase-services');
+        const requestedServer = await getApiKeyByUserAndServer(supabaseKey.user_id, serverName);
+
+        if (!requestedServer) {
+          return { user: null, error: `Server '${serverName}' not found. Create it from your dashboard first.` };
+        }
+
+        // Use the requested server's details
+        if (!requestedServer.is_active) {
+          return { user: null, error: 'Server has been deactivated.' };
+        }
+
+        return {
+          user: {
+            userId: requestedServer.user_id,
+            apiKeyId: requestedServer.id,
+            serverName: requestedServer.server_name,
+            plan: requestedServer.plan,
+            isSubscribed: requestedServer.plan !== 'free',
+          },
+        };
       }
 
-      const userId = apiKey.subject;
-      const user = await client.users.getUser(userId);
+      // If Clerk provider, also verify with Clerk
+      if (supabaseKey.provider === 'clerk' && useClerkApiKeys()) {
+        try {
+          const client = await clerkClient();
+          const clerkKey = await client.apiKeys.verify(key);
+          if (!clerkKey || clerkKey.revoked || clerkKey.expired) {
+            return { user: null, error: 'API key has been revoked or expired.' };
+          }
+        } catch (e) {
+          console.error('Clerk verification failed:', e);
+          return { user: null, error: 'API key verification failed.' };
+        }
+      }
 
-      // API key validation success = at least Pro plan
-      // Only Pro+ users can generate API keys, so valid key implies Pro access
       return {
         user: {
-          userId,
-          plan: 'pro',
-          email: user.primaryEmailAddress?.emailAddress,
-          isSubscribed: true,
+          userId: supabaseKey.user_id,
+          apiKeyId: supabaseKey.id,
+          serverName: supabaseKey.server_name,
+          plan: supabaseKey.plan,
+          isSubscribed: supabaseKey.plan !== 'free',
         },
       };
+    }
+  } catch (error) {
+    console.error('Error checking Supabase for API key:', error);
+    // Continue to legacy validation
+  }
+
+  // Legacy: Try Clerk API Keys if enabled
+  const client = await clerkClient();
+  if (useClerkApiKeys()) {
+    try {
+      const apiKey = await client.apiKeys.verify(key);
+      if (apiKey && !apiKey.revoked && !apiKey.expired) {
+        const userId = apiKey.subject;
+        return {
+          user: {
+            userId,
+            serverName: 'default',
+            plan: 'pro',
+            isSubscribed: true,
+          },
+        };
+      }
     } catch (error) {
       console.error('Error validating API key with Clerk:', error);
-      return { user: null, error: 'Invalid API key' };
     }
   }
 
-  // Use custom encryption (default)
+  // Legacy: Try custom encryption
   const payload = decryptApiKey(key);
   if (!payload) {
-    return { user: null, error: 'Invalid API key format or decryption failed' };
+    return { user: null, error: 'Invalid API key' };
   }
   if (isApiKeyExpired(payload)) {
     return { user: null, error: 'API key has expired. Please generate a new one from your dashboard.' };
   }
-  try {
-    const user = await client.users.getUser(payload.userId);
-    if (!user) {
-      return { user: null, error: 'User not found. Account may have been deleted.' };
-    }
-    const storedKey = user.unsafeMetadata?.apiKey as string | undefined;
-    if (storedKey && storedKey !== key) {
-      return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
-    }
-    // Custom encrypted keys also imply Pro access (only Pro+ can generate)
-    return {
-      user: {
-        userId: user.id,
-        plan: 'pro',
-        email: user.primaryEmailAddress?.emailAddress,
-        isSubscribed: true,
-      },
-    };
-  } catch (error) {
-    console.error('Error validating API key:', error);
-    return { user: null, error: 'Failed to verify user. Please try again.' };
-  }
+
+  return {
+    user: {
+      userId: payload.userId,
+      serverName: 'default',
+      plan: 'pro',
+      isSubscribed: true,
+    },
+  };
 }
 
 // Forward request to main MCP handler with user context
@@ -131,16 +168,24 @@ async function forwardToMCP(request: NextRequest, user: ApiKeyUser) {
                    'unknown';
   const userAgent = request.headers.get('user-agent') || 'unknown';
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-User-Id': user.userId,
+    'X-User-Plan': user.plan,
+    'X-Auth-Method': 'path',
+    'X-Server-Name': user.serverName,
+    'x-forwarded-for': clientIp,
+    'user-agent': userAgent,
+  };
+
+  // Pass API key ID if available (from Supabase)
+  if (user.apiKeyId) {
+    headers['X-Api-Key-Id'] = user.apiKeyId;
+  }
+
   const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Id': user.userId,
-      'X-User-Plan': user.plan,
-      'X-Auth-Method': 'path',
-      'x-forwarded-for': clientIp,
-      'user-agent': userAgent,
-    },
+    headers,
     body,
   });
 

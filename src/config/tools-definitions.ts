@@ -174,30 +174,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'calculate_sleep',
-    description: 'Calculate optimal sleep and wake times based on sleep cycles',
-    category: TOOL_CATEGORIES.HEALTH,
-    type: TOOL_TYPES.NATIVE,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Calculating sleep times...', invoked: 'Sleep times ready' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        mode: { type: 'string', enum: ['wakeAt', 'sleepAt', 'sleepNow'], description: 'Calculation mode' },
-        time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
-      },
-      required: ['mode'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        mode: { type: 'string' },
-        inputTime: { type: 'string' },
-        times: { type: 'array', items: { type: 'object' } },
-      },
-    },
-  },
-  {
     name: 'calculate_cycle',
     description: 'Calculate menstrual cycle predictions including next period date, fertile window, ovulation date, and current cycle phase. Supports both simplified mode (average 28-day cycle) and advanced mode with custom cycle/period lengths.',
     category: TOOL_CATEGORIES.HEALTH,
@@ -666,33 +642,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'generate_password',
-    description: 'Generate a secure random password',
-    category: TOOL_CATEGORIES.UTILITIES,
-    type: TOOL_TYPES.NATIVE,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Generating password...', invoked: 'Password generated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        length: { type: 'number', description: 'Password length (8-128)' },
-        includeUppercase: { type: 'boolean', description: 'Include uppercase letters' },
-        includeLowercase: { type: 'boolean', description: 'Include lowercase letters' },
-        includeNumbers: { type: 'boolean', description: 'Include numbers' },
-        includeSymbols: { type: 'boolean', description: 'Include symbols' },
-      },
-      required: ['length'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        password: { type: 'string' },
-        length: { type: 'number' },
-        strength: { type: 'string' },
-      },
-    },
-  },
-  {
     name: 'calculate_percentage',
     description: 'Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).',
     category: TOOL_CATEGORIES.UTILITIES,
@@ -780,31 +729,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         matchingPeople: { type: 'number' },
         rarity: { type: 'string' },
         isBabyMode: { type: 'boolean' },
-      },
-    },
-  },
-  {
-    name: 'calculate_risk',
-    description: 'Calculate risk score for various activities or decisions',
-    category: TOOL_CATEGORIES.UTILITIES,
-    type: TOOL_TYPES.NATIVE,
-    hasWidget: true,
-    invocationMessages: { invoking: 'Calculating risk...', invoked: 'Risk calculated' },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        activity: { type: 'string', description: 'Activity or decision to assess' },
-        factors: { type: 'array', items: { type: 'object' }, description: 'Risk factors with severity and likelihood' },
-      },
-      required: ['activity'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        riskScore: { type: 'number' },
-        riskLevel: { type: 'string' },
-        factors: { type: 'array', items: { type: 'object' } },
-        recommendations: { type: 'array', items: { type: 'string' } },
       },
     },
   },

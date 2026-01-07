@@ -18,33 +18,47 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load preferences from Clerk unsafeMetadata only
+  // Load preferences from Supabase via API
   useEffect(() => {
-    if (isLoaded) {
-      if (user?.unsafeMetadata?.preferences) {
-        const userPrefs = user.unsafeMetadata.preferences as Partial<UserPreferences>;
-        setPreferences({ ...DEFAULT_PREFERENCES, ...userPrefs });
+    const fetchPreferences = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/preferences');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.preferences) {
+            setPreferences({ ...DEFAULT_PREFERENCES, ...data.preferences });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch preferences:', error);
       }
       setIsLoading(false);
+    };
+
+    if (isLoaded) {
+      fetchPreferences();
     }
   }, [user, isLoaded]);
 
-  // Update preferences - save only to Clerk unsafeMetadata
+  // Update preferences - save to Supabase via API
   const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {
     const newPrefs = { ...preferences, ...updates };
     setPreferences(newPrefs);
 
-    // Save to Clerk unsafeMetadata only
     if (user) {
       try {
-        await user.update({
-          unsafeMetadata: {
-            ...user.unsafeMetadata,
-            preferences: newPrefs,
-          },
+        await fetch('/api/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preferences: newPrefs }),
         });
       } catch (error) {
-        console.error('Failed to save preferences to Clerk:', error);
+        console.error('Failed to save preferences:', error);
       }
     }
   }, [preferences, user]);

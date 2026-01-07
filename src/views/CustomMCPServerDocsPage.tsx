@@ -8,7 +8,25 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
-import type { CustomMCPServer, MCPTool } from '../types/mcp-composer';
+import type { MCPTool } from '../types/mcp-composer';
+
+// Server data from API
+interface ServerFromApi {
+  id: string;
+  name: string;
+  serverName: string;
+  plan: string;
+  isActive: boolean;
+  createdAt: string;
+  tools: {
+    id: string;
+    toolId: string;
+    name: string;
+    description: string;
+    category: string;
+    isEnabled: boolean;
+  }[];
+}
 import { ToolCountBadge } from './MCPComposerPage';
 
 interface SchemaProperty {
@@ -54,7 +72,7 @@ interface CustomMCPServerDocsPageProps {
 
 export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = ({ serverId }) => {
   const router = useRouter();
-  const [server, setServer] = useState<CustomMCPServer | null>(null);
+  const [server, setServer] = useState<ServerFromApi | null>(null);
   const [allTools, setAllTools] = useState<ToolWithSchema[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
@@ -64,30 +82,28 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
     window.scrollTo(0, 0);
   }, []);
 
-  // Check if feature is enabled and load server
+  // Check if feature is enabled and load server from API
   useEffect(() => {
     if (!isMcpComposerEnabled()) {
       router.push('/dashboard');
       return;
     }
 
-    // Load server from localStorage
-    try {
-      const stored = localStorage.getItem('customMcpServers');
-      if (stored) {
-        const servers: CustomMCPServer[] = JSON.parse(stored);
-        const found = servers.find(s => s.id === serverId);
-        if (found) {
-          setServer(found);
+    const fetchServer = async () => {
+      try {
+        const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setServer(data.server);
         } else {
           router.push('/dashboard');
         }
-      } else {
+      } catch {
         router.push('/dashboard');
       }
-    } catch {
-      router.push('/dashboard');
-    }
+    };
+
+    fetchServer();
   }, [serverId, router]);
 
   // Fetch all tools
@@ -101,8 +117,9 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
       .catch(() => setLoading(false));
   }, []);
 
-  // Filter tools to only those in this server
-  const serverTools = allTools.filter(tool => server?.tools.includes(tool.name));
+  // Filter tools to only those enabled in this server
+  const enabledToolNames = server?.tools.filter(t => t.isEnabled).map(t => t.name) || [];
+  const serverTools = allTools.filter(tool => enabledToolNames.includes(tool.name));
 
   const formatToolName = (name: string) => {
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
