@@ -161,6 +161,11 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Manage your imported GraphQL API. Edit operation descriptions, configure environments, and customize tools for your MCP server.',
     keywords: ['graphql management', 'graphql operations', 'graphql environments', 'mcp tools', 'graphql configuration'],
   },
+  mcpImport: {
+    title: 'Import MCP Server - Connect External MCP Tools | Tulzo',
+    description: 'Connect to external MCP servers and import their tools. Your AI assistant will proxy requests to the external server. Supports authentication and custom headers.',
+    keywords: ['mcp import', 'mcp server', 'mcp proxy', 'external mcp', 'mcp tools', 'model context protocol', 'ai tools', 'mcp integration'],
+  },
   pricing: {
     title: 'Pricing - Free & Pro Plans | Tulzo',
     description: 'Tulzo pricing plans. Free tier with all tools, Pro plan with unlimited API calls, priority support, and advanced features.',

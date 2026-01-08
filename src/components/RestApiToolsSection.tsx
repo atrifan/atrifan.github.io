@@ -374,7 +374,7 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
   if (specs.length === 0) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🔌</div>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>☁️</div>
         <h3 style={{ color: '#fff', margin: '0 0 0.5rem' }}>No REST APIs Imported</h3>
         <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 1rem' }}>
           Import an OpenAPI/Swagger spec to create tools from your REST API endpoints.
@@ -454,7 +454,7 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
             alignItems: 'center',
             gap: '0.5rem',
           }}>
-            🔌 REST API Tools
+            ☁️ REST API Tools
           </h2>
           <p style={{ 
             color: 'rgba(255,255,255,0.6)', 

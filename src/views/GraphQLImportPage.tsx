@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
+import { AuthenticationCard } from '../components/AuthenticationCard';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled } from '../config/mcp-composer.config';
 
@@ -50,9 +51,11 @@ export function GraphQLImportPage() {
   const [url, setUrl] = useState('');
   const [urlApiKey, setUrlApiKey] = useState('');
   const [authToken, setAuthToken] = useState('');
-  const [authType, setAuthType] = useState<'bearer' | 'basic'>('bearer');
+  const [basicCredentials, setBasicCredentials] = useState('');
+  const [authType, setAuthType] = useState<'none' | 'api_key' | 'bearer' | 'basic'>('none');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
+  const [showBasicCredentials, setShowBasicCredentials] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string | null>(null);
 
   // Custom headers state
@@ -147,20 +150,18 @@ export function GraphQLImportPage() {
       headerObj['x-api-key'] = urlApiKey.trim();
     }
 
-    // Authorization header (Bearer or Basic)
+    // Bearer Token
     if (authToken.trim()) {
-      if (authType === 'bearer') {
-        headerObj['Authorization'] = `Bearer ${authToken.trim()}`;
-      } else if (authType === 'basic') {
-        // Check if already base64 encoded or needs encoding
-        const token = authToken.trim();
-        if (token.includes(':')) {
-          // Encode username:password
-          headerObj['Authorization'] = `Basic ${btoa(token)}`;
-        } else {
-          // Assume already encoded
-          headerObj['Authorization'] = `Basic ${token}`;
-        }
+      headerObj['Authorization'] = `Bearer ${authToken.trim()}`;
+    }
+
+    // Basic Auth
+    if (basicCredentials.trim()) {
+      const creds = basicCredentials.trim();
+      if (creds.includes(':')) {
+        headerObj['Authorization'] = `Basic ${btoa(creds)}`;
+      } else {
+        headerObj['Authorization'] = `Basic ${creds}`;
       }
     }
 
@@ -667,209 +668,108 @@ export function GraphQLImportPage() {
             </div>
 
             {/* Auth Section */}
-            <div style={{
-              background: 'rgba(251, 191, 36, 0.1)',
-              border: '1px solid rgba(251, 191, 36, 0.3)',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1rem',
-            }}>
-              <p style={{ color: '#fbbf24', fontSize: '0.85rem', margin: '0 0 0.75rem', fontWeight: 600 }}>
-                🔐 Optional Authentication
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
-                If your GraphQL endpoint requires authentication, provide credentials below.
-              </p>
+            <AuthenticationCard
+              apiKey={urlApiKey}
+              onApiKeyChange={setUrlApiKey}
+              showApiKey={showApiKey}
+              onShowApiKeyToggle={() => setShowApiKey(!showApiKey)}
+              userApiKey={userApiKey}
+              bearerToken={authToken}
+              onBearerTokenChange={setAuthToken}
+              showBearerToken={showAuthToken}
+              onShowBearerTokenToggle={() => setShowAuthToken(!showAuthToken)}
+              basicCredentials={basicCredentials}
+              onBasicCredentialsChange={setBasicCredentials}
+              showBasicCredentials={showBasicCredentials}
+              onShowBasicCredentialsToggle={() => setShowBasicCredentials(!showBasicCredentials)}
+              authType={authType}
+              onAuthTypeChange={setAuthType}
+              description="If your GraphQL endpoint requires authentication, provide credentials below."
+              inputStyle={inputStyle}
+            />
 
-              {/* API Key */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
-                  API Key (x-api-key header) {userApiKey && <span style={{ color: '#10b981', fontSize: '0.7rem' }}>• Pre-filled from your account</span>}
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={urlApiKey}
-                    onChange={(e) => setUrlApiKey(e.target.value)}
-                    placeholder="Your API key (optional)"
-                    style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
-                  />
+            {/* Custom Headers */}
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowCustomHeaders(!showCustomHeaders)}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
+                {showCustomHeaders ? '▼' : '▶'} Custom Headers {customHeaders.length > 0 && `(${customHeaders.length})`}
+              </button>
+
+              {showCustomHeaders && (
+                <div style={{ marginTop: '0.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  {customHeaders.map((header, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        value={header.key}
+                        onChange={(e) => {
+                          const newHeaders = [...customHeaders];
+                          newHeaders[index].key = e.target.value;
+                          setCustomHeaders(newHeaders);
+                        }}
+                        placeholder="Header name"
+                        style={{ ...inputStyle, fontSize: '0.85rem', flex: 1 }}
+                      />
+                      <input
+                        type="text"
+                        value={header.value}
+                        onChange={(e) => {
+                          const newHeaders = [...customHeaders];
+                          newHeaders[index].value = e.target.value;
+                          setCustomHeaders(newHeaders);
+                        }}
+                        placeholder="Header value"
+                        style={{ ...inputStyle, fontSize: '0.85rem', flex: 2 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          border: 'none',
+                          color: '#ef4444',
+                          borderRadius: '6px',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                   <button
                     type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
+                    onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
                     style={{
-                      position: 'absolute',
-                      right: '0.5rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: 'rgba(255,255,255,0.5)',
-                      cursor: 'pointer',
-                      padding: '0.25rem',
-                      fontSize: '0.9rem',
-                    }}
-                    title={showApiKey ? 'Hide' : 'Show'}
-                  >
-                    {showApiKey ? '🙈' : '👁️'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Authorization Token with Type Selector */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
-                  Authorization Header
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setAuthType('bearer')}
-                    style={{
-                      padding: '0.35rem 0.75rem',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px dashed rgba(255,255,255,0.3)',
+                      color: 'rgba(255,255,255,0.7)',
                       borderRadius: '6px',
-                      border: 'none',
-                      background: authType === 'bearer' ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
-                      color: '#fff',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
+                      padding: '0.5rem 1rem',
                       cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      width: '100%',
                     }}
                   >
-                    Bearer Token
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthType('basic')}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '6px',
-                      border: 'none',
-                      background: authType === 'basic' ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
-                      color: '#fff',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Basic Auth
+                    + Add Header
                   </button>
                 </div>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showAuthToken ? 'text' : 'password'}
-                    value={authToken}
-                    onChange={(e) => setAuthToken(e.target.value)}
-                    placeholder={authType === 'bearer' ? 'Your bearer token (optional)' : 'username:password or base64 encoded (optional)'}
-                    style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthToken(!showAuthToken)}
-                    style={{
-                      position: 'absolute',
-                      right: '0.5rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: 'rgba(255,255,255,0.5)',
-                      cursor: 'pointer',
-                      padding: '0.25rem',
-                      fontSize: '0.9rem',
-                    }}
-                    title={showAuthToken ? 'Hide' : 'Show'}
-                  >
-                    {showAuthToken ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                  {authType === 'bearer' ? 'Will be sent as: Authorization: Bearer <token>' : 'Will be sent as: Authorization: Basic <credentials>'}
-                </p>
-              </div>
-
-              {/* Custom Headers */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowCustomHeaders(!showCustomHeaders)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#fbbf24',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    padding: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                  }}
-                >
-                  {showCustomHeaders ? '▼' : '▶'} Custom Headers {customHeaders.length > 0 && `(${customHeaders.length})`}
-                </button>
-
-                {showCustomHeaders && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    {customHeaders.map((header, index) => (
-                      <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <input
-                          type="text"
-                          value={header.key}
-                          onChange={(e) => {
-                            const newHeaders = [...customHeaders];
-                            newHeaders[index].key = e.target.value;
-                            setCustomHeaders(newHeaders);
-                          }}
-                          placeholder="Header name"
-                          style={{ ...inputStyle, fontSize: '0.85rem', flex: 1 }}
-                        />
-                        <input
-                          type="text"
-                          value={header.value}
-                          onChange={(e) => {
-                            const newHeaders = [...customHeaders];
-                            newHeaders[index].value = e.target.value;
-                            setCustomHeaders(newHeaders);
-                          }}
-                          placeholder="Header value"
-                          style={{ ...inputStyle, fontSize: '0.85rem', flex: 2 }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.2)',
-                            border: 'none',
-                            color: '#ef4444',
-                            borderRadius: '6px',
-                            padding: '0.5rem',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
-                      style={{
-                        background: 'rgba(255,255,255,0.1)',
-                        border: '1px dashed rgba(255,255,255,0.3)',
-                        color: 'rgba(255,255,255,0.7)',
-                        borderRadius: '6px',
-                        padding: '0.5rem 1rem',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        width: '100%',
-                      }}
-                    >
-                      + Add Header
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

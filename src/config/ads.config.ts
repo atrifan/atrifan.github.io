@@ -156,6 +156,10 @@ export const ADS_CONFIG = {
     graphqlImportTop: '7221401854',
     graphqlImportBottom: '5908320187',
 
+    // MCP Server Import page ads
+    mcpImportTop: '7221401854',
+    mcpImportBottom: '5908320187',
+
     // ECLIPSE page ads (Eclipse Finder)
     eclipseTop: '7221401854',
     eclipseResults: '5908320187',

@@ -564,6 +564,16 @@ export interface Database {
         Insert: GraphQLEnvironmentInsert;
         Update: never;
       };
+      mcp_servers: {
+        Row: MCPServerRow;
+        Insert: MCPServerInsert;
+        Update: MCPServerUpdate;
+      };
+      mcp_server_tools: {
+        Row: MCPServerToolRow;
+        Insert: MCPServerToolInsert;
+        Update: MCPServerToolUpdate;
+      };
     };
   };
 }
@@ -779,6 +789,139 @@ export interface GraphQLSpecWithOperations extends GraphQLSpecRow {
  * GraphQL operation with tool details (for display)
  */
 export interface GraphQLOperationWithTool extends GraphQLOperationRow {
+  tool: ToolRow;
+}
+
+// ============ MCP Servers Table ============
+
+/** MCP Server auth types */
+export type MCPServerAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
+
+/**
+ * MCP Server record in Supabase
+ * Table: mcp_servers
+ *
+ * Stores external MCP server configurations that users import
+ */
+export interface MCPServerRow {
+  /** UUID primary key */
+  id: string;
+  /** Clerk user ID (owner) */
+  user_id: string;
+  /** Normalized server name (used in tool names) */
+  server_name: string;
+  /** Display name for the server */
+  display_name: string;
+  /** MCP server URL (HTTP endpoint) */
+  source_url: string;
+  /** Environment name for this server */
+  environment_name: string;
+  /** Authentication type */
+  auth_type: MCPServerAuthType;
+  /** Authentication configuration (encrypted credentials) */
+  auth_config: Record<string, unknown>;
+  /** Default headers to send with every request */
+  default_headers: Record<string, string>;
+  /** Category for imported tools */
+  category: string;
+  /** Server metadata from initialize response */
+  server_info: Record<string, unknown>;
+  /** When the server was created */
+  created_at: string;
+  /** When the server was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for mcp_servers table
+ */
+export interface MCPServerInsert {
+  user_id: string;
+  server_name: string;
+  display_name: string;
+  source_url: string;
+  environment_name?: string;
+  auth_type?: MCPServerAuthType;
+  auth_config?: Record<string, unknown>;
+  default_headers?: Record<string, string>;
+  category?: string;
+  server_info?: Record<string, unknown>;
+}
+
+/**
+ * Update DTO for mcp_servers table
+ */
+export interface MCPServerUpdate {
+  display_name?: string;
+  source_url?: string;
+  environment_name?: string;
+  auth_type?: MCPServerAuthType;
+  auth_config?: Record<string, unknown>;
+  default_headers?: Record<string, string>;
+  category?: string;
+  server_info?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+// ============ MCP Server Tools Table ============
+
+/**
+ * MCP Server Tool record in Supabase
+ * Table: mcp_server_tools
+ *
+ * Links imported tools to their source MCP server
+ */
+export interface MCPServerToolRow {
+  /** UUID primary key */
+  id: string;
+  /** Foreign key to mcp_servers.id */
+  mcp_server_id: string;
+  /** Foreign key to tools.id */
+  tool_id: string;
+  /** Original tool name from the external server */
+  original_name: string;
+  /** Original description from the external server */
+  original_description: string | null;
+  /** Whether this tool supports widgets */
+  has_widget: boolean;
+  /** Whether this tool is enabled */
+  is_enabled: boolean;
+  /** When the tool was imported */
+  created_at: string;
+}
+
+/**
+ * Insert DTO for mcp_server_tools table
+ */
+export interface MCPServerToolInsert {
+  mcp_server_id: string;
+  tool_id: string;
+  original_name: string;
+  original_description?: string;
+  has_widget?: boolean;
+  is_enabled?: boolean;
+}
+
+/**
+ * Update DTO for mcp_server_tools table
+ */
+export interface MCPServerToolUpdate {
+  is_enabled?: boolean;
+}
+
+// ============ MCP Server Helper Types ============
+
+/**
+ * MCP Server with tools (for display)
+ */
+export interface MCPServerWithTools extends MCPServerRow {
+  tools: MCPServerToolWithDetails[];
+}
+
+/**
+ * MCP Server tool with tool details (for display)
+ */
+export interface MCPServerToolWithDetails extends MCPServerToolRow {
   tool: ToolRow;
 }
 

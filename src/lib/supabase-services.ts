@@ -942,3 +942,97 @@ export async function getGraphQLOperationWithDetails(
   };
 }
 
+// ============ MCP Server Tools ============
+
+/**
+ * Get MCP server tool details for execution (proxy pass)
+ */
+export async function getMCPServerToolDetails(
+  toolId: string
+): Promise<{
+  serverTool: {
+    id: string;
+    original_name: string;
+    original_description: string | null;
+    has_widget: boolean;
+    is_enabled: boolean;
+  };
+  server: {
+    id: string;
+    server_name: string;
+    display_name: string;
+    source_url: string;
+    environment_name: string;
+    auth_type: string;
+    auth_config: Record<string, unknown>;
+    default_headers: Record<string, string>;
+    category: string;
+  };
+} | null> {
+  // Get the MCP server tool link
+  const { data: serverTool, error: toolError } = await supabase
+    .from('mcp_server_tools')
+    .select(`
+      id,
+      original_name,
+      original_description,
+      has_widget,
+      is_enabled,
+      mcp_server_id
+    `)
+    .eq('tool_id', toolId)
+    .single();
+
+  if (toolError || !serverTool) {
+    console.error('Error fetching MCP server tool:', toolError);
+    return null;
+  }
+
+  // Cast serverTool to access mcp_server_id
+  const serverToolData = serverTool as {
+    id: string;
+    original_name: string;
+    original_description: string | null;
+    has_widget: boolean;
+    is_enabled: boolean;
+    mcp_server_id: string;
+  };
+
+  // Get the MCP server details
+  const { data: server, error: serverError } = await supabase
+    .from('mcp_servers')
+    .select(`
+      id,
+      server_name,
+      display_name,
+      source_url,
+      environment_name,
+      auth_type,
+      auth_config,
+      default_headers,
+      category
+    `)
+    .eq('id', serverToolData.mcp_server_id)
+    .single();
+
+  if (serverError || !server) {
+    console.error('Error fetching MCP server:', serverError);
+    return null;
+  }
+
+  return {
+    serverTool: serverToolData,
+    server: server as {
+      id: string;
+      server_name: string;
+      display_name: string;
+      source_url: string;
+      environment_name: string;
+      auth_type: string;
+      auth_config: Record<string, unknown>;
+      default_headers: Record<string, string>;
+      category: string;
+    },
+  };
+}
+

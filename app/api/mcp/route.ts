@@ -16,10 +16,12 @@ import {
   getRestEndpointWithDetails,
   getGraphQLOperationWithDetails,
   getToolByName,
+  getMCPServerToolDetails,
 } from '@/src/lib/supabase-services';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
 import { executeGraphQLCall } from '@/src/lib/graphql-handler';
-import type { EnvironmentRow } from '@/src/types/supabase';
+import { createMCPClient } from '@/src/lib/mcp-client';
+import type { EnvironmentRow, MCPServerAuthType } from '@/src/types/supabase';
 
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
@@ -661,10 +663,43 @@ async function executeToolAsync(
     };
   }
 
+  // Handle MCP tools (proxy to external MCP server)
+  if (dbTool.tool_type === 'MCP') {
+    const mcpDetails = await getMCPServerToolDetails(dbTool.id);
+    if (!mcpDetails) {
+      throw new Error(`MCP server details not found for tool: ${name}`);
+    }
+
+    const { serverTool, server } = mcpDetails;
+
+    if (!serverTool.is_enabled) {
+      throw new Error(`MCP tool is disabled: ${name}`);
+    }
+
+    // Create MCP client for the external server
+    const mcpClient = createMCPClient(
+      server.source_url,
+      server.auth_type as MCPServerAuthType,
+      server.auth_config,
+      server.default_headers
+    );
+
+    // Proxy the tool call to the external MCP server
+    const result = await mcpClient.callTool(serverTool.original_name, args);
+
+    return {
+      result,
+      isRestTool: false,
+      toolInfo: {
+        hasWidget: serverTool.has_widget || dbTool.has_widget,
+        invokingMessage: dbTool.invoking_message || `Calling ${serverTool.original_name}...`,
+        invokedMessage: dbTool.invoked_message || 'MCP tool call complete',
+      },
+    };
+  }
+
   // Handle other tool types
   switch (dbTool.tool_type) {
-    case 'MCP':
-      throw new Error(`MCP tool execution not yet implemented: ${name}`);
     case 'A2A':
       throw new Error(`A2A tool execution not yet implemented: ${name}`);
     default:
@@ -1657,6 +1692,28 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     },
                   };
                   restTools.push(gqlTool); // Add to same array as REST tools
+                } else if (st.tool.tool_type === 'MCP') {
+                  // Convert MCP proxy tool to MCP format
+                  const mcpTool = {
+                    name: st.tool.name,
+                    description: st.tool.description,
+                    inputSchema: st.tool.input_schema,
+                    outputSchema: st.tool.output_schema,
+                    annotations: {
+                      readOnlyHint: false,
+                      destructiveHint: false,
+                      idempotentHint: false,
+                      openWorldHint: true, // MCP tools call external servers
+                    },
+                    _meta: {
+                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling MCP server...',
+                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'MCP call complete',
+                      'openai/widgetAccessible': st.tool.has_widget,
+                      'openai/resultCanProduceWidget': st.tool.has_widget,
+                      'openai/widgetPrefersBorder': true,
+                    },
+                  };
+                  restTools.push(mcpTool); // Add to same array as other external tools
                 }
               }
 

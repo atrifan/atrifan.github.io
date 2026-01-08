@@ -8,6 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { RestApiToolsSection } from '../components/RestApiToolsSection';
 import { GraphQLToolsSection } from '../components/GraphQLToolsSection';
+import { MCPToolsSection } from '../components/MCPToolsSection';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
 import type { MCPTool, SaveModalType } from '../types/mcp-composer';
@@ -891,7 +892,7 @@ export const MCPComposerPage: React.FC = () => {
           // Type display config
           const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
             NATIVE: { label: 'Native Tools', icon: '⚡', color: '#9ca3af' },
-            REST: { label: 'REST API Tools', icon: '🔗', color: '#10b981' },
+            REST: { label: 'REST API Tools', icon: '☁️', color: '#10b981' },
             MCP: { label: 'MCP Tools', icon: '🔌', color: '#3b82f6' },
             GQL: { label: 'GraphQL Tools', icon: '◈', color: '#ec4899' },
             A2A: { label: 'Agent-to-Agent Tools', icon: '🤖', color: '#fbbf24' },
@@ -1135,7 +1136,7 @@ export const MCPComposerPage: React.FC = () => {
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '1.5rem' }}>🔌</span>
+                  <span style={{ fontSize: '1.5rem' }}>☁️</span>
                   <span style={{ color: '#10b981', fontWeight: 700, fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>OpenAPI / Swagger</span>
                 </div>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.75rem, 1.8vw, 0.85rem)', margin: 0, lineHeight: 1.5 }}>
@@ -1161,6 +1162,27 @@ export const MCPComposerPage: React.FC = () => {
                 </div>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.75rem, 1.8vw, 0.85rem)', margin: 0, lineHeight: 1.5 }}>
                   Connect to any GraphQL endpoint. Auto-discover queries and mutations via introspection.
+                </p>
+              </div>
+            </Link>
+            <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
+              <div style={{
+                background: 'rgba(251, 146, 60, 0.1)',
+                border: '1px solid rgba(251, 146, 60, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(251, 146, 60, 0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(251, 146, 60, 0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🔌</span>
+                  <span style={{ color: '#fb923c', fontWeight: 700, fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>MCP Server</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.75rem, 1.8vw, 0.85rem)', margin: 0, lineHeight: 1.5 }}>
+                  Connect to an external MCP server and import its tools directly into your composition.
                 </p>
               </div>
             </Link>
@@ -1198,6 +1220,21 @@ export const MCPComposerPage: React.FC = () => {
           />
         </div>
 
+        {/* MCP Tools Section */}
+        <div style={{ marginTop: '2rem' }}>
+          <MCPToolsSection
+            selectedTools={selectedTools}
+            onToolSelect={(toolName, selected) => {
+              if (selected) {
+                setSelectedTools(prev => [...prev, toolName]);
+              } else {
+                setSelectedTools(prev => prev.filter(t => t !== toolName));
+              }
+            }}
+            onDataChange={refreshTools}
+          />
+        </div>
+
         {/* Coming Soon Sections */}
         <div style={{ marginTop: '3rem' }}>
           <h2 style={{
@@ -1217,36 +1254,6 @@ export const MCPComposerPage: React.FC = () => {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '1rem',
           }}>
-            {/* MCP Server */}
-            <div style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px dashed rgba(255,255,255,0.15)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              opacity: 0.7,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>🔌</span>
-                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 700, margin: 0 }}>
-                  Tools from your MCP
-                </h3>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
-                Connect an existing MCP server and import its tools into your custom composition.
-              </p>
-              <span style={{
-                display: 'inline-block',
-                padding: '0.25rem 0.75rem',
-                background: 'rgba(251, 191, 36, 0.2)',
-                color: '#fbbf24',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '12px',
-              }}>
-                Coming Soon
-              </span>
-            </div>
-
             {/* Agent as Tool */}
             <div style={{
               background: 'rgba(255,255,255,0.03)',
