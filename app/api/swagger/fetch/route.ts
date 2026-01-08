@@ -16,12 +16,13 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { url, apiKey, bearerToken } = body;
-    
+    // Support both old format (apiKey, bearerToken) and new format (headers object)
+    const { url, apiKey, bearerToken, headers: customHeaders } = body;
+
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
-    
+
     // Validate URL
     let parsedUrl: URL;
     try {
@@ -29,17 +30,23 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
-    
-    // Build headers
+
+    // Build headers - start with defaults
     const headers: Record<string, string> = {
       'Accept': 'application/json, application/yaml, text/yaml, */*',
       'User-Agent': 'Tulzo-Swagger-Importer/1.0',
     };
-    
+
+    // Add custom headers if provided (new format)
+    if (customHeaders && typeof customHeaders === 'object') {
+      Object.assign(headers, customHeaders);
+    }
+
+    // Legacy support: add apiKey and bearerToken if provided directly
     if (apiKey) {
       headers['x-api-key'] = apiKey;
     }
-    
+
     if (bearerToken) {
       headers['Authorization'] = `Bearer ${bearerToken}`;
     }

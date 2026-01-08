@@ -44,7 +44,7 @@ interface GraphQLSpec {
   updated_at: string;
 }
 
-type TabType = 'overview' | 'environments' | 'operations' | 'docs';
+type TabType = 'overview' | 'environments' | 'operations' | 'headers' | 'docs';
 
 interface Props {
   specId: string;
@@ -64,6 +64,11 @@ export function GraphQLEditPage({ specId }: Props) {
   const [typeFilter, setTypeFilter] = useState<'all' | 'query' | 'mutation'>('all');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Headers editing state
+  const [editingHeaders, setEditingHeaders] = useState<Array<{ key: string; value: string }>>([]);
+  const [authType, setAuthType] = useState<'none' | 'bearer' | 'basic' | 'api_key'>('none');
+  const [headersSaving, setHeadersSaving] = useState(false);
+
   useEffect(() => {
     fetchSpec();
   }, [specId]);
@@ -77,6 +82,18 @@ export function GraphQLEditPage({ specId }: Props) {
       setSpec(data.spec);
       setOperations(data.operations || []);
       setEnvironments(data.environments || []);
+
+      // Initialize headers editing state
+      if (data.spec?.default_headers) {
+        const headers = Object.entries(data.spec.default_headers).map(([key, value]) => ({
+          key,
+          value: value as string,
+        }));
+        setEditingHeaders(headers);
+      }
+      if (data.spec?.auth_type) {
+        setAuthType(data.spec.auth_type as 'none' | 'bearer' | 'basic' | 'api_key');
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -143,6 +160,7 @@ export function GraphQLEditPage({ specId }: Props) {
     { id: 'overview', label: 'Overview', icon: '📋' },
     { id: 'environments', label: 'Environments', icon: '🌍' },
     { id: 'operations', label: 'Operations', icon: '⚡' },
+    { id: 'headers', label: 'Headers', icon: '🔐' },
     { id: 'docs', label: 'Schema', icon: '📄' },
   ];
 
@@ -267,6 +285,131 @@ export function GraphQLEditPage({ specId }: Props) {
     </div>
   );
 
+  const handleSaveHeaders = async () => {
+    setHeadersSaving(true);
+    setError(null);
+    try {
+      // Build headers object from array
+      const headersObj: Record<string, string> = {};
+      editingHeaders.forEach(h => {
+        if (h.key.trim()) {
+          headersObj[h.key.trim()] = h.value;
+        }
+      });
+
+      const response = await fetch(`/api/graphql/${specId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          default_headers: headersObj,
+          auth_type: authType,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save headers');
+      }
+
+      setSuccess('Headers saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setHeadersSaving(false);
+    }
+  };
+
+  const renderHeadersTab = () => (
+    <div style={{ display: 'grid', gap: '1.5rem' }}>
+      {/* Auth Type */}
+      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Authentication Type</h3>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {(['none', 'api_key', 'bearer', 'basic'] as const).map(type => (
+            <button
+              key={type}
+              onClick={() => setAuthType(type)}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: authType === type ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                color: '#fff',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {type === 'none' ? 'None' : type === 'api_key' ? 'API Key' : type === 'bearer' ? 'Bearer Token' : 'Basic Auth'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Default Headers */}
+      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Default Headers</h3>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+          These headers will be sent with every GraphQL request.
+        </p>
+
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          {editingHeaders.map((header, index) => (
+            <div key={index} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={header.key}
+                onChange={(e) => {
+                  const newHeaders = [...editingHeaders];
+                  newHeaders[index].key = e.target.value;
+                  setEditingHeaders(newHeaders);
+                }}
+                placeholder="Header name"
+                style={{ flex: '1 1 150px', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
+              />
+              <input
+                type="text"
+                value={header.value}
+                onChange={(e) => {
+                  const newHeaders = [...editingHeaders];
+                  newHeaders[index].value = e.target.value;
+                  setEditingHeaders(newHeaders);
+                }}
+                placeholder="Header value"
+                style={{ flex: '2 1 200px', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
+              />
+              <button
+                onClick={() => setEditingHeaders(editingHeaders.filter((_, i) => i !== index))}
+                style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          <button
+            onClick={() => setEditingHeaders([...editingHeaders, { key: '', value: '' }])}
+            style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '0.85rem' }}
+          >
+            + Add Header
+          </button>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={handleSaveHeaders}
+          disabled={headersSaving}
+          style={{ padding: '0.75rem 2rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', opacity: headersSaving ? 0.7 : 1 }}
+        >
+          {headersSaving ? 'Saving...' : 'Save Headers'}
+        </button>
+      </div>
+    </div>
+  );
+
   const renderDocsTab = () => (
     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
       <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>GraphQL Schema</h3>
@@ -339,6 +482,7 @@ export function GraphQLEditPage({ specId }: Props) {
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'environments' && renderEnvironmentsTab()}
         {activeTab === 'operations' && renderOperationsTab()}
+        {activeTab === 'headers' && renderHeadersTab()}
         {activeTab === 'docs' && renderDocsTab()}
       </div>
 

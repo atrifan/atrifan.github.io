@@ -21,6 +21,8 @@ interface ImportRequest {
   tools: ExtractedTool[];
   environments: Array<{ name: string; host: string }>;
   category?: string;
+  defaultHeaders?: Record<string, string>;
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic';
 }
 
 /**
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body: ImportRequest = await request.json();
-    const { serverName, specFormat, spec, rawSpec, sourceUrl, importMethod, apiInfo, tools, environments, category } = body;
+    const { serverName, specFormat, spec, rawSpec, sourceUrl, importMethod, apiInfo, tools, environments, category, defaultHeaders, authType } = body;
 
     // Validate category against allowed values
     const validCategories: ToolCategory[] = ['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'];
@@ -57,6 +59,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'At least one environment is required' }, { status: 400 });
     }
 
+    // Build auth config based on auth type
+    const authConfig: Record<string, unknown> = {};
+    if (authType === 'api_key' && defaultHeaders?.['x-api-key']) {
+      authConfig.header_name = 'x-api-key';
+    }
+
     // 1. Create or update REST API spec
     const specInsert: RestApiSpecInsert = {
       user_id: userId,
@@ -67,9 +75,9 @@ export async function POST(request: NextRequest) {
       api_title: apiInfo.title,
       api_description: apiInfo.description,
       api_version: apiInfo.version,
-      default_headers: {},
-      auth_type: 'none',
-      auth_config: {},
+      default_headers: defaultHeaders || {},
+      auth_type: authType || 'none',
+      auth_config: authConfig,
       source_url: sourceUrl,
       raw_spec: rawSpec,
       import_method: importMethod || 'paste',

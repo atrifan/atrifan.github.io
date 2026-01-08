@@ -1635,6 +1635,28 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     },
                   };
                   restTools.push(restTool);
+                } else if (st.tool.tool_type === 'GQL') {
+                  // Convert GraphQL tool to MCP format
+                  const gqlTool = {
+                    name: st.tool.name,
+                    description: st.tool.description,
+                    inputSchema: st.tool.input_schema,
+                    outputSchema: st.tool.output_schema,
+                    annotations: {
+                      readOnlyHint: st.tool.name.toLowerCase().includes('query'),
+                      destructiveHint: st.tool.name.toLowerCase().includes('delete'),
+                      idempotentHint: true,
+                      openWorldHint: true, // GraphQL tools call external APIs
+                    },
+                    _meta: {
+                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Executing GraphQL...',
+                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'GraphQL complete',
+                      'openai/widgetAccessible': st.tool.has_widget,
+                      'openai/resultCanProduceWidget': st.tool.has_widget,
+                      'openai/widgetPrefersBorder': true,
+                    },
+                  };
+                  restTools.push(gqlTool); // Add to same array as REST tools
                 }
               }
 

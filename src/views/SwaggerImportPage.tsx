@@ -45,11 +45,16 @@ export function SwaggerImportPage() {
   const [importMethod, setImportMethod] = useState<ImportMethod>('paste');
   const [swaggerUrl, setSwaggerUrl] = useState('');
   const [urlApiKey, setUrlApiKey] = useState('');
-  const [urlBearerToken, setUrlBearerToken] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [authType, setAuthType] = useState<'bearer' | 'basic'>('bearer');
   const [defaultHostFromUrl, setDefaultHostFromUrl] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [showBearerToken, setShowBearerToken] = useState(false);
+  const [showAuthToken, setShowAuthToken] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string | null>(null);
+
+  // Custom headers state
+  const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
+  const [showCustomHeaders, setShowCustomHeaders] = useState(false);
 
   // UI state
   const [isValidating, setIsValidating] = useState(false);
@@ -179,6 +184,42 @@ export function SwaggerImportPage() {
     setExistingSpec(null);
   };
 
+  // Build headers object from auth state
+  const buildHeaders = (): Record<string, string> => {
+    const headerObj: Record<string, string> = {};
+
+    // API Key
+    if (urlApiKey.trim()) {
+      headerObj['x-api-key'] = urlApiKey.trim();
+    }
+
+    // Authorization header (Bearer or Basic)
+    if (authToken.trim()) {
+      if (authType === 'bearer') {
+        headerObj['Authorization'] = `Bearer ${authToken.trim()}`;
+      } else if (authType === 'basic') {
+        // Check if already base64 encoded or needs encoding
+        const token = authToken.trim();
+        if (token.includes(':')) {
+          // Encode username:password
+          headerObj['Authorization'] = `Basic ${btoa(token)}`;
+        } else {
+          // Assume already encoded
+          headerObj['Authorization'] = `Basic ${token}`;
+        }
+      }
+    }
+
+    // Custom headers
+    customHeaders.forEach(h => {
+      if (h.key.trim() && h.value.trim()) {
+        headerObj[h.key.trim()] = h.value.trim();
+      }
+    });
+
+    return headerObj;
+  };
+
   const handleValidateSpec = async () => {
     if (!specInput.trim()) {
       setError('Please paste your OpenAPI/Swagger specification');
@@ -235,13 +276,15 @@ export function SwaggerImportPage() {
     setError(null);
 
     try {
+      // Build headers for the fetch request
+      const headerObj = buildHeaders();
+
       const response = await fetch('/api/swagger/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: swaggerUrl,
-          apiKey: urlApiKey || undefined,
-          bearerToken: urlBearerToken || undefined,
+          headers: headerObj,
         }),
       });
 
@@ -379,6 +422,17 @@ export function SwaggerImportPage() {
         hasWidget: widgetEnabledTools.has(tool.operationId),
       }));
 
+      // Build headers for storage
+      const headerObj = buildHeaders();
+
+      // Determine auth type for storage
+      let storedAuthType: 'none' | 'api_key' | 'bearer' | 'basic' = 'none';
+      if (urlApiKey.trim()) {
+        storedAuthType = 'api_key';
+      } else if (authToken.trim()) {
+        storedAuthType = authType;
+      }
+
       const response = await fetch('/api/swagger/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -393,6 +447,8 @@ export function SwaggerImportPage() {
           tools: toolsWithWidgetInfo,
           environments,
           category: selectedCategory,
+          defaultHeaders: headerObj,
+          authType: storedAuthType,
         }),
       });
 
@@ -851,6 +907,7 @@ export function SwaggerImportPage() {
               If your Swagger endpoint requires authentication, provide credentials below.
             </p>
 
+            {/* API Key */}
             <div style={{ marginBottom: '0.75rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
                 API Key (x-api-key header) {userApiKey && <span style={{ color: '#10b981', fontSize: '0.7rem' }}>• Pre-filled from your account</span>}
@@ -885,21 +942,56 @@ export function SwaggerImportPage() {
               </div>
             </div>
 
-            <div>
+            {/* Authorization Token with Type Selector */}
+            <div style={{ marginBottom: '0.75rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
-                Bearer Token (Authorization header)
+                Authorization Header
               </label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setAuthType('bearer')}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: authType === 'bearer' ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                    color: '#fff',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Bearer Token
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthType('basic')}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: authType === 'basic' ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
+                    color: '#fff',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Basic Auth
+                </button>
+              </div>
               <div style={{ position: 'relative' }}>
                 <input
-                  type={showBearerToken ? 'text' : 'password'}
-                  value={urlBearerToken}
-                  onChange={(e) => setUrlBearerToken(e.target.value)}
-                  placeholder="Your bearer token (optional)"
+                  type={showAuthToken ? 'text' : 'password'}
+                  value={authToken}
+                  onChange={(e) => setAuthToken(e.target.value)}
+                  placeholder={authType === 'bearer' ? 'Your bearer token (optional)' : 'username:password or base64 encoded (optional)'}
                   style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowBearerToken(!showBearerToken)}
+                  onClick={() => setShowAuthToken(!showAuthToken)}
                   style={{
                     position: 'absolute',
                     right: '0.5rem',
@@ -912,11 +1004,97 @@ export function SwaggerImportPage() {
                     padding: '0.25rem',
                     fontSize: '0.9rem',
                   }}
-                  title={showBearerToken ? 'Hide' : 'Show'}
+                  title={showAuthToken ? 'Hide' : 'Show'}
                 >
-                  {showBearerToken ? '🙈' : '👁️'}
+                  {showAuthToken ? '🙈' : '👁️'}
                 </button>
               </div>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                {authType === 'bearer' ? 'Will be sent as: Authorization: Bearer <token>' : 'Will be sent as: Authorization: Basic <credentials>'}
+              </p>
+            </div>
+
+            {/* Custom Headers */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowCustomHeaders(!showCustomHeaders)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#fbbf24',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+              >
+                {showCustomHeaders ? '▼' : '▶'} Custom Headers {customHeaders.length > 0 && `(${customHeaders.length})`}
+              </button>
+
+              {showCustomHeaders && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {customHeaders.map((header, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        value={header.key}
+                        onChange={(e) => {
+                          const newHeaders = [...customHeaders];
+                          newHeaders[index].key = e.target.value;
+                          setCustomHeaders(newHeaders);
+                        }}
+                        placeholder="Header name"
+                        style={{ ...inputStyle, fontSize: '0.85rem', flex: 1 }}
+                      />
+                      <input
+                        type="text"
+                        value={header.value}
+                        onChange={(e) => {
+                          const newHeaders = [...customHeaders];
+                          newHeaders[index].value = e.target.value;
+                          setCustomHeaders(newHeaders);
+                        }}
+                        placeholder="Header value"
+                        style={{ ...inputStyle, fontSize: '0.85rem', flex: 2 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          border: 'none',
+                          color: '#ef4444',
+                          borderRadius: '6px',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px dashed rgba(255,255,255,0.3)',
+                      color: 'rgba(255,255,255,0.7)',
+                      borderRadius: '6px',
+                      padding: '0.5rem 1rem',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      width: '100%',
+                    }}
+                  >
+                    + Add Header
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
