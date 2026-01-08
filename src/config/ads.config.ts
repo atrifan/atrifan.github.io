@@ -152,6 +152,10 @@ export const ADS_CONFIG = {
     swaggerImportTop: '7221401854',
     swaggerImportBottom: '5908320187',
 
+    // GraphQL Import page ads
+    graphqlImportTop: '7221401854',
+    graphqlImportBottom: '5908320187',
+
     // ECLIPSE page ads (Eclipse Finder)
     eclipseTop: '7221401854',
     eclipseResults: '5908320187',

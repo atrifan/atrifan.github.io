@@ -549,6 +549,21 @@ export interface Database {
         Insert: RestApiEndpointInsert;
         Update: RestApiEndpointUpdate;
       };
+      graphql_specs: {
+        Row: GraphQLSpecRow;
+        Insert: GraphQLSpecInsert;
+        Update: GraphQLSpecUpdate;
+      };
+      graphql_operations: {
+        Row: GraphQLOperationRow;
+        Insert: GraphQLOperationInsert;
+        Update: GraphQLOperationUpdate;
+      };
+      graphql_environments: {
+        Row: GraphQLEnvironmentRow;
+        Insert: GraphQLEnvironmentInsert;
+        Update: never;
+      };
     };
   };
 }
@@ -598,6 +613,172 @@ export interface RestApiSpecWithEndpoints extends RestApiSpecRow {
  * REST API endpoint with tool details (for display)
  */
 export interface RestApiEndpointWithTool extends RestApiEndpointRow {
+  tool: ToolRow;
+}
+
+// ============ GraphQL Specs Table ============
+
+/** GraphQL operation types */
+export type GraphQLOperationType = 'query' | 'mutation' | 'subscription';
+
+/** GraphQL argument definition */
+export interface GraphQLArgumentDef {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  defaultValue?: unknown;
+}
+
+/**
+ * GraphQL Spec record in Supabase
+ * Table: graphql_specs
+ */
+export interface GraphQLSpecRow {
+  /** UUID primary key */
+  id: string;
+  /** Clerk user ID (owner) */
+  user_id: string;
+  /** User-defined server/API name */
+  server_name: string;
+  /** GraphQL introspection result as JSON */
+  schema_json: Record<string, unknown>;
+  /** Raw SDL if available */
+  schema_sdl: string | null;
+  /** API title */
+  api_title: string | null;
+  /** API description */
+  api_description: string | null;
+  /** Source URL (GraphQL endpoint) */
+  source_url: string;
+  /** Default headers for all requests */
+  default_headers: Record<string, string>;
+  /** Authorization type */
+  auth_type: RestAuthType;
+  /** Authorization configuration */
+  auth_config: Record<string, unknown>;
+  /** When the spec was created */
+  created_at: string;
+  /** When the spec was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for graphql_specs table
+ */
+export interface GraphQLSpecInsert {
+  user_id: string;
+  server_name: string;
+  schema_json: Record<string, unknown>;
+  schema_sdl?: string;
+  api_title?: string;
+  api_description?: string;
+  source_url: string;
+  default_headers?: Record<string, string>;
+  auth_type?: RestAuthType;
+  auth_config?: Record<string, unknown>;
+}
+
+/**
+ * Update DTO for graphql_specs table
+ */
+export interface GraphQLSpecUpdate {
+  server_name?: string;
+  api_title?: string;
+  api_description?: string;
+  default_headers?: Record<string, string>;
+  auth_type?: RestAuthType;
+  auth_config?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+// ============ GraphQL Operations Table ============
+
+/**
+ * GraphQL Operation record in Supabase
+ * Table: graphql_operations
+ */
+export interface GraphQLOperationRow {
+  /** UUID primary key */
+  id: string;
+  /** Foreign key to graphql_specs.id */
+  spec_id: string;
+  /** Foreign key to tools.id */
+  tool_id: string;
+  /** Operation name */
+  operation_name: string;
+  /** Operation type: query, mutation, subscription */
+  operation_type: GraphQLOperationType;
+  /** The GraphQL operation string */
+  operation_string: string;
+  /** Arguments extracted from schema */
+  arguments: GraphQLArgumentDef[];
+  /** Return type name */
+  return_type: string | null;
+  /** Return type kind (SCALAR, OBJECT, LIST, etc.) */
+  return_type_kind: string | null;
+  /** Description from schema */
+  description: string | null;
+  /** When the operation was created */
+  created_at: string;
+  /** When the operation was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for graphql_operations table
+ */
+export interface GraphQLOperationInsert {
+  spec_id: string;
+  tool_id: string;
+  operation_name: string;
+  operation_type: GraphQLOperationType;
+  operation_string: string;
+  arguments?: GraphQLArgumentDef[];
+  return_type?: string;
+  return_type_kind?: string;
+  description?: string;
+}
+
+/**
+ * Update DTO for graphql_operations table
+ */
+export interface GraphQLOperationUpdate {
+  description?: string;
+  updated_at?: string;
+}
+
+// ============ GraphQL Environments Table ============
+
+/**
+ * GraphQL Environment link record
+ * Table: graphql_environments
+ */
+export interface GraphQLEnvironmentRow {
+  id: string;
+  spec_id: string;
+  environment_id: string;
+  created_at: string;
+}
+
+export interface GraphQLEnvironmentInsert {
+  spec_id: string;
+  environment_id: string;
+}
+
+// ============ GraphQL Helper Types ============
+
+/**
+ * GraphQL spec with operations (for display)
+ */
+export interface GraphQLSpecWithOperations extends GraphQLSpecRow {
+  operations: GraphQLOperationWithTool[];
+}
+
+/**
+ * GraphQL operation with tool details (for display)
+ */
+export interface GraphQLOperationWithTool extends GraphQLOperationRow {
   tool: ToolRow;
 }
 

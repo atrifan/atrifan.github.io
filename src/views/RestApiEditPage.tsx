@@ -325,25 +325,27 @@ export function RestApiEditPage({ specId }: RestApiEditPageProps) {
       </div>
 
       {/* Tabs */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem 0' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
+        <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '0.75rem 1.25rem',
+                padding: '0.6rem 0.75rem',
                 background: activeTab === tab.id ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.id ? '2px solid #667eea' : '2px solid transparent',
                 color: activeTab === tab.id ? '#fff' : 'rgba(255,255,255,0.6)',
-                fontSize: '0.9rem',
+                fontSize: '0.8rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem',
+                gap: '0.35rem',
                 marginBottom: '-1px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               <span>{tab.icon}</span>

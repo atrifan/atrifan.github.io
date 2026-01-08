@@ -14,9 +14,11 @@ import {
   logMcpConnection,
   getEnabledServerTools,
   getRestEndpointWithDetails,
+  getGraphQLOperationWithDetails,
   getToolByName,
 } from '@/src/lib/supabase-services';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
+import { executeGraphQLCall } from '@/src/lib/graphql-handler';
 import type { EnvironmentRow } from '@/src/types/supabase';
 
 // Auth types
@@ -625,12 +627,44 @@ async function executeToolAsync(
     };
   }
 
+  // Handle GraphQL tools
+  if (dbTool.tool_type === 'GQL') {
+    const gqlDetails = await getGraphQLOperationWithDetails(dbTool.id, context?.environmentId);
+    if (!gqlDetails) {
+      throw new Error(`GraphQL operation not found for tool: ${name}`);
+    }
+
+    const { operation, spec, environment } = gqlDetails;
+
+    // Execute the GraphQL call
+    const gqlResult = await executeGraphQLCall({
+      operation: operation as Parameters<typeof executeGraphQLCall>[0]['operation'],
+      spec: spec as Parameters<typeof executeGraphQLCall>[0]['spec'],
+      environment: environment as EnvironmentRow,
+      variables: args,
+      authToken: context?.authToken,
+      apiKey: context?.apiKey,
+    });
+
+    if (!gqlResult.success) {
+      throw new Error(gqlResult.error || 'GraphQL call failed');
+    }
+
+    return {
+      result: gqlResult.data,
+      isRestTool: true, // Use same formatting as REST
+      toolInfo: {
+        hasWidget: dbTool.has_widget,
+        invokingMessage: dbTool.invoking_message,
+        invokedMessage: dbTool.invoked_message,
+      },
+    };
+  }
+
   // Handle other tool types
   switch (dbTool.tool_type) {
     case 'MCP':
       throw new Error(`MCP tool execution not yet implemented: ${name}`);
-    case 'GQL':
-      throw new Error(`GraphQL tool execution not yet implemented: ${name}`);
     case 'A2A':
       throw new Error(`A2A tool execution not yet implemented: ${name}`);
     default:

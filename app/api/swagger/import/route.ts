@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/src/lib/supabase';
 import { generateToolName } from '@/src/lib/openapi-parser';
 import type { ExtractedTool } from '@/src/lib/openapi-parser';
-import type { ToolInsert, RestApiSpecInsert, RestApiEndpointInsert, EnvironmentInsert, ToolCategory, ServerToolInsert } from '@/src/types/supabase';
+import type { ToolInsert, RestApiSpecInsert, RestApiEndpointInsert, EnvironmentInsert, ToolCategory } from '@/src/types/supabase';
 
 interface ImportRequest {
   serverName: string;
@@ -88,46 +88,7 @@ export async function POST(request: NextRequest) {
 
     const specId = (specData as { id: string }).id;
 
-    // 2. Get or create API key for this server
-    // First, check if user has an API key for this server name
-    const { data: existingApiKey } = await supabase
-      .from('api_keys')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('server_name', serverName)
-      .single();
-
-    let apiKeyId: string;
-
-    if (existingApiKey) {
-      apiKeyId = (existingApiKey as { id: string }).id;
-    } else {
-      // Create a new API key for this server
-      const keyValue = `tlz_${crypto.randomUUID().replace(/-/g, '')}`;
-      const { data: newApiKey, error: apiKeyError } = await supabase
-        .from('api_keys')
-        .insert({
-          user_id: userId,
-          server_name: serverName,
-          name: `${serverName} API Key`,
-          api_key_hash: keyValue,
-          api_key_suffix: keyValue.slice(-4),
-          provider: 'custom',
-          plan: 'free',
-          is_active: true,
-        } as never)
-        .select('id')
-        .single();
-
-      if (apiKeyError) {
-        console.error('Error creating API key:', apiKeyError);
-        return NextResponse.json({ error: 'Failed to create server API key' }, { status: 500 });
-      }
-
-      apiKeyId = (newApiKey as { id: string }).id;
-    }
-
-    // 3. Create or update environments
+    // 2. Create or update environments (just store them, don't link to MCP server)
     const environmentIds: Record<string, string> = {};
     
     for (const env of environments) {
@@ -230,23 +191,8 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Link tool to server (api_key)
-        const serverToolInsert: ServerToolInsert = {
-          api_key_id: apiKeyId,
-          tool_id: toolId,
-          environment_id: envId,
-          is_enabled: true,
-        };
-
-        const { error: serverToolError } = await supabase
-          .from('server_tools')
-          .upsert(serverToolInsert as never, { onConflict: 'api_key_id,tool_id' });
-
-        if (serverToolError) {
-          console.error('Error linking tool to server:', serverToolError);
-          // Don't fail the import, just log the error
-        }
-
+        // Tools are created but NOT linked to any MCP server yet
+        // They will be composed into MCP servers later via the MCP Composer
         toolCount++;
         createdTools.push(toolName);
       }

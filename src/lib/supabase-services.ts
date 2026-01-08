@@ -811,4 +811,134 @@ export async function getRestEndpointWithDetails(
   };
 }
 
+// ============ GraphQL Operations ============
+
+/**
+ * Get GraphQL operation with spec and environment details for execution
+ */
+export async function getGraphQLOperationWithDetails(
+  toolId: string,
+  environmentId?: string
+): Promise<{
+  operation: {
+    id: string;
+    operation_name: string;
+    operation_type: string;
+    operation_string: string;
+    arguments: unknown[];
+    return_type: string | null;
+    return_type_kind: string | null;
+    description: string | null;
+  };
+  spec: {
+    id: string;
+    user_id: string;
+    server_name: string;
+    default_headers: Record<string, string>;
+    auth_type: string;
+    auth_config: Record<string, unknown>;
+  };
+  environment: { id: string; name: string; host: string };
+} | null> {
+  // Get operation by tool_id
+  const { data: operation, error: opError } = await supabase
+    .from('graphql_operations')
+    .select('id, spec_id, operation_name, operation_type, operation_string, arguments, return_type, return_type_kind, description')
+    .eq('tool_id', toolId)
+    .single();
+
+  if (opError || !operation) {
+    console.error('GraphQL operation not found for tool:', toolId, opError);
+    return null;
+  }
+
+  // Get spec
+  const { data: spec, error: specError } = await supabase
+    .from('graphql_specs')
+    .select('id, user_id, server_name, source_url, default_headers, auth_type, auth_config')
+    .eq('id', (operation as { spec_id: string }).spec_id)
+    .single();
+
+  if (specError || !spec) {
+    console.error('GraphQL spec not found:', specError);
+    return null;
+  }
+
+  // Get environment - either specified or from graphql_environments link
+  let envHost: string;
+  let envId: string;
+  let envName: string;
+
+  if (environmentId) {
+    const { data: env } = await supabase
+      .from('environments')
+      .select('id, name, host')
+      .eq('id', environmentId)
+      .single();
+
+    if (env) {
+      envId = (env as { id: string }).id;
+      envName = (env as { name: string }).name;
+      envHost = (env as { host: string }).host;
+    } else {
+      // Fall back to source URL
+      envId = 'default';
+      envName = 'default';
+      envHost = (spec as { source_url: string }).source_url;
+    }
+  } else {
+    // Try to get first linked environment
+    const { data: envLink } = await supabase
+      .from('graphql_environments')
+      .select('environment_id')
+      .eq('spec_id', (operation as { spec_id: string }).spec_id)
+      .limit(1)
+      .single();
+
+    if (envLink) {
+      const { data: env } = await supabase
+        .from('environments')
+        .select('id, name, host')
+        .eq('id', (envLink as { environment_id: string }).environment_id)
+        .single();
+
+      if (env) {
+        envId = (env as { id: string }).id;
+        envName = (env as { name: string }).name;
+        envHost = (env as { host: string }).host;
+      } else {
+        envId = 'default';
+        envName = 'default';
+        envHost = (spec as { source_url: string }).source_url;
+      }
+    } else {
+      // Use source URL as default
+      envId = 'default';
+      envName = 'default';
+      envHost = (spec as { source_url: string }).source_url;
+    }
+  }
+
+  return {
+    operation: operation as {
+      id: string;
+      operation_name: string;
+      operation_type: string;
+      operation_string: string;
+      arguments: unknown[];
+      return_type: string | null;
+      return_type_kind: string | null;
+      description: string | null;
+    },
+    spec: spec as {
+      id: string;
+      user_id: string;
+      server_name: string;
+      default_headers: Record<string, string>;
+      auth_type: string;
+      auth_config: Record<string, unknown>;
+    },
+    environment: { id: envId, name: envName, host: envHost },
+  };
+}
 

@@ -148,8 +148,18 @@ export const SEO_DATA: Record<string, SEOConfig> = {
   },
   swaggerImport: {
     title: 'Import Swagger/OpenAPI - Create REST API Tools | Tulzo MCP',
-    description: 'Import OpenAPI 3.0 or Swagger 2.0 specifications to automatically create REST API tools for your MCP server. Paste your spec or fetch from a URL with authentication.',
-    keywords: ['swagger import', 'openapi', 'rest api tools', 'mcp server', 'api integration', 'swagger to mcp', 'openapi to mcp'],
+    description: 'Transform any REST API into AI-ready MCP tools. Import OpenAPI 3.0 or Swagger 2.0 specifications to automatically generate tools that AI assistants like Claude, Cursor, and Windsurf can use. Supports paste or URL import with authentication.',
+    keywords: ['swagger import', 'openapi', 'rest api tools', 'mcp server', 'api integration', 'swagger to mcp', 'openapi to mcp', 'ai api tools', 'claude api', 'cursor api'],
+  },
+  graphqlImport: {
+    title: 'Import GraphQL Schema - Create GraphQL Tools | Tulzo MCP',
+    description: 'Turn your GraphQL API into AI-powered MCP tools. Import schemas via introspection to automatically create query and mutation tools for AI assistants. Connect to any GraphQL endpoint with custom headers and authentication.',
+    keywords: ['graphql import', 'graphql schema', 'graphql tools', 'mcp server', 'graphql integration', 'graphql to mcp', 'introspection', 'ai graphql', 'claude graphql'],
+  },
+  graphqlEdit: {
+    title: 'Manage GraphQL API - Edit Operations & Environments | Tulzo MCP',
+    description: 'Manage your imported GraphQL API. Edit operation descriptions, configure environments, and customize tools for your MCP server.',
+    keywords: ['graphql management', 'graphql operations', 'graphql environments', 'mcp tools', 'graphql configuration'],
   },
   pricing: {
     title: 'Pricing - Free & Pro Plans | Tulzo',

@@ -373,34 +373,25 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
 
   if (specs.length === 0) {
     return (
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.08))',
-        border: '1px solid rgba(16, 185, 129, 0.25)',
-        borderRadius: '16px',
-        padding: 'clamp(1rem, 3vw, 1.5rem)',
-        marginBottom: '1.5rem',
-        textAlign: 'center',
-      }}>
-        <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '1rem' }}>
-          No REST API tools imported yet
-        </div>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🔌</div>
+        <h3 style={{ color: '#fff', margin: '0 0 0.5rem' }}>No REST APIs Imported</h3>
+        <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 1rem' }}>
+          Import an OpenAPI/Swagger spec to create tools from your REST API endpoints.
+        </p>
         <Link
           href="/dashboard/swagger-import"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.75rem 1.25rem',
+            display: 'inline-block',
+            padding: '0.75rem 1.5rem',
             borderRadius: '8px',
-            background: 'rgba(16, 185, 129, 0.2)',
-            border: '1px solid rgba(16, 185, 129, 0.4)',
-            color: '#10b981',
-            fontWeight: 600,
-            fontSize: '0.9rem',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: '#fff',
             textDecoration: 'none',
+            fontWeight: 600,
           }}
         >
-          ➕ Import Swagger/OpenAPI
+          Import OpenAPI/Swagger
         </Link>
       </div>
     );

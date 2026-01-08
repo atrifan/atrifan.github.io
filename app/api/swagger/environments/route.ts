@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/src/lib/supabase';
 import { generateToolName } from '@/src/lib/openapi-parser';
-import type { EnvironmentInsert, ToolInsert, ServerToolInsert } from '@/src/types/supabase';
+import type { EnvironmentInsert, ToolInsert } from '@/src/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch tool details for each endpoint
+    // Fetch tool details for each endpoint to create environment-specific tools
     const endpointsWithTools: Array<{
       id: string;
       tool_id: string;
@@ -117,45 +117,6 @@ export async function POST(request: NextRequest) {
       endpointsWithTools.push({
         ...endpoint,
         tool: tool ? (tool as typeof endpointsWithTools[0]['tool']) : undefined,
-      });
-    }
-
-    // Get existing API key for this server (or user's default)
-    let apiKeyId: string | null = null;
-
-    // First try to find API key for this specific server
-    const { data: serverApiKey } = await supabase
-      .from('api_keys')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('server_name', serverName)
-      .eq('is_active', true)
-      .single();
-
-    if (serverApiKey) {
-      apiKeyId = (serverApiKey as { id: string }).id;
-    } else {
-      // Fall back to user's default API key
-      const { data: defaultApiKey } = await supabase
-        .from('api_keys')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (defaultApiKey) {
-        apiKeyId = (defaultApiKey as { id: string }).id;
-      }
-    }
-
-    if (!apiKeyId) {
-      return NextResponse.json({
-        success: true,
-        environmentId: envId,
-        toolsCreated: 0,
-        message: 'Environment created (no API key found to link tools)'
       });
     }
 
@@ -203,24 +164,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const toolId = (newTool as { id: string }).id;
-
-      // Link to server with environment
-      const serverToolInsert: ServerToolInsert = {
-        api_key_id: apiKeyId,
-        tool_id: toolId,
-        environment_id: envId,
-        is_enabled: true,
-      };
-
-      const { error: serverToolError } = await supabase
-        .from('server_tools')
-        .upsert(serverToolInsert as never, { onConflict: 'api_key_id,tool_id' });
-
-      if (serverToolError) {
-        console.error('Error linking tool to server:', serverToolError);
-      }
-
+      // Tools are created but NOT linked to any MCP server yet
+      // They will be composed into MCP servers later via the MCP Composer
       toolsCreated++;
     }
 

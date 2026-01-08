@@ -7,6 +7,7 @@ import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { RestApiToolsSection } from '../components/RestApiToolsSection';
+import { GraphQLToolsSection } from '../components/GraphQLToolsSection';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
 import type { MCPTool, SaveModalType } from '../types/mcp-composer';
@@ -263,6 +264,8 @@ export const MCPComposerPage: React.FC = () => {
   const [toolIdMap, setToolIdMap] = useState<Record<string, string>>({});
   // Tool docs modal state
   const [viewingToolDocs, setViewingToolDocs] = useState<MCPTool | null>(null);
+  // Track if there are GraphQL tools (for filter)
+  const [hasGraphQLTools, setHasGraphQLTools] = useState(false);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -366,7 +369,7 @@ export const MCPComposerPage: React.FC = () => {
 
   // Get unique tool types for filter
   const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'].filter(type =>
-    tools.some(t => (t.toolType || 'NATIVE') === type)
+    type === 'GQL' ? hasGraphQLTools : tools.some(t => (t.toolType || 'NATIVE') === type)
   );
 
   const toggleTool = (toolName: string) => {
@@ -576,47 +579,6 @@ export const MCPComposerPage: React.FC = () => {
             <li><strong>Faster responses:</strong> Less context for the AI to process</li>
             <li><strong>Task-specific:</strong> Create servers for specific workflows (e.g., &quot;Health Tools&quot;, &quot;Finance Tools&quot;)</li>
           </ul>
-        </div>
-
-        {/* Import Swagger API Button */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1))',
-          border: '1px solid rgba(16, 185, 129, 0.3)',
-          borderRadius: '12px',
-          padding: '1rem',
-          marginBottom: '1.5rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '1rem',
-        }}>
-          <div>
-            <h3 style={{ color: '#10b981', fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.25rem' }}>
-              🔌 Import REST API from Swagger/OpenAPI
-            </h3>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>
-              Paste your OpenAPI spec to automatically create REST API tools
-            </p>
-          </div>
-          <Link
-            href="/dashboard/swagger-import"
-            style={{
-              padding: '0.75rem 1.25rem',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span>Import Swagger</span>
-            <span>→</span>
-          </Link>
         </div>
 
         {/* REST API Tools Section */}
@@ -1128,19 +1090,85 @@ export const MCPComposerPage: React.FC = () => {
           </div>
         )}
 
-        {/* REST API Tools Section - Imported Swagger/OpenAPI */}
-        <div style={{ marginTop: '2rem' }}>
+        {/* Import Your APIs Section */}
+        <div style={{
+          marginTop: '2rem',
+          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08))',
+          border: '1px solid rgba(102, 126, 234, 0.2)',
+          borderRadius: '16px',
+          padding: 'clamp(1rem, 3vw, 1.5rem)',
+        }}>
           <h2 style={{
             color: '#fff',
-            fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
+            fontSize: 'clamp(1.1rem, 3vw, 1.25rem)',
             fontWeight: 700,
-            marginBottom: '1rem',
+            marginBottom: '0.75rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
           }}>
-            🔗 REST API Tools
+            📥 Import Your APIs
           </h2>
+          <p style={{
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: 'clamp(0.85rem, 2vw, 0.95rem)',
+            lineHeight: 1.6,
+            margin: '0 0 1rem',
+          }}>
+            Turn your existing APIs into AI-ready MCP tools. Import specifications and your AI assistant will be able to call these endpoints directly.
+          </p>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: '1rem',
+          }}>
+            <Link href="/dashboard/swagger-import" style={{ textDecoration: 'none' }}>
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🔌</span>
+                  <span style={{ color: '#10b981', fontWeight: 700, fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>OpenAPI / Swagger</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.75rem, 1.8vw, 0.85rem)', margin: 0, lineHeight: 1.5 }}>
+                  Import REST APIs from OpenAPI 3.0 or Swagger 2.0 specs. Paste JSON/YAML or fetch from URL.
+                </p>
+              </div>
+            </Link>
+            <Link href="/dashboard/graphql-import" style={{ textDecoration: 'none' }}>
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.1)',
+                border: '1px solid rgba(102, 126, 234, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>◈</span>
+                  <span style={{ color: '#667eea', fontWeight: 700, fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>GraphQL</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.75rem, 1.8vw, 0.85rem)', margin: 0, lineHeight: 1.5 }}>
+                  Connect to any GraphQL endpoint. Auto-discover queries and mutations via introspection.
+                </p>
+              </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* REST API Tools Section - Imported Swagger/OpenAPI */}
+        <div style={{ marginTop: '2rem' }}>
           <RestApiToolsSection
             selectedTools={selectedTools}
             onToolSelect={(toolName, selected) => {
@@ -1151,6 +1179,22 @@ export const MCPComposerPage: React.FC = () => {
               }
             }}
             onDataChange={refreshTools}
+          />
+        </div>
+
+        {/* GraphQL Tools Section */}
+        <div style={{ marginTop: '2rem' }}>
+          <GraphQLToolsSection
+            selectedTools={selectedTools}
+            onToolSelect={(toolName, selected) => {
+              if (selected) {
+                setSelectedTools(prev => [...prev, toolName]);
+              } else {
+                setSelectedTools(prev => prev.filter(t => t !== toolName));
+              }
+            }}
+            onDataChange={refreshTools}
+            onHasTools={setHasGraphQLTools}
           />
         </div>
 
@@ -1173,36 +1217,6 @@ export const MCPComposerPage: React.FC = () => {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '1rem',
           }}>
-            {/* GraphQL */}
-            <div style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px dashed rgba(255,255,255,0.15)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              opacity: 0.7,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>◈</span>
-                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 700, margin: 0 }}>
-                  Tools from GraphQL
-                </h3>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
-                Connect your GraphQL server and automatically generate MCP tools from your schema.
-              </p>
-              <span style={{
-                display: 'inline-block',
-                padding: '0.25rem 0.75rem',
-                background: 'rgba(251, 191, 36, 0.2)',
-                color: '#fbbf24',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '12px',
-              }}>
-                Coming Soon
-              </span>
-            </div>
-
             {/* MCP Server */}
             <div style={{
               background: 'rgba(255,255,255,0.03)',
