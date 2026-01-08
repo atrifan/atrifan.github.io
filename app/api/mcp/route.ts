@@ -13,7 +13,11 @@ import {
   hashApiKey,
   logMcpConnection,
   getEnabledServerTools,
+  getRestEndpointWithDetails,
+  getToolByName,
 } from '@/src/lib/supabase-services';
+import { executeRestApiCall } from '@/src/lib/rest-api-handler';
+import type { EnvironmentRow } from '@/src/types/supabase';
 
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
@@ -540,7 +544,14 @@ const RESOURCES_LIST = TOOLS.map(tool => {
 import { getToolDefinition, TOOL_TYPES, ToolExecutionContext } from '@/src/config/tools-definitions';
 import { executeHandlers, widgetRenderers, widgetRenderersOpenAI, textFormatters, templateData as handlerTemplateData } from '@/src/config/tool-handlers';
 
-// Tool execution - looks up handler in registry
+// Extended context for tool execution including auth info
+interface ExtendedToolContext extends ToolExecutionContext {
+  apiKey?: string;
+  authToken?: string;
+  environmentId?: string;
+}
+
+// Tool execution - looks up handler in registry (sync for NATIVE tools)
 function executeTool(name: string, args: Record<string, unknown>, context?: ToolExecutionContext): unknown {
   // Get tool definition to check type
   const toolDef = getToolDefinition(name);
@@ -554,24 +565,188 @@ function executeTool(name: string, args: Record<string, unknown>, context?: Tool
     throw new Error(`Unknown tool: ${name}`);
   }
 
-  // For non-NATIVE tools (MCP, REST, GQL, A2A), dynamic execution will be added here
-  // These will be fetched from database and executed based on their type
-  switch (toolDef.type) {
-    case TOOL_TYPES.MCP:
-      // TODO: Forward to external MCP server
+  // For non-NATIVE tools, throw - they should use executeToolAsync
+  throw new Error(`Tool ${name} requires async execution`);
+}
+
+// Async tool execution - handles REST, MCP, GQL, A2A tools
+async function executeToolAsync(
+  name: string,
+  args: Record<string, unknown>,
+  context?: ExtendedToolContext
+): Promise<{ result: unknown; isRestTool: boolean; toolInfo?: { hasWidget: boolean; invokingMessage?: string; invokedMessage?: string } }> {
+  // First try to get from static definitions (NATIVE tools)
+  const toolDef = getToolDefinition(name);
+
+  if (toolDef && toolDef.type === TOOL_TYPES.NATIVE) {
+    const handler = executeHandlers[name];
+    if (handler) {
+      return { result: handler(args, context), isRestTool: false };
+    }
+  }
+
+  // Check if it's a REST tool from the database
+  const dbTool = await getToolByName(name);
+  if (!dbTool) {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+
+  if (dbTool.tool_type === 'REST') {
+    // Execute REST API call
+    const endpointDetails = await getRestEndpointWithDetails(dbTool.id, context?.environmentId);
+    if (!endpointDetails) {
+      throw new Error(`REST endpoint not found for tool: ${name}`);
+    }
+
+    const { endpoint, spec, environment } = endpointDetails;
+
+    // Execute the REST call
+    const restResult = await executeRestApiCall({
+      endpoint,
+      spec,
+      environment: environment as EnvironmentRow,
+      arguments: args,
+      authToken: context?.authToken,
+      apiKey: context?.apiKey,
+    });
+
+    if (!restResult.success) {
+      throw new Error(restResult.error || 'REST API call failed');
+    }
+
+    return {
+      result: restResult.data,
+      isRestTool: true,
+      toolInfo: {
+        hasWidget: dbTool.has_widget,
+        invokingMessage: dbTool.invoking_message,
+        invokedMessage: dbTool.invoked_message,
+      },
+    };
+  }
+
+  // Handle other tool types
+  switch (dbTool.tool_type) {
+    case 'MCP':
       throw new Error(`MCP tool execution not yet implemented: ${name}`);
-    case TOOL_TYPES.REST:
-      // TODO: Make REST API call
-      throw new Error(`REST tool execution not yet implemented: ${name}`);
-    case TOOL_TYPES.GQL:
-      // TODO: Make GraphQL call
+    case 'GQL':
       throw new Error(`GraphQL tool execution not yet implemented: ${name}`);
-    case TOOL_TYPES.A2A:
-      // TODO: Agent-to-Agent protocol
+    case 'A2A':
       throw new Error(`A2A tool execution not yet implemented: ${name}`);
     default:
       throw new Error(`Unknown tool type for: ${name}`);
   }
+}
+
+// Format REST API result as text
+function formatRestResultText(toolName: string, result: unknown): string {
+  const title = toolName.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+  if (result === null || result === undefined) {
+    return `${title}: No data returned`;
+  }
+
+  if (typeof result === 'string') {
+    return `${title}:\n${result}`;
+  }
+
+  if (typeof result === 'object') {
+    try {
+      return `${title}:\n${JSON.stringify(result, null, 2)}`;
+    } catch {
+      return `${title}: [Complex object]`;
+    }
+  }
+
+  return `${title}: ${String(result)}`;
+}
+
+// Generate a generic widget for REST API results
+function generateRestWidgetHtml(toolName: string, data: unknown, hasWidget: boolean): string {
+  const title = toolName.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+  // If widget is disabled, return minimal HTML
+  if (!hasWidget) {
+    return `<!DOCTYPE html><html><body><pre>${JSON.stringify(data, null, 2)}</pre></body></html>`;
+  }
+
+  // Generate a nice generic widget for REST API data
+  const dataJson = JSON.stringify(data, null, 2);
+  const escapedData = dataJson.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .card {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 1.5rem;
+      max-width: 500px;
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+      color: #fff;
+      font-weight: 600;
+    }
+    .icon { font-size: 1.5rem; }
+    .content {
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    pre {
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .success-badge {
+      display: inline-block;
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="icon">🔌</span>
+      <span>${title}</span>
+    </div>
+    <div class="success-badge">✓ API Response</div>
+    <div class="content">
+      <pre>${escapedData}</pre>
+    </div>
+  </div>
+</body>
+</html>`;
 }
 
 // Map tool names to widget types - all tools get widgets
@@ -1319,6 +1494,8 @@ interface MCPContext {
   apiKeyId?: string;
   serverName: string;
   isAuthenticated: boolean;
+  apiKey?: string;      // API key for REST calls
+  authToken?: string;   // Bearer token for REST calls
 }
 
 // Handle MCP requests
@@ -1383,25 +1560,53 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
       }
 
       case 'tools/list': {
-        // If authenticated with apiKeyId, fetch enabled tools from DB
-        let toolsList: typeof TOOLS = TOOLS;
+        // Build tools list - start with NATIVE tools, add REST tools if authenticated
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let toolsList: any[] = [...TOOLS];
 
         if (context.isAuthenticated && context.apiKeyId) {
           try {
             const serverTools = await getEnabledServerTools(context.apiKeyId);
             if (serverTools.length > 0) {
-              // Filter to only NATIVE tools that are enabled, map to MCP format
-              const filteredTools: typeof TOOLS = [];
+              // Separate NATIVE and REST tools
+              const filteredNativeTools: typeof TOOLS = [];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const restTools: any[] = [];
+
               for (const st of serverTools) {
                 if (st.tool.tool_type === 'NATIVE') {
                   const nativeTool = TOOLS.find(t => t.name === st.tool.name);
                   if (nativeTool) {
-                    filteredTools.push(nativeTool);
+                    filteredNativeTools.push(nativeTool);
                   }
+                } else if (st.tool.tool_type === 'REST') {
+                  // Convert REST tool to MCP format
+                  const restTool = {
+                    name: st.tool.name,
+                    description: st.tool.description,
+                    inputSchema: st.tool.input_schema,
+                    outputSchema: st.tool.output_schema,
+                    annotations: {
+                      readOnlyHint: st.tool.name.toLowerCase().includes('get'),
+                      destructiveHint: st.tool.name.toLowerCase().includes('delete'),
+                      idempotentHint: true,
+                      openWorldHint: true, // REST tools call external APIs
+                    },
+                    _meta: {
+                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling API...',
+                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'API call complete',
+                      'openai/widgetAccessible': st.tool.has_widget,
+                      'openai/resultCanProduceWidget': st.tool.has_widget,
+                      'openai/widgetPrefersBorder': true,
+                    },
+                  };
+                  restTools.push(restTool);
                 }
               }
-              if (filteredTools.length > 0) {
-                toolsList = filteredTools;
+
+              // If we have enabled tools, use them; otherwise fall back to defaults
+              if (filteredNativeTools.length > 0 || restTools.length > 0) {
+                toolsList = [...filteredNativeTools, ...restTools];
               }
             }
           } catch (error) {
@@ -1421,7 +1626,14 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
       case 'tools/call': {
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
-        const result = executeTool(toolName, toolArgs);
+
+        // Execute tool (async to support REST tools)
+        const execContext: ExtendedToolContext = {
+          apiKey: context.apiKey,
+          authToken: context.authToken,
+        };
+
+        const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);
 
         // Track tool call event
         trackMCPEvent('mcp_tool_call', {
@@ -1429,19 +1641,26 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           event_category: 'mcp',
           event_label: toolName,
           has_args: Object.keys(toolArgs).length > 0,
+          is_rest_tool: isRestTool,
         });
 
         // Prepare widget data with input args for context
         const widgetData: Record<string, unknown> = result as Record<string, unknown>;
 
-        // Build response text
-        const responseText = formatResultText(toolName, result);
+        // Build response text - use generic formatter for REST tools
+        const responseText = isRestTool
+          ? formatRestResultText(toolName, result)
+          : formatResultText(toolName, result);
 
-        // Generate self-contained widget HTML
-        const widgetHtmlContent = generateWidgetHtml(toolName, widgetData);
+        // Generate widget HTML - use generic widget for REST tools
+        const widgetHtmlContent = isRestTool
+          ? generateRestWidgetHtml(toolName, widgetData, toolInfo?.hasWidget ?? false)
+          : generateWidgetHtml(toolName, widgetData);
 
-        // Get tool-specific invocation messages
-        const invocationMessages = getInvocationMessages(toolName);
+        // Get invocation messages
+        const invocationMessages = isRestTool && toolInfo
+          ? { invoking: toolInfo.invokingMessage || 'Calling API...', invoked: toolInfo.invokedMessage || 'API call complete' }
+          : getInvocationMessages(toolName);
 
         // Build OpenAI widget resource (EmbeddedResource style)
         const widgetResource = {
@@ -1459,8 +1678,8 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           'openai.com/widget': widgetResource,
           'openai/toolInvocation/invoking': invocationMessages.invoking,
           'openai/toolInvocation/invoked': invocationMessages.invoked,
-          'openai/widgetAccessible': true,
-          'openai/resultCanProduceWidget': true,
+          'openai/widgetAccessible': toolInfo?.hasWidget ?? true,
+          'openai/resultCanProduceWidget': toolInfo?.hasWidget ?? true,
           'openai/widgetPrefersBorder': true,
         };
 
@@ -1469,19 +1688,21 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           { type: 'text', text: responseText },
         ];
 
-        // Add widget HTML for Claude artifact rendering
-        const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
+        // Add widget HTML for Claude artifact rendering (if widget enabled)
+        if (!isRestTool || toolInfo?.hasWidget) {
+          const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
 \`\`\`html
 ${widgetHtmlContent}
 \`\`\`
 This component is fully functional and ready for immediate use.`;
-        content.push({ type: 'text', text: widgetHtml });
+          content.push({ type: 'text', text: widgetHtml });
 
-        // Add embedded resource for OpenAI widget rendering
-        content.push({
-          type: 'resource',
-          resource: widgetResource.resource
-        });
+          // Add embedded resource for OpenAI widget rendering
+          content.push({
+            type: 'resource',
+            resource: widgetResource.resource
+          });
+        }
 
         return {
           jsonrpc: '2.0',
@@ -1530,11 +1751,18 @@ export async function POST(request: NextRequest) {
       // Log connection asynchronously (don't await)
       logConnection(internalApiKeyId || undefined, internalServerName, internalAuthMethod || 'path', clientIp, userAgent);
 
+      // Extract API key from path (forwarded in X-Original-Api-Key header)
+      const originalApiKey = request.headers.get('X-Original-Api-Key');
+      const authorizationHeader = request.headers.get('Authorization');
+      const bearerToken = authorizationHeader?.startsWith('Bearer ') ? authorizationHeader.slice(7) : undefined;
+
       const context: MCPContext = {
         userId: internalUserId,
         apiKeyId: internalApiKeyId || undefined,
         serverName: internalServerName,
         isAuthenticated: true,
+        apiKey: originalApiKey || undefined,
+        authToken: bearerToken,
       };
       const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);
@@ -1580,11 +1808,17 @@ export async function POST(request: NextRequest) {
       const userAgent = request.headers.get('user-agent') || 'unknown';
       logConnection(authResult.apiKeyId, authResult.serverName || 'default', authResult.authMethod, clientIp, userAgent);
 
+      // Determine API key and auth token for REST calls
+      const isApiKeyAuth = authMethod === 'header' && !apiKey.startsWith('ey'); // JWT tokens start with 'ey'
+      const isBearerAuth = authMethod === 'oauth' || apiKey.startsWith('ey');
+
       const context: MCPContext = {
         userId: authResult.userId,
         apiKeyId: authResult.apiKeyId,
         serverName: authResult.serverName || 'default',
         isAuthenticated: true,
+        apiKey: isApiKeyAuth ? apiKey : undefined,
+        authToken: isBearerAuth ? apiKey : undefined,
       };
       const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);

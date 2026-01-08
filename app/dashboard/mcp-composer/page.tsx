@@ -2,11 +2,20 @@ import type { Metadata } from 'next';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { MCPComposerPage } from '@/src/views/MCPComposerPage';
+import { SEO_DATA } from '@/src/utils/seo';
+
+const seo = SEO_DATA.mcpComposer;
 
 export const metadata: Metadata = {
-  title: 'Create Custom MCP Server - Tulzo',
-  description: 'Create a custom MCP server with your selected tools for focused AI assistant integration.',
+  title: seo.title,
+  description: seo.description,
+  keywords: seo.keywords,
   robots: { index: false, follow: false },
+  openGraph: {
+    title: seo.ogTitle || seo.title,
+    description: seo.ogDescription || seo.description,
+    type: 'website',
+  },
 };
 
 export default async function MCPComposer() {

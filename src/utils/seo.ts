@@ -136,6 +136,31 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Find upcoming solar and lunar eclipses visible from your location. Get dates, times, visibility info, countdown timers, and best viewing locations for total, partial, and annular eclipses through 2030.',
     keywords: ['eclipse finder', 'next solar eclipse', 'next lunar eclipse', 'eclipse dates', 'eclipse visibility', 'total solar eclipse', 'blood moon', 'eclipse countdown', 'when is the next eclipse', 'eclipse 2025', 'eclipse 2026', 'annular eclipse', 'partial eclipse'],
   },
+  dashboard: {
+    title: 'Dashboard - Manage Your MCP Server & API Keys | Tulzo',
+    description: 'Manage your Tulzo MCP server, API keys, and tool configurations. Connect AI assistants like Claude, Cursor, and Windsurf to access 20+ tools.',
+    keywords: ['tulzo dashboard', 'mcp server', 'api keys', 'ai tools', 'claude mcp', 'cursor mcp', 'windsurf mcp', 'tool management'],
+  },
+  mcpComposer: {
+    title: 'MCP Composer - Create Custom MCP Servers | Tulzo',
+    description: 'Create custom MCP servers with only the tools you need. Compose focused tool sets for better AI performance and fewer collisions.',
+    keywords: ['mcp composer', 'custom mcp server', 'mcp tools', 'ai tool selection', 'mcp configuration', 'tool composition'],
+  },
+  swaggerImport: {
+    title: 'Import Swagger/OpenAPI - Create REST API Tools | Tulzo MCP',
+    description: 'Import OpenAPI 3.0 or Swagger 2.0 specifications to automatically create REST API tools for your MCP server. Paste your spec or fetch from a URL with authentication.',
+    keywords: ['swagger import', 'openapi', 'rest api tools', 'mcp server', 'api integration', 'swagger to mcp', 'openapi to mcp'],
+  },
+  pricing: {
+    title: 'Pricing - Free & Pro Plans | Tulzo',
+    description: 'Tulzo pricing plans. Free tier with all tools, Pro plan with unlimited API calls, priority support, and advanced features.',
+    keywords: ['tulzo pricing', 'mcp pricing', 'ai tools pricing', 'free plan', 'pro plan', 'subscription'],
+  },
+  docs: {
+    title: 'Documentation - MCP Server Setup & API Reference | Tulzo',
+    description: 'Complete documentation for Tulzo MCP server. Setup guides for Claude, Cursor, Windsurf, and other AI assistants. API reference and tool documentation.',
+    keywords: ['tulzo docs', 'mcp documentation', 'api reference', 'setup guide', 'claude setup', 'cursor setup', 'mcp integration'],
+  },
 };
 
 /**

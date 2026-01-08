@@ -188,8 +188,10 @@ export interface ToolRow {
   name: string;
   /** Human-readable description */
   description: string;
-  /** Tool category */
+  /** Primary tool category (backward compatibility) */
   category: ToolCategory;
+  /** All categories this tool belongs to */
+  categories: string[];
   /** Tool type: NATIVE, MCP, REST, GQL, A2A */
   tool_type: ToolType;
   /** Whether the tool has a widget renderer */
@@ -217,6 +219,7 @@ export interface ToolInsert {
   name: string;
   description: string;
   category: ToolCategory;
+  categories?: string[];
   tool_type: ToolType;
   has_widget?: boolean;
   invoking_message?: string;
@@ -232,6 +235,7 @@ export interface ToolInsert {
 export interface ToolUpdate {
   description?: string;
   category?: ToolCategory;
+  categories?: string[];
   tool_type?: ToolType;
   has_widget?: boolean;
   invoking_message?: string;
@@ -337,6 +341,166 @@ export interface ServerToolUpdate {
   updated_at?: string;
 }
 
+// ============ REST API Specs Table ============
+
+/** Authorization types for REST APIs */
+export type RestAuthType = 'none' | 'bearer' | 'api_key' | 'basic' | 'custom';
+
+/** Spec format */
+export type SpecFormat = 'json' | 'yaml';
+
+/**
+ * REST API Spec record in Supabase
+ * Table: rest_api_specs
+ *
+ * Stores OpenAPI/Swagger specifications for REST API tool groups.
+ */
+export interface RestApiSpecRow {
+  /** UUID primary key */
+  id: string;
+  /** Clerk user ID (owner) */
+  user_id: string;
+  /** User-defined server/API name */
+  server_name: string;
+  /** Original swagger spec as JSON */
+  swagger_spec: Record<string, unknown>;
+  /** Original format: json or yaml */
+  spec_format: SpecFormat;
+  /** OpenAPI version (e.g., '3.0.0', '2.0') */
+  openapi_version: string | null;
+  /** API title from spec */
+  api_title: string | null;
+  /** API description from spec */
+  api_description: string | null;
+  /** API version from spec */
+  api_version: string | null;
+  /** Default headers for all requests */
+  default_headers: Record<string, string>;
+  /** Authorization type */
+  auth_type: RestAuthType | null;
+  /** Authorization config */
+  auth_config: Record<string, unknown>;
+  /** Source URL for URL-based imports */
+  source_url: string | null;
+  /** Raw spec text (before parsing) */
+  raw_spec: string | null;
+  /** Import method: paste or url */
+  import_method: 'paste' | 'url' | null;
+  /** When the spec was created */
+  created_at: string;
+  /** When the spec was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for rest_api_specs table
+ */
+export interface RestApiSpecInsert {
+  user_id: string;
+  server_name: string;
+  swagger_spec: Record<string, unknown>;
+  spec_format?: SpecFormat;
+  openapi_version?: string;
+  api_title?: string;
+  api_description?: string;
+  api_version?: string;
+  default_headers?: Record<string, string>;
+  auth_type?: RestAuthType;
+  auth_config?: Record<string, unknown>;
+  source_url?: string;
+  raw_spec?: string;
+  import_method?: 'paste' | 'url';
+}
+
+/**
+ * Update DTO for rest_api_specs table
+ */
+export interface RestApiSpecUpdate {
+  server_name?: string;
+  swagger_spec?: Record<string, unknown>;
+  default_headers?: Record<string, string>;
+  auth_type?: RestAuthType;
+  auth_config?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+// ============ REST API Endpoints Table ============
+
+/** HTTP methods for REST endpoints */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/** Query parameter definition */
+export interface QueryParamDef {
+  name: string;
+  required: boolean;
+  type: string;
+  description?: string;
+}
+
+/**
+ * REST API Endpoint record in Supabase
+ * Table: rest_api_endpoints
+ *
+ * Individual endpoints extracted from swagger specs.
+ */
+export interface RestApiEndpointRow {
+  /** UUID primary key */
+  id: string;
+  /** Foreign key to rest_api_specs.id */
+  spec_id: string;
+  /** Foreign key to tools.id */
+  tool_id: string;
+  /** Operation ID from swagger */
+  operation_id: string;
+  /** HTTP method */
+  http_method: HttpMethod;
+  /** URL path (e.g., /users/{id}) */
+  path: string;
+  /** Headers specific to this endpoint */
+  headers: Record<string, string>;
+  /** Request content type */
+  request_content_type: string;
+  /** Response content type */
+  response_content_type: string;
+  /** Path parameter names */
+  path_params: string[];
+  /** Query parameter definitions */
+  query_params: QueryParamDef[];
+  /** Header parameter names */
+  header_params: string[];
+  /** When the endpoint was created */
+  created_at: string;
+  /** When the endpoint was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for rest_api_endpoints table
+ */
+export interface RestApiEndpointInsert {
+  spec_id: string;
+  tool_id: string;
+  operation_id: string;
+  http_method: HttpMethod;
+  path: string;
+  headers?: Record<string, string>;
+  request_content_type?: string;
+  response_content_type?: string;
+  path_params?: string[];
+  query_params?: QueryParamDef[];
+  header_params?: string[];
+}
+
+/**
+ * Update DTO for rest_api_endpoints table
+ */
+export interface RestApiEndpointUpdate {
+  headers?: Record<string, string>;
+  request_content_type?: string;
+  response_content_type?: string;
+  updated_at?: string;
+}
+
 // ============ Supabase Database Schema ============
 
 /**
@@ -375,6 +539,16 @@ export interface Database {
         Insert: ServerToolInsert;
         Update: ServerToolUpdate;
       };
+      rest_api_specs: {
+        Row: RestApiSpecRow;
+        Insert: RestApiSpecInsert;
+        Update: RestApiSpecUpdate;
+      };
+      rest_api_endpoints: {
+        Row: RestApiEndpointRow;
+        Insert: RestApiEndpointInsert;
+        Update: RestApiEndpointUpdate;
+      };
     };
   };
 }
@@ -411,5 +585,19 @@ export interface ServerToolWithDetails extends ServerToolRow {
  */
 export interface ServerWithTools extends ApiKeyRow {
   server_tools: ServerToolWithDetails[];
+}
+
+/**
+ * REST API spec with endpoints (for display)
+ */
+export interface RestApiSpecWithEndpoints extends RestApiSpecRow {
+  endpoints: RestApiEndpointWithTool[];
+}
+
+/**
+ * REST API endpoint with tool details (for display)
+ */
+export interface RestApiEndpointWithTool extends RestApiEndpointRow {
+  tool: ToolRow;
 }
 

@@ -148,6 +148,10 @@ export const ADS_CONFIG = {
     mcpComposerTop: '7221401854',
     mcpComposerBottom: '5908320187',
 
+    // Swagger Import page ads (uses same slots as MCP Composer)
+    swaggerImportTop: '7221401854',
+    swaggerImportBottom: '5908320187',
+
     // ECLIPSE page ads (Eclipse Finder)
     eclipseTop: '7221401854',
     eclipseResults: '5908320187',

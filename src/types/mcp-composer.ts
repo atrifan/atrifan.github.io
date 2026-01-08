@@ -3,11 +3,23 @@
  * Types for custom MCP server composition
  */
 
+export type ToolType = 'NATIVE' | 'MCP' | 'REST' | 'GQL' | 'A2A';
+
+export interface ToolSchema {
+  type: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+  [key: string]: unknown;
+}
+
 export interface MCPTool {
   name: string;
   description: string;
   category: string;
+  toolType?: ToolType;
   hasWidget: boolean;
+  inputSchema?: ToolSchema;
+  outputSchema?: ToolSchema;
 }
 
 export interface CustomMCPServer {

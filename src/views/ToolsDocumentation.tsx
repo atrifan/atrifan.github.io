@@ -204,11 +204,6 @@ export default function ToolsDocumentation() {
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>
-        {/* Header Ad */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <AdBanner slot={ADS_CONFIG.slots.docsHeader} format="horizontal" />
-        </div>
-
         {/* Back Link */}
         <Link href="/dashboard" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1.5rem' }}>
           <div style={{
@@ -259,6 +254,11 @@ export default function ToolsDocumentation() {
           }}>
             Complete reference for all {tools.length} available tools. Use these with ChatGPT, Claude, Cursor, and other AI assistants.
           </p>
+        </div>
+
+        {/* Header Ad - after title */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.docsHeader} format="horizontal" />
         </div>
 
         {/* Search & Filter */}

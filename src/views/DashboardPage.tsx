@@ -1306,6 +1306,8 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
+
+
         {/* MCP Connections Card */}
         {isPro && connections.length > 0 && (
           <DashboardCard title="Active Connections" icon={

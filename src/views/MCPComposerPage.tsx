@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
+import { RestApiToolsSection } from '../components/RestApiToolsSection';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
 import type { MCPTool, SaveModalType } from '../types/mcp-composer';
@@ -254,11 +255,14 @@ export const MCPComposerPage: React.FC = () => {
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
   const [showModal, setShowModal] = useState<SaveModalType>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [allToolNames, setAllToolNames] = useState<string[]>([]);
   // Map of tool name -> tool ID for Supabase updates
   const [toolIdMap, setToolIdMap] = useState<Record<string, string>>({});
+  // Tool docs modal state
+  const [viewingToolDocs, setViewingToolDocs] = useState<MCPTool | null>(null);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -271,6 +275,20 @@ export const MCPComposerPage: React.FC = () => {
       router.push('/dashboard');
     }
   }, [router]);
+
+  // Function to refresh tools list (called when REST API tools change)
+  const refreshTools = async () => {
+    try {
+      const toolsRes = await fetch('/api/tools');
+      const toolsData: ToolsResponse = await toolsRes.json();
+      setTools(toolsData.tools);
+      setCategories(toolsData.categories);
+      const toolNames = toolsData.tools.map((t: MCPTool) => t.name);
+      setAllToolNames(toolNames);
+    } catch (error) {
+      console.error('Failed to refresh tools:', error);
+    }
+  };
 
   // Fetch tools first, then load server data from Supabase
   useEffect(() => {
@@ -339,11 +357,17 @@ export const MCPComposerPage: React.FC = () => {
 
   const filteredTools = tools.filter(tool => {
     const matchesCategory = selectedCategory === 'all' || tool.category === selectedCategory;
+    const matchesType = selectedType === 'all' || (tool.toolType || 'NATIVE') === selectedType;
     const matchesSearch = searchQuery === '' ||
       tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesType && matchesSearch;
   });
+
+  // Get unique tool types for filter
+  const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'].filter(type =>
+    tools.some(t => (t.toolType || 'NATIVE') === type)
+  );
 
   const toggleTool = (toolName: string) => {
     setSelectedTools(prev =>
@@ -474,11 +498,6 @@ export const MCPComposerPage: React.FC = () => {
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>
-        {/* Top Ad */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <AdBanner slot={ADS_CONFIG.slots.mcpComposerTop} format="horizontal" />
-        </div>
-
         {/* Back Link */}
         <Link href="/dashboard" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1.5rem' }}>
           <div style={{
@@ -535,6 +554,11 @@ export const MCPComposerPage: React.FC = () => {
           </p>
         </div>
 
+        {/* Top Ad - after title */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.mcpComposerTop} format="horizontal" />
+        </div>
+
         {/* Disclaimer */}
         <div style={{
           background: 'rgba(102, 126, 234, 0.1)',
@@ -554,7 +578,49 @@ export const MCPComposerPage: React.FC = () => {
           </ul>
         </div>
 
-        {/* Server Name Input - hidden for default server */}
+        {/* Import Swagger API Button */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1))',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: '12px',
+          padding: '1rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1rem',
+        }}>
+          <div>
+            <h3 style={{ color: '#10b981', fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.25rem' }}>
+              🔌 Import REST API from Swagger/OpenAPI
+            </h3>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>
+              Paste your OpenAPI spec to automatically create REST API tools
+            </p>
+          </div>
+          <Link
+            href="/dashboard/swagger-import"
+            style={{
+              padding: '0.75rem 1.25rem',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <span>Import Swagger</span>
+            <span>→</span>
+          </Link>
+        </div>
+
+        {/* REST API Tools Section */}
+        {/* Server Name Input - hidden for default server - FIRST */}
         {!isDefaultServer && (
           <div style={{
             background: 'rgba(255,255,255,0.05)',
@@ -731,6 +797,60 @@ export const MCPComposerPage: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Type Filter Pills */}
+          {toolTypes.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginRight: '0.25rem' }}>Type:</span>
+              <button
+                onClick={() => setSelectedType('all')}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: selectedType === 'all'
+                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                    : 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                All
+              </button>
+              {toolTypes.map(type => {
+                const typeColors: Record<string, string> = {
+                  NATIVE: '#9ca3af',
+                  REST: '#10b981',
+                  MCP: '#3b82f6',
+                  GQL: '#ec4899',
+                  A2A: '#fbbf24',
+                };
+                const isActive = selectedType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedType(type)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '16px',
+                      border: 'none',
+                      background: isActive
+                        ? `${typeColors[type]}33`
+                        : 'rgba(255,255,255,0.08)',
+                      color: isActive ? typeColors[type] : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Bulk Actions */}
@@ -738,6 +858,7 @@ export const MCPComposerPage: React.FC = () => {
           display: 'flex',
           gap: '0.5rem',
           marginBottom: '1rem',
+          flexWrap: 'wrap',
         }}>
           <button
             onClick={selectAll}
@@ -767,6 +888,23 @@ export const MCPComposerPage: React.FC = () => {
           >
             Deselect All Visible
           </button>
+          {selectedTools.length > 0 && (
+            <button
+              onClick={() => setSelectedTools([])}
+              style={{
+                padding: '0.4rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              ✕ Clear All ({selectedTools.length})
+            </button>
+          )}
         </div>
 
         {/* Results Count */}
@@ -777,14 +915,74 @@ export const MCPComposerPage: React.FC = () => {
         }}>
           Showing {filteredTools.length} of {tools.length} tools
         </p>
-        {/* Tools Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '1rem',
-          marginBottom: '2rem',
-        }}>
-          {filteredTools.map(tool => {
+
+        {/* Tools Grid - Grouped by Type */}
+        {(() => {
+          // Group tools by type
+          const groupedTools: Record<string, typeof filteredTools> = {};
+          filteredTools.forEach(tool => {
+            const type = tool.toolType || 'NATIVE';
+            if (!groupedTools[type]) groupedTools[type] = [];
+            groupedTools[type].push(tool);
+          });
+
+          // Type display config
+          const typeConfig: Record<string, { label: string; icon: string; color: string }> = {
+            NATIVE: { label: 'Native Tools', icon: '⚡', color: '#9ca3af' },
+            REST: { label: 'REST API Tools', icon: '🔗', color: '#10b981' },
+            MCP: { label: 'MCP Tools', icon: '🔌', color: '#3b82f6' },
+            GQL: { label: 'GraphQL Tools', icon: '◈', color: '#ec4899' },
+            A2A: { label: 'Agent-to-Agent Tools', icon: '🤖', color: '#fbbf24' },
+          };
+
+          const typeOrder = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'];
+          const activeTypes = typeOrder.filter(t => groupedTools[t]?.length > 0);
+
+          return activeTypes.map((type, typeIndex) => {
+            const config = typeConfig[type] || { label: type, icon: '📦', color: '#9ca3af' };
+            const toolsInGroup = groupedTools[type];
+
+            return (
+              <div key={type} style={{ marginBottom: typeIndex < activeTypes.length - 1 ? '2rem' : '0' }}>
+                {/* Type Separator Header */}
+                {activeTypes.length > 1 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    marginBottom: '1rem',
+                    paddingBottom: '0.5rem',
+                    borderBottom: `1px solid ${config.color}33`,
+                  }}>
+                    <span style={{ fontSize: '1.25rem' }}>{config.icon}</span>
+                    <h3 style={{
+                      color: config.color,
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      margin: 0,
+                    }}>
+                      {config.label}
+                    </h3>
+                    <span style={{
+                      padding: '0.15rem 0.5rem',
+                      borderRadius: '10px',
+                      background: `${config.color}22`,
+                      color: config.color,
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                    }}>
+                      {toolsInGroup.length}
+                    </span>
+                  </div>
+                )}
+
+                {/* Tools Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '1rem',
+                }}>
+                  {toolsInGroup.map(tool => {
             const isSelected = selectedTools.includes(tool.name);
             return (
               <button
@@ -847,19 +1045,78 @@ export const MCPComposerPage: React.FC = () => {
                 }}>
                   {tool.description}
                 </p>
-                <span style={{
-                  fontSize: '0.7rem',
-                  background: 'rgba(167, 139, 250, 0.2)',
-                  color: '#a78bfa',
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '6px',
-                }}>
-                  {categoryIcons[tool.category] || '📦'} {tool.category}
-                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                  {/* Category Badge */}
+                  <span style={{
+                    fontSize: '0.7rem',
+                    background: 'rgba(167, 139, 250, 0.2)',
+                    color: '#a78bfa',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '6px',
+                  }}>
+                    {categoryIcons[tool.category] || '📦'} {tool.category}
+                  </span>
+                  {/* Type Badge */}
+                  <span style={{
+                    fontSize: '0.65rem',
+                    background: tool.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' :
+                               tool.toolType === 'MCP' ? 'rgba(59, 130, 246, 0.2)' :
+                               tool.toolType === 'GQL' ? 'rgba(236, 72, 153, 0.2)' :
+                               tool.toolType === 'A2A' ? 'rgba(251, 191, 36, 0.2)' :
+                               'rgba(156, 163, 175, 0.2)',
+                    color: tool.toolType === 'REST' ? '#10b981' :
+                           tool.toolType === 'MCP' ? '#3b82f6' :
+                           tool.toolType === 'GQL' ? '#ec4899' :
+                           tool.toolType === 'A2A' ? '#fbbf24' :
+                           '#9ca3af',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                  }}>
+                    {tool.toolType || 'NATIVE'}
+                  </span>
+                  {/* Widget Badge */}
+                  {tool.hasWidget && (
+                    <span style={{
+                      fontSize: '0.65rem',
+                      background: 'rgba(139, 92, 246, 0.2)',
+                      color: '#8b5cf6',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '4px',
+                      fontWeight: 600,
+                    }}>
+                      🎨 Widget
+                    </span>
+                  )}
+                  {/* Docs Button */}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingToolDocs(tool);
+                    }}
+                    style={{
+                      fontSize: '0.65rem',
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      color: '#10b981',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '4px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    title="View tool definition"
+                  >
+                    📖 Docs
+                  </span>
+                </div>
               </button>
             );
           })}
-        </div>
+                </div>
+              </div>
+            );
+          });
+        })()}
 
         {filteredTools.length === 0 && (
           <div style={{
@@ -870,6 +1127,32 @@ export const MCPComposerPage: React.FC = () => {
             <p style={{ fontSize: '1.1rem', margin: 0 }}>No tools found matching your criteria.</p>
           </div>
         )}
+
+        {/* REST API Tools Section - Imported Swagger/OpenAPI */}
+        <div style={{ marginTop: '2rem' }}>
+          <h2 style={{
+            color: '#fff',
+            fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
+            fontWeight: 700,
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}>
+            🔗 REST API Tools
+          </h2>
+          <RestApiToolsSection
+            selectedTools={selectedTools}
+            onToolSelect={(toolName, selected) => {
+              if (selected) {
+                setSelectedTools(prev => [...prev, toolName]);
+              } else {
+                setSelectedTools(prev => prev.filter(t => t !== toolName));
+              }
+            }}
+            onDataChange={refreshTools}
+          />
+        </div>
 
         {/* Coming Soon Sections */}
         <div style={{ marginTop: '3rem' }}>
@@ -890,36 +1173,6 @@ export const MCPComposerPage: React.FC = () => {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '1rem',
           }}>
-            {/* Swagger/OpenAPI */}
-            <div style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px dashed rgba(255,255,255,0.15)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              opacity: 0.7,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>📄</span>
-                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 700, margin: 0 }}>
-                  Tools from REST API
-                </h3>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 0.75rem', lineHeight: 1.5 }}>
-                Import your REST API endpoints as MCP tools using Swagger/OpenAPI 3.0 specification.
-              </p>
-              <span style={{
-                display: 'inline-block',
-                padding: '0.25rem 0.75rem',
-                background: 'rgba(251, 191, 36, 0.2)',
-                color: '#fbbf24',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '12px',
-              }}>
-                Coming Soon
-              </span>
-            </div>
-
             {/* GraphQL */}
             <div style={{
               background: 'rgba(255,255,255,0.03)',
@@ -1036,6 +1289,136 @@ export const MCPComposerPage: React.FC = () => {
         }}
         onCancel={() => setShowModal(null)}
       />
+
+      {/* Tool Docs Modal */}
+      {viewingToolDocs && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => setViewingToolDocs(null)}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
+              border: '1px solid rgba(102, 126, 234, 0.3)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '700px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>{viewingToolDocs.name}</h3>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                  <span style={{
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '4px',
+                    background: 'rgba(167, 139, 250, 0.2)',
+                    color: '#a78bfa',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                  }}>
+                    {viewingToolDocs.category}
+                  </span>
+                  <span style={{
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '4px',
+                    background: viewingToolDocs.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                    color: viewingToolDocs.toolType === 'REST' ? '#10b981' : '#3b82f6',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                  }}>
+                    {viewingToolDocs.toolType || 'NATIVE'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingToolDocs(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  padding: '0.25rem',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {viewingToolDocs.description && (
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                  Description
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>
+                  {viewingToolDocs.description}
+                </p>
+              </div>
+            )}
+
+            {/* Input Schema */}
+            {viewingToolDocs.inputSchema && Object.keys(viewingToolDocs.inputSchema).length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  Input Schema
+                </div>
+                <pre style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  color: 'rgba(255,255,255,0.8)',
+                  overflow: 'auto',
+                  maxHeight: '200px',
+                }}>
+                  {JSON.stringify(viewingToolDocs.inputSchema, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* Output Schema */}
+            {viewingToolDocs.outputSchema && Object.keys(viewingToolDocs.outputSchema).length > 0 && (
+              <div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  Output Schema
+                </div>
+                <pre style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  color: 'rgba(255,255,255,0.8)',
+                  overflow: 'auto',
+                  maxHeight: '200px',
+                }}>
+                  {JSON.stringify(viewingToolDocs.outputSchema, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

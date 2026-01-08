@@ -42,6 +42,7 @@ interface ToolSchema {
   type: string;
   properties?: Record<string, SchemaProperty>;
   required?: string[];
+  [key: string]: unknown;
 }
 
 interface ToolWithSchema extends MCPTool {
@@ -237,11 +238,6 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
         margin: '0 auto',
         padding: 'clamp(1rem, 4vw, 2rem)',
       }}>
-        {/* Top Ad */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <AdBanner slot={ADS_CONFIG.slots.docsHeader} format="horizontal" />
-        </div>
-
         {/* Back Link */}
         <Link href="/dashboard" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1.5rem' }}>
           <div style={{
@@ -295,6 +291,11 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
           }}>
             Custom MCP server with {serverTools.length} selected tools.
           </p>
+        </div>
+
+        {/* Top Ad - after title */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.docsHeader} format="horizontal" />
         </div>
 
         {/* Warning Banner if too many tools */}

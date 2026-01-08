@@ -18,6 +18,9 @@ import type {
   UserPreferencesRow,
   UserPreferencesInsert,
   UserPreferencesUpdate,
+  RestApiSpecRow,
+  RestApiEndpointRow,
+  RestApiEndpointWithTool,
 } from '../types/supabase';
 import crypto from 'crypto';
 
@@ -591,3 +594,221 @@ export async function getMcpConnectionsByUser(userId: string): Promise<McpConnec
 
   return (data || []) as unknown as McpConnectionRow[];
 }
+
+// ============ REST API Specs ============
+
+/**
+ * Get all REST API specs for a user
+ */
+export async function getRestApiSpecs(userId: string): Promise<RestApiSpecRow[]> {
+  const { data, error } = await supabase
+    .from('rest_api_specs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching REST API specs:', error);
+    throw error;
+  }
+
+  return (data || []) as unknown as RestApiSpecRow[];
+}
+
+/**
+ * Get REST API spec by ID with endpoints
+ */
+export async function getRestApiSpecWithEndpoints(
+  specId: string
+): Promise<{ spec: RestApiSpecRow; endpoints: RestApiEndpointWithTool[] } | null> {
+  const { data: specData, error: specError } = await supabase
+    .from('rest_api_specs')
+    .select('*')
+    .eq('id', specId)
+    .single();
+
+  if (specError) {
+    if (specError.code === 'PGRST116') return null;
+    console.error('Error fetching REST API spec:', specError);
+    throw specError;
+  }
+
+  const { data: endpointsData, error: endpointsError } = await supabase
+    .from('rest_api_endpoints')
+    .select(`
+      *,
+      tool:tools(*)
+    `)
+    .eq('spec_id', specId)
+    .order('path', { ascending: true });
+
+  if (endpointsError) {
+    console.error('Error fetching REST API endpoints:', endpointsError);
+    throw endpointsError;
+  }
+
+  return {
+    spec: specData as unknown as RestApiSpecRow,
+    endpoints: (endpointsData || []) as unknown as RestApiEndpointWithTool[],
+  };
+}
+
+/**
+ * Get all REST tools for a user (tools with type REST)
+ */
+export async function getRestTools(userId: string): Promise<ToolRow[]> {
+  const { data, error } = await supabase
+    .from('tools')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('tool_type', 'REST')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching REST tools:', error);
+    throw error;
+  }
+
+  return (data || []) as unknown as ToolRow[];
+}
+
+/**
+ * Delete a REST API spec and all associated endpoints/tools
+ */
+export async function deleteRestApiSpec(specId: string, userId: string): Promise<void> {
+  // First get all tool IDs associated with this spec
+  const { data: endpoints, error: endpointsError } = await supabase
+    .from('rest_api_endpoints')
+    .select('tool_id')
+    .eq('spec_id', specId);
+
+  if (endpointsError) {
+    console.error('Error fetching endpoints for deletion:', endpointsError);
+    throw endpointsError;
+  }
+
+  const toolIds = (endpoints as Array<{ tool_id: string }> | null)?.map(e => e.tool_id) || [];
+
+  // Delete the spec (cascades to endpoints)
+  const { error: specError } = await supabase
+    .from('rest_api_specs')
+    .delete()
+    .eq('id', specId)
+    .eq('user_id', userId);
+
+  if (specError) {
+    console.error('Error deleting REST API spec:', specError);
+    throw specError;
+  }
+
+  // Delete the associated tools
+  if (toolIds.length > 0) {
+    const { error: toolsError } = await supabase
+      .from('tools')
+      .delete()
+      .in('id', toolIds)
+      .eq('user_id', userId);
+
+    if (toolsError) {
+      console.error('Error deleting REST tools:', toolsError);
+      throw toolsError;
+    }
+  }
+}
+
+/**
+ * Get REST API endpoint by tool ID
+ */
+export async function getRestEndpointByToolId(
+  toolId: string
+): Promise<RestApiEndpointRow | null> {
+  const { data, error } = await supabase
+    .from('rest_api_endpoints')
+    .select('*')
+    .eq('tool_id', toolId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    console.error('Error fetching REST endpoint:', error);
+    throw error;
+  }
+
+  return data as unknown as RestApiEndpointRow;
+}
+
+/**
+ * Get REST API endpoint with full details (spec + environment) by tool ID
+ * Used for executing REST API calls
+ */
+export async function getRestEndpointWithDetails(
+  toolId: string,
+  environmentId?: string
+): Promise<{
+  endpoint: RestApiEndpointRow;
+  spec: RestApiSpecRow;
+  environment: { id: string; name: string; host: string };
+} | null> {
+  // Get the endpoint
+  const { data: endpointData, error: endpointError } = await supabase
+    .from('rest_api_endpoints')
+    .select('*')
+    .eq('tool_id', toolId)
+    .single();
+
+  if (endpointError) {
+    if (endpointError.code === 'PGRST116') return null;
+    console.error('Error fetching REST endpoint:', endpointError);
+    throw endpointError;
+  }
+
+  const endpoint = endpointData as unknown as RestApiEndpointRow;
+
+  // Get the spec
+  const { data: specData, error: specError } = await supabase
+    .from('rest_api_specs')
+    .select('*')
+    .eq('id', endpoint.spec_id)
+    .single();
+
+  if (specError) {
+    console.error('Error fetching REST spec:', specError);
+    throw specError;
+  }
+
+  const spec = specData as unknown as RestApiSpecRow;
+
+  // Get environment - either specified or first one for this user
+  let envQuery = supabase
+    .from('environments')
+    .select('id, name, host')
+    .eq('user_id', spec.user_id);
+
+  if (environmentId) {
+    envQuery = envQuery.eq('id', environmentId);
+  }
+
+  const { data: envData, error: envError } = await envQuery.limit(1).single();
+
+  if (envError) {
+    // If no environment found, use a default based on spec
+    console.warn('No environment found, using spec defaults');
+    return {
+      endpoint,
+      spec,
+      environment: {
+        id: 'default',
+        name: 'default',
+        host: 'https://api.example.com', // Will need to be configured
+      },
+    };
+  }
+
+  return {
+    endpoint,
+    spec,
+    environment: envData as { id: string; name: string; host: string },
+  };
+}
+
+

@@ -28,6 +28,7 @@ export async function GET() {
       name: tool.name,
       description: tool.description,
       category: tool.category,
+      toolType: tool.tool_type,
       hasWidget: tool.has_widget,
       invokingMessage: tool.invoking_message,
       invokedMessage: tool.invoked_message,
