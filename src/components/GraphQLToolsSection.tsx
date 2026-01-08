@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { FaviconImage } from './FaviconImage';
 
 interface GraphQLTool {
   id: string;
@@ -193,7 +194,14 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
               onClick={() => setExpandedSpec(expandedSpec === spec.id ? null : spec.id)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '1.25rem' }}>◈</span>
+                <FaviconImage
+                  baseUrl={spec.source_url}
+                  alt={spec.api_title || spec.server_name}
+                  size={28}
+                  borderRadius={6}
+                  fallbackEmoji="◈"
+                  fallbackBgColor="rgba(102, 126, 234, 0.2)"
+                />
               <div>
                 <div style={{ color: '#fff', fontWeight: 600 }}>{spec.api_title || spec.server_name}</div>
                 <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>

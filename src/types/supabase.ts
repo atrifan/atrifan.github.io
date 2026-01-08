@@ -574,6 +574,11 @@ export interface Database {
         Insert: MCPServerToolInsert;
         Update: MCPServerToolUpdate;
       };
+      a2a_agents: {
+        Row: A2AAgentRow;
+        Insert: A2AAgentInsert;
+        Update: A2AAgentUpdate;
+      };
     };
   };
 }
@@ -923,5 +928,107 @@ export interface MCPServerWithTools extends MCPServerRow {
  */
 export interface MCPServerToolWithDetails extends MCPServerToolRow {
   tool: ToolRow;
+}
+
+// ============ A2A Agents Table ============
+
+/** A2A Agent authentication types */
+export type A2AAgentAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
+
+/**
+ * A2A Agent record in Supabase
+ * Table: a2a_agents
+ *
+ * Stores A2A (Agent-to-Agent) protocol agents imported by users
+ */
+export interface A2AAgentRow {
+  /** UUID primary key */
+  id: string;
+  /** Clerk user ID (owner) */
+  user_id: string;
+  /** Normalized agent name (used in tool names) */
+  agent_name: string;
+  /** Display name for the agent */
+  display_name: string;
+  /** Agent URL (base URL for the agent) */
+  agent_url: string;
+  /** Environment name for this agent */
+  environment_name: string;
+  /** Full agent card JSON from .well-known/agent.json */
+  agent_card: Record<string, unknown>;
+  /** Agent version from agent card */
+  version: string | null;
+  /** Protocol version from agent card */
+  protocol_version: string | null;
+  /** Agent description */
+  description: string | null;
+  /** Icon URL from agent card or favicon fallback */
+  icon_url: string | null;
+  /** Tags/categories from agent card */
+  tags: string[];
+  /** Category for the tool */
+  category: string;
+  /** Authentication type */
+  auth_type: A2AAgentAuthType;
+  /** Authentication configuration */
+  auth_config: Record<string, unknown>;
+  /** Default headers to send with every request */
+  default_headers: Record<string, string>;
+  /** Input schema for the agent tool */
+  input_schema: Record<string, unknown>;
+  /** Output schema for the agent tool */
+  output_schema: Record<string, unknown>;
+  /** Whether this agent supports widgets (always false) */
+  has_widget: boolean;
+  /** When the agent was created */
+  created_at: string;
+  /** When the agent was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for a2a_agents table
+ */
+export interface A2AAgentInsert {
+  user_id: string;
+  agent_name: string;
+  display_name: string;
+  agent_url: string;
+  environment_name?: string;
+  agent_card?: Record<string, unknown>;
+  version?: string;
+  protocol_version?: string;
+  description?: string;
+  icon_url?: string;
+  tags?: string[];
+  category?: string;
+  auth_type?: A2AAgentAuthType;
+  auth_config?: Record<string, unknown>;
+  default_headers?: Record<string, string>;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
+  has_widget?: boolean;
+}
+
+/**
+ * Update DTO for a2a_agents table
+ */
+export interface A2AAgentUpdate {
+  display_name?: string;
+  agent_url?: string;
+  environment_name?: string;
+  agent_card?: Record<string, unknown>;
+  version?: string;
+  protocol_version?: string;
+  description?: string;
+  icon_url?: string;
+  tags?: string[];
+  category?: string;
+  auth_type?: A2AAgentAuthType;
+  auth_config?: Record<string, unknown>;
+  default_headers?: Record<string, string>;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
+  updated_at?: string;
 }
 

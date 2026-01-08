@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { FaviconImage } from './FaviconImage';
 
 // Types
 interface RestApiTool {
@@ -513,6 +514,14 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
                   gap: '1rem',
                 }}
               >
+                <FaviconImage
+                  baseUrl={spec.source_url}
+                  alt={spec.api_title || spec.server_name}
+                  size={32}
+                  borderRadius={6}
+                  fallbackEmoji="☁️"
+                  fallbackBgColor="rgba(16, 185, 129, 0.2)"
+                />
                 <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
                   <div style={{
                     color: '#fff',

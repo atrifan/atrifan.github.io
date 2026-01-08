@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { FaviconImage } from './FaviconImage';
 
 // Types
 interface MCPTool {
@@ -221,6 +222,14 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
             <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
               {expandedServers.has(server.id) ? '▼' : '▶'}
             </span>
+            <FaviconImage
+              baseUrl={server.source_url}
+              alt={server.display_name}
+              size={28}
+              borderRadius={6}
+              fallbackEmoji="🔌"
+              fallbackBgColor="rgba(59, 130, 246, 0.2)"
+            />
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>{server.display_name}</span>

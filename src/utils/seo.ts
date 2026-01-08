@@ -166,6 +166,11 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     description: 'Connect to external MCP servers and import their tools. Your AI assistant will proxy requests to the external server. Supports authentication and custom headers.',
     keywords: ['mcp import', 'mcp server', 'mcp proxy', 'external mcp', 'mcp tools', 'model context protocol', 'ai tools', 'mcp integration'],
   },
+  agentImport: {
+    title: 'Import A2A Agent - Connect Agent-to-Agent Protocol Agents | Tulzo',
+    description: 'Connect to A2A (Agent-to-Agent) protocol agents and import them as tools. Automatically discover agent cards from well-known paths. Your AI assistant can communicate with other AI agents.',
+    keywords: ['a2a import', 'agent to agent', 'a2a protocol', 'ai agent', 'agent card', 'mcp agent', 'ai communication', 'agent integration'],
+  },
   pricing: {
     title: 'Pricing - Free & Pro Plans | Tulzo',
     description: 'Tulzo pricing plans. Free tier with all tools, Pro plan with unlimited API calls, priority support, and advanced features.',

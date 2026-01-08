@@ -160,6 +160,10 @@ export const ADS_CONFIG = {
     mcpImportTop: '7221401854',
     mcpImportBottom: '5908320187',
 
+    // A2A Agent Import page ads
+    agentImportTop: '7221401854',
+    agentImportBottom: '5908320187',
+
     // ECLIPSE page ads (Eclipse Finder)
     eclipseTop: '7221401854',
     eclipseResults: '5908320187',

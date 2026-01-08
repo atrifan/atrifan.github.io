@@ -1714,6 +1714,28 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     },
                   };
                   restTools.push(mcpTool); // Add to same array as other external tools
+                } else if (st.tool.tool_type === 'A2A') {
+                  // Convert A2A agent tool to MCP format
+                  const a2aTool = {
+                    name: st.tool.name,
+                    description: st.tool.description,
+                    inputSchema: st.tool.input_schema,
+                    outputSchema: st.tool.output_schema,
+                    annotations: {
+                      readOnlyHint: false,
+                      destructiveHint: false,
+                      idempotentHint: false,
+                      openWorldHint: true, // A2A tools call external agents
+                    },
+                    _meta: {
+                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling A2A agent...',
+                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'Agent response received',
+                      'openai/widgetAccessible': false, // A2A tools don't have widgets
+                      'openai/resultCanProduceWidget': false,
+                      'openai/widgetPrefersBorder': true,
+                    },
+                  };
+                  restTools.push(a2aTool); // Add to same array as other external tools
                 }
               }
 
