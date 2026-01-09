@@ -32,6 +32,36 @@ import { ToolCountWarning } from './MCPComposerPage';
 import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
+import { AI_MODELS, formatTokenCount, formatCurrency, DEFAULT_MONTHLY_BUDGET, calculateSafeTokensForBudget } from '../config/ai-tokens.config';
+
+// Budget types
+interface ModelBudgetInfo {
+  modelId: string;
+  modelName: string;
+  icon: string;
+  provider: string;
+  safeTokensForBudget: number;
+  usedTokens: number;
+  usedCost: number;
+  usagePercent: number;
+  remainingTokens: number;
+  requestCount?: number;
+}
+
+interface BudgetData {
+  budget: {
+    monthlyBudgetUsd: number;
+    hardLimit: boolean;
+  };
+  usage: {
+    totalCost: number;
+    totalTokens: number;
+    budgetUsedPercent: number;
+    remainingBudget: number;
+    byModel?: Record<string, { inputTokens: number; outputTokens: number; cost: number; count: number }>;
+  };
+  models: ModelBudgetInfo[];
+}
 
 // Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
 const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
@@ -219,6 +249,12 @@ export const DashboardPage: React.FC = () => {
   const [selectedServerView, setSelectedServerView] = useState<SelectedServerView>('default');
   const mcpConfigCardRef = useRef<HTMLDivElement>(null);
 
+  // Budget state
+  const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [newBudget, setNewBudget] = useState<string>('5.00');
+  const [savingBudget, setSavingBudget] = useState(false);
+
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
   const customServers = servers.filter(s => s.serverName !== 'default');
@@ -343,6 +379,54 @@ export const DashboardPage: React.FC = () => {
 
     fetchServers();
   }, [user]);
+
+  // Fetch budget data
+  useEffect(() => {
+    const fetchBudget = async () => {
+      if (!isPro || !user) return;
+      try {
+        const response = await fetch('/api/ai/budget');
+        if (response.ok) {
+          const data = await response.json();
+          setBudgetData(data);
+          setNewBudget(data.budget.monthlyBudgetUsd.toFixed(2));
+        }
+      } catch (error) {
+        console.error('Failed to fetch budget:', error);
+      }
+    };
+    fetchBudget();
+  }, [isPro, user]);
+
+  // Save budget
+  const saveBudget = async () => {
+    const budgetValue = parseFloat(newBudget);
+    if (isNaN(budgetValue) || budgetValue < 0 || budgetValue > 1000) {
+      return;
+    }
+    setSavingBudget(true);
+    try {
+      const response = await fetch('/api/ai/budget', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyBudgetUsd: budgetValue }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Refetch budget data to get updated model info
+        const budgetResponse = await fetch('/api/ai/budget');
+        if (budgetResponse.ok) {
+          const budgetData = await budgetResponse.json();
+          setBudgetData(budgetData);
+        }
+        setEditingBudget(false);
+      }
+    } catch (error) {
+      console.error('Failed to save budget:', error);
+    } finally {
+      setSavingBudget(false);
+    }
+  };
 
   // Delete a custom MCP server
   const deleteCustomServer = async (serverId: string) => {
@@ -582,46 +666,146 @@ export const DashboardPage: React.FC = () => {
           </div>
         </DashboardCard>
 
-        {/* AI Token Usage - Right under subscription */}
-        {isPro && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.05)',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
-            borderRadius: '16px',
-            padding: '1rem 1.5rem',
-            marginBottom: '1.5rem',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-                <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>AI Token Usage</span>
+        {/* AI Budget Card - Right under subscription */}
+        <DashboardCard
+          title="AI Budget"
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>}
+        >
+          {/* Pro-only blur overlay */}
+          {!isPro && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔒</span>
+              <span style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>Pro Feature</span>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.75rem' }}>Upgrade to Pro to access AI Chat with budget tracking</span>
+              <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Upgrade to Pro</button>
+              </Link>
+            </div>
+          )}
+          <div style={{ position: 'relative' }}>
+            {/* Budget Usage Bar */}
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Monthly Usage</span>
+                <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
+                  {formatCurrency(budgetData?.usage.totalCost || 0)} / {formatCurrency(budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET)}
+                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: '#10b981', fontSize: '1.1rem', fontWeight: 700 }}>0</div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Used</div>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.min(budgetData?.usage.budgetUsedPercent || 0, 100)}%`,
+                  height: '100%',
+                  borderRadius: '10px',
+                  background: (budgetData?.usage.budgetUsedPercent || 0) > 90 ? 'linear-gradient(90deg, #ef4444, #dc2626)' : (budgetData?.usage.budgetUsedPercent || 0) > 70 ? 'linear-gradient(90deg, #f59e0b, #d97706)' : 'linear-gradient(90deg, #10b981, #059669)',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                  {formatTokenCount(budgetData?.usage.totalTokens || 0)} tokens used
+                </span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                  {formatCurrency(budgetData?.usage.remainingBudget || budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET)} remaining
+                </span>
+              </div>
+            </div>
+
+            {/* Spending Summary */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1))', borderRadius: '10px', padding: '0.75rem', marginBottom: '1rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 600 }}>💵 Total Spent This Month</span>
+                <span style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>{formatCurrency(budgetData?.usage.totalCost || 0)}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>↑ Input:</span>
+                  <span style={{ color: '#fff', fontSize: '0.75rem' }}>{formatTokenCount(budgetData?.models?.reduce((sum, m) => sum + (m.usedTokens > 0 ? (budgetData.usage.byModel?.[m.modelId]?.inputTokens || 0) : 0), 0) || 0)}</span>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: '#60a5fa', fontSize: '1.1rem', fontWeight: 700 }}>{isPlus ? '∞' : '100K'}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Limit</div>
-                </div>
-                <div style={{ width: '120px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>0%</span>
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '10px', height: '6px', overflow: 'hidden' }}>
-                    <div style={{ background: 'linear-gradient(90deg, #10b981, #059669)', width: '0%', height: '100%', borderRadius: '10px' }} />
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>↓ Output:</span>
+                  <span style={{ color: '#fff', fontSize: '0.75rem' }}>{formatTokenCount(budgetData?.models?.reduce((sum, m) => sum + (m.usedTokens > 0 ? (budgetData.usage.byModel?.[m.modelId]?.outputTokens || 0) : 0), 0) || 0)}</span>
                 </div>
               </div>
             </div>
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', margin: '0.75rem 0 0', textAlign: 'center' }}>
-              Token tracking mockup • Full functionality coming soon
-            </p>
+
+            {/* Model Usage Breakdown */}
+            {budgetData?.models && budgetData.models.filter(m => m.usedTokens > 0).length > 0 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '0.5rem', fontWeight: 500 }}>📊 Spending by Model</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {budgetData.models.filter(m => m.usedTokens > 0).sort((a, b) => b.usedCost - a.usedCost).map(model => {
+                    const modelUsage = budgetData.usage.byModel?.[model.modelId];
+                    const costPercent = budgetData.usage.totalCost > 0 ? (model.usedCost / budgetData.usage.totalCost) * 100 : 0;
+                    return (
+                      <div key={model.modelId} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '0.6rem 0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '1rem' }}>{model.icon}</span>
+                            <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{model.modelName}</span>
+                          </div>
+                          <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 600 }}>{formatCurrency(model.usedCost)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                          <span>↑{formatTokenCount(modelUsage?.inputTokens || 0)}</span>
+                          <span>↓{formatTokenCount(modelUsage?.outputTokens || 0)}</span>
+                          <span>{model.requestCount || modelUsage?.count || 0} requests</span>
+                          <div style={{ flex: 1 }} />
+                          <span style={{ color: 'rgba(255,255,255,0.4)' }}>{costPercent.toFixed(1)}% of total</span>
+                        </div>
+                        {/* Mini progress bar */}
+                        <div style={{ marginTop: '0.35rem', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
+                          <div style={{ width: `${costPercent}%`, height: '100%', background: 'linear-gradient(90deg, #10b981, #059669)', borderRadius: '4px' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Budget Settings */}
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Monthly Budget Limit</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Set your spending cap for AI features</div>
+                </div>
+                {editingBudget ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: '#10b981', fontSize: '1rem' }}>$</span>
+                    <input
+                      type="number"
+                      value={newBudget}
+                      onChange={(e) => setNewBudget(e.target.value)}
+                      min="0"
+                      max="1000"
+                      step="0.50"
+                      style={{ width: '80px', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem', textAlign: 'right' }}
+                    />
+                    <button onClick={saveBudget} disabled={savingBudget} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                      {savingBudget ? '...' : '✓'}
+                    </button>
+                    <button onClick={() => setEditingBudget(false)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setNewBudget((budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET).toFixed(2)); setEditingBudget(true); }} style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    {formatCurrency(budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET)} ✏️
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+              <Link href="/chat" style={{ textDecoration: 'none' }}>
+                <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
+                  💬 Open AI Chat
+                </button>
+              </Link>
+            </div>
           </div>
-        )}
+        </DashboardCard>
 
         {/* Preferences Card */}
         <DashboardCard
@@ -1388,8 +1572,6 @@ export const DashboardPage: React.FC = () => {
             </Link>
           </DashboardCard>
         )}
-
-
 
         {/* MCP Connections Card */}
         {isPro && connections.length > 0 && (
