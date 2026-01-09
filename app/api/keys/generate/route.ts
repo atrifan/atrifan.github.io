@@ -65,46 +65,32 @@ export async function POST() {
     // Check if user already has an API key for default server
     const existingKey = await getApiKeyByUserAndServer(userId, 'default');
 
-    // If existing key has different plan, delete it (force regenerate)
-    if (existingKey && existingKey.plan !== plan) {
+    // If existing key, delete it from Supabase
+    if (existingKey) {
       // Delete from Supabase (cascades to server_tools)
       await deleteApiKey(existingKey.id);
+    }
 
-      // If Clerk provider, also revoke in Clerk
-      if (existingKey.provider === 'clerk') {
+    // Always clean up any existing Clerk API keys for this user (revoked or not)
+    // This prevents "token with same name and subject already exists" conflicts
+    // includeInvalid: true ensures we also get revoked keys
+    try {
+      const existingClerkKeys = await client.apiKeys.list({
+        subject: userId,
+        includeInvalid: true
+      });
+      console.log(`Found ${existingClerkKeys.data.length} existing Clerk keys for user ${userId}`);
+      for (const key of existingClerkKeys.data) {
+        // Delete the key entirely (not just revoke)
         try {
-          const existingClerkKeys = await client.apiKeys.list({ subject: userId });
-          for (const key of existingClerkKeys.data) {
-            if (!key.revoked) {
-              await client.apiKeys.revoke({
-                apiKeyId: key.id,
-                revocationReason: 'Plan changed - regenerating key'
-              });
-            }
-          }
-        } catch (e) {
-          console.error('Error revoking Clerk keys:', e);
+          console.log(`Deleting Clerk key ${key.id} (revoked: ${key.revoked})`);
+          await client.apiKeys.delete(key.id);
+        } catch (deleteErr) {
+          console.error(`Error deleting Clerk key ${key.id}:`, deleteErr);
         }
       }
-    } else if (existingKey) {
-      // Key exists with same plan - just revoke and regenerate
-      await deleteApiKey(existingKey.id);
-
-      if (existingKey.provider === 'clerk') {
-        try {
-          const existingClerkKeys = await client.apiKeys.list({ subject: userId });
-          for (const key of existingClerkKeys.data) {
-            if (!key.revoked) {
-              await client.apiKeys.revoke({
-                apiKeyId: key.id,
-                revocationReason: 'Replaced by new key'
-              });
-            }
-          }
-        } catch (e) {
-          console.error('Error revoking Clerk keys:', e);
-        }
-      }
+    } catch (e) {
+      console.error('Error listing/deleting Clerk keys:', e);
     }
 
     // Generate new API key

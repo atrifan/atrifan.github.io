@@ -34,22 +34,22 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // If Clerk provider, revoke in Clerk first
+    // If Clerk provider, delete from Clerk first (not just revoke)
     if (apiKey.provider === 'clerk') {
       try {
         const client = await clerkClient();
         const existingKeys = await client.apiKeys.list({ subject: userId });
-        
+
         for (const key of existingKeys.data) {
-          if (!key.revoked) {
-            await client.apiKeys.revoke({
-              apiKeyId: key.id,
-              revocationReason: 'User deleted key'
-            });
+          // Delete the key entirely to prevent conflicts on regeneration
+          try {
+            await client.apiKeys.delete(key.id);
+          } catch (deleteErr) {
+            console.error(`Error deleting Clerk key ${key.id}:`, deleteErr);
           }
         }
       } catch (e) {
-        console.error('Error revoking Clerk API key:', e);
+        console.error('Error deleting Clerk API keys:', e);
         // Continue with Supabase deletion even if Clerk fails
       }
     }
