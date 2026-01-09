@@ -102,20 +102,18 @@ export const EMBEDDING_MODEL = {
   costPer1M: 0.02, // Very cheap
 };
 
-// Token quotas per tier
+// Token quotas per tier - budget-based (no static monthlyTokens)
 export interface TokenQuota {
   tier: 'free' | 'pro' | 'plus';
-  monthlyTokens: number;
   models: string[]; // model IDs allowed
   features: string[];
   price: number;
-  aiCostBudget: number; // 20% of price for 80% margin
+  aiCostBudget: number; // $ budget for AI usage
 }
 
 export const TOKEN_QUOTAS: Record<string, TokenQuota> = {
   free: {
     tier: 'free',
-    monthlyTokens: 0, // No AI for free
     models: [],
     features: ['basic-tools', 'ads'],
     price: 0,
@@ -123,30 +121,33 @@ export const TOKEN_QUOTAS: Record<string, TokenQuota> = {
   },
   pro: {
     tier: 'pro',
-    monthlyTokens: 15_000_000, // 15M tokens
     models: ['mistral/ministral-3b'],
     features: ['ai-chat', 'mcp-server', 'embeddings', 'ads'],
     price: 7,
-    aiCostBudget: 1.40, // $7 * 20% = $1.40
+    aiCostBudget: 5, // $5 budget
   },
   plus: {
     tier: 'plus',
-    monthlyTokens: 8_000_000, // 8M tokens (quality over quantity)
     models: AI_MODELS.map(m => m.id), // All models
     features: ['ai-chat', 'mcp-server', 'embeddings', 'agents', 'priority-support', 'ads'],
     price: 14,
-    aiCostBudget: 2.80, // $14 * 20% = $2.80
+    aiCostBudget: 5, // $5 budget
   },
 };
 
-// Calculate estimated messages per month
-export function estimateMessagesPerMonth(tier: 'free' | 'pro' | 'plus'): number {
+// Calculate estimated messages per month based on budget and model
+export function estimateMessagesPerMonth(tier: 'free' | 'pro' | 'plus', modelId?: string): number {
   const quota = TOKEN_QUOTAS[tier];
-  if (!quota || quota.monthlyTokens === 0) return 0;
-  
+  if (!quota || quota.aiCostBudget === 0) return 0;
+
+  // Use the specified model or the first available model for the tier
+  const effectiveModelId = modelId || quota.models[0];
+  if (!effectiveModelId) return 0;
+
+  const safeTokens = calculateSafeTokensForBudget(effectiveModelId, quota.aiCostBudget);
   // Average message: 500 input + 1000 output = 1500 tokens
   const avgTokensPerMessage = 1500;
-  return Math.floor(quota.monthlyTokens / avgTokensPerMessage);
+  return Math.floor(safeTokens / avgTokensPerMessage);
 }
 
 // Calculate cost for a message
@@ -164,26 +165,27 @@ export function calculateTokenCost(
   return inputCost + outputCost;
 }
 
-// Get usage percentage
-export function getUsagePercentage(usedTokens: number, tier: 'free' | 'pro' | 'plus'): number {
+// Get usage percentage based on cost spent vs budget
+export function getUsagePercentage(costSpent: number, tier: 'free' | 'pro' | 'plus'): number {
   const quota = TOKEN_QUOTAS[tier];
-  if (!quota || quota.monthlyTokens === 0) return 100;
-  return Math.min(100, (usedTokens / quota.monthlyTokens) * 100);
+  if (!quota || quota.aiCostBudget === 0) return 100;
+  return Math.min(100, (costSpent / quota.aiCostBudget) * 100);
 }
 
-// Check if user can send message
-export function canSendMessage(usedTokens: number, tier: 'free' | 'pro' | 'plus'): boolean {
+// Check if user can send message based on budget
+export function canSendMessage(costSpent: number, tier: 'free' | 'pro' | 'plus'): boolean {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota) return false;
   if (tier === 'free') return false;
-  return usedTokens < quota.monthlyTokens;
+  return costSpent < quota.aiCostBudget;
 }
 
-// Get remaining tokens
-export function getRemainingTokens(usedTokens: number, tier: 'free' | 'pro' | 'plus'): number {
+// Get remaining tokens for a specific model based on remaining budget
+export function getRemainingTokens(costSpent: number, tier: 'free' | 'pro' | 'plus', modelId: string): number {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota) return 0;
-  return Math.max(0, quota.monthlyTokens - usedTokens);
+  const remainingBudget = Math.max(0, quota.aiCostBudget - costSpent);
+  return calculateSafeTokensForBudget(modelId, remainingBudget);
 }
 
 // Format token count for display

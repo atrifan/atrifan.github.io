@@ -8,6 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
+import { ChatIcon } from '../components/ChatIcon';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import {
@@ -196,6 +197,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [availableMcpServers, setAvailableMcpServers] = useState<MCPServer[]>([]);
   const [showAddConnector, setShowAddConnector] = useState<ConnectorType | null>(null);
   const [loadingConnectors, setLoadingConnectors] = useState(false);
+  const [connectorInfoModal, setConnectorInfoModal] = useState<{ connector: ChatConnector; tools: any[] } | null>(null);
 
   // Budget state
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
@@ -211,10 +213,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
 
-  // Token usage (will be fetched from API)
-  const [tokenUsage, setTokenUsage] = useState({
+  // Cost usage (will be fetched from API)
+  const [costUsage, setCostUsage] = useState({
     used: 0,
-    limit: quota.monthlyTokens,
+    limit: quota.aiCostBudget,
   });
 
   const canAccessPro = isPro || isPlus;
@@ -233,15 +235,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
   const totalSystemPromptTokens = activePersonalities.reduce((sum, p) => sum + p.prompt_token_count, 0);
 
-  // Legacy token-based (fallback)
-  const usagePercent = budgetData ? budgetUsagePercent : getUsagePercentage(tokenUsage.used, tier);
-  const isQuotaExceeded = budgetData ? isBudgetExceeded : tokenUsage.used >= tokenUsage.limit;
+  // Budget-based usage
+  const usagePercent = budgetData ? budgetUsagePercent : getUsagePercentage(costUsage.used, tier);
+  const isQuotaExceeded = budgetData ? isBudgetExceeded : costUsage.used >= costUsage.limit;
 
   // Fetch conversations and connectors on mount
   useEffect(() => {
     if (canAccessPro) {
       fetchConversations();
-      fetchTokenUsage();
+      fetchCostUsage();
       fetchConnectors();
       fetchMcpServers();
       fetchBudget();
@@ -274,17 +276,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   };
 
-  // Fetch token usage
-  const fetchTokenUsage = async () => {
+  // Fetch cost usage
+  const fetchCostUsage = async () => {
     try {
       const response = await fetch('/api/ai/usage', {
         headers: { 'x-user-tier': tier },
       });
       if (response.ok) {
         const data = await response.json();
-        setTokenUsage({
-          used: data.totalTokens || 0,
-          limit: data.quota?.monthlyTokens || quota.monthlyTokens,
+        setCostUsage({
+          used: parseFloat(data.usage?.totalCost) || 0,
+          limit: data.quota?.aiCostBudget || quota.aiCostBudget,
         });
       }
     } catch (err) {
@@ -443,6 +445,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   };
 
+  // Show connector info modal with tools
+  const showConnectorInfo = async (connector: ChatConnector) => {
+    try {
+      // Fetch tools for this connector's MCP server
+      if (connector.mcp_server_id) {
+        const response = await fetch(`/api/mcp-servers/${connector.mcp_server_id}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Transform tools from the nested structure
+          const tools = (data.tools || []).map((st: any) => ({
+            name: st.tool?.name || st.original_name,
+            description: st.tool?.description || st.original_description,
+            inputSchema: st.tool?.input_schema,
+            outputSchema: st.tool?.output_schema,
+            isEnabled: st.is_enabled,
+          }));
+          setConnectorInfoModal({ connector, tools });
+        } else {
+          // Fallback - show modal with empty tools
+          setConnectorInfoModal({ connector, tools: [] });
+        }
+      } else {
+        // External connector - no tools to fetch
+        setConnectorInfoModal({ connector, tools: [] });
+      }
+    } catch (err) {
+      console.error('Failed to fetch connector tools:', err);
+      setConnectorInfoModal({ connector, tools: [] });
+    }
+  };
+
   // Load a conversation
   const loadConversation = async (convId: string) => {
     try {
@@ -524,9 +557,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
       if (!response.ok) {
         const errorData = await response.json();
-        if (errorData.reason === 'quota_exceeded') {
-          setTokenUsage(prev => ({ ...prev, used: prev.limit }));
-          throw new Error('Monthly token quota exceeded. Resets on the 1st.');
+        if (errorData.reason === 'budget_exceeded') {
+          setCostUsage(prev => ({ ...prev, used: prev.limit }));
+          throw new Error('Monthly AI budget exceeded. Resets on the 1st.');
         }
         throw new Error(errorData.error || 'Failed to send message');
       }
@@ -554,10 +587,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       // Update last message tokens for display
       if (data.usage) {
         setLastMessageTokens({ input: data.usage.input, output: data.usage.output });
-        setTokenUsage(prev => ({
-          ...prev,
-          used: prev.used + data.usage.input + data.usage.output,
-        }));
+        // Update cost usage with the cost from this message
+        if (data.usage.cost) {
+          setCostUsage(prev => ({
+            ...prev,
+            used: prev.used + data.usage.cost,
+          }));
+        }
         // Refresh budget data to update the display
         fetchBudget();
       }
@@ -567,6 +603,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       setIsLoading(false);
     }
   }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities]);
+
+  // Close all sidebars
+  const closeSidebars = useCallback(() => {
+    setShowHistory(false);
+    setShowConnectors(false);
+    setShowPersonalities(false);
+  }, []);
 
   // Handle Enter key
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -630,21 +673,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         {/* Hero Header - Centered like CUT */}
         <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
           <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
-            {/* Chat Icon */}
-            <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="chatGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#8b5cf6" />
-                  <stop offset="50%" stopColor="#6366f1" />
-                  <stop offset="100%" stopColor="#3b82f6" />
-                </linearGradient>
-              </defs>
-              <circle cx="50" cy="50" r="45" fill="url(#chatGradient)" opacity="0.2" />
-              <path d="M30 35C30 31.6863 32.6863 29 36 29H64C67.3137 29 70 31.6863 70 35V55C70 58.3137 67.3137 61 64 61H45L35 71V61H36C32.6863 61 30 58.3137 30 55V35Z" stroke="url(#chatGradient)" strokeWidth="3" fill="none" />
-              <circle cx="42" cy="45" r="3" fill="url(#chatGradient)" />
-              <circle cx="50" cy="45" r="3" fill="url(#chatGradient)" />
-              <circle cx="58" cy="45" r="3" fill="url(#chatGradient)" />
-            </svg>
+            <ChatIcon size={100} />
           </div>
 
           <h1 style={{
@@ -683,31 +712,32 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           )}
         </View>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          <button onClick={() => setShowHistory(!showHistory)} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>
+        {/* Action Buttons - Compact on mobile */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.35rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <button onClick={() => { setShowHistory(!showHistory); setShowConnectors(false); setShowPersonalities(false); }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
             📜 History
           </button>
-          <button onClick={() => setShowConnectors(!showConnectors)} style={{ background: showConnectors ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>
+          <button onClick={() => { setShowConnectors(!showConnectors); setShowHistory(false); setShowPersonalities(false); }} style={{ background: showConnectors ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
             🔌 Connectors
           </button>
-          <button onClick={() => setShowPersonalities(!showPersonalities)} style={{ background: showPersonalities ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            🎭 Personalities
+          <button onClick={() => { setShowPersonalities(!showPersonalities); setShowHistory(false); setShowConnectors(false); }} style={{ background: showPersonalities ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            🎭 Persona
             {activePersonalityIds.length > 0 && (
-              <span style={{ background: '#f59e0b', color: '#000', borderRadius: '10px', padding: '0.1rem 0.4rem', fontSize: '0.7rem', fontWeight: 600 }}>
+              <span style={{ background: '#f59e0b', color: '#000', borderRadius: '10px', padding: '0.1rem 0.35rem', fontSize: '0.65rem', fontWeight: 600 }}>
                 {activePersonalityIds.length}
               </span>
             )}
           </button>
-          <button onClick={startNewChat} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>
-            + New Chat
+          <button onClick={startNewChat} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+            + New
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Sidebar - now stacks on top on mobile */}
+        {/* Main Layout - Desktop: side-by-side, Mobile: stacked */}
+        <div className={`chat-layout-grid ${!(showHistory || showConnectors || showPersonalities) ? 'no-sidebar' : ''}`}>
+          {/* Left Panel - Shows when any panel is active */}
           {(showHistory || showConnectors || showPersonalities) && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '400px', overflowY: 'auto' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', height: 'fit-content', maxHeight: '60vh', overflowY: 'auto' }}>
               {showHistory && (
                 <div>
                   <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -770,7 +800,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                               <span>{conn.icon}</span>
                               <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{conn.display_name}</span>
                             </div>
-                            <button onClick={() => removeConnector(conn.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                              {conn.mcp_server_id ? (
+                                <Link href={`/dashboard/mcp-composer?edit=${conn.mcp_server_id}`} style={{ textDecoration: 'none' }}>
+                                  <button style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.25rem' }} title="Edit server">✏️</button>
+                                </Link>
+                              ) : conn.external_url ? (
+                                <a href={conn.external_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                                  <button style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.25rem' }} title="Open external URL">🔗</button>
+                                </a>
+                              ) : null}
+                              <button onClick={() => showConnectorInfo(conn)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.25rem' }} title="View tools info">ⓘ</button>
+                              <button onClick={() => removeConnector(conn.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
+                            </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
                             <span style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem', borderRadius: '6px', background: conn.connector_type.includes('mcp') ? 'rgba(102, 126, 234, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: conn.connector_type.includes('mcp') ? '#667eea' : '#f59e0b' }}>
@@ -973,7 +1015,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
                 <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                  {formatTokenCount(budgetData?.usage.totalTokens || tokenUsage.used)} tokens used
+                  {formatCurrency(budgetData?.usage.totalCost || costUsage.used)} spent
                 </span>
                 {isBudgetExceeded ? (
                   <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>
@@ -1177,12 +1219,47 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
               {/* Input Area */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', marginTop: '1rem' }}>
+                {/* Model Selector Dropdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Model:</span>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '8px',
+                      padding: '0.4rem 0.6rem',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      appearance: 'none',
+                      paddingRight: '1.5rem',
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.5rem center',
+                    }}
+                  >
+                    {availableModels.map(m => (
+                      <option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>
+                        {m.icon} {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  {tier === 'pro' && (
+                    <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                      <span style={{ color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }}>⬆️ More models</span>
+                    </Link>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <input
                     type="text"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onFocus={closeSidebars}
                     placeholder={isQuotaExceeded ? 'Quota exceeded - upgrade or wait until next month' : `Message ${selectedModelData?.name}...`}
                     disabled={isQuotaExceeded || isLoading}
                     style={{
@@ -1198,7 +1275,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     }}
                   />
                   <button
-                    onClick={sendMessage}
+                    onClick={() => { closeSidebars(); sendMessage(); }}
                     disabled={isQuotaExceeded || isLoading || !message.trim()}
                     style={{
                       background: isQuotaExceeded ? 'rgba(100,100,100,0.5)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)',
@@ -1218,7 +1295,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   </button>
                 </div>
                 <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.75rem' }}>
-                  Press Enter to send • {formatTokenCount(tokenUsage.limit - tokenUsage.used)} tokens remaining this month
+                  Press Enter to send • {formatCurrency(Math.max(0, costUsage.limit - costUsage.used))} budget remaining
                 </p>
               </div>
             </div>
@@ -1228,6 +1305,67 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         {/* Footer Banner */}
         <AdBanner slot={ADS_CONFIG.slots.chatBottom} format="horizontal" style={{ marginTop: '1.5rem' }} />
         <Footer />
+
+        {/* Connector Info Modal */}
+        {connectorInfoModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setConnectorInfoModal(null)}>
+            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ color: '#fff', margin: 0 }}>{connectorInfoModal.connector.icon} {connectorInfoModal.connector.display_name}</h3>
+                <button onClick={() => setConnectorInfoModal(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>×</button>
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '6px', background: connectorInfoModal.connector.connector_type.includes('mcp') ? 'rgba(102, 126, 234, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: connectorInfoModal.connector.connector_type.includes('mcp') ? '#667eea' : '#f59e0b' }}>
+                  {connectorInfoModal.connector.connector_type.replace('_', ' ').toUpperCase()}
+                </span>
+                {connectorInfoModal.connector.description && (
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0.5rem 0 0' }}>{connectorInfoModal.connector.description}</p>
+                )}
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {connectorInfoModal.tools.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>
+                    <p style={{ margin: 0 }}>No tools available or unable to fetch tools.</p>
+                    {connectorInfoModal.connector.external_url && (
+                      <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>External URL: {connectorInfoModal.connector.external_url}</p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
+                      {connectorInfoModal.tools.length} tool{connectorInfoModal.tools.length !== 1 ? 's' : ''} available
+                    </div>
+                    {connectorInfoModal.tools.map((tool: any, idx: number) => (
+                      <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <h4 style={{ color: '#667eea', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{tool.name}</h4>
+                        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>{tool.description}</p>
+                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                          <div>
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Input Schema:</span>
+                            <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#a78bfa', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
+                              {JSON.stringify(tool.inputSchema || tool.input_schema || { type: 'object', properties: {} }, null, 2)}
+                            </pre>
+                          </div>
+                          {(tool.outputSchema || tool.output_schema) && (
+                            <div>
+                              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Output Schema:</span>
+                              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#10b981', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
+                                {JSON.stringify(tool.outputSchema || tool.output_schema || { type: 'object' }, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setConnectorInfoModal(null)} style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </View>
     </View>
   );

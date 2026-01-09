@@ -9,6 +9,7 @@ import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { MermaidDiagram } from '../components/MermaidDiagram';
+import { AutomationIcon } from '../components/AutomationIcon';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
@@ -67,6 +68,7 @@ interface Personality {
 
 interface MCPTool {
   server: string;
+  serverId?: string;
   name: string;
   description: string;
 }
@@ -117,6 +119,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // MCP tools
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
+  const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set()); // Which servers' tools to use
 
   // Budget
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
@@ -131,6 +134,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [isExporting, setIsExporting] = useState(false);
   const [exportedCode, setExportedCode] = useState('');
   const [lastTokenUsage, setLastTokenUsage] = useState<{ input: number; output: number } | null>(null);
+  const [toolInfoModal, setToolInfoModal] = useState<{ server: string; tools: MCPTool[] } | null>(null);
 
   // Group tools by server
   const toolsByServer = useMemo(() => {
@@ -144,7 +148,13 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     return grouped;
   }, [mcpTools]);
 
-  const toggleServer = (server: string) => {
+  // Get tools from selected servers only
+  const activeTools = useMemo(() => {
+    if (selectedServers.size === 0) return mcpTools; // All if none selected
+    return mcpTools.filter(tool => selectedServers.has(tool.server));
+  }, [mcpTools, selectedServers]);
+
+  const toggleServerExpand = (server: string) => {
     setExpandedServers(prev => {
       const next = new Set(prev);
       if (next.has(server)) {
@@ -155,6 +165,26 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       return next;
     });
   };
+
+  const toggleServerSelect = (server: string) => {
+    setSelectedServers(prev => {
+      const next = new Set(prev);
+      if (next.has(server)) {
+        next.delete(server);
+      } else {
+        next.add(server);
+      }
+      return next;
+    });
+  };
+
+  // Select all servers by default when tools load
+  useEffect(() => {
+    if (mcpTools.length > 0 && selectedServers.size === 0) {
+      const allServers = new Set(mcpTools.map(t => t.server));
+      setSelectedServers(allServers);
+    }
+  }, [mcpTools]);
 
   const canAccessPro = isPro || isPlus;
   const tier = isPlus ? 'plus' : isPro ? 'pro' : 'free';
@@ -243,7 +273,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             if (server.serverName === 'default') continue;
             for (const tool of server.tools || []) {
               if (tool.isEnabled) {
-                allTools.push({ server: server.serverName, name: tool.name, description: tool.description });
+                allTools.push({ server: server.serverName, serverId: server.id, name: tool.name, description: tool.description });
               }
             }
           }
@@ -261,7 +291,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           // For now, just note that they exist
           for (const server of mcpData.servers || []) {
             if (server.source_type === 'mcp_import' && server.toolCount > 0) {
-              allTools.push({ server: server.server_name, name: `[${server.toolCount} tools]`, description: `MCP server with ${server.toolCount} tools` });
+              allTools.push({ server: server.server_name, serverId: server.id, name: `[${server.toolCount} tools]`, description: `MCP server with ${server.toolCount} tools` });
             }
           }
         }
@@ -290,7 +320,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           prompt,
           currentMermaid: mermaidDiagram,
           modelId: selectedModel,
-          availableTools: mcpTools,
+          availableTools: activeTools,
         }),
       });
 
@@ -307,7 +337,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, mermaidDiagram, selectedModel, mcpTools, currentAutomation, isGenerating]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating]);
 
   // Save automation
   const saveAutomation = async () => {
@@ -433,7 +463,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
         {/* Header */}
         <View UNSAFE_style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '0.5rem' }}>⚡ AUTOMATION BUILDER</h1>
+          <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+            <AutomationIcon size={100} />
+          </div>
+          <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 900, background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '0.5rem' }}>AUTOMATION BUILDER</h1>
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Build workflows with natural language • Export to TypeScript</p>
         </View>
 
@@ -500,41 +533,35 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         {/* BUILDER VIEW */}
         {view === 'builder' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Settings Panel - horizontal scrollable on mobile */}
-            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+            {/* Settings Panel - Grid on desktop, stack on mobile */}
+            <div className="automation-settings-grid">
               {/* Model Selection */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '200px', flexShrink: 0 }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: 0 }}>🤖 Model</h3>
+                  <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🤖 Model</h3>
                   {tier === 'pro' && (
                     <Link href="/pricing" style={{ textDecoration: 'none' }}>
-                      <span style={{ color: '#f59e0b', fontSize: '0.65rem' }}>⬆️ More models</span>
+                      <span style={{ color: '#f59e0b', fontSize: '0.6rem' }}>⬆️ Upgrade</span>
                     </Link>
                   )}
                 </div>
-                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}>
+                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}>
                   {availableModels.map(m => (
                     <option key={m.id} value={m.id}>{m.icon} {m.name}</option>
                   ))}
                 </select>
-                {selectedModelData && (
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
-                    ${selectedModelData.inputCostPer1M}/M in • ${selectedModelData.outputCostPer1M}/M out
-                  </div>
-                )}
               </div>
 
               {/* Personalities */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '180px', flexShrink: 0 }}>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>🎭 Personalities</h3>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>🎭 Personalities</h3>
                 {personalities.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No personalities. <Link href="/chat" style={{ color: '#f59e0b' }}>Create one</Link></p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/chat" style={{ color: '#f59e0b' }}>Create</Link></p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                     {personalities.map(p => (
-                      <button key={p.id} onClick={() => setActivePersonalityIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent', borderRadius: '6px', padding: '0.4rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}>
-                        <span>{p.icon} {p.name}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>~{p.prompt_token_count}t</span>
+                      <button key={p.id} onClick={() => setActivePersonalityIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} style={{ background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent', borderRadius: '6px', padding: '0.3rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
+                        {p.icon} {p.name}
                       </button>
                     ))}
                   </div>
@@ -542,82 +569,63 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
 
               {/* Schedule */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '160px', flexShrink: 0 }}>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>⏰ Schedule</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>⏰ Schedule</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                   {SCHEDULE_OPTIONS.map(opt => (
                     <button
                       key={opt.id}
                       onClick={() => !opt.comingSoon && setSelectedSchedule(opt.id)}
                       disabled={opt.comingSoon}
-                      title={opt.comingSoon ? 'Coming soon!' : undefined}
+                      title={opt.comingSoon ? 'Coming soon!' : opt.label}
                       style={{
-                        background: opt.comingSoon
-                          ? 'rgba(255,255,255,0.03)'
-                          : selectedSchedule === opt.id
-                            ? 'linear-gradient(135deg, #f59e0b, #ea580c)'
-                            : 'rgba(255,255,255,0.08)',
+                        background: opt.comingSoon ? 'rgba(255,255,255,0.03)' : selectedSchedule === opt.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.08)',
                         border: opt.comingSoon ? '1px dashed rgba(255,255,255,0.2)' : 'none',
                         borderRadius: '6px',
-                        padding: '0.35rem 0.6rem',
+                        padding: '0.3rem 0.5rem',
                         color: opt.comingSoon ? 'rgba(255,255,255,0.3)' : '#fff',
                         cursor: opt.comingSoon ? 'not-allowed' : 'pointer',
-                        fontSize: '0.75rem',
+                        fontSize: '0.7rem',
                         opacity: opt.comingSoon ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
                       }}
                     >
-                      {opt.icon} {opt.label}{opt.comingSoon ? ' 🔜' : ''}
+                      {opt.icon}
+                      <span>{opt.label}</span>
+                      {opt.comingSoon && <span>🔜</span>}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* MCP Tools - Grouped by Server */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '220px', flexShrink: 0 }}>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>🔧 Tools ({mcpTools.length})</h3>
+              {/* MCP Tools - Grouped by Server with Selection */}
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🔧 Tools</h3>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>{activeTools.length}/{mcpTools.length}</span>
+                </div>
                 {mcpTools.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No MCP tools. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add servers</Link></p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add</Link></p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '200px', overflowY: 'auto' }}>
-                    {Object.entries(toolsByServer).map(([server, tools]) => (
-                      <div key={server}>
-                        <button
-                          onClick={() => toggleServer(server)}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            background: 'rgba(139, 92, 246, 0.15)',
-                            border: '1px solid rgba(139, 92, 246, 0.3)',
-                            borderRadius: '6px',
-                            padding: '0.5rem 0.6rem',
-                            color: '#a78bfa',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <span style={{ transform: expandedServers.has(server) ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
-                            {server}
-                          </span>
-                          <span style={{ background: 'rgba(139, 92, 246, 0.3)', padding: '0.1rem 0.4rem', borderRadius: '10px', fontSize: '0.65rem' }}>{tools.length}</span>
-                        </button>
-                        {expandedServers.has(server) && (
-                          <div style={{ marginTop: '0.25rem', marginLeft: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                            {tools.map((tool, i) => (
-                              <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '4px', padding: '0.35rem 0.5rem' }}>
-                                <div style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 500 }}>{tool.name}</div>
-                                {tool.description && (
-                                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '120px', overflowY: 'auto' }}>
+                    {Object.entries(toolsByServer).map(([server, tools]) => {
+                      const isSelected = selectedServers.has(server);
+                      const serverId = tools[0]?.serverId;
+                      const editUrl = serverId ? `/dashboard/mcp-composer?edit=${serverId}` : '/dashboard';
+                      return (
+                        <div key={server} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.4rem', background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent', borderRadius: '4px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', flex: 1 }}>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleServerSelect(server)} style={{ accentColor: '#a78bfa', cursor: 'pointer', width: '14px', height: '14px' }} />
+                            <span style={{ color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1 }}>{server}</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{tools.length}</span>
+                          </label>
+                          <Link href={editUrl} onClick={(e) => e.stopPropagation()} style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textDecoration: 'none', padding: '0.1rem 0.25rem' }} title={`Edit ${server}`}>✏️</Link>
+                          <button onClick={(e) => { e.stopPropagation(); setToolInfoModal({ server, tools }); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', padding: '0.1rem 0.25rem' }} title={`View ${server} tools info`}>ⓘ</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -719,6 +727,43 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowExportModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={exportToTypeScript} disabled={isExporting} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', cursor: 'pointer' }}>{isExporting ? 'Generating...' : 'Generate Code'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tool Info Modal */}
+        {toolInfoModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setToolInfoModal(null)}>
+            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ color: '#fff', margin: 0 }}>🔧 {toolInfoModal.server} Tools</h3>
+                <button onClick={() => setToolInfoModal(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>×</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {toolInfoModal.tools.map((tool, idx) => (
+                  <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <h4 style={{ color: '#f59e0b', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{tool.name}</h4>
+                    <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>{tool.description}</p>
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Input Schema:</span>
+                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#a78bfa', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
+                          {JSON.stringify((tool as any).inputSchema || { type: 'object', properties: {} }, null, 2)}
+                        </pre>
+                      </div>
+                      <div>
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Output Schema:</span>
+                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#10b981', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
+                          {JSON.stringify((tool as any).outputSchema || { type: 'object' }, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setToolInfoModal(null)} style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #f59e0b, #ea580c)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
               </div>
             </div>
           </div>

@@ -223,3 +223,40 @@ body {
   }
 }
 
+/* Responsive grid for chat/automation panels */
+.chat-layout-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .chat-layout-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 320px) 1fr;
+  }
+
+  .chat-layout-grid.no-sidebar {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Automation settings grid */
+.automation-settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .automation-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .automation-settings-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

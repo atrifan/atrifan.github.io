@@ -32,7 +32,7 @@ import { ToolCountWarning } from './MCPComposerPage';
 import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
-import { AI_MODELS, formatTokenCount, formatCurrency, DEFAULT_MONTHLY_BUDGET, calculateSafeTokensForBudget } from '../config/ai-tokens.config';
+import { AI_MODELS, TOKEN_QUOTAS, formatTokenCount, formatCurrency, DEFAULT_MONTHLY_BUDGET, calculateSafeTokensForBudget } from '../config/ai-tokens.config';
 
 // Budget types
 interface ModelBudgetInfo {
@@ -50,6 +50,8 @@ interface ModelBudgetInfo {
 
 interface BudgetData {
   budget: {
+    planBudgetUsd?: number;
+    extraBudgetUsd?: number;
     monthlyBudgetUsd: number;
     hardLimit: boolean;
   };
@@ -398,10 +400,10 @@ export const DashboardPage: React.FC = () => {
     fetchBudget();
   }, [isPro, user]);
 
-  // Save budget
+  // Save extra budget (adds to plan budget)
   const saveBudget = async () => {
-    const budgetValue = parseFloat(newBudget);
-    if (isNaN(budgetValue) || budgetValue < 0 || budgetValue > 1000) {
+    const extraValue = parseFloat(newBudget);
+    if (isNaN(extraValue) || extraValue < 0 || extraValue > 100) {
       return;
     }
     setSavingBudget(true);
@@ -409,17 +411,17 @@ export const DashboardPage: React.FC = () => {
       const response = await fetch('/api/ai/budget', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monthlyBudgetUsd: budgetValue }),
+        body: JSON.stringify({ extraBudgetUsd: extraValue }),
       });
       if (response.ok) {
-        const data = await response.json();
-        // Refetch budget data to get updated model info
+        // Refetch budget data to get updated totals
         const budgetResponse = await fetch('/api/ai/budget');
         if (budgetResponse.ok) {
           const budgetData = await budgetResponse.json();
           setBudgetData(budgetData);
         }
         setEditingBudget(false);
+        setNewBudget('1.00');
       }
     } catch (error) {
       console.error('Failed to save budget:', error);
@@ -763,37 +765,52 @@ export const DashboardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Budget Settings */}
+            {/* Budget Info - Plan Based */}
             <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
-                  <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Monthly Budget Limit</div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Set your spending cap for AI features</div>
-                </div>
-                {editingBudget ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ color: '#10b981', fontSize: '1rem' }}>$</span>
-                    <input
-                      type="number"
-                      value={newBudget}
-                      onChange={(e) => setNewBudget(e.target.value)}
-                      min="0"
-                      max="1000"
-                      step="0.50"
-                      style={{ width: '80px', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem', textAlign: 'right' }}
-                    />
-                    <button onClick={saveBudget} disabled={savingBudget} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
-                      {savingBudget ? '...' : '✓'}
-                    </button>
-                    <button onClick={() => setEditingBudget(false)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
-                      ✕
-                    </button>
+                  <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Monthly AI Budget</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                    Included with {isPlus ? 'Plus' : 'Pro'} plan: {formatCurrency(TOKEN_QUOTAS[isPlus ? 'plus' : 'pro'].aiCostBudget)}/month
+                    {(budgetData?.budget.extraBudgetUsd || 0) > 0 && (
+                      <span style={{ color: '#10b981' }}> + {formatCurrency(budgetData?.budget.extraBudgetUsd || 0)} extra</span>
+                    )}
                   </div>
-                ) : (
-                  <button onClick={() => { setNewBudget((budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET).toFixed(2)); setEditingBudget(true); }} style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.85rem' }}>
-                    {formatCurrency(budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET)} ✏️
-                  </button>
-                )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#10b981', fontWeight: 600, fontSize: '1rem' }}>
+                    {formatCurrency(budgetData?.budget.monthlyBudgetUsd || TOKEN_QUOTAS[isPlus ? 'plus' : 'pro'].aiCostBudget)}
+                  </span>
+                  {editingBudget ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>+$</span>
+                      <input
+                        type="number"
+                        value={newBudget}
+                        onChange={(e) => setNewBudget(e.target.value)}
+                        min="0"
+                        max="100"
+                        step="0.50"
+                        placeholder="0.00"
+                        style={{ width: '60px', padding: '0.35rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem', textAlign: 'right' }}
+                      />
+                      <button onClick={saveBudget} disabled={savingBudget} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>
+                        {savingBudget ? '...' : '✓'}
+                      </button>
+                      <button onClick={() => setEditingBudget(false)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setNewBudget('1.00'); setEditingBudget(true); }}
+                      style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px dashed rgba(16, 185, 129, 0.4)', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem' }}
+                      title="Add extra budget for this month"
+                    >
+                      + Add Extra
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

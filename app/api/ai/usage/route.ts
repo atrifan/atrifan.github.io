@@ -63,10 +63,15 @@ export async function GET(request: NextRequest) {
       usageByModel[u.model_id].cost += parseFloat(u.cost_usd);
     });
 
+    const budgetRemaining = Math.max(0, (quota?.aiCostBudget || 0) - totalCost);
+    const budgetUsedPercent = quota?.aiCostBudget
+      ? Math.min(100, (totalCost / quota.aiCostBudget) * 100)
+      : 100;
+
     const response = {
       tier,
       quota: {
-        monthlyTokens: quota?.monthlyTokens || 0,
+        aiCostBudget: quota?.aiCostBudget || 0,
         models: quota?.models || [],
         price: quota?.price || 0,
       },
@@ -79,13 +84,11 @@ export async function GET(request: NextRequest) {
         byModel: usageByModel,
       },
       remaining: {
-        tokens: Math.max(0, (quota?.monthlyTokens || 0) - totalTokens),
-        percentage: quota?.monthlyTokens 
-          ? Math.max(0, 100 - (totalTokens / quota.monthlyTokens) * 100)
-          : 0,
+        budget: budgetRemaining,
+        budgetUsedPercent,
       },
       throttle: THROTTLE_CONFIG[tier as keyof typeof THROTTLE_CONFIG] || THROTTLE_CONFIG.free,
-      canUseAI: tier !== 'free' && totalTokens < (quota?.monthlyTokens || 0),
+      canUseAI: tier !== 'free' && totalCost < (quota?.aiCostBudget || 0),
     };
 
     return NextResponse.json(response);

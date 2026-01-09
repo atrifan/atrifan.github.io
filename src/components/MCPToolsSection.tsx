@@ -70,8 +70,12 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
       const response = await fetch('/api/mcp-servers/list');
       if (response.ok) {
         const data = await response.json();
-        setServers(data.servers || []);
-        onHasTools?.((data.servers || []).length > 0);
+        // Only show truly imported external MCP servers (not native/api_key servers)
+        const importedServers = (data.servers || []).filter(
+          (s: { source_type?: string }) => s.source_type === 'mcp_import'
+        );
+        setServers(importedServers);
+        onHasTools?.(importedServers.length > 0);
       }
     } catch (err) {
       console.error('Error fetching MCP servers:', err);

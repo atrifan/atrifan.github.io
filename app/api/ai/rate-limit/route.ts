@@ -46,20 +46,20 @@ export async function POST(request: NextRequest) {
 
     const { data: monthlyUsage } = await supabase
       .from('ai_token_usage')
-      .select('input_tokens, output_tokens')
+      .select('cost_usd')
       .eq('user_id', userId)
       .gte('created_at', startOfMonth.toISOString());
 
-    const totalTokens = monthlyUsage?.reduce(
-      (sum, u) => sum + u.input_tokens + u.output_tokens, 0
+    const totalCost = monthlyUsage?.reduce(
+      (sum, u) => sum + (parseFloat(String(u.cost_usd)) || 0), 0
     ) || 0;
 
-    if (totalTokens >= quota.monthlyTokens) {
+    if (totalCost >= quota.aiCostBudget) {
       return NextResponse.json({
         allowed: false,
-        reason: 'quota_exceeded',
-        message: 'Monthly token quota exceeded. Resets on the 1st.',
-        usage: { totalTokens, limit: quota.monthlyTokens },
+        reason: 'budget_exceeded',
+        message: 'Monthly AI budget exceeded. Resets on the 1st.',
+        usage: { totalCost, limit: quota.aiCostBudget },
       });
     }
 
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       allowed: true,
       remaining: {
-        tokens: quota.monthlyTokens - totalTokens,
+        budget: quota.aiCostBudget - totalCost,
         minuteRequests: throttle.requestsPerMinute - (minuteRequests?.request_count || 0) - 1,
         hourRequests: throttle.requestsPerHour - (hourRequests?.request_count || 0) - 1,
       },
