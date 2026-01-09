@@ -10,9 +10,16 @@ import { RestApiToolsSection } from '../components/RestApiToolsSection';
 import { GraphQLToolsSection } from '../components/GraphQLToolsSection';
 import { MCPToolsSection } from '../components/MCPToolsSection';
 import { AgentToolsSection } from '../components/AgentToolsSection';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
 import type { MCPTool, SaveModalType } from '../types/mcp-composer';
+
+interface MCPComposerPageProps {
+  isPro: boolean;
+  isPlus: boolean;
+}
 
 // Category icons
 const categoryIcons: Record<string, string> = {
@@ -244,11 +251,12 @@ export const ToolCountBadge: React.FC<{ count: number }> = ({ count }) => {
   );
 };
 
-export const MCPComposerPage: React.FC = () => {
+export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editServerId = searchParams.get('edit');
   const isDefaultServer = editServerId === 'default';
+  const canAccessPro = isPro || isPlus;
 
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -274,12 +282,43 @@ export const MCPComposerPage: React.FC = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  // Check if feature is enabled
+  // Check if feature is enabled (only for Pro users)
   useEffect(() => {
-    if (!isMcpComposerEnabled()) {
+    if (canAccessPro && !isMcpComposerEnabled()) {
       router.push('/dashboard');
     }
-  }, [router]);
+  }, [router, canAccessPro]);
+
+  // Show upgrade modal for non-Pro users
+  if (!canAccessPro) {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'clamp(1rem, 4vw, 2rem)', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <UpgradeModal
+          isOpen={true}
+          title="MCP Composer - Pro Feature"
+          featureName="MCP Composer with custom server creation"
+          showCloseButton={false}
+        />
+        <div style={{ maxWidth: '56rem', margin: '0 auto', filter: 'blur(8px)', pointerEvents: 'none' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <h1 style={{
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              MCP COMPOSER
+            </h1>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   // Function to refresh tools list (called when REST API tools change)
   const refreshTools = async () => {

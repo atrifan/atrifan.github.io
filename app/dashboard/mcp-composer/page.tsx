@@ -29,11 +29,6 @@ export default async function MCPComposer() {
   const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
   const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
-  // Redirect free users to dashboard
-  if (!isPro) {
-    redirect('/dashboard');
-  }
-
-  return <MCPComposerPage />;
+  return <MCPComposerPage isPro={isPro} isPlus={isPlus} />;
 }
 

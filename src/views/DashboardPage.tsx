@@ -107,6 +107,8 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, icon, children }) 
     borderRadius: '20px',
     padding: 'clamp(1.25rem, 4vw, 2rem)',
     marginBottom: '1.5rem',
+    position: 'relative',
+    overflow: 'hidden',
   }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
       {icon}
@@ -676,7 +678,7 @@ export const DashboardPage: React.FC = () => {
           {/* Pro-only blur overlay */}
           {!isPro && (
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: '1rem' }}>
-              <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔒</span>
+              <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>💰</span>
               <span style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>Pro Feature</span>
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.75rem' }}>Upgrade to Pro to access AI Chat with budget tracking</span>
               <Link href="/pricing" style={{ textDecoration: 'none' }}>
@@ -1012,42 +1014,48 @@ export const DashboardPage: React.FC = () => {
               )}
             </div>
           ) : (
-            /* Blurred section for free users */
-            <div style={{
-              filter: 'blur(6px)',
-              opacity: 0.4,
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }}>
-              <div style={{
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: '10px',
-                padding: '1rem',
-                fontFamily: 'monospace',
-                color: '#10b981',
-                marginBottom: '1rem',
-              }}>
-                tlz_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+            /* Pro-only overlay for API Keys */
+            <>
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: '1rem' }}>
+                <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔑</span>
+                <span style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>Pro Feature</span>
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.75rem' }}>Upgrade to Pro to generate API keys for MCP server access</span>
+                <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                  <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Upgrade to Pro</button>
+                </Link>
               </div>
-              <div style={{
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: '10px',
-                padding: '0.75rem 1rem',
-              }}>
-                <code style={{ color: '#60a5fa', fontSize: '0.85rem' }}>
-                  {HOST_URL}/api/mcp/...
-                </code>
+              <div style={{ filter: 'blur(4px)', opacity: 0.3, pointerEvents: 'none' }}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  fontFamily: 'monospace',
+                  color: '#10b981',
+                  marginBottom: '1rem',
+                }}>
+                  tlz_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                </div>
+                <div style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1rem',
+                }}>
+                  <code style={{ color: '#60a5fa', fontSize: '0.85rem' }}>
+                    {HOST_URL}/api/mcp/...
+                  </code>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </DashboardCard>
 
         {/* Locked Sections for Free Users */}
         {!isPro && isBillingEnabled() && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
             <LockedSection
               title="MCP Server Config"
-              description="Configure your MCP server for AI assistants like Claude, Cursor, and Windsurf."
+              description="Upgrade to Pro to configure MCP server for Claude, Cursor, and Windsurf"
+              emoji="⚙️"
               icon={
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="3" />
@@ -1057,7 +1065,8 @@ export const DashboardPage: React.FC = () => {
             />
             <LockedSection
               title="MCP Servers"
-              description="Create custom MCP servers with only the tools you need."
+              description="Upgrade to Pro to create custom MCP servers with focused tool sets"
+              emoji="🔧"
               icon={
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -1066,7 +1075,8 @@ export const DashboardPage: React.FC = () => {
             />
             <LockedSection
               title="Agent Creator"
-              description="Create AI agents that communicate via A2A protocol."
+              description="Upgrade to Pro to create AI agents with A2A protocol"
+              emoji="🤖"
               icon={
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="3" />

@@ -141,7 +141,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               🚀 Upgrade to Pro
             </button>
           </Link>
-          {showCloseButton && onClose && (
+          {showCloseButton && onClose ? (
             <button
               onClick={onClose}
               style={{
@@ -158,6 +158,28 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             >
               Maybe Later
             </button>
+          ) : (
+            <Link href="/" style={{ textDecoration: 'none' }}>
+              <button
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'transparent',
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                ← Back to Home
+              </button>
+            </Link>
           )}
         </div>
       </div>

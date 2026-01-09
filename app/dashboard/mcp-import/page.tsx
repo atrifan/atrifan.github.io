@@ -36,11 +36,6 @@ export default async function MCPImportPage() {
   const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
   const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
-  // Redirect free users to dashboard
-  if (!isPro) {
-    redirect('/dashboard');
-  }
-
-  return <MCPServerImportPage />;
+  return <MCPServerImportPage isPro={isPro} isPlus={isPlus} />;
 }
 

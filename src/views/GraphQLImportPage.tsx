@@ -7,6 +7,8 @@ import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { AuthenticationCard } from '../components/AuthenticationCard';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled } from '../config/mcp-composer.config';
 
@@ -30,13 +32,19 @@ interface EnvironmentConfig {
 
 type Step = 'server-name' | 'fetch-schema' | 'preview-tools' | 'environments' | 'saving';
 
+interface GraphQLImportPageProps {
+  isPro: boolean;
+  isPlus: boolean;
+}
+
 // Normalize name helper
 const normalizeName = (name: string): string => {
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 };
 
-export function GraphQLImportPage() {
+export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
   const router = useRouter();
+  const canAccessPro = isPro || isPlus;
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<Step>('server-name');
@@ -76,12 +84,43 @@ export function GraphQLImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Check if feature is enabled
+  // Check if feature is enabled (only for Pro users)
   useEffect(() => {
-    if (!isMcpComposerEnabled()) {
+    if (canAccessPro && !isMcpComposerEnabled()) {
       router.push('/dashboard');
     }
-  }, [router]);
+  }, [router, canAccessPro]);
+
+  // Show upgrade modal for non-Pro users
+  if (!canAccessPro) {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'clamp(1rem, 4vw, 2rem)', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <UpgradeModal
+          isOpen={true}
+          title="GraphQL Import - Pro Feature"
+          featureName="GraphQL schema import for custom MCP tools"
+          showCloseButton={false}
+        />
+        <div style={{ maxWidth: '56rem', margin: '0 auto', filter: 'blur(8px)', pointerEvents: 'none' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <h1 style={{
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #e535ab 0%, #ff6b6b 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              GRAPHQL IMPORT
+            </h1>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   // Fetch user's API key for pre-filling auth fields
   useEffect(() => {

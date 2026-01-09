@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { BackToTools } from '../components/BackToTools';
+import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 
 interface GraphQLTool {
@@ -48,10 +51,13 @@ type TabType = 'overview' | 'environments' | 'operations' | 'headers' | 'docs';
 
 interface Props {
   specId: string;
+  isPro: boolean;
+  isPlus: boolean;
 }
 
-export function GraphQLEditPage({ specId }: Props) {
+export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
   const router = useRouter();
+  const canAccessPro = isPro || isPlus;
   const [spec, setSpec] = useState<GraphQLSpec | null>(null);
   const [operations, setOperations] = useState<GraphQLOperation[]>([]);
   const [environments, setEnvironments] = useState<GraphQLEnvironment[]>([]);
@@ -70,8 +76,41 @@ export function GraphQLEditPage({ specId }: Props) {
   const [headersSaving, setHeadersSaving] = useState(false);
 
   useEffect(() => {
-    fetchSpec();
-  }, [specId]);
+    if (canAccessPro) {
+      fetchSpec();
+    }
+  }, [specId, canAccessPro]);
+
+  // Show upgrade modal for non-Pro users
+  if (!canAccessPro) {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'clamp(1rem, 4vw, 2rem)', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <UpgradeModal
+          isOpen={true}
+          title="GraphQL Editor - Pro Feature"
+          featureName="GraphQL specification editing"
+          showCloseButton={false}
+        />
+        <div style={{ maxWidth: '56rem', margin: '0 auto', filter: 'blur(8px)', pointerEvents: 'none' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <h1 style={{
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #e535ab 0%, #ff6b6b 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              GRAPHQL EDITOR
+            </h1>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const fetchSpec = async () => {
     try {

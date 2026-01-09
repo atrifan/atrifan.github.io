@@ -24,13 +24,8 @@ export default async function CustomMCPServerDocs({ params }: PageProps) {
   const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
   const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
-  // Redirect free users to dashboard
-  if (!isPro) {
-    redirect('/dashboard');
-  }
-
   const { id } = await params;
 
-  return <CustomMCPServerDocsPage serverId={id} />;
+  return <CustomMCPServerDocsPage serverId={id} isPro={isPro} isPlus={isPlus} />;
 }
 

@@ -6,6 +6,9 @@ import Link from 'next/link';
 import yaml from 'js-yaml';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { BackToTools } from '../components/BackToTools';
+import { Footer } from '../components/Footer';
 import { ADS_CONFIG } from '../config/ads.config';
 
 // Types
@@ -65,10 +68,13 @@ const methodColors: Record<string, string> = {
 
 interface RestApiEditPageProps {
   specId: string;
+  isPro: boolean;
+  isPlus: boolean;
 }
 
-export function RestApiEditPage({ specId }: RestApiEditPageProps) {
+export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps) {
   const router = useRouter();
+  const canAccessPro = isPro || isPlus;
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,8 +97,41 @@ export function RestApiEditPage({ specId }: RestApiEditPageProps) {
   const [regeneratingSpec, setRegeneratingSpec] = useState(false);
 
   useEffect(() => {
-    fetchSpec();
-  }, [specId]);
+    if (canAccessPro) {
+      fetchSpec();
+    }
+  }, [specId, canAccessPro]);
+
+  // Show upgrade modal for non-Pro users
+  if (!canAccessPro) {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'clamp(1rem, 4vw, 2rem)', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <UpgradeModal
+          isOpen={true}
+          title="REST API Editor - Pro Feature"
+          featureName="REST API specification editing"
+          showCloseButton={false}
+        />
+        <div style={{ maxWidth: '56rem', margin: '0 auto', filter: 'blur(8px)', pointerEvents: 'none' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <h1 style={{
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              REST API EDITOR
+            </h1>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const fetchSpec = async () => {
     try {

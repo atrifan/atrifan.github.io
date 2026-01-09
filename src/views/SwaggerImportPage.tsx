@@ -7,6 +7,8 @@ import { Footer } from '../components/Footer';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { AuthenticationCard } from '../components/AuthenticationCard';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled } from '../config/mcp-composer.config';
 import { parseOpenAPISpec, detectFormat, normalizeName, generateToolName } from '../lib/openapi-parser';
@@ -22,10 +24,16 @@ interface EnvironmentConfig {
   host: string;
 }
 
+interface SwaggerImportPageProps {
+  isPro: boolean;
+  isPlus: boolean;
+}
+
 // ============ Component ============
 
-export function SwaggerImportPage() {
+export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
   const router = useRouter();
+  const canAccessPro = isPro || isPlus;
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<Step>('server-name');
@@ -77,12 +85,43 @@ export function SwaggerImportPage() {
   const [existingSpec, setExistingSpec] = useState<ExistingSpec | null>(null);
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
 
-  // Check if feature is enabled
+  // Check if feature is enabled (only for Pro users)
   useEffect(() => {
-    if (!isMcpComposerEnabled()) {
+    if (canAccessPro && !isMcpComposerEnabled()) {
       router.push('/dashboard');
     }
-  }, [router]);
+  }, [router, canAccessPro]);
+
+  // Show upgrade modal for non-Pro users
+  if (!canAccessPro) {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'clamp(1rem, 4vw, 2rem)', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <UpgradeModal
+          isOpen={true}
+          title="Swagger Import - Pro Feature"
+          featureName="OpenAPI/Swagger import for custom MCP tools"
+          showCloseButton={false}
+        />
+        <div style={{ maxWidth: '56rem', margin: '0 auto', filter: 'blur(8px)', pointerEvents: 'none' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <BackToTools />
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+            <h1 style={{
+              fontSize: 'clamp(1.75rem, 6vw, 4rem)',
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              SWAGGER IMPORT
+            </h1>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   // Fetch categories
   useEffect(() => {
