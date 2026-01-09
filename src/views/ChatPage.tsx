@@ -704,10 +704,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: (showHistory || showConnectors || showPersonalities) ? '280px 1fr' : '1fr', gap: '1rem' }}>
-          {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Sidebar - now stacks on top on mobile */}
           {(showHistory || showConnectors || showPersonalities) && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '600px', overflowY: 'auto' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '400px', overflowY: 'auto' }}>
               {showHistory && (
                 <div>
                   <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

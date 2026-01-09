@@ -462,11 +462,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
         {/* BUILDER VIEW */}
         {view === 'builder' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1rem' }}>
-            {/* Left Panel - Settings */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Settings Panel - horizontal scrollable on mobile */}
+            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
               {/* Model Selection */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '200px', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: 0 }}>🤖 Model</h3>
                   {tier === 'pro' && (
@@ -488,7 +488,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
 
               {/* Personalities */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '180px', flexShrink: 0 }}>
                 <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>🎭 Personalities</h3>
                 {personalities.length === 0 ? (
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No personalities. <Link href="/chat" style={{ color: '#f59e0b' }}>Create one</Link></p>
@@ -505,7 +505,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
 
               {/* Schedule */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '160px', flexShrink: 0 }}>
                 <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>⏰ Schedule</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                   {SCHEDULE_OPTIONS.map(opt => (
@@ -515,24 +515,24 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
 
               {/* MCP Tools */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', flex: 1, overflow: 'auto' }}>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>🔧 Available Tools ({mcpTools.length})</h3>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', minWidth: '200px', flexShrink: 0 }}>
+                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>🔧 Tools ({mcpTools.length})</h3>
                 {mcpTools.length === 0 ? (
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No MCP tools. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add servers</Link></p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '200px', overflowY: 'auto' }}>
-                    {mcpTools.slice(0, 20).map((tool, i) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '150px', overflowY: 'auto' }}>
+                    {mcpTools.slice(0, 10).map((tool, i) => (
                       <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
-                        <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500 }}>{tool.server}.{tool.name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description}</div>
+                        <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500 }}>{tool.name}</div>
                       </div>
                     ))}
+                    {mcpTools.length > 10 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textAlign: 'center' }}>+{mcpTools.length - 10} more</div>}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right Panel - Builder */}
+            {/* Builder Panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Prompt Input */}
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
