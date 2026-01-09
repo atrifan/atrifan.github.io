@@ -555,7 +555,7 @@ export const MCPComposerPage: React.FC = () => {
               ? 'Toggle tools on or off for your default server. Disabled tools will not be available to AI assistants.'
               : isEditMode
                 ? 'Update your custom MCP server configuration. Add or remove tools as needed.'
-                : 'Compose a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.'}
+                : 'Build a focused MCP server with only the tools you need. Fewer tools means better AI performance and fewer collisions.'}
           </p>
         </div>
 

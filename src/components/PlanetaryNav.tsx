@@ -27,6 +27,8 @@ import { CycleIcon } from './CycleIcon';
 import { RiskIcon } from './RiskIcon';
 import { BloodIcon } from './BloodIcon';
 import { EclipseIcon } from './EclipseIcon';
+import { ChatIcon } from './ChatIcon';
+import { AutomationIcon } from './AutomationIcon';
 
 interface PlanetaryNavProps {
   isOpen: boolean;
@@ -114,6 +116,8 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
       spin: <SpinIcon size={size} />,
       decide: <DecideIcon size={size} />,
       eclipse: <EclipseIcon size={size} />,
+      chat: <ChatIcon size={size} />,
+      automation: <AutomationIcon size={size} />,
     };
     return iconMap[toolId] || <span style={{ fontSize: `${size}px` }}>🔧</span>;
   };
@@ -385,6 +389,8 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                             cursor: 'pointer',
                             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                             boxShadow: `0 4px 16px ${tool.color}33`,
+                            position: 'relative',
+                            overflow: 'hidden',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
@@ -395,6 +401,25 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                             e.currentTarget.style.boxShadow = `0 4px 16px ${tool.color}33`;
                           }}
                         >
+                          {/* Pro badge for AI tools */}
+                          {tool.isPro && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '4px',
+                              right: '4px',
+                              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                              color: '#fff',
+                              padding: '0.1rem 0.35rem',
+                              fontSize: '0.5rem',
+                              fontWeight: 700,
+                              borderRadius: '4px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                            }}>
+                              PRO
+                            </div>
+                          )}
                           <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             {this.renderToolIcon(tool.id, isMobile ? 28 : 36)}
                           </div>

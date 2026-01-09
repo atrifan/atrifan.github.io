@@ -23,12 +23,21 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const { userId } = await auth();
-  
+  const { userId, has } = await auth();
+
   if (!userId) {
     redirect('/sign-in');
   }
-  
+
+  // Check if user has Pro or Plus plan
+  const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
+  const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
+
+  // Redirect free users to dashboard
+  if (!isPro) {
+    redirect('/dashboard');
+  }
+
   return <SwaggerImportPage />;
 }
 

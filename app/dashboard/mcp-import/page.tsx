@@ -1,4 +1,6 @@
 import { Metadata } from 'next';
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 import { MCPServerImportPage } from '@/src/views/MCPServerImportPage';
 import { SEO_DATA } from '@/src/utils/seo';
 
@@ -23,7 +25,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MCPImportPage() {
+export default async function MCPImportPage() {
+  const { userId, has } = await auth();
+
+  if (!userId) {
+    redirect('/sign-in');
+  }
+
+  // Check if user has Pro or Plus plan
+  const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
+  const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
+
+  // Redirect free users to dashboard
+  if (!isPro) {
+    redirect('/dashboard');
+  }
+
   return <MCPServerImportPage />;
 }
 

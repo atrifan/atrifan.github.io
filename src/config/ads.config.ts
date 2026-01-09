@@ -144,11 +144,11 @@ export const ADS_CONFIG = {
     docsHeader: '7221401854',
     docsFooter: '5908320187',
 
-    // MCP Composer page ads
+    // MCP Creator page ads
     mcpComposerTop: '7221401854',
     mcpComposerBottom: '5908320187',
 
-    // Swagger Import page ads (uses same slots as MCP Composer)
+    // Swagger Import page ads (uses same slots as MCP Creator)
     swaggerImportTop: '7221401854',
     swaggerImportBottom: '5908320187',
 
@@ -163,6 +163,18 @@ export const ADS_CONFIG = {
     // A2A Agent Import page ads
     agentImportTop: '7221401854',
     agentImportBottom: '5908320187',
+
+    // AI Chat page ads
+    chatTop: '7221401854',
+    chatBottom: '5908320187',
+
+    // AI Automation page ads
+    automationTop: '7221401854',
+    automationBottom: '5908320187',
+
+    // Generic tool page ads (for new AI tools)
+    toolTop: '7221401854',
+    toolBottom: '5908320187',
 
     // ECLIPSE page ads (Eclipse Finder)
     eclipseTop: '7221401854',

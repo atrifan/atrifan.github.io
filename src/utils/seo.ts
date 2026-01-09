@@ -142,9 +142,9 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     keywords: ['tulzo dashboard', 'mcp server', 'api keys', 'ai tools', 'claude mcp', 'cursor mcp', 'windsurf mcp', 'tool management'],
   },
   mcpComposer: {
-    title: 'MCP Composer - Create Custom MCP Servers | Tulzo',
-    description: 'Create custom MCP servers with only the tools you need. Compose focused tool sets for better AI performance and fewer collisions.',
-    keywords: ['mcp composer', 'custom mcp server', 'mcp tools', 'ai tool selection', 'mcp configuration', 'tool composition'],
+    title: 'MCP Creator - Create Custom MCP Servers | Tulzo',
+    description: 'Create custom MCP servers with only the tools you need. Build focused tool sets for better AI performance and fewer collisions.',
+    keywords: ['mcp creator', 'custom mcp server', 'mcp tools', 'ai tool selection', 'mcp configuration', 'tool builder'],
   },
   swaggerImport: {
     title: 'Import Swagger/OpenAPI - Create REST API Tools | Tulzo MCP',
@@ -180,6 +180,20 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     title: 'Documentation - MCP Server Setup & API Reference | Tulzo',
     description: 'Complete documentation for Tulzo MCP server. Setup guides for Claude, Cursor, Windsurf, and other AI assistants. API reference and tool documentation.',
     keywords: ['tulzo docs', 'mcp documentation', 'api reference', 'setup guide', 'claude setup', 'cursor setup', 'mcp integration'],
+  },
+  chat: {
+    title: 'AI Chat - Multi-Model Chat Assistant | Tulzo',
+    description: 'Chat with multiple AI models including GPT-5, Claude 4, Gemini 3, Llama 3.1, and more. Access all your Tulzo tools through natural conversation. Save chat history and connect external MCP servers.',
+    keywords: ['AI chat', 'multi-model chat', 'GPT-5', 'Claude 4', 'Gemini 3', 'Llama 3.1', 'AI assistant', 'chatbot', 'MCP chat', 'tool chat', 'AI conversation'],
+    ogTitle: 'Tulzo AI Chat - Talk to Multiple AI Models',
+    ogDescription: 'Chat with GPT-5, Claude 4, Gemini 3, and more. Access 20+ tools through natural conversation.',
+  },
+  automation: {
+    title: 'AI Automation - No-Code Workflow Builder | Tulzo',
+    description: 'Build powerful automations using natural language. Describe what you want to automate and AI suggests the right tools. Schedule recurring workflows, connect MCP servers, and save automation templates.',
+    keywords: ['AI automation', 'workflow automation', 'no-code automation', 'natural language automation', 'scheduled tasks', 'MCP automation', 'tool automation', 'workflow builder', 'automation templates'],
+    ogTitle: 'Tulzo AI Automation - Build Workflows with Natural Language',
+    ogDescription: 'Describe your automation in plain English. AI suggests tools and builds your workflow automatically.',
   },
 };
 

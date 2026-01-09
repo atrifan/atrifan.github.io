@@ -468,7 +468,7 @@ export function AgentImportPage() {
           }}
           >
             <span style={{ fontSize: '1.2rem' }}>←</span>
-            <span>Back to MCP Composer</span>
+            <span>Back to MCP Creator</span>
           </div>
         </Link>
 

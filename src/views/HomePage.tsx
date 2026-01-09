@@ -32,6 +32,8 @@ import { CycleIcon } from '../components/CycleIcon';
 import { RiskIcon } from '../components/RiskIcon';
 import { BloodIcon } from '../components/BloodIcon';
 import { EclipseIcon } from '../components/EclipseIcon';
+import { ChatIcon } from '../components/ChatIcon';
+import { AutomationIcon } from '../components/AutomationIcon';
 import { WeatherTimeCardWrapper } from '../components/WeatherTimeCardWrapper';
 import { Footer } from '../components/Footer';
 
@@ -96,6 +98,8 @@ export class HomePage extends Component<{}, HomePageState> {
       brain: <BrainIcon size={size} />,
       vibe: <VibeIcon size={size} />,
       eclipse: <EclipseIcon size={size} />,
+      chat: <ChatIcon size={size} />,
+      automation: <AutomationIcon size={size} />,
     };
     return iconMap[toolId] || <span className="big-icon">🔧</span>;
   };
@@ -193,6 +197,27 @@ export class HomePage extends Component<{}, HomePageState> {
             e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.25)';
           }}
         >
+          {/* Pro Ribbon for AI tools */}
+          {tool.isPro && (
+            <div style={{
+              position: 'absolute',
+              top: '12px',
+              right: '-32px',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              color: '#fff',
+              padding: '0.25rem 2.5rem',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              transform: 'rotate(45deg)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              zIndex: 10,
+            }}>
+              PRO
+            </div>
+          )}
+
           {/* Glow effect */}
           <div style={{
             position: 'absolute',

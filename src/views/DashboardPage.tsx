@@ -10,6 +10,7 @@ import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isBillingEnabled } from '../config/billing.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
+import { LockedSection } from '../components/LockedSection';
 // Server data from API
 interface ServerFromApi {
   id: string;
@@ -581,6 +582,47 @@ export const DashboardPage: React.FC = () => {
           </div>
         </DashboardCard>
 
+        {/* AI Token Usage - Right under subscription */}
+        {isPro && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.05)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            borderRadius: '16px',
+            padding: '1rem 1.5rem',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>AI Token Usage</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#10b981', fontSize: '1.1rem', fontWeight: 700 }}>0</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Used</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#60a5fa', fontSize: '1.1rem', fontWeight: 700 }}>{isPlus ? '∞' : '100K'}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>Limit</div>
+                </div>
+                <div style={{ width: '120px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>0%</span>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '10px', height: '6px', overflow: 'hidden' }}>
+                    <div style={{ background: 'linear-gradient(90deg, #10b981, #059669)', width: '0%', height: '100%', borderRadius: '10px' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', margin: '0.75rem 0 0', textAlign: 'center' }}>
+              Token tracking mockup • Full functionality coming soon
+            </p>
+          </div>
+        )}
+
         {/* Preferences Card */}
         <DashboardCard
           title="Preferences"
@@ -799,7 +841,47 @@ export const DashboardPage: React.FC = () => {
           )}
         </DashboardCard>
 
-        {/* MCP Server Config Card with Tabs */}
+        {/* Locked Sections for Free Users */}
+        {!isPro && isBillingEnabled() && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <LockedSection
+              title="MCP Server Config"
+              description="Configure your MCP server for AI assistants like Claude, Cursor, and Windsurf."
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              }
+            />
+            <LockedSection
+              title="MCP Servers"
+              description="Create custom MCP servers with only the tools you need."
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+              }
+            />
+            <LockedSection
+              title="Agent Creator"
+              description="Create AI agents that communicate via A2A protocol."
+              icon={
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="4" cy="12" r="2" />
+                  <circle cx="20" cy="12" r="2" />
+                  <circle cx="12" cy="4" r="2" />
+                  <circle cx="12" cy="20" r="2" />
+                  <path d="M6 12h3M15 12h3M12 6v3M12 15v3" />
+                </svg>
+              }
+            />
+          </div>
+        )}
+
+        {/* MCP Server Config Card with Tabs - Pro only */}
+        {isPro && (
         <div ref={mcpConfigCardRef} tabIndex={-1} style={{ outline: 'none' }}>
         <DashboardCard title="MCP Server Config" icon={
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1038,6 +1120,7 @@ export const DashboardPage: React.FC = () => {
           )}
         </DashboardCard>
         </div>
+        )}
 
         {/* MCP Servers Card */}
         {isPro && apiKey && isMcpComposerEnabled() && (
@@ -1402,6 +1485,95 @@ export const DashboardPage: React.FC = () => {
                 );
               })}
             </div>
+          </DashboardCard>
+        )}
+
+        {/* Agent Creator Card - A2A Protocol */}
+        {isPro && apiKey && isMcpComposerEnabled() && (
+          <DashboardCard title="Agent Creator" icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="4" cy="12" r="2" />
+              <circle cx="20" cy="12" r="2" />
+              <circle cx="12" cy="4" r="2" />
+              <circle cx="12" cy="20" r="2" />
+              <path d="M6 12h3M15 12h3M12 6v3M12 15v3" />
+            </svg>
+          }>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+              Create AI agents that communicate via A2A protocol. Select models and aggregate tools from your MCP servers.
+            </p>
+
+            {/* Agent Creator Features */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>🤖</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>Model Selection</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: 0 }}>
+                  Choose from GPT-5, Claude 4, Gemini 3, Llama 3.1, and more
+                </p>
+              </div>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>🔧</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>Tool Aggregation</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: 0 }}>
+                  Combine tools from multiple MCP servers into one agent
+                </p>
+              </div>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>🔗</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>A2A Protocol</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: 0 }}>
+                  Agent-to-Agent communication for complex workflows
+                </p>
+              </div>
+            </div>
+
+            {/* Mock Agent List */}
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Your Agents</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>Coming Soon</span>
+              </div>
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>🤖</span>
+                No agents created yet
+              </div>
+            </div>
+
+            {/* Create Agent Button */}
+            <button
+              disabled
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '10px',
+                border: '2px dashed rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.1)',
+                color: '#f59e0b',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'not-allowed',
+                opacity: 0.6,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Create A2A Agent
+              <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.3)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>Soon</span>
+            </button>
           </DashboardCard>
         )}
 

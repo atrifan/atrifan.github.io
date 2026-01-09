@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Tools are created but NOT linked to any MCP server yet
-      // They will be composed into MCP servers later via the MCP Composer
+      // They will be added to MCP servers later via the MCP Creator
       toolsCreated++;
     }
 

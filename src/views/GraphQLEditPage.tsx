@@ -177,7 +177,7 @@ export function GraphQLEditPage({ specId }: Props) {
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: '2rem' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
           <h1>Spec not found</h1>
-          <Link href="/dashboard/mcp-composer" style={{ color: '#667eea' }}>← Back to Composer</Link>
+          <Link href="/dashboard/mcp-composer" style={{ color: '#667eea' }}>← Back to Creator</Link>
         </div>
       </div>
     );

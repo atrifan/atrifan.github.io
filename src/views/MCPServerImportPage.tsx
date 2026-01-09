@@ -449,7 +449,7 @@ export function MCPServerImportPage() {
           }}
           >
             <span style={{ fontSize: '1.2rem' }}>←</span>
-            <span>Back to MCP Composer</span>
+            <span>Back to MCP Creator</span>
           </div>
         </Link>
 
@@ -953,7 +953,7 @@ export function MCPServerImportPage() {
           }}>
             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
             <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>{successMessage}</h2>
-            <p style={{ color: 'rgba(255,255,255,0.9)' }}>Redirecting to MCP Composer...</p>
+            <p style={{ color: 'rgba(255,255,255,0.9)' }}>Redirecting to MCP Creator...</p>
           </div>
         )}
 

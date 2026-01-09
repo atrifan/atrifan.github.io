@@ -1,6 +1,6 @@
 /**
- * MCP Composer Types
- * Types for custom MCP server composition
+ * MCP Creator Types
+ * Types for custom MCP server creation
  */
 
 export type ToolType = 'NATIVE' | 'MCP' | 'REST' | 'GQL' | 'A2A';

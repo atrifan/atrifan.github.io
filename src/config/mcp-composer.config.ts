@@ -1,16 +1,16 @@
 /**
- * MCP Composer Configuration
- * 
- * Controls whether MCP Server Composition features are enabled.
+ * MCP Creator Configuration
+ *
+ * Controls whether MCP Server Creation features are enabled.
  * Set NEXT_PUBLIC_SUPPORT_MCP_COMPOSITION=true in .env to enable.
  */
 
 export const MCP_COMPOSER_CONFIG = {
   /**
-   * Whether MCP composition features are enabled.
+   * Whether MCP creation features are enabled.
    * When true, shows:
    * - Create custom MCP server button in dashboard
-   * - MCP composer page
+   * - MCP creator page
    * - Custom MCP server cards in dashboard
    */
   enabled: process.env.NEXT_PUBLIC_SUPPORT_MCP_COMPOSITION === 'true',

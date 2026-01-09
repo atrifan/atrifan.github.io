@@ -1205,7 +1205,7 @@ export function SwaggerImportPage() {
             {successMessage}
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.7)' }}>
-            Redirecting to MCP Composer...
+            Redirecting to MCP Creator...
           </p>
         </>
       ) : (
@@ -1260,7 +1260,7 @@ export function SwaggerImportPage() {
           }}
           >
             <span style={{ fontSize: '1.2rem' }}>←</span>
-            <span>Back to MCP Composer</span>
+            <span>Back to MCP Creator</span>
           </div>
         </Link>
 

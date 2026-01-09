@@ -3,7 +3,7 @@
  * Define all available tools/apps in the platform
  */
 
-export type ToolCategory = 'health' | 'money' | 'time' | 'utilities' | 'fun';
+export type ToolCategory = 'health' | 'money' | 'time' | 'utilities' | 'fun' | 'ai';
 
 export interface ToolConfig {
   id: string;
@@ -18,6 +18,7 @@ export interface ToolConfig {
   gradient: string;
   category: ToolCategory;
   available: boolean;
+  isPro?: boolean; // Requires Pro subscription
 }
 
 export const CATEGORY_LABELS: Record<ToolCategory, string> = {
@@ -26,6 +27,7 @@ export const CATEGORY_LABELS: Record<ToolCategory, string> = {
   time: 'Time & Dates',
   utilities: 'Utilities',
   fun: 'Fun & Social',
+  ai: 'AI',
 };
 
 export const TOOLS: ToolConfig[] = [
@@ -370,6 +372,37 @@ export const TOOLS: ToolConfig[] = [
     category: 'fun',
     available: true,
   },
+  // AI
+  {
+    id: 'chat',
+    name: 'CHAT',
+    descriptiveName: 'AI Chat Assistant',
+    shortDescription: 'Chat with AI models, save history, and connect tools.',
+    seoTitle: 'AI Chat Assistant – Multi-Model Chat | Tulzo',
+    seoDescription: 'Chat with multiple AI models including GPT-5, Claude 4, Gemini 3, and more. Save chat history and connect your tools.',
+    icon: '💬',
+    path: '/chat',
+    color: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%)',
+    category: 'ai',
+    available: true,
+    isPro: true,
+  },
+  {
+    id: 'automation',
+    name: 'AUTOMATION',
+    descriptiveName: 'AI Workflow Automation',
+    shortDescription: 'Create automations using natural language and your tools.',
+    seoTitle: 'AI Workflow Automation – No-Code Automation | Tulzo',
+    seoDescription: 'Build powerful automations using natural language. Connect your tools and MCP servers to create custom workflows.',
+    icon: '⚡',
+    path: '/automation',
+    color: '#f59e0b',
+    gradient: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)',
+    category: 'ai',
+    available: true,
+    isPro: true,
+  },
 ];
 
 export const getToolByPath = (path: string): ToolConfig | undefined => {
@@ -387,6 +420,7 @@ export const getToolsByCategory = (): Record<ToolCategory, ToolConfig[]> => {
     time: [],
     utilities: [],
     fun: [],
+    ai: [],
   };
 
   TOOLS.filter(t => t.available).forEach(tool => {
@@ -397,7 +431,12 @@ export const getToolsByCategory = (): Record<ToolCategory, ToolConfig[]> => {
 };
 
 export const getCategoryOrder = (): ToolCategory[] => {
-  return ['health', 'money', 'time', 'utilities', 'fun'];
+  return ['ai', 'health', 'money', 'time', 'utilities', 'fun'];
+};
+
+// Get AI tools specifically
+export const getAITools = (): ToolConfig[] => {
+  return TOOLS.filter(t => t.category === 'ai' && t.available);
 };
 
 // Total count of available UI tools
