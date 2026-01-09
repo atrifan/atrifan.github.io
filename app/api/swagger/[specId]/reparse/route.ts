@@ -102,7 +102,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         };
         
         // Only update name/description if they match the auto-generated ones
-        const autoName = generateToolName('', spec.server_name, tool.operationId);
+        const autoName = generateToolName('', spec.server_name, tool.operationId, tool.httpMethod);
         if (existingTool?.name === autoName || !existingTool?.name) {
           toolUpdates.name = tool.name;
         }

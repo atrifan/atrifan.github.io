@@ -20,6 +20,10 @@ export interface MCPTool {
   hasWidget: boolean;
   inputSchema?: ToolSchema;
   outputSchema?: ToolSchema;
+  /** Source URL for imported tools (REST, MCP, GQL, A2A) - used for favicon */
+  sourceUrl?: string;
+  /** Icon URL for A2A agents */
+  iconUrl?: string;
 }
 
 export interface CustomMCPServer {

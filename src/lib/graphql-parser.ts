@@ -324,30 +324,34 @@ export function parseGraphQLSchema(introspectionResult: IntrospectionResult): Pa
 }
 
 /**
- * Generate a tool name from environment, server, and operation name
- * Format: {env}-{server}-{operation} (max 50 chars)
+ * Generate a tool name from environment, server, operation type, and operation name
+ * Format: {env}-{server}-{type}-{operation} (max 50 chars)
+ * Uses dashes for consistency with REST and MCP naming
  */
 export function generateGraphQLToolName(
   envName: string,
   serverName: string,
-  operationName: string
+  operationName: string,
+  operationType?: 'query' | 'mutation' | 'subscription'
 ): string {
-  // Sanitize parts: lowercase, replace non-alphanumeric with underscore
-  const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  // Sanitize parts: lowercase, replace non-alphanumeric with dash
+  const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
   const env = sanitize(envName);
   const server = sanitize(serverName);
+  const type = operationType ? sanitize(operationType) : '';
   const op = sanitize(operationName);
 
-  // Build name with max 50 chars
-  let name = `${env}_${server}_${op}`;
+  // Build parts array, filtering out empty parts
+  const parts = [env, server, type, op].filter(Boolean);
+  let name = parts.join('-');
+
+  // Truncate if needed (max 50 chars)
   if (name.length > 50) {
-    // Truncate operation name to fit
-    const maxOpLen = 50 - env.length - server.length - 2; // 2 for underscores
-    name = `${env}_${server}_${op.slice(0, Math.max(maxOpLen, 10))}`;
+    name = name.slice(0, 50).replace(/-$/, '');
   }
 
-  return name.slice(0, 50);
+  return name;
 }
 
 /**

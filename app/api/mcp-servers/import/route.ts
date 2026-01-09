@@ -16,6 +16,13 @@ interface ImportedTool {
   inputSchema?: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   hasWidget: boolean;
+  // MCP annotations from source server
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
   // Custom overrides
   customName?: string;
   customDescription?: string;
@@ -147,6 +154,8 @@ export async function POST(request: NextRequest) {
           has_widget: tool.hasWidget,
           invoking_message: `Calling ${tool.name}...`,
           invoked_message: 'MCP tool call complete',
+          // Preserve annotations from source MCP server
+          annotations: tool.annotations,
           user_id: userId,
         };
 

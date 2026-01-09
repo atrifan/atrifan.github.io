@@ -110,7 +110,8 @@ export async function POST(request: NextRequest) {
         .eq('id', op.tool_id)
         .single();
 
-      const toolName = generateGraphQLToolName(name, serverName, op.operation_name);
+      const opType = op.operation_type?.toLowerCase() as 'query' | 'mutation' | 'subscription' | undefined;
+      const toolName = generateGraphQLToolName(name, serverName, op.operation_name, opType);
       const inputSchema = generateInputSchema(op.arguments || []);
 
       const toolInsert: ToolInsert = {

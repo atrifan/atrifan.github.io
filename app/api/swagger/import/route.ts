@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       if (!envId) continue;
       
       for (const tool of tools) {
-        const toolName = generateToolName(env.name, serverName, tool.operationId);
+        const toolName = generateToolName(env.name, serverName, tool.operationId, tool.httpMethod);
 
         // Determine categories from tags or fallback to selected category
         const toolTags = tool.tags || [];
@@ -145,6 +145,11 @@ export async function POST(request: NextRequest) {
         // Primary category is first one
         const primaryCategory = (categories[0] as ToolCategory) || toolCategory;
 
+        // Determine annotations based on HTTP method
+        const method = tool.httpMethod.toUpperCase();
+        const isReadOnly = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+        const isDestructive = method === 'DELETE' || method === 'PUT' || method === 'PATCH';
+
         // Create tool definition
         const toolInsert: ToolInsert = {
           name: toolName,
@@ -157,6 +162,10 @@ export async function POST(request: NextRequest) {
           invoked_message: 'API call complete',
           input_schema: tool.inputSchema,
           output_schema: tool.outputSchema,
+          annotations: {
+            readOnlyHint: isReadOnly,
+            destructiveHint: isDestructive,
+          },
           user_id: userId,
         };
         

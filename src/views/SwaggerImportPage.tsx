@@ -443,7 +443,7 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
     const selectedToolsList = parseResult?.tools?.filter(t => selectedTools.has(t.operationId)) || [];
     for (const tool of selectedToolsList) {
       for (const env of environments) {
-        const fullName = generateToolName(env.name, serverName, tool.operationId);
+        const fullName = generateToolName(env.name, serverName, tool.operationId, tool.httpMethod);
         if (fullName.length > 50) {
           setError(`Tool name "${fullName}" exceeds 50 characters. Please shorten the server name, environment name, or operation ID.`);
           return;
@@ -1490,7 +1490,7 @@ function ToolPreviewCard({ tool, serverName, isSelected, hasWidget, onToggle, on
         <div style={{ marginTop: '1rem', marginLeft: '2rem', fontSize: '0.8rem' }}>
           <div style={{ marginBottom: '0.5rem' }}>
             <strong style={{ color: 'rgba(255,255,255,0.8)' }}>Tool Name:</strong>{' '}
-            <code style={{ color: '#10b981' }}>{generateToolName('env', serverName, tool.operationId)}</code>
+            <code style={{ color: '#10b981' }}>{generateToolName('env', serverName, tool.operationId, tool.httpMethod)}</code>
           </div>
 
           {/* Widget Toggle */}

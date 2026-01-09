@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { MCPServerEditPage } from '@/src/views/MCPServerEditPage';
+import { CustomMCPServerDocsPage } from '@/src/views/CustomMCPServerDocsPage';
 
 export const metadata: Metadata = {
-  title: 'Edit MCP Server - Tulzo',
-  description: 'Edit your imported MCP server configuration and tools.',
+  title: 'MCP Server Docs - Tulzo',
+  description: 'View the tools available in your custom MCP server.',
   robots: { index: false, follow: false },
 };
 
@@ -13,7 +13,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function EditMCPServer({ params }: PageProps) {
+export default async function CustomMCPServerDocs({ params }: PageProps) {
   const { userId, has } = await auth();
 
   if (!userId) {
@@ -26,6 +26,6 @@ export default async function EditMCPServer({ params }: PageProps) {
 
   const { id } = await params;
 
-  return <MCPServerEditPage serverId={id} isPro={isPro} isPlus={isPlus} />;
+  return <CustomMCPServerDocsPage serverId={id} isPro={isPro} isPlus={isPlus} />;
 }
 

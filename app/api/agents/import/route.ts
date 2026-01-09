@@ -34,9 +34,11 @@ function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Generate tool name: just the normalized agent name
-function generateAgentToolName(agentName: string): string {
-  return normalizeName(agentName);
+// Generate tool name: env-agentName (consistent with other tool types)
+function generateAgentToolName(envName: string, agentName: string): string {
+  const normalizedEnv = normalizeName(envName);
+  const normalizedAgent = normalizeName(agentName);
+  return `${normalizedEnv}-${normalizedAgent}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Create tool for the agent
-    const toolName = generateAgentToolName(normalizedAgentName);
+    const toolName = generateAgentToolName(environmentName, normalizedAgentName);
     const validCategory = (['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'].includes(category)
       ? category
       : 'Utilities') as ToolCategory;

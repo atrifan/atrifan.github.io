@@ -12,6 +12,7 @@ import { MCPToolsSection } from '../components/MCPToolsSection';
 import { AgentToolsSection } from '../components/AgentToolsSection';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor, MCP_COMPOSER_CONFIG } from '../config/mcp-composer.config';
 import type { MCPTool, SaveModalType } from '../types/mcp-composer';
@@ -276,6 +277,8 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
   const [viewingToolDocs, setViewingToolDocs] = useState<MCPTool | null>(null);
   // Track if there are GraphQL tools (for filter)
   const [hasGraphQLTools, setHasGraphQLTools] = useState(false);
+  // Collapsed tool type sections
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   // Scroll to top on mount
   useEffect(() => {
@@ -420,6 +423,24 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
         ? prev.filter(t => t !== toolName)
         : [...prev, toolName]
     );
+  };
+
+  const toggleSection = (type: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  // Truncate text helper
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
   };
 
   const selectAll = () => {
@@ -946,18 +967,34 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
             const config = typeConfig[type] || { label: type, icon: '📦', color: '#9ca3af' };
             const toolsInGroup = groupedTools[type];
 
+            const isCollapsed = collapsedSections.has(type);
+
             return (
               <div key={type} style={{ marginBottom: typeIndex < activeTypes.length - 1 ? '2rem' : '0' }}>
-                {/* Type Separator Header */}
+                {/* Type Separator Header - Collapsible */}
                 {activeTypes.length > 1 && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    marginBottom: '1rem',
-                    paddingBottom: '0.5rem',
-                    borderBottom: `1px solid ${config.color}33`,
-                  }}>
+                  <button
+                    onClick={() => toggleSection(type)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      marginBottom: isCollapsed ? '0' : '1rem',
+                      paddingBottom: '0.5rem',
+                      borderBottom: `1px solid ${config.color}33`,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '1rem',
+                      color: config.color,
+                      transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s',
+                    }}>▼</span>
                     <span style={{ fontSize: '1.25rem' }}>{config.icon}</span>
                     <h3 style={{
                       color: config.color,
@@ -977,10 +1014,18 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
                     }}>
                       {toolsInGroup.length}
                     </span>
-                  </div>
+                    <span style={{
+                      marginLeft: 'auto',
+                      color: 'rgba(255,255,255,0.4)',
+                      fontSize: '0.75rem',
+                    }}>
+                      {isCollapsed ? 'Click to expand' : 'Click to collapse'}
+                    </span>
+                  </button>
                 )}
 
-                {/* Tools Grid */}
+                {/* Tools Grid - Collapsible */}
+                {!isCollapsed && (
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -1013,13 +1058,41 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
                   gap: '0.5rem',
                   marginBottom: '0.5rem',
                 }}>
+                  {/* Favicon for imported tools */}
+                  {tool.sourceUrl && (
+                    <FaviconImage
+                      iconUrl={tool.iconUrl}
+                      baseUrl={tool.sourceUrl}
+                      alt={tool.name}
+                      size={24}
+                      borderRadius={4}
+                      fallbackEmoji={
+                        tool.toolType === 'REST' ? '☁️' :
+                        tool.toolType === 'MCP' ? '🔌' :
+                        tool.toolType === 'GQL' ? '◈' :
+                        tool.toolType === 'A2A' ? '🤖' : '📦'
+                      }
+                      fallbackBgColor={
+                        tool.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' :
+                        tool.toolType === 'MCP' ? 'rgba(59, 130, 246, 0.2)' :
+                        tool.toolType === 'GQL' ? 'rgba(236, 72, 153, 0.2)' :
+                        tool.toolType === 'A2A' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                      }
+                      style={{ flexShrink: 0 }}
+                    />
+                  )}
                   <h3 style={{
                     color: '#fff',
                     fontSize: '0.95rem',
                     fontWeight: 600,
                     margin: 0,
-                  }}>
-                    {formatToolName(tool.name)}
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                    minWidth: 0,
+                  }} title={formatToolName(tool.name)}>
+                    {truncateText(formatToolName(tool.name), tool.sourceUrl ? 28 : 35)}
                   </h3>
                   <div style={{
                     width: '20px',
@@ -1046,7 +1119,12 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
                   fontSize: '0.8rem',
                   margin: '0 0 0.5rem',
                   lineHeight: 1.4,
-                }}>
+                  display: '-webkit-box',
+                  WebkitLineClamp: 5,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }} title={tool.description}>
                   {tool.description}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
@@ -1117,6 +1195,7 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
             );
           })}
                 </div>
+                )}
               </div>
             );
           });

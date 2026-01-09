@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     let toolCount = 0;
     for (const env of environments) {
       for (const tool of parseResult.tools) {
-        const toolName = generateToolName(env.name, spec.server_name, tool.operationId);
+        const toolName = generateToolName(env.name, spec.server_name, tool.operationId, tool.httpMethod);
 
         const toolTags = tool.tags || [];
         const mappedCategories = toolTags.filter(tag => validCategories.includes(tag as ToolCategory));

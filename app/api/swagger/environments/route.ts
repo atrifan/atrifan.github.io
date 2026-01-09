@@ -128,8 +128,8 @@ export async function POST(request: NextRequest) {
       const httpMethod = endpoint.http_method;
       const path = endpoint.path;
 
-      // Generate tool name for this environment
-      const toolName = generateToolName(name, serverName, operationId);
+      // Generate tool name for this environment (includes HTTP method for uniqueness)
+      const toolName = generateToolName(name, serverName, operationId, httpMethod);
 
       // Get tool properties from existing tool or use defaults
       const description = existingTool?.description || `${httpMethod} ${path}`;

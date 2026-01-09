@@ -53,6 +53,8 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
   // Edit states
   const [editingServer, setEditingServer] = useState<string | null>(null);
   const [editServerName, setEditServerName] = useState('');
+  const [editingEnv, setEditingEnv] = useState<string | null>(null);
+  const [editEnvName, setEditEnvName] = useState('');
   const [editingTool, setEditingTool] = useState<string | null>(null);
   const [editToolName, setEditToolName] = useState('');
   const [editToolWidget, setEditToolWidget] = useState(false);
@@ -195,6 +197,39 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
     } catch (err) {
       console.error('Error updating server:', err);
       showNotification('error', 'Failed to update server name');
+    }
+  };
+
+  // Environment editing
+  const startEditEnv = (server: MCPServer) => {
+    setEditingEnv(server.id);
+    setEditEnvName(server.environment_name);
+  };
+
+  const cancelEditEnv = () => {
+    setEditingEnv(null);
+    setEditEnvName('');
+  };
+
+  const saveEditEnv = async (serverId: string) => {
+    try {
+      const response = await fetch(`/api/mcp-servers/${serverId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environmentName: editEnvName }),
+      });
+      if (response.ok) {
+        setServers(prev => prev.map(s => s.id === serverId ? { ...s, environment_name: editEnvName } : s));
+        cancelEditEnv();
+        showNotification('success', 'Environment name updated');
+        onDataChange?.();
+      } else {
+        const data = await response.json();
+        showNotification('error', data.error || 'Failed to update');
+      }
+    } catch (err) {
+      console.error('Error updating environment:', err);
+      showNotification('error', 'Failed to update environment name');
     }
   };
 
@@ -472,6 +507,24 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
                 <div style={{ borderTop: '1px solid rgba(59, 130, 246, 0.15)', padding: '1rem' }}>
                   {/* Quick Actions */}
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <Link
+                      href={`/dashboard/mcp-server/${server.id}`}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '6px',
+                        background: 'rgba(59, 130, 246, 0.2)',
+                        border: '1px solid rgba(59, 130, 246, 0.4)',
+                        color: '#3b82f6',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                      }}
+                    >
+                      ✏️ Edit Full
+                    </Link>
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmRefresh(server); }}
                       disabled={refreshingServer === server.id}
@@ -532,6 +585,32 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <span style={{ color: '#3b82f6', fontWeight: 600, fontSize: '0.9rem' }}>{server.display_name}</span>
                         <button onClick={() => startEditServer(server)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit display name">✏️</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Environment Name Edit */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Environment
+                    </div>
+                    {editingEnv === server.id ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          value={editEnvName}
+                          onChange={(e) => setEditEnvName(e.target.value)}
+                          style={{ flex: 1, minWidth: '150px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                        />
+                        <button onClick={() => saveEditEnv(server.id)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
+                        <button onClick={cancelEditEnv} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#3b82f6', fontWeight: 600, fontSize: '0.85rem' }}>{server.environment_name}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
+                        <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{server.source_url}</span>
+                        <button onClick={() => startEditEnv(server)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit environment name">✏️</button>
                       </div>
                     )}
                   </div>

@@ -63,8 +63,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       console.error('Error fetching MCP server tools:', toolsError);
     }
 
+    // Transform tools to expected format for CustomMCPServerDocsPage
+    const transformedTools = (serverTools || []).map((st: {
+      id: string;
+      is_enabled: boolean;
+      tool: { id: string; name: string; description: string; category: string } | null;
+    }) => ({
+      id: st.id,
+      toolId: st.tool?.id || '',
+      name: st.tool?.name || '',
+      description: st.tool?.description || '',
+      category: st.tool?.category || 'Utilities',
+      isEnabled: st.is_enabled,
+    }));
+
     return NextResponse.json({
-      server,
+      server: {
+        ...(server as Record<string, unknown>),
+        tools: transformedTools,
+      },
       tools: serverTools || [],
     });
   } catch (error) {

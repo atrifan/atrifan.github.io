@@ -161,9 +161,14 @@ export async function POST(request: NextRequest) {
 
     for (const env of envsToCreate) {
       for (const op of allOperations) {
-        const toolName = generateGraphQLToolName(env.name, serverName, op.name);
+        const opType = op.type?.toLowerCase() as 'query' | 'mutation' | 'subscription' | undefined;
+        const toolName = generateGraphQLToolName(env.name, serverName, op.name, opType);
         // Use the fully resolved input schema from the parser, or fallback to simple generation
         const inputSchema = op.inputSchema || generateInputSchema(op.arguments);
+
+        // Determine annotations based on operation type
+        const isReadOnly = op.type === 'query';
+        const isDestructive = op.type === 'mutation'; // Mutations can be destructive
 
         // Create tool definition with fully resolved schemas
         const toolInsert: ToolInsert = {
@@ -177,6 +182,10 @@ export async function POST(request: NextRequest) {
           has_widget: false,
           invoking_message: `Executing ${op.type} ${op.name}...`,
           invoked_message: 'GraphQL operation complete',
+          annotations: {
+            readOnlyHint: isReadOnly,
+            destructiveHint: isDestructive,
+          },
           user_id: userId,
         };
 

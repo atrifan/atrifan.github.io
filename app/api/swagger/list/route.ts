@@ -122,8 +122,8 @@ export async function GET() {
         // Find tools for this environment by matching the naming pattern
         const envTools: ToolInfo[] = [];
         for (const endpoint of endpointsWithTools) {
-          // Generate the expected tool name for this environment
-          const expectedToolName = generateToolName(envPrefix, spec.server_name, endpoint.operation_id);
+          // Generate the expected tool name for this environment (includes HTTP method)
+          const expectedToolName = generateToolName(envPrefix, spec.server_name, endpoint.operation_id, endpoint.http_method);
 
           // Fetch the tool with this name
           const { data: envTool } = await supabase

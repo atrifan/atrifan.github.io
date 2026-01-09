@@ -181,6 +181,18 @@ export type ToolType = 'NATIVE' | 'MCP' | 'REST' | 'GQL' | 'A2A';
  * Stores reusable tool definitions that can be linked to multiple servers.
  * NATIVE tools are system-defined, others can be user-created.
  */
+/** MCP Tool Annotations (per MCP spec) */
+export interface ToolAnnotations {
+  /** If true, the tool does not modify state (GET, query) */
+  readOnlyHint?: boolean;
+  /** If true, the tool may perform destructive operations (DELETE, PUT, PATCH) */
+  destructiveHint?: boolean;
+  /** If true, the tool may have side effects beyond its primary function */
+  idempotentHint?: boolean;
+  /** If true, the tool interacts with external entities */
+  openWorldHint?: boolean;
+}
+
 export interface ToolRow {
   /** UUID primary key */
   id: string;
@@ -204,6 +216,8 @@ export interface ToolRow {
   input_schema: Record<string, unknown>;
   /** Output schema (JSON Schema) */
   output_schema: Record<string, unknown>;
+  /** MCP tool annotations (readOnlyHint, destructiveHint, etc.) */
+  annotations: ToolAnnotations | null;
   /** User ID (null for system NATIVE tools) */
   user_id: string | null;
   /** When the tool was created */
@@ -226,6 +240,7 @@ export interface ToolInsert {
   invoked_message?: string;
   input_schema: Record<string, unknown>;
   output_schema: Record<string, unknown>;
+  annotations?: ToolAnnotations;
   user_id?: string;
 }
 
@@ -233,6 +248,7 @@ export interface ToolInsert {
  * Update DTO for tools table
  */
 export interface ToolUpdate {
+  name?: string;
   description?: string;
   category?: ToolCategory;
   categories?: string[];
@@ -242,6 +258,7 @@ export interface ToolUpdate {
   invoked_message?: string;
   input_schema?: Record<string, unknown>;
   output_schema?: Record<string, unknown>;
+  annotations?: ToolAnnotations;
   updated_at?: string;
 }
 

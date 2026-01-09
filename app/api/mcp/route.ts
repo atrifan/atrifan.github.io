@@ -1661,15 +1661,16 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     filteredNativeTools.push(nativeTool);
                   }
                 } else if (st.tool.tool_type === 'REST') {
-                  // Convert REST tool to MCP format
+                  // Convert REST tool to MCP format - use stored annotations or fallback
+                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean } | null;
                   const restTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: st.tool.name.toLowerCase().includes('get'),
-                      destructiveHint: st.tool.name.toLowerCase().includes('delete'),
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? st.tool.name.toLowerCase().includes('get'),
+                      destructiveHint: storedAnnotations?.destructiveHint ?? st.tool.name.toLowerCase().includes('delete'),
                       idempotentHint: true,
                       openWorldHint: true, // REST tools call external APIs
                     },
@@ -1683,15 +1684,16 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                   };
                   restTools.push(restTool);
                 } else if (st.tool.tool_type === 'GQL') {
-                  // Convert GraphQL tool to MCP format
+                  // Convert GraphQL tool to MCP format - use stored annotations or fallback
+                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean } | null;
                   const gqlTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: st.tool.name.toLowerCase().includes('query'),
-                      destructiveHint: st.tool.name.toLowerCase().includes('delete'),
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? st.tool.name.toLowerCase().includes('query'),
+                      destructiveHint: storedAnnotations?.destructiveHint ?? st.tool.name.toLowerCase().includes('mutation'),
                       idempotentHint: true,
                       openWorldHint: true, // GraphQL tools call external APIs
                     },
@@ -1705,17 +1707,18 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                   };
                   restTools.push(gqlTool); // Add to same array as REST tools
                 } else if (st.tool.tool_type === 'MCP') {
-                  // Convert MCP proxy tool to MCP format
+                  // Convert MCP proxy tool to MCP format - use stored annotations from source server
+                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
                   const mcpTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: false,
-                      destructiveHint: false,
-                      idempotentHint: false,
-                      openWorldHint: true, // MCP tools call external servers
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? false,
+                      destructiveHint: storedAnnotations?.destructiveHint ?? false,
+                      idempotentHint: storedAnnotations?.idempotentHint ?? false,
+                      openWorldHint: storedAnnotations?.openWorldHint ?? true, // MCP tools call external servers
                     },
                     _meta: {
                       'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling MCP server...',

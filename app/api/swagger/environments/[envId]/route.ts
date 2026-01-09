@@ -78,12 +78,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           if (tools) {
             // Rename each tool
             for (const tool of tools as { id: string; name: string }[]) {
-              // Extract operation from old tool name
-              // Old format: oldEnvPrefix-serverName-operation
+              // Extract method and operation from old tool name
+              // Format: oldEnvPrefix-serverName-method-operation or oldEnvPrefix-serverName-operation (legacy)
               const oldPrefix = `${normalizeName(oldEnvPrefix)}-${normalizeName(serverName)}-`;
               if (tool.name.startsWith(oldPrefix)) {
-                const operation = tool.name.substring(oldPrefix.length);
-                const newToolName = generateToolName(newEnvPrefix, serverName, operation);
+                const remainder = tool.name.substring(oldPrefix.length);
+                // Check if remainder starts with an HTTP method
+                const httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
+                const parts = remainder.split('-');
+                let method = '';
+                let operation = remainder;
+                if (parts.length > 1 && httpMethods.includes(parts[0])) {
+                  method = parts[0];
+                  operation = parts.slice(1).join('-');
+                }
+                const newToolName = generateToolName(newEnvPrefix, serverName, operation, method || undefined);
 
                 // Update tool name
                 await supabase

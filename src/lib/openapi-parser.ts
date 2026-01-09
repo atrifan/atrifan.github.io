@@ -302,36 +302,38 @@ function buildHeaders(operation: Operation, method: string): Record<string, stri
 }
 
 /**
- * Normalize name for tool naming (lowercase, replace spaces with underscores)
+ * Normalize name for tool naming (lowercase, replace spaces with dashes)
+ * Uses dashes as separator for consistency across all tool types
  */
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_-]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 /**
- * Generate tool name from environment, server name, and operation ID
- * Format: <env>-<server>-<operation> or <server>-<operation> if no environment
+ * Generate tool name from environment, server name, HTTP method, and operation ID
+ * Format: <env>-<server>-<method>-<operation> for REST APIs
+ * This provides uniqueness and clarity about what the tool does
  */
 export function generateToolName(
   environment: string,
   serverName: string,
-  operationId: string
+  operationId: string,
+  httpMethod?: string
 ): string {
   const envPart = normalizeName(environment);
   const serverPart = normalizeName(serverName);
+  const methodPart = httpMethod ? normalizeName(httpMethod) : '';
   const opPart = normalizeName(operationId);
 
-  // If no environment, just use server-operation
-  if (!envPart) {
-    return `${serverPart}-${opPart}`;
-  }
+  // Build parts array, filtering out empty parts
+  const parts = [envPart, serverPart, methodPart, opPart].filter(Boolean);
 
-  return `${envPart}-${serverPart}-${opPart}`;
+  return parts.join('-');
 }
 
 /**
@@ -403,7 +405,7 @@ export function extractTools(spec: OpenAPISpec, serverName: string): ExtractedTo
 
       tools.push({
         operationId,
-        name: generateToolName('', serverName, operationId),
+        name: generateToolName('', serverName, operationId, method),
         description,
         httpMethod: method as HttpMethod,
         path,
