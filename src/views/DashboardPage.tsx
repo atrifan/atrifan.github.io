@@ -1188,8 +1188,8 @@ export const DashboardPage: React.FC = () => {
 
               {/* Status */}
               <div style={{
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
+                background: needsRegenerate ? 'rgba(251, 191, 36, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                border: needsRegenerate ? '1px solid rgba(251, 191, 36, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
                 borderRadius: '10px',
                 padding: '0.75rem 1rem',
                 marginBottom: '1.5rem',
@@ -1197,8 +1197,10 @@ export const DashboardPage: React.FC = () => {
                 alignItems: 'center',
                 gap: '0.5rem',
               }}>
-                <span style={{ color: '#10b981', fontSize: '1rem' }}>●</span>
-                <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9rem' }}>Server Active</span>
+                <span style={{ color: needsRegenerate ? '#fbbf24' : '#10b981', fontSize: '1rem' }}>●</span>
+                <span style={{ color: needsRegenerate ? '#fbbf24' : '#10b981', fontWeight: 600, fontSize: '0.9rem' }}>
+                  {needsRegenerate ? 'API Key Regeneration Required' : 'Server Active'}
+                </span>
               </div>
 
               {/* Tabs */}
@@ -1317,14 +1319,16 @@ export const DashboardPage: React.FC = () => {
                 Use Tulzo tools directly in ChatGPT, Claude, Cursor, and other AI assistants.
               </p>
               <div style={{
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
+                background: needsRegenerate ? 'rgba(251, 191, 36, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                border: needsRegenerate ? '1px solid rgba(251, 191, 36, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
                 borderRadius: '10px',
                 padding: '1rem',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <span style={{ color: '#10b981', fontSize: '1.25rem' }}>●</span>
-                  <span style={{ color: '#10b981', fontWeight: 600 }}>Server Active</span>
+                  <span style={{ color: needsRegenerate ? '#fbbf24' : '#10b981', fontSize: '1.25rem' }}>●</span>
+                  <span style={{ color: needsRegenerate ? '#fbbf24' : '#10b981', fontWeight: 600 }}>
+                    {needsRegenerate ? 'API Key Regeneration Required' : 'Server Active'}
+                  </span>
                 </div>
               </div>
             </div>

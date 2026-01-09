@@ -15,8 +15,12 @@ import { isMcpComposerEnabled } from '../config/mcp-composer.config';
 interface OperationPreview {
   name: string;
   description: string;
-  arguments: Array<{ name: string; type: string; required: boolean }>;
+  arguments: Array<{ name: string; type: string; required: boolean; description?: string }>;
   returnType: string;
+  /** Fully resolved input schema */
+  inputSchema?: Record<string, unknown>;
+  /** Fully resolved output schema */
+  outputSchema?: Record<string, unknown>;
 }
 
 interface FetchResult {
@@ -41,6 +45,135 @@ interface GraphQLImportPageProps {
 const normalizeName = (name: string): string => {
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 };
+
+// Helper to render a JSON Schema property recursively
+function renderSchemaProperty(name: string, schema: Record<string, unknown>, indent: number = 0): React.ReactNode {
+  const indentStyle = { paddingLeft: `${indent * 12}px` };
+  const type = schema.type as string || 'unknown';
+  const description = schema.description as string | undefined;
+  const required = schema.required as string[] | undefined;
+  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  const items = schema.items as Record<string, unknown> | undefined;
+  const enumValues = schema.enum as string[] | undefined;
+
+  // Color coding by type
+  const typeColors: Record<string, string> = {
+    string: '#10b981', integer: '#3b82f6', number: '#8b5cf6', boolean: '#f59e0b',
+    array: '#ec4899', object: '#06b6d4', unknown: '#6b7280',
+  };
+  const typeColor = typeColors[type] || typeColors.unknown;
+
+  if (type === 'object' && properties) {
+    return (
+      <div key={name} style={indentStyle}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.15rem' }}>
+          <span style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 500 }}>{name}</span>
+          <span style={{ color: typeColor, fontSize: '0.7rem' }}>object</span>
+          {description && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', fontStyle: 'italic' }}>{description}</span>}
+        </div>
+        {Object.entries(properties).map(([propName, propSchema]) => {
+          const isRequired = required?.includes(propName);
+          return (
+            <div key={propName}>
+              {renderSchemaProperty(
+                isRequired ? `${propName}*` : propName,
+                propSchema,
+                indent + 1
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (type === 'array' && items) {
+    return (
+      <div key={name} style={indentStyle}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.15rem' }}>
+          <span style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 500 }}>{name}</span>
+          <span style={{ color: typeColor, fontSize: '0.7rem' }}>array</span>
+          {description && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', fontStyle: 'italic' }}>{description}</span>}
+        </div>
+        {renderSchemaProperty('[]', items, indent + 1)}
+      </div>
+    );
+  }
+
+  // Scalar or enum type
+  return (
+    <div key={name} style={{ ...indentStyle, display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.15rem' }}>
+      <span style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 500 }}>{name}</span>
+      <span style={{ color: typeColor, fontSize: '0.7rem' }}>{type}</span>
+      {enumValues && <span style={{ color: '#a78bfa', fontSize: '0.65rem' }}>enum: [{enumValues.slice(0, 3).join(', ')}{enumValues.length > 3 ? '...' : ''}]</span>}
+      {description && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', fontStyle: 'italic' }}>{description}</span>}
+    </div>
+  );
+}
+
+// Operation Preview Card Component
+function OperationPreviewCard({ op, type }: { op: OperationPreview; type: 'query' | 'mutation' }) {
+  const [expanded, setExpanded] = useState(false);
+  const color = type === 'query' ? '#667eea' : '#f59e0b';
+  const bgColor = type === 'query' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(245, 158, 11, 0.3)';
+  const label = type === 'query' ? 'Q' : 'M';
+
+  const hasInputSchema = op.inputSchema && Object.keys(op.inputSchema.properties as object || {}).length > 0;
+  const hasOutputSchema = op.outputSchema && Object.keys(op.outputSchema).length > 0;
+
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '0.5rem', overflow: 'hidden' }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+      >
+        <span style={{ background: bgColor, color, padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: '#fff', fontWeight: 500, fontSize: 'clamp(0.8rem, 2vw, 0.9rem)', flex: 1 }}>{op.name}</span>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}>→ {op.returnType}</span>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+      </div>
+      {expanded && (
+        <div style={{ padding: '0 0.75rem 0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {/* Description */}
+          {op.description && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.25rem' }}>📝 Description</div>
+              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem' }}>{op.description}</div>
+            </div>
+          )}
+
+          {/* Input Schema */}
+          <div style={{ marginTop: '0.75rem' }}>
+            <div style={{ color: '#10b981', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.25rem' }}>📥 Input Schema (Arguments)</div>
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '4px', padding: '0.5rem', fontSize: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+              {hasInputSchema ? (
+                Object.entries((op.inputSchema?.properties || {}) as Record<string, Record<string, unknown>>).map(([propName, propSchema]) => {
+                  const required = (op.inputSchema?.required as string[]) || [];
+                  const isRequired = required.includes(propName);
+                  return renderSchemaProperty(isRequired ? `${propName}*` : propName, propSchema, 0);
+                })
+              ) : (
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>No arguments</span>
+              )}
+            </div>
+          </div>
+
+          {/* Output Schema */}
+          <div style={{ marginTop: '0.75rem' }}>
+            <div style={{ color: '#a78bfa', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.25rem' }}>📤 Output Schema (Return Type: {op.returnType})</div>
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '4px', padding: '0.5rem', fontSize: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+              {hasOutputSchema ? (
+                renderSchemaProperty('result', op.outputSchema!, 0)
+              ) : (
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>Scalar type: {op.returnType}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
   const router = useRouter();
@@ -861,7 +994,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
             {/* Operations Preview */}
             <div style={cardStyle}>
               <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: 'clamp(0.95rem, 2.5vw, 1.1rem)' }}>📋 Operations to Import</h3>
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {fetchResult.operations.queries.length > 0 && (
                   <div style={{ marginBottom: '1rem' }}>
                     <h4 style={{ color: '#667eea', margin: '0 0 0.5rem', fontSize: 'clamp(0.8rem, 2vw, 0.9rem)' }}>
@@ -869,11 +1002,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
                       Queries ({fetchResult.operations.queries.length})
                     </h4>
                     {fetchResult.operations.queries.slice(0, 10).map(op => (
-                      <div key={op.name} style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ background: 'rgba(102, 126, 234, 0.3)', color: '#667eea', padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>Q</span>
-                        <span style={{ color: '#fff', fontWeight: 500, fontSize: 'clamp(0.8rem, 2vw, 0.9rem)' }}>{op.name}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}>→ {op.returnType}</span>
-                      </div>
+                      <OperationPreviewCard key={op.name} op={op} type="query" />
                     ))}
                     {fetchResult.operations.queries.length > 10 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.75rem, 2vw, 0.85rem)' }}>...and {fetchResult.operations.queries.length - 10} more</div>}
                   </div>
@@ -885,11 +1014,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
                       Mutations ({fetchResult.operations.mutations.length})
                     </h4>
                     {fetchResult.operations.mutations.slice(0, 10).map(op => (
-                      <div key={op.name} style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>M</span>
-                        <span style={{ color: '#fff', fontWeight: 500, fontSize: 'clamp(0.8rem, 2vw, 0.9rem)' }}>{op.name}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}>→ {op.returnType}</span>
-                      </div>
+                      <OperationPreviewCard key={op.name} op={op} type="mutation" />
                     ))}
                     {fetchResult.operations.mutations.length > 10 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.75rem, 2vw, 0.85rem)' }}>...and {fetchResult.operations.mutations.length - 10} more</div>}
                   </div>

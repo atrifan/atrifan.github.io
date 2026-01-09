@@ -66,12 +66,16 @@ export async function POST(request: NextRequest) {
           description: q.description,
           arguments: q.arguments,
           returnType: q.returnType,
+          inputSchema: q.inputSchema,
+          outputSchema: q.outputSchema,
         })),
         mutations: parsed.mutations.map(m => ({
           name: m.name,
           description: m.description,
           arguments: m.arguments,
           returnType: m.returnType,
+          inputSchema: m.inputSchema,
+          outputSchema: m.outputSchema,
         })),
       },
     });

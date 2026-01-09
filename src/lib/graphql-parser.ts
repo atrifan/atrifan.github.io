@@ -30,7 +30,7 @@ interface IntrospectionField {
   deprecationReason: string | null;
 }
 
-interface IntrospectionFullType {
+export interface IntrospectionFullType {
   kind: string;
   name: string;
   description: string | null;
@@ -60,6 +60,10 @@ export interface ExtractedOperation {
   returnType: string;
   returnTypeKind: string;
   operationString: string;
+  /** Fully resolved input schema with all types expanded */
+  inputSchema?: Record<string, unknown>;
+  /** Fully resolved output schema with all types expanded */
+  outputSchema?: Record<string, unknown>;
 }
 
 export interface ParsedGraphQLSchema {
@@ -130,6 +134,7 @@ function generateOperationString(
 
 /**
  * Extract operations from a type (Query, Mutation, or Subscription)
+ * Note: inputSchema and outputSchema are added later by parseGraphQLSchema
  */
 function extractOperations(
   schema: IntrospectionSchema,
@@ -137,10 +142,10 @@ function extractOperations(
   operationType: GraphQLOperationType
 ): ExtractedOperation[] {
   if (!typeName) return [];
-  
+
   const type = schema.types.find(t => t.name === typeName);
   if (!type || !type.fields) return [];
-  
+
   return type.fields
     .filter(field => !field.name.startsWith('__')) // Skip introspection fields
     .map(field => ({
@@ -155,17 +160,165 @@ function extractOperations(
 }
 
 /**
+ * Add resolved schemas to operations
+ */
+function addResolvedSchemas(
+  operations: ExtractedOperation[],
+  types: IntrospectionFullType[]
+): ExtractedOperation[] {
+  return operations.map(op => ({
+    ...op,
+    inputSchema: generateInputSchemaWithTypes(op.arguments, types),
+    outputSchema: generateOutputSchemaFromType(op.returnType, types),
+  }));
+}
+
+/**
+ * Generate fully resolved input schema (internal helper)
+ */
+function generateInputSchemaWithTypes(args: GraphQLArgumentDef[], types: IntrospectionFullType[]): Record<string, unknown> {
+  if (args.length === 0) {
+    return { type: 'object', properties: {}, required: [] };
+  }
+
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+
+  for (const arg of args) {
+    properties[arg.name] = {
+      ...resolveTypeToSchemaInternal(arg.type, types, new Set(), 5),
+      description: arg.description || `Argument: ${arg.name}`,
+    };
+    if (arg.required) {
+      required.push(arg.name);
+    }
+  }
+
+  return { type: 'object', properties, required };
+}
+
+/**
+ * Generate fully resolved output schema (internal helper)
+ */
+function generateOutputSchemaFromType(returnType: string, types: IntrospectionFullType[]): Record<string, unknown> {
+  return resolveTypeToSchemaInternal(returnType, types, new Set(), 5);
+}
+
+/**
+ * Internal type resolution (defined here to be available for extractOperations)
+ */
+function resolveTypeToSchemaInternal(
+  typeName: string,
+  types: IntrospectionFullType[],
+  visited: Set<string>,
+  maxDepth: number
+): Record<string, unknown> {
+  const cleanType = typeName.replace(/!/g, '');
+  const baseTypeName = cleanType.replace(/[!\[\]]/g, '');
+  const isList = cleanType.includes('[');
+
+  // Scalar types
+  const scalarMap: Record<string, string> = {
+    'String': 'string', 'Int': 'integer', 'Float': 'number', 'Boolean': 'boolean',
+    'ID': 'string', 'DateTime': 'string', 'Date': 'string', 'Time': 'string',
+    'JSON': 'object', 'JSONObject': 'object',
+  };
+
+  if (scalarMap[baseTypeName]) {
+    const scalarSchema: Record<string, unknown> = { type: scalarMap[baseTypeName] };
+    if (baseTypeName === 'DateTime' || baseTypeName === 'Date') {
+      scalarSchema.format = 'date-time';
+    }
+    return isList ? { type: 'array', items: scalarSchema } : scalarSchema;
+  }
+
+  // Prevent infinite recursion
+  if (visited.has(baseTypeName) || maxDepth <= 0) {
+    const refSchema: Record<string, unknown> = { type: 'object', description: `Reference to ${baseTypeName}` };
+    return isList ? { type: 'array', items: refSchema } : refSchema;
+  }
+
+  const typeDef = types.find(t => t.name === baseTypeName);
+  if (!typeDef) {
+    const unknownSchema: Record<string, unknown> = { type: 'object', description: `Unknown type: ${baseTypeName}` };
+    return isList ? { type: 'array', items: unknownSchema } : unknownSchema;
+  }
+
+  const newVisited = new Set(visited);
+  newVisited.add(baseTypeName);
+
+  let resolvedSchema: Record<string, unknown>;
+
+  switch (typeDef.kind) {
+    case 'ENUM': {
+      const enumValues = typeDef.enumValues?.map(e => e.name) || [];
+      resolvedSchema = { type: 'string', enum: enumValues, description: typeDef.description || `Enum: ${baseTypeName}` };
+      break;
+    }
+    case 'INPUT_OBJECT': {
+      const properties: Record<string, unknown> = {};
+      const required: string[] = [];
+      for (const field of typeDef.inputFields || []) {
+        const fieldTypeName = getTypeName(field.type);
+        properties[field.name] = {
+          ...resolveTypeToSchemaInternal(fieldTypeName, types, newVisited, maxDepth - 1),
+          description: field.description || undefined,
+        };
+        if (field.type.kind === 'NON_NULL') required.push(field.name);
+      }
+      resolvedSchema = { type: 'object', description: typeDef.description || `Input: ${baseTypeName}`, properties, required: required.length > 0 ? required : undefined };
+      break;
+    }
+    case 'OBJECT':
+    case 'INTERFACE': {
+      const properties: Record<string, unknown> = {};
+      for (const field of typeDef.fields || []) {
+        properties[field.name] = {
+          ...resolveTypeToSchemaInternal(getTypeName(field.type), types, newVisited, maxDepth - 1),
+          description: field.description || undefined,
+        };
+      }
+      resolvedSchema = { type: 'object', description: typeDef.description || `Type: ${baseTypeName}`, properties };
+      break;
+    }
+    case 'UNION': {
+      const possibleTypes = typeDef.possibleTypes?.map(t => t.name || 'Unknown') || [];
+      resolvedSchema = {
+        type: 'object',
+        description: `Union of: ${possibleTypes.join(' | ')}`,
+        oneOf: possibleTypes.map(t => resolveTypeToSchemaInternal(t, types, newVisited, maxDepth - 1)),
+      };
+      break;
+    }
+    default:
+      resolvedSchema = { type: 'object', description: `${typeDef.kind}: ${baseTypeName}` };
+  }
+
+  return isList ? { type: 'array', items: resolvedSchema } : resolvedSchema;
+}
+
+/**
  * Parse GraphQL introspection result and extract all operations
  */
 export function parseGraphQLSchema(introspectionResult: IntrospectionResult): ParsedGraphQLSchema {
   const schema = introspectionResult.__schema;
+  const allTypes = schema.types.filter(t => !t.name.startsWith('__'));
 
-  return {
-    queries: extractOperations(schema, schema.queryType?.name || null, 'query'),
-    mutations: extractOperations(schema, schema.mutationType?.name || null, 'mutation'),
-    subscriptions: extractOperations(schema, schema.subscriptionType?.name || null, 'subscription'),
-    types: schema.types.filter(t => !t.name.startsWith('__')), // Exclude introspection types
-  };
+  // Extract operations and add resolved schemas
+  const queries = addResolvedSchemas(
+    extractOperations(schema, schema.queryType?.name || null, 'query'),
+    allTypes
+  );
+  const mutations = addResolvedSchemas(
+    extractOperations(schema, schema.mutationType?.name || null, 'mutation'),
+    allTypes
+  );
+  const subscriptions = addResolvedSchemas(
+    extractOperations(schema, schema.subscriptionType?.name || null, 'subscription'),
+    allTypes
+  );
+
+  return { queries, mutations, subscriptions, types: allTypes };
 }
 
 /**
@@ -196,7 +349,7 @@ export function generateGraphQLToolName(
 }
 
 /**
- * Convert GraphQL type to JSON Schema type
+ * Convert GraphQL type to JSON Schema type (simple version for basic types)
  */
 function graphqlTypeToJsonSchema(typeName: string): { type: string; items?: { type: string } } {
   // Remove NON_NULL marker
@@ -221,10 +374,171 @@ function graphqlTypeToJsonSchema(typeName: string): { type: string; items?: { ty
   return { type: scalarMap[cleanType] || 'object' };
 }
 
+/** Map of GraphQL scalar types to JSON Schema types */
+const SCALAR_MAP: Record<string, string> = {
+  'String': 'string',
+  'Int': 'integer',
+  'Float': 'number',
+  'Boolean': 'boolean',
+  'ID': 'string',
+  'DateTime': 'string',
+  'Date': 'string',
+  'Time': 'string',
+  'JSON': 'object',
+  'JSONObject': 'object',
+};
+
 /**
- * Generate JSON Schema input schema from GraphQL arguments
+ * Get the base type name from a GraphQL type string (removes !, [])
  */
-export function generateInputSchema(args: GraphQLArgumentDef[]): Record<string, unknown> {
+function getBaseTypeName(typeName: string): string {
+  return typeName.replace(/[!\[\]]/g, '');
+}
+
+/**
+ * Check if a type is a list type
+ */
+function isListType(typeName: string): boolean {
+  return typeName.includes('[');
+}
+
+/**
+ * Resolve a GraphQL type to a full JSON Schema, expanding object types
+ * @param typeName - The GraphQL type name (e.g., "User!", "[Post!]!")
+ * @param types - All types from the introspection schema
+ * @param visited - Set of already visited types to prevent infinite recursion
+ * @param maxDepth - Maximum depth for nested type resolution
+ */
+export function resolveTypeToSchema(
+  typeName: string,
+  types: IntrospectionFullType[],
+  visited: Set<string> = new Set(),
+  maxDepth: number = 5
+): Record<string, unknown> {
+  const cleanType = typeName.replace(/!/g, '');
+  const baseTypeName = getBaseTypeName(cleanType);
+  const isList = isListType(cleanType);
+
+  // Check for scalar types
+  if (SCALAR_MAP[baseTypeName]) {
+    const scalarSchema: Record<string, unknown> = { type: SCALAR_MAP[baseTypeName] };
+    if (baseTypeName === 'DateTime' || baseTypeName === 'Date') {
+      scalarSchema.format = 'date-time';
+    }
+    if (isList) {
+      return { type: 'array', items: scalarSchema };
+    }
+    return scalarSchema;
+  }
+
+  // Prevent infinite recursion
+  if (visited.has(baseTypeName) || maxDepth <= 0) {
+    const refSchema: Record<string, unknown> = { type: 'object', description: `Reference to ${baseTypeName}` };
+    if (isList) {
+      return { type: 'array', items: refSchema };
+    }
+    return refSchema;
+  }
+
+  // Find the type definition
+  const typeDef = types.find(t => t.name === baseTypeName);
+  if (!typeDef) {
+    const unknownSchema: Record<string, unknown> = { type: 'object', description: `Unknown type: ${baseTypeName}` };
+    if (isList) {
+      return { type: 'array', items: unknownSchema };
+    }
+    return unknownSchema;
+  }
+
+  const newVisited = new Set(visited);
+  newVisited.add(baseTypeName);
+
+  let resolvedSchema: Record<string, unknown>;
+
+  switch (typeDef.kind) {
+    case 'ENUM': {
+      const enumValues = typeDef.enumValues?.map(e => e.name) || [];
+      resolvedSchema = {
+        type: 'string',
+        enum: enumValues,
+        description: typeDef.description || `Enum: ${baseTypeName}`,
+      };
+      break;
+    }
+
+    case 'INPUT_OBJECT': {
+      const properties: Record<string, unknown> = {};
+      const required: string[] = [];
+
+      for (const field of typeDef.inputFields || []) {
+        const fieldTypeName = getTypeName(field.type);
+        const fieldRequired = field.type.kind === 'NON_NULL';
+
+        properties[field.name] = {
+          ...resolveTypeToSchema(fieldTypeName, types, newVisited, maxDepth - 1),
+          description: field.description || undefined,
+        };
+
+        if (fieldRequired) {
+          required.push(field.name);
+        }
+      }
+
+      resolvedSchema = {
+        type: 'object',
+        description: typeDef.description || `Input type: ${baseTypeName}`,
+        properties,
+        required: required.length > 0 ? required : undefined,
+      };
+      break;
+    }
+
+    case 'OBJECT':
+    case 'INTERFACE': {
+      const properties: Record<string, unknown> = {};
+
+      for (const field of typeDef.fields || []) {
+        const fieldTypeName = getTypeName(field.type);
+
+        properties[field.name] = {
+          ...resolveTypeToSchema(fieldTypeName, types, newVisited, maxDepth - 1),
+          description: field.description || undefined,
+        };
+      }
+
+      resolvedSchema = {
+        type: 'object',
+        description: typeDef.description || `Type: ${baseTypeName}`,
+        properties,
+      };
+      break;
+    }
+
+    case 'UNION': {
+      const possibleTypes = typeDef.possibleTypes?.map(t => t.name || 'Unknown') || [];
+      resolvedSchema = {
+        type: 'object',
+        description: `Union of: ${possibleTypes.join(' | ')}`,
+        oneOf: possibleTypes.map(t => resolveTypeToSchema(t, types, newVisited, maxDepth - 1)),
+      };
+      break;
+    }
+
+    default:
+      resolvedSchema = { type: 'object', description: `${typeDef.kind}: ${baseTypeName}` };
+  }
+
+  if (isList) {
+    return { type: 'array', items: resolvedSchema };
+  }
+
+  return resolvedSchema;
+}
+
+/**
+ * Generate fully resolved JSON Schema input schema from GraphQL arguments
+ */
+export function generateInputSchema(args: GraphQLArgumentDef[], types?: IntrospectionFullType[]): Record<string, unknown> {
   if (args.length === 0) {
     return {
       type: 'object',
@@ -237,10 +551,19 @@ export function generateInputSchema(args: GraphQLArgumentDef[]): Record<string, 
   const required: string[] = [];
 
   for (const arg of args) {
-    properties[arg.name] = {
-      ...graphqlTypeToJsonSchema(arg.type),
-      description: arg.description || `Argument: ${arg.name}`,
-    };
+    if (types) {
+      // Use full type resolution
+      properties[arg.name] = {
+        ...resolveTypeToSchema(arg.type, types),
+        description: arg.description || `Argument: ${arg.name}`,
+      };
+    } else {
+      // Fallback to simple resolution
+      properties[arg.name] = {
+        ...graphqlTypeToJsonSchema(arg.type),
+        description: arg.description || `Argument: ${arg.name}`,
+      };
+    }
 
     if (arg.required) {
       required.push(arg.name);
@@ -252,6 +575,13 @@ export function generateInputSchema(args: GraphQLArgumentDef[]): Record<string, 
     properties,
     required,
   };
+}
+
+/**
+ * Generate fully resolved JSON Schema output schema from GraphQL return type
+ */
+export function generateOutputSchema(returnType: string, types: IntrospectionFullType[]): Record<string, unknown> {
+  return resolveTypeToSchema(returnType, types);
 }
 
 /**
