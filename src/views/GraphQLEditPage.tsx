@@ -15,6 +15,7 @@ interface GraphQLTool {
   name: string;
   description: string;
   has_widget: boolean;
+  category?: string;
 }
 
 interface GraphQLOperation {
@@ -74,6 +75,10 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
   const [editingHeaders, setEditingHeaders] = useState<Array<{ key: string; value: string }>>([]);
   const [authType, setAuthType] = useState<'none' | 'bearer' | 'basic' | 'api_key'>('none');
   const [headersSaving, setHeadersSaving] = useState(false);
+
+  // Field editing state (like REST API edit page)
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     if (canAccessPro) {
@@ -173,6 +178,48 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
     }
   };
 
+  // Field editing helpers (like REST API edit page)
+  const startEdit = (field: string, currentValue: string) => {
+    setEditingField(field);
+    setEditValue(currentValue);
+  };
+
+  const cancelEdit = () => {
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const saveField = async (field: string, value: string) => {
+    if (!spec) return;
+    setSaving(true);
+    try {
+      const body: Record<string, string> = {};
+      if (field === 'server_name') body.serverName = value;
+      if (field === 'api_title') body.apiTitle = value;
+      if (field === 'api_description') body.apiDescription = value;
+
+      const response = await fetch(`/api/graphql/${specId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save');
+      }
+
+      setSpec({ ...spec, [field]: value });
+      setEditingField(null);
+      setSuccess('Saved successfully');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleToggleWidget = async (opId: string, hasWidget: boolean) => {
     try {
       const response = await fetch(`/api/graphql/operations/${opId}`, {
@@ -224,28 +271,72 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
 
   const renderOverviewTab = () => (
     <div style={{ display: 'grid', gap: '1.5rem' }}>
-      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
         <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>API Information</h3>
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Server Name</label>
-            <div style={{ color: '#fff', fontSize: '1rem' }}>{spec.server_name}</div>
-          </div>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Title</label>
-            <div style={{ color: '#fff', fontSize: '1rem' }}>{spec.api_title || '-'}</div>
-          </div>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Description</label>
-            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>{spec.api_description || 'No description'}</div>
-          </div>
-          <div>
-            <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Source URL</label>
-            <div style={{ color: '#667eea', fontSize: '0.9rem', wordBreak: 'break-all' }}>{spec.source_url}</div>
+
+        {/* Server Name - Editable */}
+        <EditableField
+          label="Server Name"
+          value={spec.server_name}
+          field="server_name"
+          editingField={editingField}
+          editValue={editValue}
+          onStartEdit={startEdit}
+          onSave={saveField}
+          onCancel={cancelEdit}
+          onChange={setEditValue}
+          saving={saving}
+        />
+
+        {/* API Title - Editable */}
+        <EditableField
+          label="API Title"
+          value={spec.api_title || ''}
+          field="api_title"
+          editingField={editingField}
+          editValue={editValue}
+          onStartEdit={startEdit}
+          onSave={saveField}
+          onCancel={cancelEdit}
+          onChange={setEditValue}
+          saving={saving}
+        />
+
+        {/* API Description - Editable */}
+        <EditableField
+          label="Description"
+          value={spec.api_description || ''}
+          field="api_description"
+          editingField={editingField}
+          editValue={editValue}
+          onStartEdit={startEdit}
+          onSave={saveField}
+          onCancel={cancelEdit}
+          onChange={setEditValue}
+          saving={saving}
+          multiline
+        />
+
+        {/* Read-only fields */}
+        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Source URL</div>
+              <div style={{ color: '#667eea', fontSize: '0.85rem', wordBreak: 'break-all' }}>{spec.source_url}</div>
+            </div>
+            <div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Created</div>
+              <div style={{ color: '#fff' }}>{new Date(spec.created_at).toLocaleDateString()}</div>
+            </div>
+            <div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Updated</div>
+              <div style={{ color: '#fff' }}>{new Date(spec.updated_at).toLocaleDateString()}</div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
         <div style={{ background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', border: '1px solid rgba(102, 126, 234, 0.3)' }}>
           <div style={{ fontSize: '2rem', fontWeight: 700, color: '#667eea' }}>{operations.filter(o => o.operation_type === 'query').length}</div>
@@ -301,24 +392,9 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
       </div>
 
       {/* Operations List */}
-      <div style={{ display: 'grid', gap: '0.5rem' }}>
+      <div style={{ display: 'grid', gap: '0.75rem' }}>
         {filteredOperations.map(op => (
-          <div key={op.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', background: op.operation_type === 'query' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: op.operation_type === 'query' ? '#667eea' : '#f59e0b', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase' }}>
-              {op.operation_type}
-            </span>
-            <div style={{ flex: 1, minWidth: '150px' }}>
-              <div style={{ color: '#fff', fontWeight: 500 }}>{op.operation_name}</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{op.tools?.name || 'No tool'}</div>
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>→ {op.return_type || 'void'}</div>
-            <button
-              onClick={() => handleToggleWidget(op.id, !op.tools?.has_widget)}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: op.tools?.has_widget ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)', color: op.tools?.has_widget ? '#10b981' : 'rgba(255,255,255,0.5)', fontSize: '0.8rem', cursor: 'pointer' }}
-            >
-              {op.tools?.has_widget ? '✓ Widget' : 'No Widget'}
-            </button>
-          </div>
+          <OperationCard key={op.id} operation={op} onUpdate={fetchSpec} />
         ))}
       </div>
     </div>
@@ -548,32 +624,65 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
   );
 }
 
-// Environment Card Component
+// Environment Card Component (matching REST API edit page design)
 function EnvironmentCard({ environment, onDelete }: { environment: GraphQLEnvironment; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(environment.name);
+  const [host, setHost] = useState(environment.host);
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/graphql/environments/${environment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, host }),
+      });
+      if (response.ok) {
+        setEditing(false);
+        onDelete(); // This is actually onUpdate - refresh the list
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
+    if (!confirm('Delete this environment?')) return;
     setDeleting(true);
     try {
       const response = await fetch(`/api/graphql/environments/${environment.id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed to delete');
-      onDelete();
-    } catch (err) {
-      console.error(err);
+      if (response.ok) onDelete();
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-      <div>
-        <div style={{ color: '#fff', fontWeight: 500 }}>{environment.name}</div>
-        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>{environment.host}</div>
-      </div>
-      <button onClick={handleDelete} disabled={deleting} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer' }}>
-        {deleting ? 'Deleting...' : 'Delete'}
-      </button>
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+      {editing ? (
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }} />
+          <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="Host URL" style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }} />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', cursor: 'pointer' }}>{saving ? 'Saving...' : 'Save'}</button>
+            <button onClick={() => setEditing(false)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 600 }}>{environment.name}</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>{environment.host}</div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={() => setEditing(true)} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}>✏️</button>
+            <button onClick={handleDelete} disabled={deleting} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}>{deleting ? '...' : '🗑️'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -645,6 +754,218 @@ function AddEnvironmentButton({ specId, onAdd }: { specId: string; onAdd: () => 
         </div>
       )}
     </>
+  );
+}
+
+// Editable field component (matching REST API edit page design)
+function EditableField({
+  label,
+  value,
+  field,
+  editingField,
+  editValue,
+  onStartEdit,
+  onSave,
+  onCancel,
+  onChange,
+  saving,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  field: string;
+  editingField: string | null;
+  editValue: string;
+  onStartEdit: (field: string, value: string) => void;
+  onSave: (field: string, value: string) => void;
+  onCancel: () => void;
+  onChange: (value: string) => void;
+  saving: boolean;
+  multiline?: boolean;
+}) {
+  const isEditing = editingField === field;
+
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>{label}</div>
+      {isEditing ? (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+          {multiline ? (
+            <textarea
+              value={editValue}
+              onChange={(e) => onChange(e.target.value)}
+              rows={3}
+              style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem', resize: 'vertical' }}
+            />
+          ) : (
+            <input
+              type="text"
+              value={editValue}
+              onChange={(e) => onChange(e.target.value)}
+              style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
+            />
+          )}
+          <button onClick={() => onSave(field, editValue)} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
+            {saving ? '...' : 'Save'}
+          </button>
+          <button onClick={onCancel} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <span style={{ color: '#fff', flex: 1 }}>{value || <em style={{ color: 'rgba(255,255,255,0.3)' }}>Not set</em>}</span>
+          <button onClick={() => onStartEdit(field, value)} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}>
+            ✏️ Edit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Operation Card Component with editable description and viewable schemas
+function OperationCard({ operation, onUpdate }: { operation: GraphQLOperation; onUpdate: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [description, setDescription] = useState(operation.tools?.description || '');
+  const [saving, setSaving] = useState(false);
+
+  const tool = operation.tools;
+  const typeColor = operation.operation_type === 'query' ? '#667eea' : '#f59e0b';
+  const typeBg = operation.operation_type === 'query' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(245, 158, 11, 0.2)';
+
+  const handleSaveDescription = async () => {
+    if (!tool) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/graphql/tools/${tool.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description }),
+      });
+      if (response.ok) {
+        setEditingDescription(false);
+        onUpdate();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to save');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleWidget = async () => {
+    if (!tool) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/graphql/tools/${tool.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hasWidget: !tool.has_widget }),
+      });
+      if (response.ok) onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+      {/* Header row */}
+      <div
+        style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', background: typeBg, color: typeColor, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>
+          {operation.operation_type}
+        </span>
+        <div style={{ flex: 1, minWidth: '150px' }}>
+          <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>{operation.operation_name}</div>
+          {tool?.description && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{tool.description}</div>}
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', fontFamily: 'monospace' }}>→ {operation.return_type || 'void'}</div>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleToggleWidget(); }}
+          disabled={saving}
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: tool?.has_widget ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)', color: tool?.has_widget ? '#10b981' : 'rgba(255,255,255,0.5)', fontSize: '0.75rem', cursor: 'pointer' }}
+        >
+          {tool?.has_widget ? '✓ Widget' : 'No Widget'}
+        </button>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>{expanded ? '▲' : '▼'}</span>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {/* Description editing */}
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Description</div>
+            {editingDescription ? (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem', resize: 'vertical' }}
+                />
+                <button onClick={handleSaveDescription} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
+                  {saving ? '...' : 'Save'}
+                </button>
+                <button onClick={() => { setEditingDescription(false); setDescription(tool?.description || ''); }} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ color: '#fff', flex: 1, fontSize: '0.9rem' }}>{tool?.description || <em style={{ color: 'rgba(255,255,255,0.3)' }}>No description</em>}</span>
+                <button onClick={() => { setDescription(tool?.description || ''); setEditingDescription(true); }} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}>
+                  ✏️ Edit
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Arguments (read-only) */}
+          {operation.arguments && operation.arguments.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Arguments</div>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+                {operation.arguments.map((arg, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: idx < operation.arguments.length - 1 ? '0.5rem' : 0 }}>
+                    <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: '0.8rem' }}>{arg.name}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>:</span>
+                    <span style={{ color: '#667eea', fontFamily: 'monospace', fontSize: '0.8rem' }}>{arg.type}</span>
+                    {arg.required && <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>*</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Return Type (read-only) */}
+          {operation.return_type && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Return Type</div>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+                <span style={{ color: '#10b981', fontFamily: 'monospace', fontSize: '0.85rem' }}>{operation.return_type}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Tool info */}
+          {tool && (
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
+                <span>Tool: <span style={{ color: '#fff' }}>{tool.name}</span></span>
+                <span>Category: <span style={{ color: '#fff' }}>{tool.category || 'graphql'}</span></span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

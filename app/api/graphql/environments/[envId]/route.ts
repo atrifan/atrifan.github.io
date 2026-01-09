@@ -1,6 +1,7 @@
 /**
- * GraphQL Environment Delete API
- * 
+ * GraphQL Environment Management API
+ *
+ * PATCH /api/graphql/environments/[envId] - Update environment (name, host)
  * DELETE /api/graphql/environments/[envId] - Delete an environment and its tools
  */
 
@@ -14,6 +15,57 @@ interface RouteParams {
   params: Promise<{ envId: string }>;
 }
 
+// PATCH - Update environment
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { envId } = await params;
+    const body = await request.json();
+    const { name, host } = body;
+
+    // Verify ownership
+    const { data: existingEnv } = await supabase
+      .from('environments')
+      .select('id, user_id')
+      .eq('id', envId)
+      .single();
+
+    if (!existingEnv) {
+      return NextResponse.json({ error: 'Environment not found' }, { status: 404 });
+    }
+
+    const env = existingEnv as { id: string; user_id: string | null };
+    if (env.user_id !== userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Build update object
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (name !== undefined) updates.name = name;
+    if (host !== undefined) updates.host = host;
+
+    const { error } = await supabase
+      .from('environments')
+      .update(updates as never)
+      .eq('id', envId);
+
+    if (error) {
+      console.error('Error updating environment:', error);
+      return NextResponse.json({ error: 'Failed to update environment' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error updating environment:', error);
+    return NextResponse.json({ error: 'Failed to update environment' }, { status: 500 });
+  }
+}
+
+// DELETE - Delete environment and its tools
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { userId } = await auth();

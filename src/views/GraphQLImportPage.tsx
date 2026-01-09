@@ -464,11 +464,6 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
       }
 
       setSuccessMessage(`Successfully imported ${data.toolCount} tools!`);
-
-      // Redirect after success
-      setTimeout(() => {
-        router.push('/dashboard/mcp-composer');
-      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import schema');
       setCurrentStep('environments');
@@ -1125,9 +1120,15 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
                 <h2 style={{ color: '#10b981', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
                   {successMessage}
                 </h2>
-                <p style={{ color: 'rgba(255,255,255,0.7)' }}>
-                  Redirecting to MCP Creator...
+                <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1.5rem' }}>
+                  Your GraphQL tools are ready to use.
                 </p>
+                <button
+                  onClick={() => router.push('/dashboard/mcp-composer?refresh=1')}
+                  style={primaryButtonStyle}
+                >
+                  ← Back to MCP Composer
+                </button>
               </>
             ) : (
               <>
