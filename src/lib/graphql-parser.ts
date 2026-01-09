@@ -175,6 +175,7 @@ function addResolvedSchemas(
 
 /**
  * Generate fully resolved input schema (internal helper)
+ * Uses higher depth limit to ensure full type resolution
  */
 function generateInputSchemaWithTypes(args: GraphQLArgumentDef[], types: IntrospectionFullType[]): Record<string, unknown> {
   if (args.length === 0) {
@@ -186,7 +187,7 @@ function generateInputSchemaWithTypes(args: GraphQLArgumentDef[], types: Introsp
 
   for (const arg of args) {
     properties[arg.name] = {
-      ...resolveTypeToSchemaInternal(arg.type, types, new Set(), 5),
+      ...resolveTypeToSchemaInternal(arg.type, types, new Set(), 10),
       description: arg.description || `Argument: ${arg.name}`,
     };
     if (arg.required) {
@@ -199,9 +200,10 @@ function generateInputSchemaWithTypes(args: GraphQLArgumentDef[], types: Introsp
 
 /**
  * Generate fully resolved output schema (internal helper)
+ * Uses higher depth limit to ensure full type resolution
  */
 function generateOutputSchemaFromType(returnType: string, types: IntrospectionFullType[]): Record<string, unknown> {
-  return resolveTypeToSchemaInternal(returnType, types, new Set(), 5);
+  return resolveTypeToSchemaInternal(returnType, types, new Set(), 10);
 }
 
 /**
@@ -407,13 +409,13 @@ function isListType(typeName: string): boolean {
  * @param typeName - The GraphQL type name (e.g., "User!", "[Post!]!")
  * @param types - All types from the introspection schema
  * @param visited - Set of already visited types to prevent infinite recursion
- * @param maxDepth - Maximum depth for nested type resolution
+ * @param maxDepth - Maximum depth for nested type resolution (default 10 for full resolution)
  */
 export function resolveTypeToSchema(
   typeName: string,
   types: IntrospectionFullType[],
   visited: Set<string> = new Set(),
-  maxDepth: number = 5
+  maxDepth: number = 10
 ): Record<string, unknown> {
   const cleanType = typeName.replace(/!/g, '');
   const baseTypeName = getBaseTypeName(cleanType);

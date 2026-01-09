@@ -16,6 +16,8 @@ interface GraphQLTool {
   description: string;
   has_widget: boolean;
   category?: string;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
 }
 
 interface GraphQLOperation {
@@ -75,6 +77,10 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
   const [editingHeaders, setEditingHeaders] = useState<Array<{ key: string; value: string }>>([]);
   const [authType, setAuthType] = useState<'none' | 'bearer' | 'basic' | 'api_key'>('none');
   const [headersSaving, setHeadersSaving] = useState(false);
+  const [visibleHeaders, setVisibleHeaders] = useState<Set<number>>(new Set());
+
+  // Refresh schemas state
+  const [refreshing, setRefreshing] = useState(false);
 
   // Field editing state (like REST API edit page)
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -156,6 +162,24 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
       setShowDeleteModal(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefreshSchemas = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/graphql/specs/${specId}/refresh`, { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to refresh schemas');
+      const data = await response.json();
+      setSuccess(`Refreshed ${data.updatedCount} of ${data.totalOperations} operations`);
+      setTimeout(() => setSuccess(null), 3000);
+      // Refetch to get updated data
+      fetchSpec();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -352,11 +376,39 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button
+          onClick={handleRefreshSchemas}
+          disabled={refreshing}
+          style={{
+            padding: '0.75rem 1.5rem',
+            borderRadius: '8px',
+            border: '1px solid rgba(102, 126, 234, 0.4)',
+            background: 'rgba(102, 126, 234, 0.1)',
+            color: '#667eea',
+            cursor: refreshing ? 'wait' : 'pointer',
+            opacity: refreshing ? 0.7 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>
+            <path d="M23 4v6h-6M1 20v-6h6" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          {refreshing ? 'Refreshing...' : 'Refresh Schemas'}
+        </button>
         <button onClick={() => setShowDeleteModal(true)} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', cursor: 'pointer' }}>
           Delete API
         </button>
       </div>
+      <style jsx>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 
@@ -435,6 +487,31 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
     }
   };
 
+  // Check if a header key is sensitive (should be hidden by default)
+  const isSensitiveHeader = (key: string): boolean => {
+    const lowerKey = key.toLowerCase();
+    return lowerKey.includes('api-key') ||
+           lowerKey.includes('apikey') ||
+           lowerKey.includes('authorization') ||
+           lowerKey.includes('token') ||
+           lowerKey.includes('secret') ||
+           lowerKey.includes('password') ||
+           lowerKey.includes('bearer') ||
+           lowerKey.includes('auth');
+  };
+
+  const toggleHeaderVisibility = (index: number) => {
+    setVisibleHeaders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
   const renderHeadersTab = () => (
     <div style={{ display: 'grid', gap: '1.5rem' }}>
       {/* Auth Type */}
@@ -483,17 +560,40 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
                 placeholder="Header name"
                 style={{ flex: '1 1 150px', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
               />
-              <input
-                type="text"
-                value={header.value}
-                onChange={(e) => {
-                  const newHeaders = [...editingHeaders];
-                  newHeaders[index].value = e.target.value;
-                  setEditingHeaders(newHeaders);
-                }}
-                placeholder="Header value"
-                style={{ flex: '2 1 200px', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
-              />
+              <div style={{ flex: '2 1 200px', position: 'relative', display: 'flex', gap: '0.25rem' }}>
+                <input
+                  type={isSensitiveHeader(header.key) && !visibleHeaders.has(index) ? 'password' : 'text'}
+                  value={header.value}
+                  onChange={(e) => {
+                    const newHeaders = [...editingHeaders];
+                    newHeaders[index].value = e.target.value;
+                    setEditingHeaders(newHeaders);
+                  }}
+                  placeholder="Header value"
+                  style={{ flex: 1, padding: '0.5rem', paddingRight: isSensitiveHeader(header.key) ? '2.5rem' : '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
+                />
+                {isSensitiveHeader(header.key) && (
+                  <button
+                    type="button"
+                    onClick={() => toggleHeaderVisibility(index)}
+                    style={{
+                      position: 'absolute',
+                      right: '0.5rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.5)',
+                      cursor: 'pointer',
+                      padding: '0.25rem',
+                      fontSize: '0.9rem',
+                    }}
+                    title={visibleHeaders.has(index) ? 'Hide value' : 'Show value'}
+                  >
+                    {visibleHeaders.has(index) ? '👁️' : '👁️‍🗨️'}
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setEditingHeaders(editingHeaders.filter((_, i) => i !== index))}
                 style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', cursor: 'pointer' }}
@@ -927,10 +1027,16 @@ function OperationCard({ operation, onUpdate }: { operation: GraphQLOperation; o
             )}
           </div>
 
-          {/* Arguments (read-only) */}
-          {operation.arguments && operation.arguments.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Arguments</div>
+          {/* Input Schema (read-only) */}
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+              Input Schema {operation.arguments && operation.arguments.length > 0 && <span style={{ color: '#667eea' }}>({operation.arguments.length} args)</span>}
+            </div>
+            {tool?.input_schema && Object.keys(tool.input_schema).length > 0 ? (
+              <pre style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', overflow: 'auto', maxHeight: '250px', margin: 0 }}>
+                {JSON.stringify(tool.input_schema, null, 2)}
+              </pre>
+            ) : operation.arguments && operation.arguments.length > 0 ? (
               <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
                 {operation.arguments.map((arg, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: idx < operation.arguments.length - 1 ? '0.5rem' : 0 }}>
@@ -941,18 +1047,28 @@ function OperationCard({ operation, onUpdate }: { operation: GraphQLOperation; o
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Return Type (read-only) */}
-          {operation.return_type && (
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Return Type</div>
+            ) : (
               <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
-                <span style={{ color: '#10b981', fontFamily: 'monospace', fontSize: '0.85rem' }}>{operation.return_type}</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', fontSize: '0.85rem' }}>No input parameters</span>
               </div>
+            )}
+          </div>
+
+          {/* Return Type / Output Schema (read-only) */}
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+              Output Schema {operation.return_type && <span style={{ color: '#10b981' }}>({operation.return_type})</span>}
             </div>
-          )}
+            {tool?.output_schema && Object.keys(tool.output_schema).length > 0 ? (
+              <pre style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', overflow: 'auto', maxHeight: '250px', margin: 0 }}>
+                {JSON.stringify(tool.output_schema, null, 2)}
+              </pre>
+            ) : (
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', fontSize: '0.85rem' }}>No detailed schema available</span>
+              </div>
+            )}
+          </div>
 
           {/* Tool info */}
           {tool && (

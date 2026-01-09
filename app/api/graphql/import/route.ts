@@ -151,9 +151,10 @@ export async function POST(request: NextRequest) {
     for (const env of envsToCreate) {
       for (const op of allOperations) {
         const toolName = generateGraphQLToolName(env.name, serverName, op.name);
-        const inputSchema = generateInputSchema(op.arguments);
+        // Use the fully resolved input schema from the parser, or fallback to simple generation
+        const inputSchema = op.inputSchema || generateInputSchema(op.arguments);
 
-        // Create tool definition
+        // Create tool definition with fully resolved schemas
         const toolInsert: ToolInsert = {
           name: toolName,
           description: op.description || `GraphQL ${op.type}: ${op.name}`,
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
           categories: [toolCategory],
           tool_type: 'GQL',
           input_schema: inputSchema,
-          output_schema: { type: 'object' },
+          output_schema: op.outputSchema || { type: 'object', description: op.returnType },
           has_widget: false,
           invoking_message: `Executing ${op.type} ${op.name}...`,
           invoked_message: 'GraphQL operation complete',

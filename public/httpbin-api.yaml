@@ -1,0 +1,224 @@
+openapi: 3.0.0
+info:
+  title: HTTPBin API
+  description: A simple HTTP Request & Response Service for testing
+  version: 1.0.0
+  contact:
+    name: HTTPBin
+    url: https://httpbin.org
+servers:
+  - url: https://httpbin.org
+    description: HTTPBin production server
+
+paths:
+  /get:
+    get:
+      operationId: get_request
+      summary: HTTP GET
+      description: Returns GET data including args, headers, origin and url
+      parameters:
+        - name: param1
+          in: query
+          description: Test parameter 1
+          schema:
+            type: string
+        - name: param2
+          in: query
+          description: Test parameter 2
+          schema:
+            type: string
+      responses:
+        '200':
+          description: GET response
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /post:
+    post:
+      operationId: post_request
+      summary: HTTP POST
+      description: Returns POST data including form data, JSON, files, and headers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  description: Message to send
+                data:
+                  type: object
+                  description: Additional data
+      responses:
+        '200':
+          description: POST response
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /put:
+    put:
+      operationId: put_request
+      summary: HTTP PUT
+      description: Returns PUT data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Resource ID
+                data:
+                  type: object
+                  description: Resource data
+      responses:
+        '200':
+          description: PUT response
+
+  /delete:
+    delete:
+      operationId: delete_request
+      summary: HTTP DELETE
+      description: Returns DELETE data
+      parameters:
+        - name: id
+          in: query
+          description: Resource ID to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: DELETE response
+
+  /headers:
+    get:
+      operationId: get_headers
+      summary: Return request headers
+      description: Returns the request headers sent by the client
+      responses:
+        '200':
+          description: Headers response
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ip:
+    get:
+      operationId: get_ip
+      summary: Return client IP
+      description: Returns the client's IP address
+      responses:
+        '200':
+          description: IP response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  origin:
+                    type: string
+
+  /user-agent:
+    get:
+      operationId: get_user_agent
+      summary: Return user agent
+      description: Returns the client's user agent string
+      responses:
+        '200':
+          description: User agent response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user-agent:
+                    type: string
+
+  /status/{code}:
+    get:
+      operationId: get_status
+      summary: Return specific HTTP status
+      description: Returns the specified HTTP status code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: HTTP status code to return
+          schema:
+            type: integer
+            minimum: 100
+            maximum: 599
+      responses:
+        default:
+          description: Status response
+
+  /delay/{seconds}:
+    get:
+      operationId: get_delay
+      summary: Delayed response
+      description: Returns a delayed response (max 10 seconds)
+      parameters:
+        - name: seconds
+          in: path
+          required: true
+          description: Number of seconds to delay
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+      responses:
+        '200':
+          description: Delayed response
+
+  /json:
+    get:
+      operationId: get_json
+      summary: Return JSON data
+      description: Returns a sample JSON object
+      responses:
+        '200':
+          description: JSON response
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /uuid:
+    get:
+      operationId: get_uuid
+      summary: Generate UUID
+      description: Returns a randomly generated UUID
+      responses:
+        '200':
+          description: UUID response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+
+  /base64/{value}:
+    get:
+      operationId: decode_base64
+      summary: Decode base64
+      description: Decodes a base64 encoded string
+      parameters:
+        - name: value
+          in: path
+          required: true
+          description: Base64 encoded string to decode
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decoded response
