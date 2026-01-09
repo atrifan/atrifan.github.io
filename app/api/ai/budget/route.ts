@@ -4,12 +4,11 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-// Plan budget constants (must match ai-tokens.config.ts - duplicated here for server-side use)
-// Pro: $7/month * 20% = $1.40, Plus: $14/month * 20% = $2.80
+// Plan budget constants (must match ai-tokens.config.ts TOKEN_QUOTAS.aiCostBudget)
 const PLAN_BUDGETS = {
   free: 0,
-  pro: 1.40,
-  plus: 2.80,
+  pro: 5.00,
+  plus: 5.00,
 };
 
 const DEFAULT_MONTHLY_BUDGET = 5.00;

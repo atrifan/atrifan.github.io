@@ -636,12 +636,81 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               {/* Prompt Input */}
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>✨ Describe your workflow</h3>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && generateFlow()} placeholder="e.g., When I get a new email, extract the sender and save to a spreadsheet..." disabled={isGenerating} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }} />
-                  <button onClick={generateFlow} disabled={isGenerating || !prompt.trim()} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.75rem 1.25rem', color: '#fff', cursor: 'pointer', fontWeight: 600, opacity: isGenerating || !prompt.trim() ? 0.5 : 1 }}>{isGenerating ? '...' : '⚡ Generate'}</button>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      // Auto-resize
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (e.metaKey || e.ctrlKey) {
+                          // Cmd/Ctrl+Enter: new line (default behavior)
+                          return;
+                        } else if (!e.shiftKey) {
+                          // Enter: generate
+                          e.preventDefault();
+                          generateFlow();
+                        }
+                      }
+                    }}
+                    placeholder="e.g., When I get a new email, extract the sender and save to a spreadsheet..."
+                    disabled={isGenerating}
+                    rows={1}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: 'rgba(0,0,0,0.3)',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      resize: 'none',
+                      minHeight: '44px',
+                      maxHeight: '150px',
+                      lineHeight: '1.4',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    onClick={generateFlow}
+                    disabled={isGenerating || !prompt.trim()}
+                    title={isGenerating ? 'Generating...' : 'Generate workflow (Enter)'}
+                    style={{
+                      background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      width: '44px',
+                      height: '44px',
+                      color: '#fff',
+                      cursor: isGenerating || !prompt.trim() ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isGenerating || !prompt.trim() ? 0.5 : 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isGenerating ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
+                        <path d="M12 2a10 10 0 0 1 10 10" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.4rem', marginBottom: 0 }}>
+                  Enter to generate • ⌘+Enter for new line
+                </p>
                 {lastTokenUsage && (
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                  <div style={{ marginTop: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
                     Last: ↑{lastTokenUsage.input} ↓{lastTokenUsage.output} tokens
                   </div>
                 )}

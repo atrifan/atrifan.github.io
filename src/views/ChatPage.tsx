@@ -20,6 +20,7 @@ import {
   formatCurrency,
   DEFAULT_MONTHLY_BUDGET,
   getBudgetUsagePercent,
+  calculateSafeTokensForBudget,
 } from '../config/ai-tokens.config';
 
 interface ChatPageProps {
@@ -227,9 +228,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const totalCostSpent = budgetData?.usage.totalCost || 0;
   const budgetUsagePercent = getBudgetUsagePercent(totalCostSpent, monthlyBudget);
   const isBudgetExceeded = totalCostSpent >= monthlyBudget;
+  const remainingBudget = Math.max(0, monthlyBudget - totalCostSpent);
 
   // Get selected model's budget info
   const selectedModelBudget = budgetData?.models.find(m => m.modelId === selectedModel);
+
+  // Calculate estimated tokens remaining for selected model
+  const estimatedTokensRemaining = calculateSafeTokensForBudget(selectedModel, remainingBudget);
 
   // Calculate active personalities token count
   const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
@@ -611,13 +616,29 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setShowPersonalities(false);
   }, []);
 
-  // Handle Enter key
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+  // Handle Enter key - Enter to send, Cmd/Ctrl+Enter for new line
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl+Enter: insert new line
+        return; // Let default behavior add new line
+      } else if (!e.shiftKey) {
+        // Enter without modifiers: send message
+        e.preventDefault();
+        sendMessage();
+      }
     }
   }, [sendMessage]);
+
+  // Auto-resize textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  }, []);
 
   // Show upgrade modal for non-Pro users
   if (!canAccessPro) {
@@ -1013,25 +1034,33 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   transition: 'width 0.3s ease',
                 }} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.25rem' }}>
                 <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
                   {formatCurrency(budgetData?.usage.totalCost || costUsage.used)} spent
                 </span>
-                {isBudgetExceeded ? (
-                  <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>
-                    ⚠️ Budget exceeded - Resets on 1st
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {/* Estimated tokens remaining for selected model */}
+                  <span style={{ color: '#60a5fa', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <span style={{ fontSize: '0.7rem' }}>🎯</span>
+                    ~{formatTokenCount(estimatedTokensRemaining)} tokens left
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>({selectedModelData?.name})</span>
                   </span>
-                ) : budgetUsagePercent > 80 ? (
-                  <span style={{ color: '#f59e0b', fontSize: '0.75rem' }}>
-                    {formatCurrency(monthlyBudget - totalCostSpent)} remaining
-                  </span>
-                ) : (
-                  <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', cursor: 'pointer' }}>
-                      ⚙️ Adjust budget
+                  {isBudgetExceeded ? (
+                    <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>
+                      ⚠️ Budget exceeded
                     </span>
-                  </Link>
-                )}
+                  ) : budgetUsagePercent > 80 ? (
+                    <span style={{ color: '#f59e0b', fontSize: '0.75rem' }}>
+                      {formatCurrency(remainingBudget)} left
+                    </span>
+                  ) : (
+                    <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', cursor: 'pointer' }}>
+                        ⚙️ Adjust
+                      </span>
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1253,15 +1282,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     </Link>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <input
-                    type="text"
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+                  <textarea
+                    ref={textareaRef}
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => { setMessage(e.target.value); adjustTextareaHeight(); }}
                     onKeyDown={handleKeyDown}
                     onFocus={closeSidebars}
                     placeholder={isQuotaExceeded ? 'Quota exceeded - upgrade or wait until next month' : `Message ${selectedModelData?.name}...`}
                     disabled={isQuotaExceeded || isLoading}
+                    rows={1}
                     style={{
                       flex: 1,
                       background: isQuotaExceeded ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.08)',
@@ -1272,30 +1302,47 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       fontSize: '0.95rem',
                       outline: 'none',
                       opacity: isQuotaExceeded ? 0.6 : 1,
+                      resize: 'none',
+                      minHeight: '48px',
+                      maxHeight: '200px',
+                      lineHeight: '1.4',
+                      fontFamily: 'inherit',
                     }}
                   />
                   <button
                     onClick={() => { closeSidebars(); sendMessage(); }}
                     disabled={isQuotaExceeded || isLoading || !message.trim()}
+                    title={isLoading ? 'Sending...' : 'Send message (Enter)'}
                     style={{
                       background: isQuotaExceeded ? 'rgba(100,100,100,0.5)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                       border: 'none',
                       borderRadius: '12px',
-                      padding: '0 1.5rem',
+                      width: '48px',
+                      height: '48px',
                       color: '#fff',
                       cursor: isQuotaExceeded || isLoading ? 'not-allowed' : 'pointer',
-                      fontWeight: 600,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
+                      justifyContent: 'center',
                       opacity: (!message.trim() || isLoading) ? 0.6 : 1,
+                      flexShrink: 0,
                     }}
                   >
-                    {isLoading ? 'Sending...' : 'Send'} <span>→</span>
+                    {isLoading ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
+                        <path d="M12 2a10 10 0 0 1 10 10" />
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      </svg>
+                    )}
                   </button>
                 </div>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.75rem' }}>
-                  Press Enter to send • {formatCurrency(Math.max(0, costUsage.limit - costUsage.used))} budget remaining
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', textAlign: 'center', marginTop: '0.5rem' }}>
+                  Enter to send • ⌘+Enter for new line • {formatCurrency(remainingBudget)} left • ~{formatTokenCount(estimatedTokensRemaining)} tokens
                 </p>
               </div>
             </div>

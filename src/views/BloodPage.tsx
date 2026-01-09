@@ -8,6 +8,7 @@ import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { ShareResults } from '../components/ShareResults';
+import { BloodIcon } from '../components/BloodIcon';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { MeasurementSystem } from '../types/preferences';
@@ -315,19 +316,8 @@ class BloodPageClass extends Component<BloodPageProps, BloodPageState> {
 
           {/* Header */}
           <View UNSAFE_style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              margin: '0 auto 1rem',
-              background: gradient,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.5rem',
-              boxShadow: '0 8px 32px rgba(239, 68, 68, 0.4)',
-            }}>
-              🩸
+            <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
+              <BloodIcon size={80} />
             </div>
             <h1 style={{
               fontSize: 'clamp(2rem, 5vw, 3rem)',
