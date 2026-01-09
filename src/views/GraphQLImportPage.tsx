@@ -112,7 +112,12 @@ function renderSchemaProperty(name: string, schema: Record<string, unknown>, ind
 }
 
 // Operation Preview Card Component
-function OperationPreviewCard({ op, type }: { op: OperationPreview; type: 'query' | 'mutation' }) {
+function OperationPreviewCard({ op, type, isSelected, onToggle }: {
+  op: OperationPreview;
+  type: 'query' | 'mutation';
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const color = type === 'query' ? '#667eea' : '#f59e0b';
   const bgColor = type === 'query' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(245, 158, 11, 0.3)';
@@ -122,15 +127,49 @@ function OperationPreviewCard({ op, type }: { op: OperationPreview; type: 'query
   const hasOutputSchema = op.outputSchema && Object.keys(op.outputSchema).length > 0;
 
   return (
-    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', marginBottom: '0.5rem', overflow: 'hidden' }}>
+    <div style={{
+      background: isSelected ? 'rgba(102, 126, 234, 0.15)' : 'rgba(0,0,0,0.2)',
+      border: isSelected ? '1px solid rgba(102, 126, 234, 0.4)' : '1px solid transparent',
+      borderRadius: '6px',
+      marginBottom: '0.5rem',
+      overflow: 'hidden'
+    }}>
       <div
-        onClick={() => setExpanded(!expanded)}
         style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
       >
+        {/* Checkbox */}
+        <div
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          style={{
+            width: '20px',
+            height: '20px',
+            borderRadius: '4px',
+            border: '2px solid',
+            borderColor: isSelected ? '#667eea' : 'rgba(255,255,255,0.3)',
+            background: isSelected ? '#667eea' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {isSelected && <span style={{ color: '#fff', fontSize: '0.75rem' }}>✓</span>}
+        </div>
         <span style={{ background: bgColor, color, padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>{label}</span>
-        <span style={{ color: '#fff', fontWeight: 500, fontSize: 'clamp(0.8rem, 2vw, 0.9rem)', flex: 1 }}>{op.name}</span>
+        <span
+          onClick={() => setExpanded(!expanded)}
+          style={{ color: '#fff', fontWeight: 500, fontSize: 'clamp(0.8rem, 2vw, 0.9rem)', flex: 1, cursor: 'pointer' }}
+        >
+          {op.name}
+        </span>
         <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}>→ {op.returnType}</span>
-        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+        <span
+          onClick={() => setExpanded(!expanded)}
+          style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', cursor: 'pointer' }}
+        >
+          ▼
+        </span>
       </div>
       {expanded && (
         <div style={{ padding: '0 0.75rem 0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -187,6 +226,9 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('📦');
+
+  // Selected operations state (for choosing which operations to import)
+  const [selectedOperations, setSelectedOperations] = useState<Set<string>>(new Set());
 
   // URL & Auth state
   const [url, setUrl] = useState('');
@@ -374,6 +416,13 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
 
       setFetchResult(data);
 
+      // Select all operations by default
+      const allOpNames = [
+        ...data.operations.queries.map((op: OperationPreview) => op.name),
+        ...data.operations.mutations.map((op: OperationPreview) => op.name),
+      ];
+      setSelectedOperations(new Set(allOpNames));
+
       // Initialize environment from URL
       try {
         const urlObj = new URL(url);
@@ -392,8 +441,39 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
 
   // Step 3: Proceed to Environments
   const handleProceedToEnvironments = () => {
+    if (selectedOperations.size === 0) {
+      setError('Please select at least one operation to import');
+      return;
+    }
     setError(null);
     setCurrentStep('environments');
+  };
+
+  // Operation selection handlers
+  const handleOperationToggle = (opName: string) => {
+    setSelectedOperations(prev => {
+      const next = new Set(prev);
+      if (next.has(opName)) {
+        next.delete(opName);
+      } else {
+        next.add(opName);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllOperations = () => {
+    if (fetchResult) {
+      const allOpNames = [
+        ...fetchResult.operations.queries.map(op => op.name),
+        ...fetchResult.operations.mutations.map(op => op.name),
+      ];
+      setSelectedOperations(new Set(allOpNames));
+    }
+  };
+
+  const handleDeselectAllOperations = () => {
+    setSelectedOperations(new Set());
   };
 
   // Environment handlers
@@ -454,6 +534,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
           authType: storedAuthType,
           category: selectedCategory,
           environments,
+          selectedOperations: Array.from(selectedOperations),
         }),
       });
 
@@ -988,7 +1069,26 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
 
             {/* Operations Preview */}
             <div style={cardStyle}>
-              <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: 'clamp(0.95rem, 2.5vw, 1.1rem)' }}>📋 Operations to Import</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: 'clamp(0.95rem, 2.5vw, 1.1rem)' }}>📋 Operations to Import</h3>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <button
+                    onClick={handleSelectAllOperations}
+                    style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.4)', background: 'transparent', color: '#10b981', fontSize: '0.75rem', cursor: 'pointer' }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={handleDeselectAllOperations}
+                    style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'transparent', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}
+                  >
+                    Deselect All
+                  </button>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
+                    {selectedOperations.size} selected
+                  </span>
+                </div>
+              </div>
               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {fetchResult.operations.queries.length > 0 && (
                   <div style={{ marginBottom: '1rem' }}>
@@ -996,10 +1096,15 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
                       <span style={{ background: 'rgba(102, 126, 234, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', marginRight: '0.5rem' }}>QUERY</span>
                       Queries ({fetchResult.operations.queries.length})
                     </h4>
-                    {fetchResult.operations.queries.slice(0, 10).map(op => (
-                      <OperationPreviewCard key={op.name} op={op} type="query" />
+                    {fetchResult.operations.queries.map(op => (
+                      <OperationPreviewCard
+                        key={op.name}
+                        op={op}
+                        type="query"
+                        isSelected={selectedOperations.has(op.name)}
+                        onToggle={() => handleOperationToggle(op.name)}
+                      />
                     ))}
-                    {fetchResult.operations.queries.length > 10 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.75rem, 2vw, 0.85rem)' }}>...and {fetchResult.operations.queries.length - 10} more</div>}
                   </div>
                 )}
                 {fetchResult.operations.mutations.length > 0 && (
@@ -1008,22 +1113,31 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
                       <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', marginRight: '0.5rem' }}>MUTATION</span>
                       Mutations ({fetchResult.operations.mutations.length})
                     </h4>
-                    {fetchResult.operations.mutations.slice(0, 10).map(op => (
-                      <OperationPreviewCard key={op.name} op={op} type="mutation" />
+                    {fetchResult.operations.mutations.map(op => (
+                      <OperationPreviewCard
+                        key={op.name}
+                        op={op}
+                        type="mutation"
+                        isSelected={selectedOperations.has(op.name)}
+                        onToggle={() => handleOperationToggle(op.name)}
+                      />
                     ))}
-                    {fetchResult.operations.mutations.length > 10 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'clamp(0.75rem, 2vw, 0.85rem)' }}>...and {fetchResult.operations.mutations.length - 10} more</div>}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <button onClick={handleBack} style={secondaryButtonStyle}>
                 ← Back
               </button>
-              <button onClick={handleProceedToEnvironments} style={primaryButtonStyle}>
-                Configure Environments →
+              <button
+                onClick={handleProceedToEnvironments}
+                style={primaryButtonStyle}
+                disabled={selectedOperations.size === 0}
+              >
+                Configure Environments ({selectedOperations.size} operations) →
               </button>
             </div>
           </div>

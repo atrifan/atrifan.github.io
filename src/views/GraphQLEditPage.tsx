@@ -50,7 +50,7 @@ interface GraphQLSpec {
   updated_at: string;
 }
 
-type TabType = 'overview' | 'environments' | 'operations' | 'headers' | 'docs';
+type TabType = 'overview' | 'environments' | 'operations' | 'docs';
 
 interface Props {
   specId: string;
@@ -72,12 +72,6 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'query' | 'mutation'>('all');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-
-  // Headers editing state
-  const [editingHeaders, setEditingHeaders] = useState<Array<{ key: string; value: string }>>([]);
-  const [authType, setAuthType] = useState<'none' | 'bearer' | 'basic' | 'api_key'>('none');
-  const [headersSaving, setHeadersSaving] = useState(false);
-  const [visibleHeaders, setVisibleHeaders] = useState<Set<number>>(new Set());
 
   // Refresh schemas state
   const [refreshing, setRefreshing] = useState(false);
@@ -132,18 +126,6 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
       setSpec(data.spec);
       setOperations(data.operations || []);
       setEnvironments(data.environments || []);
-
-      // Initialize headers editing state
-      if (data.spec?.default_headers) {
-        const headers = Object.entries(data.spec.default_headers).map(([key, value]) => ({
-          key,
-          value: value as string,
-        }));
-        setEditingHeaders(headers);
-      }
-      if (data.spec?.auth_type) {
-        setAuthType(data.spec.auth_type as 'none' | 'bearer' | 'basic' | 'api_key');
-      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -270,7 +252,6 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
     { id: 'overview', label: 'Overview', icon: '📋' },
     { id: 'environments', label: 'Environments', icon: '🌍' },
     { id: 'operations', label: 'Operations', icon: '⚡' },
-    { id: 'headers', label: 'Headers', icon: '🔐' },
     { id: 'docs', label: 'Schema', icon: '📄' },
   ];
 
@@ -362,19 +343,18 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', border: '1px solid rgba(102, 126, 234, 0.3)' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#667eea' }}>{operations.filter(o => o.operation_type === 'query').length}</div>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Queries</div>
-        </div>
-        <div style={{ background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#f59e0b' }}>{operations.filter(o => o.operation_type === 'mutation').length}</div>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Mutations</div>
-        </div>
-        <div style={{ background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#10b981' }}>{environments.length}</div>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Environments</div>
-        </div>
+        <StatCard icon="⚡" label="Queries" value={operations.filter(o => o.operation_type === 'query').length} />
+        <StatCard icon="🔄" label="Mutations" value={operations.filter(o => o.operation_type === 'mutation').length} />
+        <StatCard icon="🌍" label="Environments" value={environments.length} />
+        <StatCard icon="📅" label="Created" value={new Date(spec.created_at).toLocaleDateString()} />
       </div>
+
+      {/* Default Headers */}
+      <DefaultHeadersEditor
+        specId={spec.id}
+        headers={spec.default_headers || {}}
+        onUpdate={fetchSpec}
+      />
 
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button
@@ -452,179 +432,6 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
     </div>
   );
 
-  const handleSaveHeaders = async () => {
-    setHeadersSaving(true);
-    setError(null);
-    try {
-      // Build headers object from array
-      const headersObj: Record<string, string> = {};
-      editingHeaders.forEach(h => {
-        if (h.key.trim()) {
-          headersObj[h.key.trim()] = h.value;
-        }
-      });
-
-      const response = await fetch(`/api/graphql/${specId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          default_headers: headersObj,
-          auth_type: authType,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to save headers');
-      }
-
-      setSuccess('Headers saved successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setHeadersSaving(false);
-    }
-  };
-
-  // Check if a header key is sensitive (should be hidden by default)
-  const isSensitiveHeader = (key: string): boolean => {
-    const lowerKey = key.toLowerCase();
-    return lowerKey.includes('api-key') ||
-           lowerKey.includes('apikey') ||
-           lowerKey.includes('authorization') ||
-           lowerKey.includes('token') ||
-           lowerKey.includes('secret') ||
-           lowerKey.includes('password') ||
-           lowerKey.includes('bearer') ||
-           lowerKey.includes('auth');
-  };
-
-  const toggleHeaderVisibility = (index: number) => {
-    setVisibleHeaders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  };
-
-  const renderHeadersTab = () => (
-    <div style={{ display: 'grid', gap: '1.5rem' }}>
-      {/* Auth Type */}
-      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Authentication Type</h3>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {(['none', 'api_key', 'bearer', 'basic'] as const).map(type => (
-            <button
-              key={type}
-              onClick={() => setAuthType(type)}
-              style={{
-                padding: '0.5rem 1rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: authType === type ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {type === 'none' ? 'None' : type === 'api_key' ? 'API Key' : type === 'bearer' ? 'Bearer Token' : 'Basic Auth'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Default Headers */}
-      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Default Headers</h3>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-          These headers will be sent with every GraphQL request.
-        </p>
-
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {editingHeaders.map((header, index) => (
-            <div key={index} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                value={header.key}
-                onChange={(e) => {
-                  const newHeaders = [...editingHeaders];
-                  newHeaders[index].key = e.target.value;
-                  setEditingHeaders(newHeaders);
-                }}
-                placeholder="Header name"
-                style={{ flex: '1 1 150px', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
-              />
-              <div style={{ flex: '2 1 200px', position: 'relative', display: 'flex', gap: '0.25rem' }}>
-                <input
-                  type={isSensitiveHeader(header.key) && !visibleHeaders.has(index) ? 'password' : 'text'}
-                  value={header.value}
-                  onChange={(e) => {
-                    const newHeaders = [...editingHeaders];
-                    newHeaders[index].value = e.target.value;
-                    setEditingHeaders(newHeaders);
-                  }}
-                  placeholder="Header value"
-                  style={{ flex: 1, padding: '0.5rem', paddingRight: isSensitiveHeader(header.key) ? '2.5rem' : '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
-                />
-                {isSensitiveHeader(header.key) && (
-                  <button
-                    type="button"
-                    onClick={() => toggleHeaderVisibility(index)}
-                    style={{
-                      position: 'absolute',
-                      right: '0.5rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: 'rgba(255,255,255,0.5)',
-                      cursor: 'pointer',
-                      padding: '0.25rem',
-                      fontSize: '0.9rem',
-                    }}
-                    title={visibleHeaders.has(index) ? 'Hide value' : 'Show value'}
-                  >
-                    {visibleHeaders.has(index) ? '👁️' : '👁️‍🗨️'}
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setEditingHeaders(editingHeaders.filter((_, i) => i !== index))}
-                style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-
-          <button
-            onClick={() => setEditingHeaders([...editingHeaders, { key: '', value: '' }])}
-            style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '0.85rem' }}
-          >
-            + Add Header
-          </button>
-        </div>
-      </div>
-
-      {/* Save Button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          onClick={handleSaveHeaders}
-          disabled={headersSaving}
-          style={{ padding: '0.75rem 2rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', opacity: headersSaving ? 0.7 : 1 }}
-        >
-          {headersSaving ? 'Saving...' : 'Save Headers'}
-        </button>
-      </div>
-    </div>
-  );
-
   const renderDocsTab = () => (
     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
       <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>GraphQL Schema</h3>
@@ -697,7 +504,6 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'environments' && renderEnvironmentsTab()}
         {activeTab === 'operations' && renderOperationsTab()}
-        {activeTab === 'headers' && renderHeadersTab()}
         {activeTab === 'docs' && renderDocsTab()}
       </div>
 
@@ -1085,3 +891,151 @@ function OperationCard({ operation, onUpdate }: { operation: GraphQLOperation; o
   );
 }
 
+// StatCard Component (matching REST API edit page)
+function StatCard({ icon, label, value }: { icon: string; label: string; value: string | number }) {
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+      <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{icon}</div>
+      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>{value}</div>
+      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{label}</div>
+    </div>
+  );
+}
+
+// DefaultHeadersEditor Component (matching REST API edit page)
+function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; headers: Record<string, string>; onUpdate: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [headersList, setHeadersList] = useState<Array<{ key: string; value: string }>>(
+    Object.entries(headers).map(([key, value]) => ({ key, value }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [visibleHeaders, setVisibleHeaders] = useState<Set<number>>(new Set());
+  const [visibleViewHeaders, setVisibleViewHeaders] = useState<Set<string>>(new Set());
+
+  const isSensitiveHeader = (key: string): boolean => {
+    const lowerKey = key.toLowerCase();
+    return lowerKey.includes('api-key') || lowerKey.includes('apikey') || lowerKey.includes('x-api-key') ||
+           lowerKey.includes('authorization') || lowerKey.includes('token') || lowerKey.includes('secret') ||
+           lowerKey.includes('password') || lowerKey.includes('bearer') || lowerKey.includes('auth');
+  };
+
+  const toggleHeaderVisibility = (index: number) => {
+    setVisibleHeaders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) newSet.delete(index);
+      else newSet.add(index);
+      return newSet;
+    });
+  };
+
+  const toggleViewHeaderVisibility = (key: string) => {
+    setVisibleViewHeaders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) newSet.delete(key);
+      else newSet.add(key);
+      return newSet;
+    });
+  };
+
+  const maskValue = (value: string): string => {
+    if (value.length <= 4) return '••••••••';
+    return '••••••••' + value.slice(-4);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const headersObj: Record<string, string> = {};
+      for (const h of headersList) {
+        if (h.key.trim()) headersObj[h.key.trim()] = h.value;
+      }
+      const response = await fetch(`/api/graphql/${specId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_headers: headersObj }),
+      });
+      if (response.ok) {
+        setEditing(false);
+        setVisibleHeaders(new Set());
+        onUpdate();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>Default Headers</h3>
+        {!editing ? (
+          <button onClick={() => setEditing(true)} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.8rem', cursor: 'pointer' }}>
+            ✏️ Edit Headers
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={() => { setEditing(false); setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value }))); setVisibleHeaders(new Set()); }} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
+        These headers are sent with every GraphQL request to this server.
+      </p>
+      {editing ? (
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          {headersList.map((header, index) => {
+            const isSensitive = isSensitiveHeader(header.key);
+            const isVisible = visibleHeaders.has(index);
+            return (
+              <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input type="text" value={header.key} onChange={(e) => { const updated = [...headersList]; updated[index].key = e.target.value; setHeadersList(updated); }} placeholder="Header name" style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }} />
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>:</span>
+                <div style={{ flex: 2, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input type={isSensitive && !isVisible ? 'password' : 'text'} value={header.value} onChange={(e) => { const updated = [...headersList]; updated[index].value = e.target.value; setHeadersList(updated); }} placeholder="Value" style={{ width: '100%', padding: '0.5rem', paddingRight: isSensitive ? '2.5rem' : '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }} />
+                  {isSensitive && (
+                    <button type="button" onClick={() => toggleHeaderVisibility(index)} style={{ position: 'absolute', right: '0.5rem', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '0.25rem', fontSize: '0.9rem' }} title={isVisible ? 'Hide value' : 'Show value'}>
+                      {isVisible ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => setHeadersList(headersList.filter((_, i) => i !== index))} style={{ padding: '0.5rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer' }}>🗑️</button>
+              </div>
+            );
+          })}
+          <button onClick={() => setHeadersList([...headersList, { key: '', value: '' }])} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px dashed rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', cursor: 'pointer' }}>
+            + Add Header
+          </button>
+        </div>
+      ) : (
+        <div>
+          {Object.keys(headers).length === 0 ? (
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>No default headers configured</div>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              {Object.entries(headers).map(([key, value]) => {
+                const isSensitive = isSensitiveHeader(key);
+                const isVisible = visibleViewHeaders.has(key);
+                return (
+                  <div key={key} style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', alignItems: 'center' }}>
+                    <span style={{ color: '#667eea', fontWeight: 600 }}>{key}:</span>
+                    <span style={{ color: 'rgba(255,255,255,0.7)', flex: 1 }}>{isSensitive && !isVisible ? maskValue(value) : value}</span>
+                    {isSensitive && (
+                      <button type="button" onClick={() => toggleViewHeaderVisibility(key)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '0.25rem', fontSize: '0.85rem' }} title={isVisible ? 'Hide value' : 'Show value'}>
+                        {isVisible ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -16,6 +16,8 @@ interface ToolInfo {
   name: string;
   description: string;
   has_widget: boolean;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
 }
 
 interface GraphQLOperation {
@@ -81,7 +83,7 @@ export async function GET() {
       for (const op of (operations || []) as GraphQLOperation[]) {
         const { data: tool } = await supabase
           .from('tools')
-          .select('id, name, description, has_widget')
+          .select('id, name, description, has_widget, input_schema, output_schema')
           .eq('id', op.tool_id)
           .single();
 

@@ -27,6 +27,7 @@ interface ImportRequest {
   defaultHeaders?: Record<string, string>;
   category?: string;
   environments?: EnvironmentConfig[];
+  selectedOperations?: string[]; // Optional: if provided, only import these operations
 }
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body: ImportRequest = await request.json();
-    const { serverName, sourceUrl, schema, apiTitle, apiDescription, defaultHeaders, category, environments } = body;
+    const { serverName, sourceUrl, schema, apiTitle, apiDescription, defaultHeaders, category, environments, selectedOperations } = body;
 
     // Validate category - first check if it's a custom category in the database
     const validCategories: ToolCategory[] = ['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'];
@@ -69,11 +70,21 @@ export async function POST(request: NextRequest) {
 
     // Parse the schema
     const parsed = parseGraphQLSchema(schema as { __schema: Parameters<typeof parseGraphQLSchema>[0]['__schema'] });
-    const allOperations = [...parsed.queries, ...parsed.mutations];
+    let allOperations = [...parsed.queries, ...parsed.mutations];
     // Note: subscriptions are not supported as tools (they require websockets)
 
     if (allOperations.length === 0) {
       return NextResponse.json({ error: 'No queries or mutations found in schema' }, { status: 400 });
+    }
+
+    // Filter operations if selectedOperations is provided
+    if (selectedOperations && selectedOperations.length > 0) {
+      const selectedSet = new Set(selectedOperations);
+      allOperations = allOperations.filter(op => selectedSet.has(op.name));
+
+      if (allOperations.length === 0) {
+        return NextResponse.json({ error: 'No operations selected for import' }, { status: 400 });
+      }
     }
 
     // Determine auth type based on provided headers

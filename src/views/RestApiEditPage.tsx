@@ -816,6 +816,8 @@ interface ToolCardEndpoint {
     description: string;
     category: string;
     has_widget: boolean;
+    input_schema?: Record<string, unknown>;
+    output_schema?: Record<string, unknown>;
   };
 }
 
@@ -829,6 +831,7 @@ const toolMethodColors: Record<string, string> = {
 
 function ToolCard({ endpoint, onUpdate }: { endpoint: ToolCardEndpoint; onUpdate: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState(endpoint.tools?.name || '');
   const [description, setDescription] = useState(endpoint.tools?.description || '');
   const [hasWidget, setHasWidget] = useState(endpoint.tools?.has_widget || false);
@@ -872,9 +875,9 @@ function ToolCard({ endpoint, onUpdate }: { endpoint: ToolCardEndpoint; onUpdate
   };
 
   return (
-    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
       {editing && tool ? (
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
+        <div style={{ padding: '1rem', display: 'grid', gap: '0.75rem' }}>
           <div>
             <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Tool Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }} />
@@ -893,23 +896,79 @@ function ToolCard({ endpoint, onUpdate }: { endpoint: ToolCardEndpoint; onUpdate
           </div>
         </div>
       ) : (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: methodColor, color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>{endpoint.http_method}</span>
+        <>
+          {/* Header row - clickable to expand */}
+          <div
+            style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', cursor: 'pointer' }}
+            onClick={() => setExpanded(!expanded)}
+          >
+            <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: methodColor, color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>{endpoint.http_method}</span>
+            <div style={{ flex: 1, minWidth: '150px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{tool?.name || endpoint.operation_id}</span>
                 {tool?.has_widget && <span title="Widget enabled" style={{ fontSize: '0.8rem' }}>🎨</span>}
               </div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{endpoint.path}</div>
-              {tool?.description && <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{tool.description}</div>}
+              {tool?.description && !expanded && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '400px' }}>{tool.description}</div>}
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
               <button onClick={() => { setName(tool?.name || ''); setDescription(tool?.description || ''); setHasWidget(tool?.has_widget || false); setEditing(true); }} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}>✏️</button>
               <button onClick={handleDelete} disabled={deleting} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}>{deleting ? '...' : '🗑️'}</button>
             </div>
+            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>{expanded ? '▲' : '▼'}</span>
           </div>
-        </div>
+
+          {/* Expanded details */}
+          {expanded && (
+            <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              {/* Description */}
+              {tool?.description && (
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Description</div>
+                  <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', lineHeight: 1.5 }}>{tool.description}</div>
+                </div>
+              )}
+
+              {/* Input Schema */}
+              <div style={{ marginTop: '1rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Input Schema</div>
+                {tool?.input_schema && Object.keys(tool.input_schema).length > 0 ? (
+                  <pre style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', overflow: 'auto', maxHeight: '250px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {JSON.stringify(tool.input_schema, null, 2)}
+                  </pre>
+                ) : (
+                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', fontSize: '0.85rem' }}>No input parameters</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Output Schema */}
+              <div style={{ marginTop: '1rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Output Schema</div>
+                {tool?.output_schema && Object.keys(tool.output_schema).length > 0 ? (
+                  <pre style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem', color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', overflow: 'auto', maxHeight: '250px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {JSON.stringify(tool.output_schema, null, 2)}
+                  </pre>
+                ) : (
+                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', fontSize: '0.85rem' }}>No output schema defined</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tool info */}
+              {tool && (
+                <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
+                    <span>Category: <span style={{ color: '#fff' }}>{tool.category || 'api'}</span></span>
+                    <span>Widget: <span style={{ color: tool.has_widget ? '#10b981' : 'rgba(255,255,255,0.4)' }}>{tool.has_widget ? 'Enabled' : 'Disabled'}</span></span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -921,6 +980,51 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
     Object.entries(headers).map(([key, value]) => ({ key, value }))
   );
   const [saving, setSaving] = useState(false);
+  const [visibleHeaders, setVisibleHeaders] = useState<Set<number>>(new Set());
+  const [visibleViewHeaders, setVisibleViewHeaders] = useState<Set<string>>(new Set());
+
+  // Check if a header key is sensitive (should be hidden by default)
+  const isSensitiveHeader = (key: string): boolean => {
+    const lowerKey = key.toLowerCase();
+    return lowerKey.includes('api-key') ||
+           lowerKey.includes('apikey') ||
+           lowerKey.includes('x-api-key') ||
+           lowerKey.includes('authorization') ||
+           lowerKey.includes('token') ||
+           lowerKey.includes('secret') ||
+           lowerKey.includes('password') ||
+           lowerKey.includes('bearer') ||
+           lowerKey.includes('auth');
+  };
+
+  const toggleHeaderVisibility = (index: number) => {
+    setVisibleHeaders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleViewHeaderVisibility = (key: string) => {
+    setVisibleViewHeaders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const maskValue = (value: string): string => {
+    if (value.length <= 4) return '••••••••';
+    return '••••••••' + value.slice(-4);
+  };
 
   const addHeader = () => {
     setHeadersList([...headersList, { key: '', value: '' }]);
@@ -954,6 +1058,7 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
 
       if (response.ok) {
         setEditing(false);
+        setVisibleHeaders(new Set());
         onUpdate();
       }
     } finally {
@@ -974,7 +1079,7 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
             <button onClick={handleSave} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
               {saving ? 'Saving...' : 'Save'}
             </button>
-            <button onClick={() => { setEditing(false); setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value }))); }} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
+            <button onClick={() => { setEditing(false); setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value }))); setVisibleHeaders(new Set()); }} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
               Cancel
             </button>
           </div>
@@ -987,26 +1092,51 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
 
       {editing ? (
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {headersList.map((header, index) => (
-            <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="text"
-                value={header.key}
-                onChange={(e) => updateHeader(index, 'key', e.target.value)}
-                placeholder="Header name"
-                style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
-              />
-              <span style={{ color: 'rgba(255,255,255,0.4)' }}>:</span>
-              <input
-                type="text"
-                value={header.value}
-                onChange={(e) => updateHeader(index, 'value', e.target.value)}
-                placeholder="Value"
-                style={{ flex: 2, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
-              />
-              <button onClick={() => removeHeader(index)} style={{ padding: '0.5rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer' }}>🗑️</button>
-            </div>
-          ))}
+          {headersList.map((header, index) => {
+            const isSensitive = isSensitiveHeader(header.key);
+            const isVisible = visibleHeaders.has(index);
+            return (
+              <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={header.key}
+                  onChange={(e) => updateHeader(index, 'key', e.target.value)}
+                  placeholder="Header name"
+                  style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                />
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>:</span>
+                <div style={{ flex: 2, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={isSensitive && !isVisible ? 'password' : 'text'}
+                    value={header.value}
+                    onChange={(e) => updateHeader(index, 'value', e.target.value)}
+                    placeholder="Value"
+                    style={{ width: '100%', padding: '0.5rem', paddingRight: isSensitive ? '2.5rem' : '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                  />
+                  {isSensitive && (
+                    <button
+                      type="button"
+                      onClick={() => toggleHeaderVisibility(index)}
+                      style={{
+                        position: 'absolute',
+                        right: '0.5rem',
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(255,255,255,0.5)',
+                        cursor: 'pointer',
+                        padding: '0.25rem',
+                        fontSize: '0.9rem',
+                      }}
+                      title={isVisible ? 'Hide value' : 'Show value'}
+                    >
+                      {isVisible ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => removeHeader(index)} style={{ padding: '0.5rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer' }}>🗑️</button>
+              </div>
+            );
+          })}
           <button onClick={addHeader} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px dashed rgba(255,255,255,0.3)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', cursor: 'pointer' }}>
             + Add Header
           </button>
@@ -1017,12 +1147,35 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
             <div style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>No default headers configured</div>
           ) : (
             <div style={{ display: 'grid', gap: '0.5rem' }}>
-              {Object.entries(headers).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
-                  <span style={{ color: '#667eea', fontWeight: 600 }}>{key}:</span>
-                  <span style={{ color: 'rgba(255,255,255,0.7)' }}>{value}</span>
-                </div>
-              ))}
+              {Object.entries(headers).map(([key, value]) => {
+                const isSensitive = isSensitiveHeader(key);
+                const isVisible = visibleViewHeaders.has(key);
+                return (
+                  <div key={key} style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', alignItems: 'center' }}>
+                    <span style={{ color: '#667eea', fontWeight: 600 }}>{key}:</span>
+                    <span style={{ color: 'rgba(255,255,255,0.7)', flex: 1 }}>
+                      {isSensitive && !isVisible ? maskValue(value) : value}
+                    </span>
+                    {isSensitive && (
+                      <button
+                        type="button"
+                        onClick={() => toggleViewHeaderVisibility(key)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'rgba(255,255,255,0.5)',
+                          cursor: 'pointer',
+                          padding: '0.25rem',
+                          fontSize: '0.85rem',
+                        }}
+                        title={isVisible ? 'Hide value' : 'Show value'}
+                      >
+                        {isVisible ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
