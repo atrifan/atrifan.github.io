@@ -684,18 +684,30 @@ async function executeToolAsync(
       server.default_headers
     );
 
-    // Proxy the tool call to the external MCP server
-    const result = await mcpClient.callTool(serverTool.original_name, args);
+    try {
+      // Initialize connection first (required by official SDK)
+      await mcpClient.initialize();
 
-    return {
-      result,
-      isRestTool: false,
-      toolInfo: {
-        hasWidget: serverTool.has_widget || dbTool.has_widget,
-        invokingMessage: dbTool.invoking_message || `Calling ${serverTool.original_name}...`,
-        invokedMessage: dbTool.invoked_message || 'MCP tool call complete',
-      },
-    };
+      // Proxy the tool call to the external MCP server
+      const result = await mcpClient.callTool(serverTool.original_name, args);
+
+      // Close connection after use
+      await mcpClient.close();
+
+      return {
+        result,
+        isRestTool: false,
+        toolInfo: {
+          hasWidget: serverTool.has_widget || dbTool.has_widget,
+          invokingMessage: dbTool.invoking_message || `Calling ${serverTool.original_name}...`,
+          invokedMessage: dbTool.invoked_message || 'MCP tool call complete',
+        },
+      };
+    } catch (error) {
+      // Ensure connection is closed on error
+      await mcpClient.close().catch(() => {});
+      throw error;
+    }
   }
 
   // Handle other tool types

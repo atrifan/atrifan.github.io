@@ -227,6 +227,11 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
       return;
     }
 
+    // Prevent multiple simultaneous requests
+    if (isFetching) {
+      return;
+    }
+
     setIsFetching(true);
     setError(null);
 
@@ -970,29 +975,27 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
         {/* Saving State */}
         {currentStep === 'saving' && (
           <div style={{ ...cardStyle, textAlign: 'center', padding: '3rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-            <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>Importing Tools...</h2>
-            <p style={{ color: 'rgba(255,255,255,0.7)' }}>Please wait while we import your MCP server tools.</p>
-          </div>
-        )}
-
-        {/* Success Message */}
-        {successMessage && (
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'rgba(34, 197, 94, 0.95)',
-            padding: '2rem',
-            borderRadius: '16px',
-            textAlign: 'center',
-            zIndex: 1000,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
-            <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>{successMessage}</h2>
-            <p style={{ color: 'rgba(255,255,255,0.9)' }}>Redirecting to MCP Creator...</p>
+            {successMessage ? (
+              <>
+                <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>✅</div>
+                <h2 style={{ color: '#10b981', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                  {successMessage}
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Redirecting to MCP Creator...
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⏳</div>
+                <h2 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                  Importing Tools...
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Please wait while we import your MCP server tools.
+                </p>
+              </>
+            )}
           </div>
         )}
 

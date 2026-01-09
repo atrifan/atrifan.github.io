@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
       serverInfo = await client.initialize();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize MCP server';
-      return NextResponse.json({ 
+      console.error('MCP server initialization failed:', { url, error: message });
+      return NextResponse.json({
         error: `Failed to connect to MCP server: ${message}`,
-        details: 'Make sure the URL is correct and the server supports HTTP transport.'
+        details: 'Make sure the URL is correct and the server supports HTTP transport (JSON-RPC over HTTP POST).'
       }, { status: 400 });
     }
 

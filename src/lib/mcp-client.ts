@@ -1,27 +1,15 @@
 /**
  * MCP Client Library
- * 
- * HTTP-based MCP client for proxying requests to external MCP servers.
- * Supports initialize, tools/list, tools/call, resources/list, resources/read.
+ *
+ * Uses the official @modelcontextprotocol/sdk for proper protocol support.
+ * Supports Streamable HTTP transport (SSE) for MCP servers.
  */
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { MCPServerAuthType } from '../types/supabase';
 
-// MCP Protocol Types
-export interface MCPRequest {
-  jsonrpc: '2.0';
-  id: string | number;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-export interface MCPResponse {
-  jsonrpc: '2.0';
-  id: string | number;
-  result?: unknown;
-  error?: { code: number; message: string; data?: unknown };
-}
-
+// Re-export types for compatibility
 export interface MCPToolDefinition {
   name: string;
   description?: string;
@@ -61,11 +49,12 @@ export interface MCPClientConfig {
 }
 
 /**
- * MCP Client for HTTP-based MCP servers
+ * MCP Client wrapper using official SDK
  */
 export class MCPClient {
   private config: MCPClientConfig;
-  private requestId = 0;
+  private client: Client | null = null;
+  private transport: StreamableHTTPClientTransport | null = null;
 
   constructor(config: MCPClientConfig) {
     this.config = {
@@ -79,7 +68,6 @@ export class MCPClient {
    */
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...this.config.headers,
     };
 
@@ -106,117 +94,120 @@ export class MCPClient {
   }
 
   /**
-   * Send an MCP request to the server
-   */
-  async sendRequest(method: string, params?: Record<string, unknown>): Promise<MCPResponse> {
-    const request: MCPRequest = {
-      jsonrpc: '2.0',
-      id: ++this.requestId,
-      method,
-      params,
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-    try {
-      const response = await fetch(this.config.url, {
-        method: 'POST',
-        headers: this.buildHeaders(),
-        body: JSON.stringify(request),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text}`);
-      }
-
-      const data = await response.json();
-      return data as MCPResponse;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout');
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Initialize connection to the MCP server
    */
   async initialize(): Promise<MCPServerInfo> {
-    const response = await this.sendRequest('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'Tulzo MCP Proxy', version: '1.0.0' },
+    const url = new URL(this.config.url);
+    const headers = this.buildHeaders();
+
+    // Create transport with custom headers
+    this.transport = new StreamableHTTPClientTransport(url, {
+      requestInit: {
+        headers,
+      },
     });
 
-    if (response.error) {
-      throw new Error(response.error.message);
-    }
+    // Create client
+    this.client = new Client({
+      name: 'Tulzo MCP Proxy',
+      version: '1.0.0',
+    });
 
-    return (response.result as { serverInfo?: MCPServerInfo })?.serverInfo || {};
+    // Connect
+    await this.client.connect(this.transport);
+
+    // Get server info from the client
+    const serverInfo = this.client.getServerVersion();
+    const capabilities = this.client.getServerCapabilities();
+
+    return {
+      name: serverInfo?.name,
+      version: serverInfo?.version,
+      description: serverInfo?.description,
+      capabilities: capabilities ? {
+        tools: capabilities.tools,
+        resources: capabilities.resources,
+        prompts: capabilities.prompts,
+      } : undefined,
+    };
   }
 
   /**
    * List available tools from the MCP server
    */
   async listTools(): Promise<MCPToolDefinition[]> {
-    const response = await this.sendRequest('tools/list');
-
-    if (response.error) {
-      throw new Error(response.error.message);
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
     }
 
-    const result = response.result as { tools?: MCPToolDefinition[] };
-    return result?.tools || [];
+    const result = await this.client.listTools();
+    return (result.tools || []).map(tool => {
+      // Cast to access potential outputSchema (not in standard MCP but some servers include it)
+      const toolWithOutput = tool as typeof tool & { outputSchema?: Record<string, unknown> };
+      return {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema as Record<string, unknown>,
+        outputSchema: toolWithOutput.outputSchema,
+        annotations: tool.annotations as Record<string, unknown>,
+        _meta: (tool as typeof tool & { _meta?: Record<string, unknown> })._meta,
+      };
+    });
   }
 
   /**
    * Call a tool on the MCP server
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    const response = await this.sendRequest('tools/call', {
-      name,
-      arguments: args,
-    });
-
-    if (response.error) {
-      throw new Error(response.error.message);
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
     }
 
-    return response.result;
+    const result = await this.client.callTool({ name, arguments: args });
+    return result;
   }
 
   /**
    * List available resources from the MCP server
    */
   async listResources(): Promise<MCPResourceDefinition[]> {
-    const response = await this.sendRequest('resources/list');
-
-    if (response.error) {
-      throw new Error(response.error.message);
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
     }
 
-    const result = response.result as { resources?: MCPResourceDefinition[] };
-    return result?.resources || [];
+    const result = await this.client.listResources();
+    return (result.resources || []).map(resource => ({
+      uri: resource.uri,
+      name: resource.name,
+      description: resource.description,
+      mimeType: resource.mimeType,
+    }));
   }
 
   /**
    * Read a resource from the MCP server
    */
   async readResource(uri: string): Promise<unknown> {
-    const response = await this.sendRequest('resources/read', { uri });
-
-    if (response.error) {
-      throw new Error(response.error.message);
+    if (!this.client) {
+      throw new Error('Client not initialized. Call initialize() first.');
     }
 
-    return response.result;
+    const result = await this.client.readResource({ uri });
+    return result;
+  }
+
+  /**
+   * Close the connection
+   */
+  async close(): Promise<void> {
+    if (this.client) {
+      await this.client.close();
+      this.client = null;
+    }
+    if (this.transport) {
+      await this.transport.close();
+      this.transport = null;
+    }
   }
 }
 
