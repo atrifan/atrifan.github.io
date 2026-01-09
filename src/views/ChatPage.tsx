@@ -616,20 +616,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setShowPersonalities(false);
   }, []);
 
-  // Handle Enter key - Enter to send, Cmd/Ctrl+Enter for new line
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter') {
-      if (e.metaKey || e.ctrlKey) {
-        // Cmd/Ctrl+Enter: insert new line
-        return; // Let default behavior add new line
-      } else if (!e.shiftKey) {
-        // Enter without modifiers: send message
-        e.preventDefault();
-        sendMessage();
-      }
-    }
-  }, [sendMessage]);
-
   // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const adjustTextareaHeight = useCallback(() => {
@@ -639,6 +625,30 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     }
   }, []);
+
+  // Handle Enter key - Enter to send, Cmd/Ctrl+Enter for new line
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl+Enter: insert new line manually
+        e.preventDefault();
+        const textarea = e.currentTarget;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newValue = message.substring(0, start) + '\n' + message.substring(end);
+        setMessage(newValue);
+        // Set cursor position after the newline
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + 1;
+          adjustTextareaHeight();
+        }, 0);
+      } else if (!e.shiftKey) {
+        // Enter without modifiers: send message
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+  }, [sendMessage, message, setMessage, adjustTextareaHeight]);
 
   // Show upgrade modal for non-Pro users
   if (!canAccessPro) {
@@ -1291,21 +1301,21 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     onFocus={closeSidebars}
                     placeholder={isQuotaExceeded ? 'Quota exceeded - upgrade or wait until next month' : `Message ${selectedModelData?.name}...`}
                     disabled={isQuotaExceeded || isLoading}
-                    rows={1}
+                    rows={3}
                     style={{
                       flex: 1,
                       background: isQuotaExceeded ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${isQuotaExceeded ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.15)'}`,
-                      borderRadius: '12px',
+                      borderRadius: '0.75rem',
                       padding: '0.875rem 1rem',
                       color: '#fff',
-                      fontSize: '0.95rem',
+                      fontSize: '1rem', // 16px minimum prevents iOS zoom
                       outline: 'none',
                       opacity: isQuotaExceeded ? 0.6 : 1,
                       resize: 'none',
-                      minHeight: '48px',
-                      maxHeight: '200px',
-                      lineHeight: '1.4',
+                      minHeight: '5rem', // ~3 lines
+                      maxHeight: '12.5rem',
+                      lineHeight: '1.5',
                       fontFamily: 'inherit',
                     }}
                   />
@@ -1316,9 +1326,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     style={{
                       background: isQuotaExceeded ? 'rgba(100,100,100,0.5)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                       border: 'none',
-                      borderRadius: '12px',
-                      width: '48px',
-                      height: '48px',
+                      borderRadius: '0.75rem',
+                      width: '3rem',
+                      height: '3rem',
                       color: '#fff',
                       cursor: isQuotaExceeded || isLoading ? 'not-allowed' : 'pointer',
                       display: 'flex',
@@ -1341,7 +1351,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     )}
                   </button>
                 </div>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', textAlign: 'center', marginTop: '0.5rem' }}>
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', textAlign: 'center', marginTop: '0.5rem' }}>
                   Enter to send • ⌘+Enter for new line • {formatCurrency(remainingBudget)} left • ~{formatTokenCount(estimatedTokensRemaining)} tokens
                 </p>
               </div>

@@ -457,7 +457,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
       <SideAds leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop} leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle} leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom} rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop} rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle} rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom} />
 
-      <View maxWidth="72rem" marginX="auto">
+      <View maxWidth="56rem" marginX="auto">
         <div style={{ marginBottom: '1.5rem' }}><BackToTools /></div>
         <AdBanner slot={ADS_CONFIG.slots.automationTop} format="horizontal" />
 
@@ -634,8 +634,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             {/* Builder Panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Prompt Input */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>✨ Describe your workflow</h3>
+              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '0.75rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ color: '#fff', fontSize: 'clamp(0.875rem, 2vw, 1rem)', margin: '0 0 0.75rem' }}>✨ Describe your workflow</h3>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
                   <textarea
                     value={prompt}
@@ -643,13 +643,23 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                       setPrompt(e.target.value);
                       // Auto-resize
                       e.target.style.height = 'auto';
-                      e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         if (e.metaKey || e.ctrlKey) {
-                          // Cmd/Ctrl+Enter: new line (default behavior)
-                          return;
+                          // Cmd/Ctrl+Enter: insert new line manually
+                          e.preventDefault();
+                          const textarea = e.currentTarget;
+                          const start = textarea.selectionStart;
+                          const end = textarea.selectionEnd;
+                          const newValue = prompt.substring(0, start) + '\n' + prompt.substring(end);
+                          setPrompt(newValue);
+                          setTimeout(() => {
+                            textarea.selectionStart = textarea.selectionEnd = start + 1;
+                            textarea.style.height = 'auto';
+                            textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+                          }, 0);
                         } else if (!e.shiftKey) {
                           // Enter: generate
                           e.preventDefault();
@@ -659,19 +669,19 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                     }}
                     placeholder="e.g., When I get a new email, extract the sender and save to a spreadsheet..."
                     disabled={isGenerating}
-                    rows={1}
+                    rows={3}
                     style={{
                       flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '0.5rem',
                       border: '1px solid rgba(255,255,255,0.2)',
                       background: 'rgba(0,0,0,0.3)',
                       color: '#fff',
-                      fontSize: '0.9rem',
+                      fontSize: '1rem', // 16px minimum prevents iOS zoom
                       resize: 'none',
-                      minHeight: '44px',
-                      maxHeight: '150px',
-                      lineHeight: '1.4',
+                      minHeight: '5rem', // ~3 lines
+                      maxHeight: '12.5rem',
+                      lineHeight: '1.5',
                       fontFamily: 'inherit',
                     }}
                   />
@@ -682,9 +692,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                     style={{
                       background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                       border: 'none',
-                      borderRadius: '8px',
-                      width: '44px',
-                      height: '44px',
+                      borderRadius: '0.5rem',
+                      width: '3rem',
+                      height: '3rem',
                       color: '#fff',
                       cursor: isGenerating || !prompt.trim() ? 'not-allowed' : 'pointer',
                       display: 'flex',
@@ -695,27 +705,27 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                     }}
                   >
                     {isGenerating ? (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
                         <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
                         <path d="M12 2a10 10 0 0 1 10 10" />
                       </svg>
                     ) : (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                       </svg>
                     )}
                   </button>
                 </div>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.4rem', marginBottom: 0 }}>
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', marginTop: '0.5rem', marginBottom: 0 }}>
                   Enter to generate • ⌘+Enter for new line
                 </p>
                 {lastTokenUsage && (
-                  <div style={{ marginTop: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                  <div style={{ marginTop: '0.35rem', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', color: 'rgba(255,255,255,0.4)' }}>
                     Last: ↑{lastTokenUsage.input} ↓{lastTokenUsage.output} tokens
                   </div>
                 )}
                 {lastExplanation && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>{lastExplanation}</div>
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '0.375rem', fontSize: 'clamp(0.8rem, 1.8vw, 0.9rem)', color: 'rgba(255,255,255,0.7)' }}>{lastExplanation}</div>
                 )}
               </div>
 
