@@ -374,7 +374,13 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
 
   if (specs.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={{
+        background: 'rgba(16, 185, 129, 0.1)',
+        border: '1px solid rgba(16, 185, 129, 0.3)',
+        borderRadius: '16px',
+        padding: 'clamp(1.5rem, 4vw, 2rem)',
+        textAlign: 'center',
+      }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>☁️</div>
         <h3 style={{ color: '#fff', margin: '0 0 0.5rem' }}>No REST APIs Imported</h3>
         <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 1rem' }}>

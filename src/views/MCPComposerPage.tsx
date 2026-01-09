@@ -323,7 +323,8 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
   // Function to refresh tools list (called when REST API tools change)
   const refreshTools = async () => {
     try {
-      const toolsRes = await fetch('/api/tools');
+      // Use cache: 'no-store' to bypass browser cache after mutations
+      const toolsRes = await fetch('/api/tools', { cache: 'no-store' });
       const toolsData: ToolsResponse = await toolsRes.json();
       setTools(toolsData.tools);
       setCategories(toolsData.categories);
