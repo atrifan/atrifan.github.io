@@ -308,6 +308,48 @@ body {
   }
 }
 
+/* Chat FAB Container - Mobile only */
+.chat-fab-container {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .chat-fab-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: fixed;
+    bottom: 100px;
+    right: 1rem;
+    z-index: 90;
+  }
+
+  .chat-fab {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .chat-fab-primary {
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    color: #fff;
+  }
+
+  .chat-fab-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
 /* Mobile Chat Layout - ChatGPT style */
 .chat-mobile-container {
   display: none;
@@ -339,10 +381,11 @@ body {
     background: rgba(10, 10, 20, 0.98);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
     display: flex;
     align-items: flex-end;
     gap: 0.5rem;
-    z-index: 100;
+    z-index: 9999;
   }
 
   .chat-mobile-input-bar textarea {
