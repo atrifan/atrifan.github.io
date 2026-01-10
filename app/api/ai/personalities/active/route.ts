@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/src/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 // POST - Link a personality (make it active)
 export async function POST(request: NextRequest) {
@@ -17,11 +13,6 @@ export async function POST(request: NextRequest) {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
     }
 
     const body = await request.json();
@@ -32,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify personality belongs to user
-    const { data: personality } = await supabase
+    const { data: personality } = await db
       .from('chat_personalities')
       .select('id')
       .eq('id', personalityId)
@@ -44,17 +35,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current max priority
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('chat_active_personalities')
       .select('priority')
       .eq('user_id', userId)
       .order('priority', { ascending: false })
       .limit(1);
 
-    const newPriority = priority ?? ((existing?.[0]?.priority ?? -1) + 1);
+    const newPriority = priority ?? (((existing as { priority: number }[] | null)?.[0]?.priority ?? -1) + 1);
 
     // Insert or update
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('chat_active_personalities')
       .upsert({
         user_id: userId,
@@ -84,11 +75,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const { searchParams } = new URL(request.url);
     const personalityId = searchParams.get('personalityId');
 
@@ -96,7 +82,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Personality ID required' }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('chat_active_personalities')
       .delete()
       .eq('user_id', userId)
@@ -122,11 +108,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const body = await request.json();
     const { orderedIds } = body; // Array of personality IDs in order
 
@@ -136,7 +117,7 @@ export async function PUT(request: NextRequest) {
 
     // Update priorities
     for (let i = 0; i < orderedIds.length; i++) {
-      await supabase
+      await db
         .from('chat_active_personalities')
         .update({ priority: i })
         .eq('user_id', userId)

@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/src/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 // GET - List user's chat connectors
 export async function GET() {
@@ -19,13 +15,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     // Get all connectors for this user
-    const { data: connectors, error } = await supabase
+    const { data: connectors, error } = await db
       .from('chat_connectors')
       .select(`
         id,
@@ -62,11 +53,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const body = await request.json();
     const { 
       connectorType, 
@@ -85,9 +71,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid connector type' }, { status: 400 });
     }
 
-    // For internal_mcp, verify the MCP server exists and belongs to user
-    if (connectorType === 'internal_mcp' && mcpServerId) {
-      const { data: mcpServer } = await supabase
+    // For external_mcp (imported MCP servers), verify the MCP server exists and belongs to user
+    if (connectorType === 'external_mcp' && mcpServerId) {
+      const { data: mcpServer } = await db
         .from('mcp_servers')
         .select('id, display_name')
         .eq('id', mcpServerId)
@@ -99,13 +85,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
+    // For internal_mcp (api_key servers), verify the api_key exists and belongs to user
+    if (connectorType === 'internal_mcp' && mcpServerId) {
+      const { data: apiKey } = await db
+        .from('api_keys')
+        .select('id, server_name')
+        .eq('id', mcpServerId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!apiKey) {
+        return NextResponse.json({ error: 'Server not found' }, { status: 404 });
+      }
+    }
+
+    // Note: mcp_server_id only works for external_mcp (references mcp_servers table)
+    // For internal_mcp, we store the api_key_id in external_url as a reference
+    const { data, error } = await db
       .from('chat_connectors')
       .insert({
         user_id: userId,
         connector_type: connectorType,
-        mcp_server_id: connectorType === 'internal_mcp' ? mcpServerId : null,
-        external_url: ['external_mcp', 'external_agent'].includes(connectorType) ? externalUrl : null,
+        mcp_server_id: connectorType === 'external_mcp' ? mcpServerId : null,
+        external_url: externalUrl || null,
         external_auth_type: externalAuthType || 'none',
         external_auth_config: externalAuthConfig || {},
         external_headers: externalHeaders || {},
@@ -139,11 +141,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const { searchParams } = new URL(request.url);
     const connectorId = searchParams.get('id');
 
@@ -151,7 +148,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Connector ID required' }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('chat_connectors')
       .delete()
       .eq('id', connectorId)

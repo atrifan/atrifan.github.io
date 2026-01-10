@@ -223,6 +223,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [newPersonality, setNewPersonality] = useState({ name: '', description: '', icon: '🤖', systemPrompt: '' });
   const [creatingPersonality, setCreatingPersonality] = useState(false);
 
+  // Chat config popover state
+  const [showChatConfig, setShowChatConfig] = useState(false);
+
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
 
@@ -442,6 +445,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Add internal MCP connector
   const addInternalMcpConnector = async (server: MCPServer) => {
     try {
+      // Construct the internal MCP URL: PUBLIC_URL/api/mcp/<api_key>/<server_name>
+      // We need to get the API key for this server - for now use the server_name
+      const baseUrl = process.env.NEXT_PUBLIC_URL || window.location.origin;
+      const serverPath = server.server_name === 'default' ? '' : `/${server.server_name}`;
+      const internalUrl = `${baseUrl}/api/mcp/[api_key]${serverPath}`;
+
       const response = await fetch('/api/ai/connectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -449,13 +458,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           connectorType: 'internal_mcp',
           mcpServerId: server.id,
           displayName: server.display_name,
-          description: `${server.toolCount} tools available`,
+          description: `${server.toolCount} tools`,
           icon: '🔧',
+          externalUrl: internalUrl,
         }),
       });
       if (response.ok) {
         fetchConnectors();
         setShowAddConnector(null);
+      } else {
+        const err = await response.json();
+        console.error('Failed to add connector:', err);
       }
     } catch (err) {
       console.error('Failed to add connector:', err);
@@ -472,7 +485,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           connectorType: 'external_mcp',
           mcpServerId: server.id,
           displayName: server.display_name,
-          description: `${server.toolCount} tools from ${server.source_url || 'external server'}`,
+          description: `${server.toolCount} tools`,
           icon: '🌐',
           externalUrl: server.source_url,
         }),
@@ -495,7 +508,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         body: JSON.stringify({
           connectorType: 'external_agent',
           displayName: agent.display_name,
-          description: agent.description || `A2A Agent at ${agent.agent_url}`,
+          description: agent.description ? agent.description.slice(0, 50) : 'A2A Agent',
           icon: '🤖',
           externalUrl: agent.agent_url,
         }),
@@ -821,8 +834,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           <button onClick={() => { setShowHistory(!showHistory); setShowConnectors(false); setShowPersonalities(false); }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
             📜 History
           </button>
-          <button onClick={() => { setShowConnectors(!showConnectors); setShowHistory(false); setShowPersonalities(false); }} style={{ background: showConnectors ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+          <button onClick={() => { setShowConnectors(!showConnectors); setShowHistory(false); setShowPersonalities(false); }} style={{ background: showConnectors ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
             🔌 Connectors
+            {connectors.length > 0 && (
+              <span style={{ background: '#8b5cf6', color: '#fff', borderRadius: '10px', padding: '0.1rem 0.35rem', fontSize: '0.65rem', fontWeight: 600 }}>
+                {connectors.length}
+              </span>
+            )}
           </button>
           <button onClick={() => { setShowPersonalities(!showPersonalities); setShowHistory(false); setShowConnectors(false); }} style={{ background: showPersonalities ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
             🎭 Persona
@@ -897,11 +915,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   {connectors.length > 0 && (
                     <div style={{ marginBottom: '1rem' }}>
                       <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Active</div>
-                      {connectors.map(conn => (
+                      {connectors.map(conn => {
+                        const isExternal = conn.connector_type === 'external_mcp' || conn.connector_type === 'external_agent';
+                        return (
                         <div key={conn.id} style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '0.6rem', marginBottom: '0.4rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <span>{conn.icon}</span>
+                              {isExternal && conn.external_url ? (
+                                <FaviconImage
+                                  baseUrl={conn.external_url}
+                                  alt={conn.display_name}
+                                  size={18}
+                                  borderRadius={4}
+                                  fallbackEmoji={conn.icon}
+                                  fallbackBgColor="transparent"
+                                />
+                              ) : (
+                                <span>{conn.icon}</span>
+                              )}
                               <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{conn.display_name}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -925,7 +956,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                             {conn.description && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conn.description}</span>}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1444,41 +1476,164 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
               {/* Input Area */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', marginTop: '1rem' }}>
-                {/* Model Selector Dropdown */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Model:</span>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      padding: '0.4rem 0.6rem',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      cursor: 'pointer',
-                      outline: 'none',
-                      appearance: 'none',
-                      paddingRight: '1.5rem',
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                      backgroundRepeat: 'no-repeat',
-                      backgroundPosition: 'right 0.5rem center',
-                    }}
-                  >
-                    {availableModels.map(m => (
-                      <option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>
-                        {m.icon} {m.name}
-                      </option>
-                    ))}
-                  </select>
-                  {tier === 'pro' && (
-                    <Link href="/pricing" style={{ textDecoration: 'none' }}>
-                      <span style={{ color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }}>⬆️ More models</span>
-                    </Link>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+                  {/* Chat Config Button */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setShowChatConfig(!showChatConfig)}
+                      title="Chat configuration"
+                      style={{
+                        background: showChatConfig ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)',
+                        border: `1px solid ${showChatConfig ? 'rgba(139, 92, 246, 0.5)' : 'rgba(255,255,255,0.15)'}`,
+                        borderRadius: '0.75rem',
+                        width: '3rem',
+                        height: '3rem',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.2rem',
+                        flexShrink: 0,
+                      }}
+                    >
+                      ⚙️
+                    </button>
+                    {/* Config badge showing active items */}
+                    {(connectors.length > 0 || activePersonalityIds.length > 0) && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        right: '-4px',
+                        background: '#8b5cf6',
+                        color: '#fff',
+                        borderRadius: '10px',
+                        padding: '0.1rem 0.35rem',
+                        fontSize: '0.6rem',
+                        fontWeight: 600,
+                        minWidth: '16px',
+                        textAlign: 'center',
+                      }}>
+                        {connectors.length + activePersonalityIds.length}
+                      </div>
+                    )}
+
+                    {/* Chat Config Popover */}
+                    {showChatConfig && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: 0,
+                        marginBottom: '0.5rem',
+                        background: 'rgba(20, 20, 35, 0.98)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        minWidth: '280px',
+                        maxWidth: '320px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        zIndex: 100,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>Chat Config</span>
+                          <button onClick={() => setShowChatConfig(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+                        </div>
+
+                        {/* Model Selection */}
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Model</div>
+                          <select
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            style={{
+                              width: '100%',
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              borderRadius: '8px',
+                              padding: '0.5rem',
+                              color: '#fff',
+                              fontSize: '0.85rem',
+                              cursor: 'pointer',
+                              outline: 'none',
+                            }}
+                          >
+                            {availableModels.map(m => (
+                              <option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>
+                                {m.icon} {m.name}
+                              </option>
+                            ))}
+                          </select>
+                          {tier === 'pro' && (
+                            <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                              <span style={{ color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer', display: 'block', marginTop: '0.25rem' }}>⬆️ Upgrade for more models</span>
+                            </Link>
+                          )}
+                        </div>
+
+                        {/* Active Connectors */}
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connectors ({connectors.length})</span>
+                            <button onClick={() => { setShowChatConfig(false); setShowConnectors(true); }} style={{ background: 'none', border: 'none', color: '#8b5cf6', cursor: 'pointer', fontSize: '0.7rem' }}>Edit</button>
+                          </div>
+                          {connectors.length === 0 ? (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>No connectors active</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {connectors.map(c => {
+                                const isExternal = c.connector_type === 'external_mcp' || c.connector_type === 'external_agent';
+                                const bgColor = c.connector_type === 'internal_mcp' ? 'rgba(139, 92, 246, 0.15)' :
+                                               c.connector_type === 'external_mcp' ? 'rgba(16, 185, 129, 0.15)' :
+                                               'rgba(245, 158, 11, 0.15)';
+                                return (
+                                  <div key={c.id} style={{ background: bgColor, padding: '0.4rem 0.5rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    {isExternal && c.external_url ? (
+                                      <FaviconImage
+                                        baseUrl={c.external_url}
+                                        alt={c.display_name}
+                                        size={16}
+                                        borderRadius={3}
+                                        fallbackEmoji={c.icon}
+                                        fallbackBgColor="transparent"
+                                      />
+                                    ) : (
+                                      <span style={{ fontSize: '0.9rem' }}>{c.icon}</span>
+                                    )}
+                                    <span style={{ color: '#fff', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Active Personalities */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personalities ({activePersonalityIds.length})</span>
+                            <button onClick={() => { setShowChatConfig(false); setShowPersonalities(true); }} style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: '0.7rem' }}>Edit</button>
+                          </div>
+                          {activePersonalityIds.length === 0 ? (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>No personalities active</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {activePersonalities.map(p => (
+                                <div key={p.id} style={{ background: 'rgba(245, 158, 11, 0.15)', padding: '0.4rem 0.5rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontSize: '0.9rem' }}>{p.icon}</span>
+                                  <span style={{ color: '#fff', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {activePersonalityIds.length > 0 && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', marginTop: '0.35rem' }}>
+                              ~{totalSystemPromptTokens} tokens in system prompt
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <textarea
                     ref={textareaRef}
                     value={message}

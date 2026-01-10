@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/src/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 // Estimate token count (rough: ~4 chars per token)
 function estimateTokens(text: string): number {
@@ -25,13 +21,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     // Get all personalities
-    const { data: personalities, error: pError } = await supabase
+    const { data: personalities, error: pError } = await db
       .from('chat_personalities')
       .select('*')
       .eq('user_id', userId)
@@ -43,7 +34,7 @@ export async function GET() {
     }
 
     // Get active personalities
-    const { data: active, error: aError } = await supabase
+    const { data: active, error: aError } = await db
       .from('chat_active_personalities')
       .select('personality_id, priority')
       .eq('user_id', userId)
@@ -53,11 +44,11 @@ export async function GET() {
       console.error('Error fetching active personalities:', aError);
     }
 
-    const activeIds = (active || []).map(a => a.personality_id);
-    
+    const activeIds = (active || []).map((a: { personality_id: string }) => a.personality_id);
+
     // Calculate combined system prompt tokens
-    const activePersonalities = (personalities || []).filter(p => activeIds.includes(p.id));
-    const totalSystemTokens = activePersonalities.reduce((sum, p) => sum + (p.prompt_token_count || 0), 0);
+    const activePersonalities = (personalities || []).filter((p: { id: string }) => activeIds.includes(p.id));
+    const totalSystemTokens = activePersonalities.reduce((sum: number, p: { prompt_token_count?: number }) => sum + (p.prompt_token_count || 0), 0);
 
     return NextResponse.json({
       personalities: personalities || [],
@@ -78,11 +69,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const body = await request.json();
     const { name, description, icon, systemPrompt, isDefault } = body;
 
@@ -92,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     const tokenCount = estimateTokens(systemPrompt);
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('chat_personalities')
       .insert({
         user_id: userId,
@@ -108,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating personality:', error);
-      if (error.code === '23505') {
+      if ((error as { code?: string }).code === '23505') {
         return NextResponse.json({ error: 'A personality with this name already exists' }, { status: 409 });
       }
       return NextResponse.json({ error: 'Failed to create personality' }, { status: 500 });
@@ -129,11 +115,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const body = await request.json();
     const { id, name, description, icon, systemPrompt, isDefault } = body;
 
@@ -151,7 +132,7 @@ export async function PUT(request: NextRequest) {
     }
     if (isDefault !== undefined) updates.is_default = isDefault;
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('chat_personalities')
       .update(updates)
       .eq('id', id)
@@ -179,11 +160,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
-
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -191,7 +167,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Personality ID required' }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('chat_personalities')
       .delete()
       .eq('id', id)
