@@ -747,9 +747,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             </div>
 
             {/* Builder Panel */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '60vh' }}>
               {/* Mermaid Diagram - Now at the top */}
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minHeight: '300px' }}>
                 <MermaidDiagram definition={mermaidDiagram} title={currentAutomation?.name || 'Workflow'} />
               </div>
 
