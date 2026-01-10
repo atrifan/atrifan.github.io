@@ -1036,3 +1036,61 @@ export async function getMCPServerToolDetails(
   };
 }
 
+// ============ A2A Agents ============
+
+/**
+ * A2A Agent row type
+ */
+export interface A2AAgentRow {
+  id: string;
+  user_id: string;
+  agent_name: string;
+  display_name: string;
+  agent_url: string;
+  environment_name: string;
+  agent_card: Record<string, unknown>;
+  version: string | null;
+  protocol_version: string | null;
+  description: string | null;
+  icon_url: string | null;
+  tags: string[];
+  category: string;
+  auth_type: 'none' | 'api_key' | 'bearer' | 'basic';
+  auth_config: Record<string, unknown>;
+  default_headers: Record<string, string>;
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
+  has_widget: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get A2A agent by tool name
+ * Tool names follow the pattern: a2a_{env}-{agent_name}
+ */
+export async function getA2AAgentByToolName(toolName: string): Promise<A2AAgentRow | null> {
+  // Parse tool name: a2a_{env}-{agent_name}
+  const match = toolName.match(/^a2a_([^-]+)-(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, envName, agentName] = match;
+
+  const { data, error } = await supabase
+    .from('a2a_agents')
+    .select('*')
+    .eq('agent_name', agentName)
+    .eq('environment_name', envName)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    console.error('Error fetching A2A agent:', error);
+    throw error;
+  }
+
+  return data as unknown as A2AAgentRow;
+}
+

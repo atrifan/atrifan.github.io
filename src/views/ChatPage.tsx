@@ -139,6 +139,7 @@ interface BudgetData {
     totalTokens: number;
     budgetUsedPercent: number;
     remainingBudget: number;
+    byModel: Record<string, { inputTokens: number; outputTokens: number; cost: number; count: number }>;
   };
   models: ModelBudgetInfo[];
 }
@@ -237,6 +238,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Model statistics collapsed state (desktop)
   const [modelStatsExpanded, setModelStatsExpanded] = useState(false);
 
+  // Model selector dropdown state
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+
   // Detect mobile on mount and resize
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -325,6 +330,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showChatConfig]);
+
+  // Close model dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+        setShowModelDropdown(false);
+      }
+    };
+
+    if (showModelDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showModelDropdown]);
 
   // Fetch conversation history
   const fetchConversations = async () => {
@@ -917,8 +939,22 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '1.25rem', flexShrink: 0 }}>←</Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-              <span style={{ fontSize: '1.25rem' }}>{selectedModelData?.icon || '💬'}</span>
-              <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedModelData?.name || 'Chat'}</span>
+              {isExternalAgentSelected && selectedAgentConnector ? (
+                <>
+                  <FaviconImage
+                    iconUrl={selectedAgentConnector.icon_url || undefined}
+                    baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined}
+                    size={24}
+                    fallbackEmoji="🤖"
+                  />
+                  <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedAgentConnector.display_name}</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: '1.25rem' }}>{selectedModelData?.icon || '💬'}</span>
+                  <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedModelData?.name || 'Chat'}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -974,12 +1010,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 {connectors.length > 0 && (
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Active ({connectors.length})</div>
-                    {connectors.map(c => (
-                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', marginBottom: '0.25rem' }}>
-                        <span style={{ color: '#fff', fontSize: '0.8rem' }}>{c.display_name}</span>
-                        <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                      </div>
-                    ))}
+                    {connectors.map(c => {
+                      const typeConfig = c.connector_type === 'external_agent'
+                        ? { bg: 'rgba(16, 185, 129, 0.1)', badge: 'Agent', badgeBg: '#10b981' }
+                        : c.connector_type === 'external_mcp'
+                        ? { bg: 'rgba(59, 130, 246, 0.1)', badge: 'Ext MCP', badgeBg: '#3b82f6' }
+                        : { bg: 'rgba(139, 92, 246, 0.1)', badge: 'Native', badgeBg: '#8b5cf6' };
+                      const fallbackUrl = c.external_url?.startsWith('http') ? c.external_url : undefined;
+                      return (
+                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: typeConfig.bg, borderRadius: '8px', marginBottom: '0.25rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                            <FaviconImage iconUrl={c.icon_url || undefined} baseUrl={fallbackUrl} size={18} fallbackEmoji={c.icon || (c.connector_type === 'external_agent' ? '🤖' : c.connector_type === 'external_mcp' ? '🌐' : '🔧')} />
+                            <span style={{ color: '#fff', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</span>
+                            <span style={{ background: typeConfig.badgeBg, color: '#fff', padding: '0.1rem 0.25rem', borderRadius: '3px', fontSize: '0.5rem', fontWeight: 600, flexShrink: 0 }}>{typeConfig.badge}</span>
+                          </div>
+                          <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0 }}>✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <button onClick={() => setShowMobileOverlay(true)} style={{ width: '100%', padding: '0.5rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>+ Add Connector</button>
@@ -1021,11 +1069,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               <>
                 {/* External Agent Welcome */}
                 <div style={{ marginBottom: '1rem' }}>
-                  {selectedAgentConnector.icon_url ? (
-                    <FaviconImage iconUrl={selectedAgentConnector.icon_url} size={64} />
-                  ) : (
-                    <div style={{ fontSize: '3rem' }}>🤖</div>
-                  )}
+                  <FaviconImage
+                    iconUrl={selectedAgentConnector.icon_url || undefined}
+                    baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined}
+                    size={64}
+                    fallbackEmoji="🤖"
+                  />
                 </div>
                 <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Start chatting with {selectedAgentConnector.display_name}</h2>
                 <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', maxWidth: '400px' }}>Ask questions, get help or chat.</p>
@@ -1071,11 +1120,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
                         {isAgentMessage && agentConnector ? (
                           <>
-                            {agentConnector.icon_url ? (
-                              <FaviconImage iconUrl={agentConnector.icon_url} size={14} />
-                            ) : (
-                              <span>🤖</span>
-                            )}
+                            <FaviconImage
+                              iconUrl={agentConnector.icon_url || undefined}
+                              baseUrl={agentConnector.external_url?.startsWith('http') ? agentConnector.external_url : undefined}
+                              size={14}
+                              fallbackEmoji="🤖"
+                            />
                             <span>{agentConnector.display_name}</span>
                           </>
                         ) : (
@@ -1170,7 +1220,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
           {/* Helper text */}
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', textAlign: 'center', marginTop: '0.5rem' }}>
-            Enter to send • ⌘+Enter for new line • {isExternalAgentSelected ? '∞ tokens (free)' : `~${formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens left`}
+            Enter to send • ⌘+Enter for new line • {isExternalAgentSelected ? '∞ tokens (free)' : `~${formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens left • ${formatCurrency(remainingBudget)} remaining`}
           </p>
         </div>
       </div>
@@ -1219,21 +1269,56 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   </div>
                 </div>
 
-                {/* Model Selection */}
-                <div style={{ marginBottom: '1.5rem' }}>
+                {/* Model Selection - Custom Dropdown */}
+                <div style={{ marginBottom: '1.5rem' }} ref={modelDropdownRef}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Model / Agent</div>
-                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', padding: '0.75rem', color: '#fff', fontSize: '1rem', cursor: 'pointer', outline: 'none' }}>
-                    <optgroup label="AI Models" style={{ background: '#1a1a2e' }}>
-                      {availableModels.map(m => (<option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>{m.icon} {m.name}</option>))}
-                    </optgroup>
-                    {externalAgentConnectors.length > 0 && (
-                      <optgroup label="External Agents" style={{ background: '#1a1a2e' }}>
-                        {externalAgentConnectors.map(agent => (
-                          <option key={agent.id} value={`agent:${agent.id}`} style={{ background: '#1a1a2e' }}>🤖 {agent.display_name}</option>
+                  <div style={{ position: 'relative' }}>
+                    {/* Selected Value Button */}
+                    <button
+                      onClick={() => setShowModelDropdown(!showModelDropdown)}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', padding: '0.75rem', color: '#fff', fontSize: '1rem', cursor: 'pointer', outline: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                        {isExternalAgentSelected && selectedAgentConnector ? (
+                          <>
+                            <FaviconImage iconUrl={selectedAgentConnector.icon_url || undefined} baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined} size={20} fallbackEmoji="🤖" />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedAgentConnector.display_name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{selectedModelData?.icon || '💬'}</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedModelData?.name || 'Select Model'}</span>
+                          </>
+                        )}
+                      </div>
+                      <span style={{ transform: showModelDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>▼</span>
+                    </button>
+                    {/* Dropdown Menu */}
+                    {showModelDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', maxHeight: '300px', overflowY: 'auto', zIndex: 100 }}>
+                        {/* AI Models Section */}
+                        <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
+                        {availableModels.map(m => (
+                          <button key={m.id} onClick={() => { setSelectedModel(m.id); setShowModelDropdown(false); }} style={{ width: '100%', padding: '0.6rem 0.75rem', background: selectedModel === m.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', textAlign: 'left' }}>
+                            <span>{m.icon}</span>
+                            <span>{m.name}</span>
+                          </button>
                         ))}
-                      </optgroup>
+                        {/* External Agents Section */}
+                        {externalAgentConnectors.length > 0 && (
+                          <>
+                            <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
+                            {externalAgentConnectors.map(agent => (
+                              <button key={agent.id} onClick={() => { setSelectedModel(`agent:${agent.id}`); setShowModelDropdown(false); }} style={{ width: '100%', padding: '0.6rem 0.75rem', background: selectedModel === `agent:${agent.id}` ? 'rgba(16, 185, 129, 0.2)' : 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', textAlign: 'left' }}>
+                                <FaviconImage iconUrl={agent.icon_url || undefined} baseUrl={agent.external_url?.startsWith('http') ? agent.external_url : undefined} size={20} fallbackEmoji="🤖" />
+                                <span>{agent.display_name}</span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
                     )}
-                  </select>
+                  </div>
 
                   {/* Model Stats Collapsible */}
                   {(budgetData && budgetData.models.length > 0) || externalAgentConnectors.length > 0 ? (
@@ -1244,30 +1329,65 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       </button>
                       {modelStatsExpanded && (
                         <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                          {budgetData?.models.map(m => (
-                            <div key={m.modelId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                              <span style={{ fontSize: '1rem' }}>{m.icon}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.modelName}</div>
-                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>{m.requestCount} requests • {formatCurrency(m.usedCost)}</div>
+                          {/* Token Summary */}
+                          {budgetData && (
+                            <div style={{ padding: '0.5rem', marginBottom: '0.5rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.65rem' }}>Total Tokens Used</span>
+                                <span style={{ color: '#a78bfa', fontSize: '0.75rem', fontWeight: 600 }}>{formatTokenCount(budgetData.usage.totalTokens)}</span>
                               </div>
-                              <UsageDonut percent={m.usagePercent} size={24} strokeWidth={3} />
+                              <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.6rem' }}>
+                                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
+                                  ↑ {formatTokenCount(Object.values(budgetData.usage.byModel || {}).reduce((sum, m) => sum + m.inputTokens, 0))} in
+                                </span>
+                                <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
+                                  ↓ {formatTokenCount(Object.values(budgetData.usage.byModel || {}).reduce((sum, m) => sum + m.outputTokens, 0))} out
+                                </span>
+                              </div>
                             </div>
-                          ))}
+                          )}
+                          {/* All Available Models */}
+                          {availableModels.map(m => {
+                            const modelBudget = budgetData?.models.find(b => b.modelId === m.id);
+                            const modelUsage = budgetData?.usage.byModel?.[m.id];
+                            return (
+                              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ fontSize: '1rem' }}>{m.icon}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</div>
+                                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
+                                    {modelBudget?.requestCount || 0} req • {formatCurrency(modelBudget?.usedCost || 0)}
+                                    {modelUsage ? <span> • ↑{formatTokenCount(modelUsage.inputTokens)} ↓{formatTokenCount(modelUsage.outputTokens)}</span> : <span> • ↑0 ↓0</span>}
+                                  </div>
+                                </div>
+                                <UsageDonut percent={modelBudget?.usagePercent || 0} size={24} strokeWidth={3} />
+                              </div>
+                            );
+                          })}
                           {/* External Agents Stats */}
-                          {externalAgentConnectors.map(agent => (
-                            <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                              {agent.icon_url ? (
-                                <FaviconImage iconUrl={agent.icon_url} size={20} />
-                              ) : (
-                                <span style={{ fontSize: '1rem' }}>🤖</span>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.display_name}</div>
-                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>External Agent • $0.00</div>
+                          {externalAgentConnectors.map(agent => {
+                            // Calculate tokens from current conversation messages for this agent
+                            const agentMessages = messages.filter(m => m.model === `agent:${agent.id}`);
+                            const agentInputTokens = agentMessages.reduce((sum, m) => sum + (m.tokens?.input || 0), 0);
+                            const agentOutputTokens = agentMessages.reduce((sum, m) => sum + (m.tokens?.output || 0), 0);
+                            const agentRequestCount = agentMessages.length;
+                            return (
+                              <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <FaviconImage
+                                  iconUrl={agent.icon_url || undefined}
+                                  baseUrl={agent.external_url?.startsWith('http') ? agent.external_url : undefined}
+                                  size={20}
+                                  fallbackEmoji="🤖"
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.display_name}</div>
+                                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
+                                    {agentRequestCount} req • $0.00 • ↑{formatTokenCount(agentInputTokens)} ↓{formatTokenCount(agentOutputTokens)} <span style={{ color: '#10b981' }}>(free)</span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1282,19 +1402,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   </div>
                   {connectors.length > 0 && (
                     <div style={{ marginBottom: '0.5rem' }}>
-                      {connectors.map(c => (
-                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: c.connector_type === 'external_agent' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', marginBottom: '0.25rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {c.icon_url ? (
-                              <FaviconImage iconUrl={c.icon_url} size={20} />
-                            ) : (
-                              <span style={{ fontSize: '1rem' }}>{c.icon || (c.connector_type === 'external_agent' ? '🤖' : '🔌')}</span>
-                            )}
-                            <span style={{ color: '#fff', fontSize: '0.85rem' }}>{c.display_name}</span>
+                      {connectors.map(c => {
+                        const typeConfig = c.connector_type === 'external_agent'
+                          ? { bg: 'rgba(16, 185, 129, 0.1)', badge: 'Agent', badgeBg: '#10b981', badgeColor: '#fff' }
+                          : c.connector_type === 'external_mcp'
+                          ? { bg: 'rgba(59, 130, 246, 0.1)', badge: 'Ext MCP', badgeBg: '#3b82f6', badgeColor: '#fff' }
+                          : { bg: 'rgba(139, 92, 246, 0.1)', badge: 'Native', badgeBg: '#8b5cf6', badgeColor: '#fff' };
+                        const fallbackUrl = c.external_url?.startsWith('http') ? c.external_url : undefined;
+                        return (
+                          <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: typeConfig.bg, borderRadius: '8px', marginBottom: '0.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                              <FaviconImage iconUrl={c.icon_url || undefined} baseUrl={fallbackUrl} size={20} fallbackEmoji={c.icon || (c.connector_type === 'external_agent' ? '🤖' : c.connector_type === 'external_mcp' ? '🌐' : '🔧')} />
+                              <span style={{ color: '#fff', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</span>
+                              <span style={{ background: typeConfig.badgeBg, color: typeConfig.badgeColor, padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.55rem', fontWeight: 600, flexShrink: 0 }}>{typeConfig.badge}</span>
+                            </div>
+                            <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', flexShrink: 0 }}>✕</button>
                           </div>
-                          <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   <button onClick={() => setMobileOverlayMode('connectors')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Connector</button>

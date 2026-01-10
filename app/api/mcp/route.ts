@@ -17,7 +17,10 @@ import {
   getGraphQLOperationWithDetails,
   getToolByName,
   getMCPServerToolDetails,
+  getA2AAgentByToolName,
 } from '@/src/lib/supabase-services';
+import { ClientFactory } from '@a2a-js/sdk/client';
+import { v4 as uuidv4 } from 'uuid';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
 import { executeGraphQLCall } from '@/src/lib/graphql-handler';
 import { createMCPClient } from '@/src/lib/mcp-client';
@@ -710,13 +713,86 @@ async function executeToolAsync(
     }
   }
 
-  // Handle other tool types
-  switch (dbTool.tool_type) {
-    case 'A2A':
-      throw new Error(`A2A tool execution not yet implemented: ${name}`);
-    default:
-      throw new Error(`Unknown tool type for: ${name}`);
+  // Handle A2A agent tools
+  if (dbTool.tool_type === 'A2A') {
+    const agent = await getA2AAgentByToolName(name);
+    if (!agent) {
+      throw new Error(`A2A agent not found for tool: ${name}`);
+    }
+
+    try {
+      // Create A2A client using official SDK
+      const factory = new ClientFactory();
+      const client = await factory.createFromUrl(agent.agent_url);
+
+      // Extract query from args (A2A tools expect a 'query' parameter)
+      const query = (args.query as string) || JSON.stringify(args);
+
+      // Send message to agent
+      const response = await client.sendMessage({
+        message: {
+          messageId: uuidv4(),
+          role: 'user',
+          parts: [{ kind: 'text', text: query }],
+          kind: 'message',
+        },
+      });
+
+      // Extract text from response
+      let resultText = '';
+      if (response.kind === 'message') {
+        // Direct message response
+        const parts = (response as { parts?: Array<{ kind: string; text?: string }> }).parts || [];
+        resultText = parts
+          .filter((p: { kind: string }) => p.kind === 'text')
+          .map((p: { text?: string }) => p.text || '')
+          .join('\n');
+      } else if (response.kind === 'task') {
+        // Task response - extract from artifacts or history
+        const task = response as {
+          status?: { state: string };
+          artifacts?: Array<{ parts?: Array<{ kind: string; text?: string }> }>;
+          history?: Array<{ role: string; parts?: Array<{ kind: string; text?: string }> }>;
+        };
+        if (task.artifacts && task.artifacts.length > 0) {
+          resultText = task.artifacts
+            .flatMap(a => a.parts || [])
+            .filter(p => p.kind === 'text')
+            .map(p => p.text || '')
+            .join('\n');
+        } else if (task.history) {
+          // Get last agent message from history
+          const agentMessages = task.history.filter(m => m.role === 'agent');
+          if (agentMessages.length > 0) {
+            const lastMessage = agentMessages[agentMessages.length - 1];
+            resultText = (lastMessage.parts || [])
+              .filter(p => p.kind === 'text')
+              .map(p => p.text || '')
+              .join('\n');
+          }
+        }
+        if (!resultText) {
+          resultText = `Task ${task.status?.state || 'completed'}`;
+        }
+      }
+
+      return {
+        result: resultText || 'Agent returned no response',
+        isRestTool: false,
+        toolInfo: {
+          hasWidget: false,
+          invokingMessage: dbTool.invoking_message || `Calling ${agent.display_name}...`,
+          invokedMessage: dbTool.invoked_message || 'Agent response received',
+        },
+      };
+    } catch (error) {
+      console.error('A2A agent call failed:', error);
+      throw new Error(`A2A agent call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
+
+  // Handle other tool types
+  throw new Error(`Unknown tool type for: ${name}`);
 }
 
 // Format REST API result as text

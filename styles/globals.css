@@ -677,6 +677,15 @@ body {
   background: rgba(10, 10, 20, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  /* Hide on mobile - settings overlay has all this info */
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .chat-fullscreen-header {
+    display: block;
+    padding: 1rem 2rem;
+  }
 }
 
 .chat-fullscreen-messages {
@@ -695,10 +704,6 @@ body {
 }
 
 @media (min-width: 768px) {
-  .chat-fullscreen-header {
-    padding: 1rem 2rem;
-  }
-
   .chat-fullscreen-messages {
     padding: 1.5rem 2rem;
   }

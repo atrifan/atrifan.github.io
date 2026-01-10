@@ -365,13 +365,16 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
         }
       }
 
+      // Use URL from agent card if available, otherwise fall back to import URL
+      const effectiveAgentUrl = agentCard?.url || url.trim();
+
       const response = await fetch('/api/agents/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentName: agentName.trim(),
           displayName: displayName.trim() || agentName.trim(),
-          agentUrl: url.trim(),
+          agentUrl: effectiveAgentUrl,
           environmentName: environmentName.trim() || 'default',
           agentCard: agentCard || {},
           version: agentCard?.version,
