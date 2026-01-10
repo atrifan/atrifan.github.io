@@ -8,8 +8,8 @@ import { AI_MODELS, TOKEN_QUOTAS } from '@/src/config/ai-tokens.config';
 export const dynamic = 'force-dynamic';
 
 function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL;
+  const key = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key);
 }
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseClient();
+    console.log('Supabase client:', supabase ? 'connected' : 'NOT CONNECTED - check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     const tier = request.headers.get('x-user-tier') || 'free';
     const quota = TOKEN_QUOTAS[tier as keyof typeof TOKEN_QUOTAS];
 
@@ -119,12 +120,11 @@ export async function POST(request: NextRequest) {
 
     // Record usage and save messages to database
     let activeConversationId = conversationId;
+    const cost = calculateCost(modelId, usage.prompt_tokens, usage.completion_tokens);
 
     if (supabase) {
-      const cost = calculateCost(modelId, usage.prompt_tokens, usage.completion_tokens);
-
       // Record token usage
-      await supabase.from('ai_token_usage').insert({
+      const { error: usageError } = await supabase.from('ai_token_usage').insert({
         user_id: userId,
         model_id: modelId,
         input_tokens: usage.prompt_tokens,
@@ -133,6 +133,12 @@ export async function POST(request: NextRequest) {
         message_type: 'chat',
         conversation_id: conversationId,
       });
+
+      if (usageError) {
+        console.error('Failed to record token usage:', usageError);
+      } else {
+        console.log('Token usage recorded:', { userId, modelId, input: usage.prompt_tokens, output: usage.completion_tokens, cost });
+      }
 
       // Create or update conversation
       if (!conversationId) {
@@ -184,6 +190,7 @@ export async function POST(request: NextRequest) {
       usage: {
         input: usage.prompt_tokens,
         output: usage.completion_tokens,
+        cost,
       },
     });
   } catch (error) {
