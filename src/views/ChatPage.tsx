@@ -1618,20 +1618,20 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             </div>
 
-            {/* Chat Messages Area */}
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', minHeight: '50vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Chat Messages Area - Single container with messages and input */}
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
               {/* Messages or Empty state */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', paddingBottom: '0' }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
                 {messages.length === 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem', height: '100%' }}>
-                    <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>{selectedModelData?.icon || '🤖'}</div>
-                    <h2 style={{ color: '#fff', fontSize: '1.5rem', margin: '0 0 0.5rem' }}>Start chatting with {selectedModelData?.name}</h2>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', maxWidth: '400px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem 0' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>{selectedModelData?.icon || '🤖'}</div>
+                    <h2 style={{ color: '#fff', fontSize: '1.25rem', margin: '0 0 0.5rem' }}>Start chatting with {selectedModelData?.name}</h2>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', maxWidth: '400px', fontSize: '0.9rem' }}>
                       Ask questions, get help with calculations, or explore your connected tools.
                     </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.5rem', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem', justifyContent: 'center' }}>
                       {['Calculate my budget', 'Help me sleep better', 'What\'s my trading risk?', 'Convert units'].map(suggestion => (
-                        <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '20px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '20px', padding: '0.4rem 0.8rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '0.8rem' }}>
                           {suggestion}
                         </button>
                       ))}
@@ -1687,14 +1687,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
               {/* Error message */}
               {error && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem', color: '#ef4444', fontSize: '0.85rem' }}>
+                <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', padding: '0.75rem', margin: '0 1.5rem 0.5rem', color: '#ef4444', fontSize: '0.85rem' }}>
                   ⚠️ {error}
                 </div>
               )}
 
               {/* Last Message Token Summary */}
               {lastMessageTokens && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', padding: '0.5rem 0.75rem', margin: '0 1.5rem 0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem' }}>
                     <span style={{ color: 'rgba(255,255,255,0.6)' }}>Last message:</span>
                     <span style={{ color: '#10b981' }}>↑ {lastMessageTokens.input} in</span>
@@ -1709,8 +1709,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 </div>
               )}
 
-              {/* Input Area */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '1rem 1.5rem 1.5rem' }}>
+              {/* Input Area - inside the chat box */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '1rem 1.5rem', marginTop: 'auto' }}>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
                   {/* Chat Config Button - Desktop only (mobile uses FAB) */}
                   <div ref={chatConfigRef} className="desktop-only" style={{ position: 'relative' }}>
