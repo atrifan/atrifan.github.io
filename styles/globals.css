@@ -312,7 +312,7 @@ body {
 .chat-fab-container {
   position: fixed;
   bottom: 100px;
-  right: 1rem;
+  left: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
