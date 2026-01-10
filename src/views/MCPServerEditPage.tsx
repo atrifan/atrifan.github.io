@@ -192,16 +192,16 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: '2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>Loading...</div>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: 'clamp(1rem, 4vw, 2rem)' }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>Loading...</div>
       </div>
     );
   }
 
   if (!server) {
     return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: '2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: 'clamp(1rem, 4vw, 2rem)' }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
           <h1>Server not found</h1>
           <Link href="/dashboard/mcp-composer" style={{ color: '#667eea' }}>← Back to Composer</Link>
         </div>
@@ -332,8 +332,8 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
       />
 
       {/* Header */}
-      <div style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '1rem 2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '1rem clamp(1rem, 4vw, 2rem)', position: 'relative', zIndex: 101 }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <Link href="/dashboard/mcp-composer" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '0.9rem' }}>← Back</Link>
             <FaviconImage baseUrl={server.source_url} alt={server.display_name} size={32} borderRadius={6} fallbackEmoji="🔌" />
@@ -345,7 +345,7 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
 
       {/* Alerts */}
       {error && (
-        <div style={{ maxWidth: '1200px', margin: '1rem auto', padding: '0 2rem' }}>
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
           <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', color: '#ef4444' }}>
             {error}
             <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>×</button>
@@ -353,18 +353,18 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
         </div>
       )}
       {success && (
-        <div style={{ maxWidth: '1200px', margin: '1rem auto', padding: '0 2rem' }}>
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
           <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '8px', color: '#10b981' }}>{success}</div>
         </div>
       )}
 
       {/* Top Ad */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem 2rem 0' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1rem clamp(1rem, 4vw, 2rem) 0' }}>
         <AdBanner slot={ADS_CONFIG.slots.mcpImportTop} />
       </div>
 
       {/* Tabs */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 1rem) 0' }}>
         <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {tabs.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ padding: '0.6rem 0.75rem', background: activeTab === tab.id ? 'rgba(59, 130, 246, 0.2)' : 'transparent', border: 'none', borderBottom: activeTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent', color: activeTab === tab.id ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -375,7 +375,7 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem 3rem' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 2rem) 3rem' }}>
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'tools' && renderToolsTab()}
       </div>

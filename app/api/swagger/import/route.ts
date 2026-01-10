@@ -96,29 +96,53 @@ export async function POST(request: NextRequest) {
 
     const specId = (specData as { id: string }).id;
 
-    // 2. Create or update environments (just store them, don't link to MCP server)
+    // 2. Create or update environments for THIS spec only
+    // Check via junction table if env already exists for this spec, don't share across specs
     const environmentIds: Record<string, string> = {};
 
     for (const env of environments) {
-      const envInsert: EnvironmentInsert = {
-        user_id: userId,
-        name: env.name,
-        host: env.host,
-        custom_config: {},
-      };
-
-      const { data: envData, error: envError } = await supabase
-        .from('environments')
-        .upsert(envInsert as never, { onConflict: 'user_id,name' })
-        .select()
+      // Check if this spec already has an environment with this name
+      const { data: existingLink } = await supabase
+        .from('rest_api_environments')
+        .select('environment_id, environments!inner(id, name)')
+        .eq('spec_id', specId)
+        .eq('environments.name', env.name)
         .single();
 
-      if (envError) {
-        console.error('Error creating environment:', envError);
-        continue;
+      let envId: string;
+
+      if (existingLink) {
+        // Update existing environment for this spec
+        envId = (existingLink as { environment_id: string }).environment_id;
+        await supabase
+          .from('environments')
+          .update({ host: env.host } as never)
+          .eq('id', envId);
+      } else {
+        // Create new environment (use unique name to avoid collision)
+        const uniqueEnvName = `${serverName}-${env.name}-${Date.now()}`;
+        const envInsert: EnvironmentInsert = {
+          user_id: userId,
+          name: uniqueEnvName,
+          host: env.host,
+          custom_config: {},
+        };
+
+        const { data: envData, error: envError } = await supabase
+          .from('environments')
+          .insert(envInsert as never)
+          .select()
+          .single();
+
+        if (envError || !envData) {
+          console.error('Error creating environment:', envError);
+          continue;
+        }
+
+        envId = (envData as { id: string }).id;
       }
 
-      environmentIds[env.name] = (envData as { id: string }).id;
+      environmentIds[env.name] = envId;
     }
 
     // 3. Link environments to spec via junction table

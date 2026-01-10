@@ -278,8 +278,8 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: '2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: 'clamp(1rem, 4vw, 2rem)' }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
           Loading...
         </div>
       </div>
@@ -288,8 +288,8 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
 
   if (!spec) {
     return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: '2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)', padding: 'clamp(1rem, 4vw, 2rem)' }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', color: '#fff', textAlign: 'center', paddingTop: '4rem' }}>
           <h1>Spec not found</h1>
           <Link href="/dashboard/mcp-composer" style={{ color: '#667eea' }}>← Back to Dashboard</Link>
         </div>
@@ -317,8 +317,8 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       />
 
       {/* Header */}
-      <div style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '1rem 2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '1rem clamp(1rem, 4vw, 2rem)', position: 'relative', zIndex: 101 }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <Link href="/dashboard/mcp-composer" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '0.9rem' }}>
               ← Back
@@ -345,7 +345,7 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
 
       {/* Alerts */}
       {error && (
-        <div style={{ maxWidth: '1200px', margin: '1rem auto', padding: '0 2rem' }}>
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
           <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', color: '#ef4444' }}>
             {error}
             <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>×</button>
@@ -353,7 +353,7 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
         </div>
       )}
       {success && (
-        <div style={{ maxWidth: '1200px', margin: '1rem auto', padding: '0 2rem' }}>
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
           <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '8px', color: '#10b981' }}>
             {success}
           </div>
@@ -361,12 +361,12 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       )}
 
       {/* Top Ad Banner */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem 2rem 0' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1rem clamp(1rem, 4vw, 2rem) 0' }}>
         <AdBanner slot={ADS_CONFIG.slots.swaggerImportTop} />
       </div>
 
       {/* Tabs */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 1rem) 0' }}>
         <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {tabs.map(tab => (
             <button
@@ -397,7 +397,7 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       </div>
 
       {/* Tab Content */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem 2rem' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 2rem) 2rem' }}>
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'environments' && renderEnvironmentsTab()}
         {activeTab === 'tools' && renderToolsTab()}
@@ -405,7 +405,7 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       </div>
 
       {/* Bottom Ad Banner */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem 2rem' }}>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '0 clamp(1rem, 4vw, 2rem) 2rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.swaggerImportBottom} />
       </div>
     </div>
