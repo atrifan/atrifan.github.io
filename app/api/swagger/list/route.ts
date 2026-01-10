@@ -102,28 +102,33 @@ export async function GET() {
         });
       }
 
-      // Get environments that belong to this spec (by naming convention: serverName-envName)
-      const { data: allEnvironments } = await supabase
-        .from('environments')
-        .select('id, name, host')
-        .eq('user_id', userId);
+      // Get environments linked to this spec via junction table
+      const { data: envLinks } = await supabase
+        .from('rest_api_environments')
+        .select('environment_id')
+        .eq('spec_id', spec.id);
 
-      // Filter environments that belong to this spec (name starts with serverName-)
-      const specEnvironments = (allEnvironments || []).filter((env: { name: string }) =>
-        env.name.startsWith(`${spec.server_name}-`)
-      );
+      const specEnvironments: RestApiEnvironment[] = [];
+      for (const link of (envLinks || []) as Array<{ environment_id: string }>) {
+        const { data: env } = await supabase
+          .from('environments')
+          .select('id, name, host')
+          .eq('id', link.environment_id)
+          .single();
+
+        if (env) {
+          specEnvironments.push(env as RestApiEnvironment);
+        }
+      }
 
       // For each environment, find the tools that belong to it
       const environmentsWithTools: RestApiEnvironment[] = [];
       for (const env of specEnvironments as RestApiEnvironment[]) {
-        // Extract the env prefix from the environment name (e.g., "myapi-prod" -> "prod")
-        const envPrefix = env.name.replace(`${spec.server_name}-`, '');
-
         // Find tools for this environment by matching the naming pattern
         const envTools: ToolInfo[] = [];
         for (const endpoint of endpointsWithTools) {
           // Generate the expected tool name for this environment (includes HTTP method)
-          const expectedToolName = generateToolName(envPrefix, spec.server_name, endpoint.operation_id, endpoint.http_method);
+          const expectedToolName = generateToolName(env.name, spec.server_name, endpoint.operation_id, endpoint.http_method);
 
           // Fetch the tool with this name
           const { data: envTool } = await supabase

@@ -315,8 +315,24 @@ export function normalizeName(name: string): string {
 }
 
 /**
+ * Generate an operationId from HTTP method and path when not provided in spec
+ * e.g., GET /users/{id} -> get-users-id
+ */
+function generateOperationId(method: string, path: string): string {
+  // Remove leading slash and replace path params with their names
+  const cleanPath = path
+    .replace(/^\//, '')
+    .replace(/\{([^}]+)\}/g, '$1')
+    .replace(/[^a-zA-Z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return `${method.toLowerCase()}-${cleanPath}`;
+}
+
+/**
  * Generate tool name from environment, server name, HTTP method, and operation ID
- * Format: <env>-<server>-<method>-<operation> for REST APIs
+ * Format: rest_<env>-<server>-<method>-<operation> for REST APIs
  * This provides uniqueness and clarity about what the tool does
  */
 export function generateToolName(
@@ -333,7 +349,8 @@ export function generateToolName(
   // Build parts array, filtering out empty parts
   const parts = [envPart, serverPart, methodPart, opPart].filter(Boolean);
 
-  return parts.join('-');
+  // Add rest_ prefix for REST API tools
+  return `rest_${parts.join('-')}`;
 }
 
 /**
@@ -355,8 +372,8 @@ export function extractTools(spec: OpenAPISpec, serverName: string): ExtractedTo
     for (const [method, operation] of methods) {
       if (!operation) continue;
 
-      const operationId = operation.operationId;
-      if (!operationId) continue;
+      // Generate operationId if not provided (e.g., httpbin doesn't have operationIds)
+      const operationId = operation.operationId || generateOperationId(method, path);
 
       // Extract description
       const description = operation.description || operation.summary || `${method} ${path}`;

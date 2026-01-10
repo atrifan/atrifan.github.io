@@ -98,21 +98,21 @@ export async function POST(request: NextRequest) {
 
     // 2. Create or update environments (just store them, don't link to MCP server)
     const environmentIds: Record<string, string> = {};
-    
+
     for (const env of environments) {
       const envInsert: EnvironmentInsert = {
         user_id: userId,
-        name: `${serverName}-${env.name}`,
+        name: env.name,
         host: env.host,
         custom_config: {},
       };
-      
+
       const { data: envData, error: envError } = await supabase
         .from('environments')
         .upsert(envInsert as never, { onConflict: 'user_id,name' })
         .select()
         .single();
-      
+
       if (envError) {
         console.error('Error creating environment:', envError);
         continue;
@@ -120,8 +120,15 @@ export async function POST(request: NextRequest) {
 
       environmentIds[env.name] = (envData as { id: string }).id;
     }
-    
-    // 3. Create tools for each environment
+
+    // 3. Link environments to spec via junction table
+    for (const envId of Object.values(environmentIds)) {
+      await supabase
+        .from('rest_api_environments')
+        .upsert({ spec_id: specId, environment_id: envId } as never, { onConflict: 'spec_id,environment_id' });
+    }
+
+    // 4. Create tools for each environment
     let toolCount = 0;
     const createdTools: string[] = [];
     
@@ -150,8 +157,8 @@ export async function POST(request: NextRequest) {
         const isReadOnly = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
         const isDestructive = method === 'DELETE' || method === 'PUT' || method === 'PATCH';
 
-        // Create tool definition
-        const toolInsert: ToolInsert = {
+        // Create tool definition (with annotations)
+        const toolInsertWithAnnotations: ToolInsert = {
           name: toolName,
           description: tool.description,
           category: primaryCategory,
@@ -168,14 +175,28 @@ export async function POST(request: NextRequest) {
           },
           user_id: userId,
         };
-        
-        const { data: toolData, error: toolError } = await supabase
+
+        // Try with annotations first, fallback without if column doesn't exist
+        let toolData;
+        let toolError;
+
+        ({ data: toolData, error: toolError } = await supabase
           .from('tools')
-          .upsert(toolInsert as never, { onConflict: 'name' })
+          .upsert(toolInsertWithAnnotations as never, { onConflict: 'name' })
           .select()
-          .single();
-        
-        if (toolError) {
+          .single());
+
+        // If annotations column doesn't exist, retry without it
+        if (toolError?.code === 'PGRST204' && toolError?.message?.includes('annotations')) {
+          const { annotations: _annotations, ...toolInsertWithoutAnnotations } = toolInsertWithAnnotations;
+          ({ data: toolData, error: toolError } = await supabase
+            .from('tools')
+            .upsert(toolInsertWithoutAnnotations as never, { onConflict: 'name' })
+            .select()
+            .single());
+        }
+
+        if (toolError || !toolData) {
           console.error('Error creating tool:', toolError);
           continue;
         }

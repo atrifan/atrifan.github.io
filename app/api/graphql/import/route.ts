@@ -134,10 +134,9 @@ export async function POST(request: NextRequest) {
     const createdEnvIds: string[] = [];
 
     for (const env of envsToCreate) {
-      const envName = `${serverName}-${env.name}`;
       const envInsert: EnvironmentInsert = {
         user_id: userId,
-        name: envName,
+        name: env.name,
         host: env.host,
         custom_config: {},
       };

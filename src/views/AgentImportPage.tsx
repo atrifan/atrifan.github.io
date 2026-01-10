@@ -265,6 +265,35 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
     } else if (fallbackIconUrl) {
       setIconUrl(fallbackIconUrl);
     }
+
+    // Populate default schemas (can be edited by user)
+    const defaultInputSchema = {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The query or message to send to the agent'
+        }
+      },
+      required: ['query']
+    };
+    const defaultOutputSchema = {
+      type: 'object',
+      properties: {
+        result: {
+          type: 'string',
+          description: 'The agent response'
+        }
+      }
+    };
+
+    // Set default schemas if not already set
+    if (!inputSchema) {
+      setInputSchema(JSON.stringify(defaultInputSchema, null, 2));
+    }
+    if (!outputSchema) {
+      setOutputSchema(JSON.stringify(defaultOutputSchema, null, 2));
+    }
   };
 
   // Handle manual paste submit
@@ -367,9 +396,9 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
 
       setSuccessMessage(`Successfully imported agent "${displayName || agentName}"!`);
 
-      // Redirect after success
+      // Auto-redirect to MCP Composer after success
       setTimeout(() => {
-        router.push('/dashboard/mcp-composer');
+        router.push('/dashboard/mcp-composer?refresh=1');
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save agent');
@@ -553,21 +582,6 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
             fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
           }}>
             ⚠️ {error}
-          </div>
-        )}
-
-        {/* Success Display */}
-        {successMessage && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.1)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '8px',
-            padding: 'clamp(0.75rem, 2vw, 1rem)',
-            marginBottom: '1rem',
-            color: '#10b981',
-            fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
-          }}>
-            ✅ {successMessage}
           </div>
         )}
 
@@ -963,32 +977,30 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
               <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                    Input Schema (JSON)
+                    Input Schema (JSON) - Edit as needed
                   </label>
                   <textarea
                     value={inputSchema}
                     onChange={(e) => setInputSchema(e.target.value)}
-                    placeholder='{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}'
-                    rows={4}
+                    rows={8}
                     style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.85rem', resize: 'vertical' }}
                   />
                   <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    Default: query (string, required)
+                    Define the input parameters for this agent tool
                   </p>
                 </div>
                 <div>
                   <label style={{ display: 'block', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                    Output Schema (JSON)
+                    Output Schema (JSON) - Edit as needed
                   </label>
                   <textarea
                     value={outputSchema}
                     onChange={(e) => setOutputSchema(e.target.value)}
-                    placeholder='{"type":"object"}'
-                    rows={3}
+                    rows={6}
                     style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.85rem', resize: 'vertical' }}
                   />
                   <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    Default: object (A2A response)
+                    Define the expected output structure from this agent
                   </p>
                 </div>
               </div>
@@ -1007,12 +1019,34 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
 
         {/* Step 4: Saving */}
         {currentStep === 'saving' && (
-          <div style={cardStyle}>
-            <div style={{ textAlign: 'center', padding: '2rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-              <h2 style={{ color: '#fff', marginBottom: '0.5rem' }}>Importing Agent...</h2>
-              <p style={{ color: 'rgba(255,255,255,0.6)' }}>Please wait while we set up your agent.</p>
-            </div>
+          <div style={{ ...cardStyle, textAlign: 'center', padding: '3rem' }}>
+            {successMessage ? (
+              <>
+                <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>✅</div>
+                <h2 style={{ color: '#10b981', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                  {successMessage}
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1.5rem' }}>
+                  Your A2A agent is ready to use.
+                </p>
+                <button
+                  onClick={() => router.push('/dashboard/mcp-composer?refresh=1')}
+                  style={primaryButtonStyle}
+                >
+                  ← Back to MCP Composer
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⏳</div>
+                <h2 style={{ color: '#fff', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                  Importing Agent...
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Please wait while we set up your A2A agent.
+                </p>
+              </>
+            )}
           </div>
         )}
 

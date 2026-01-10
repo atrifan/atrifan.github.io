@@ -1140,7 +1140,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                       <Link
-                        href={isCustom ? `/dashboard/mcp-server/${selectedServer.id}` : '/docs/tools'}
+                        href={isCustom ? `/dashboard/server/${selectedServer.id}` : '/docs/tools'}
                         style={{
                           padding: '0.35rem 0.75rem',
                           borderRadius: '6px',
@@ -1510,7 +1510,7 @@ export const DashboardPage: React.FC = () => {
                         Config
                       </button>
                       <Link
-                        href={`/dashboard/mcp-server/${server.id}`}
+                        href={`/dashboard/server/${server.id}`}
                         style={{
                           padding: '0.35rem 0.75rem',
                           borderRadius: '6px',

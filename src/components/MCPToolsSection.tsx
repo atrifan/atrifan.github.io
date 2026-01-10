@@ -491,10 +491,14 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
                   </div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 'clamp(0.75rem, 2vw, 0.8rem)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', fontWeight: 600 }}>
-                      {server.server_name}
+                      {server.environment_name || server.server_name}
                     </span>
                     <span>•</span>
                     <span>{server.toolCount || tools.length} tool{(server.toolCount || tools.length) !== 1 ? 's' : ''}</span>
+                    <span>•</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                      {server.source_url}
+                    </span>
                   </div>
                 </div>
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '1.25rem', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>

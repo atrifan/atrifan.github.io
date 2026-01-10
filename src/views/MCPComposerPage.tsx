@@ -333,6 +333,8 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
       setCategories(toolsData.categories);
       const toolNames = toolsData.tools.map((t: MCPTool) => t.name);
       setAllToolNames(toolNames);
+      // Clean up selectedTools to remove any deleted tools
+      setSelectedTools(prev => prev.filter(name => toolNames.includes(name)));
     } catch (error) {
       console.error('Failed to refresh tools:', error);
     }
@@ -342,9 +344,19 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Fetch all available tools
-        const toolsRes = await fetch('/api/tools');
+        // Check if we need to force refresh (e.g., after import)
+        const shouldRefresh = searchParams.get('refresh') === '1';
+
+        // Fetch all available tools (bypass cache if refresh requested)
+        const toolsRes = await fetch('/api/tools', shouldRefresh ? { cache: 'no-store' } : undefined);
         const toolsData: ToolsResponse = await toolsRes.json();
+
+        // Clear the refresh param from URL without triggering navigation
+        if (shouldRefresh && typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('refresh');
+          window.history.replaceState({}, '', url.toString());
+        }
         setTools(toolsData.tools);
         setCategories(toolsData.categories);
         const toolNames = toolsData.tools.map((t: MCPTool) => t.name);

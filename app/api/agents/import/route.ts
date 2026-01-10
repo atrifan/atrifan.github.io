@@ -34,11 +34,11 @@ function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Generate tool name: env-agentName (consistent with other tool types)
+// Generate tool name: a2a_env-agentName (consistent with other tool types)
 function generateAgentToolName(envName: string, agentName: string): string {
   const normalizedEnv = normalizeName(envName);
   const normalizedAgent = normalizeName(agentName);
-  return `${normalizedEnv}-${normalizedAgent}`;
+  return `a2a_${normalizedEnv}-${normalizedAgent}`;
 }
 
 export async function POST(request: NextRequest) {

@@ -58,12 +58,12 @@ export async function GET() {
     const agentsWithTools: A2AAgent[] = [];
     
     for (const agent of (agents || []) as A2AAgent[]) {
-      // Generate the expected tool name
+      // Generate the expected tool name (must match import format: a2a_env-agent)
       const envName = agent.environment_name || 'default';
       const normalizedEnv = envName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       const normalizedAgent = agent.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-      const toolName = `${normalizedEnv}-${normalizedAgent}`;
-      
+      const toolName = `a2a_${normalizedEnv}-${normalizedAgent}`;
+
       // Find the tool
       const { data: tool } = await supabase
         .from('tools')

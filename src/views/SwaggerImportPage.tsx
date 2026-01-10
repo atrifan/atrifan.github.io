@@ -502,9 +502,9 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
 
       setSuccessMessage(`Successfully imported ${data.toolCount} tools!`);
 
-      // Redirect after success
+      // Redirect after success with refresh param to force reload
       setTimeout(() => {
-        router.push('/dashboard/mcp-composer');
+        router.push('/dashboard/mcp-composer?refresh=1');
       }, 2000);
     } catch (err) {
       setError(`Failed to save: ${(err as Error).message}`);

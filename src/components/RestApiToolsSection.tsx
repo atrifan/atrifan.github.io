@@ -1438,236 +1438,73 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
         </div>
       )}
 
-      {/* Delete Spec Confirmation Modal */}
+      {/* Confirmation Modals */}
       {confirmDeleteSpec && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={() => setConfirmDeleteSpec(null)}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '400px',
-              width: '100%',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⚠️</div>
-              <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.1rem' }}>Delete API?</h3>
-              <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0, fontSize: '0.9rem' }}>
-                Are you sure you want to delete <strong style={{ color: '#ef4444' }}>{confirmDeleteSpec.specName}</strong>?
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0.5rem 0 0', fontSize: '0.8rem' }}>
-                This will delete all tools and environments associated with this API.
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => setConfirmDeleteSpec(null)}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteSpec(confirmDeleteSpec.specId)}
-                disabled={deletingSpec === confirmDeleteSpec.specId}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: deletingSpec === confirmDeleteSpec.specId ? 'wait' : 'pointer',
-                  opacity: deletingSpec === confirmDeleteSpec.specId ? 0.7 : 1,
-                }}
-              >
-                {deletingSpec === confirmDeleteSpec.specId ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title="Delete REST API"
+          message={`Are you sure you want to delete "${confirmDeleteSpec.specName}"? This will remove all associated tools and environments.`}
+          onConfirm={() => handleDeleteSpec(confirmDeleteSpec.specId)}
+          onCancel={() => setConfirmDeleteSpec(null)}
+          confirmText="Delete"
+          confirmColor="#ef4444"
+        />
       )}
 
-      {/* Delete Tool Confirmation Modal */}
       {confirmDeleteTool && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={() => setConfirmDeleteTool(null)}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '400px',
-              width: '100%',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗑️</div>
-              <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.1rem' }}>Delete Tool?</h3>
-              <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0, fontSize: '0.9rem', wordBreak: 'break-all' }}>
-                Are you sure you want to delete <strong style={{ color: '#ef4444' }}>{confirmDeleteTool.toolName}</strong>?
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => setConfirmDeleteTool(null)}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteTool(confirmDeleteTool.toolId, confirmDeleteTool.specId)}
-                disabled={deletingTool === confirmDeleteTool.toolId}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: deletingTool === confirmDeleteTool.toolId ? 'wait' : 'pointer',
-                  opacity: deletingTool === confirmDeleteTool.toolId ? 0.7 : 1,
-                }}
-              >
-                {deletingTool === confirmDeleteTool.toolId ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title="Delete Tool"
+          message={`Are you sure you want to delete the tool "${confirmDeleteTool.toolName}"?`}
+          onConfirm={() => handleDeleteTool(confirmDeleteTool.toolId, confirmDeleteTool.specId)}
+          onCancel={() => setConfirmDeleteTool(null)}
+          confirmText="Delete"
+          confirmColor="#ef4444"
+        />
       )}
 
-      {/* Reimport Confirmation Modal */}
-      {confirmReimport && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={() => setConfirmReimport(null)}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '450px',
-              width: '100%',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔄</div>
-              <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.1rem' }}>Refresh from URL?</h3>
-              <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0, fontSize: '0.9rem' }}>
-                This will refresh <strong style={{ color: '#10b981' }}>{confirmReimport.api_title || confirmReimport.server_name}</strong> from:
-              </p>
-              <p style={{ color: '#3b82f6', margin: '0.5rem 0 0', fontSize: '0.8rem', wordBreak: 'break-all' }}>
-                {confirmReimport.source_url}
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0.5rem 0 0', fontSize: '0.8rem' }}>
-                All tools will be updated to match the source.
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => setConfirmReimport(null)}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleReimportFromUrl(confirmReimport)}
-                disabled={reimportingSpec === confirmReimport.id}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#10b981',
-                  color: '#fff',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: reimportingSpec === confirmReimport.id ? 'wait' : 'pointer',
-                  opacity: reimportingSpec === confirmReimport.id ? 0.7 : 1,
-                }}
-              >
-                {reimportingSpec === confirmReimport.id ? 'Refreshing...' : 'Refresh'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {confirmDeleteEnv && (
+        <ConfirmModal
+          title="Delete Environment"
+          message={`Are you sure you want to delete the "${confirmDeleteEnv.envName}" environment? This will remove all associated tools.`}
+          onConfirm={() => handleDeleteEnv(confirmDeleteEnv.envId, confirmDeleteEnv.specId)}
+          onCancel={() => setConfirmDeleteEnv(null)}
+          confirmText="Delete"
+          confirmColor="#ef4444"
+        />
       )}
+
+      {confirmReimport && (
+        <ConfirmModal
+          title="Refresh from URL"
+          message={`Refresh "${confirmReimport.api_title || confirmReimport.server_name}" from ${confirmReimport.source_url}? This will update all tools to match the source.`}
+          onConfirm={() => handleReimportFromUrl(confirmReimport)}
+          onCancel={() => setConfirmReimport(null)}
+          confirmText="Refresh"
+          confirmColor="#10b981"
+        />
+      )}
+    </div>
+  );
+}
+
+// Confirmation Modal Component
+function ConfirmModal({ title, message, onConfirm, onCancel, confirmText, confirmColor }: {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText: string;
+  confirmColor: string;
+}) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={onCancel}>
+      <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', border: '1px solid rgba(102, 126, 234, 0.3)', borderRadius: '12px', padding: '1.5rem', maxWidth: '400px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>{title}</h3>
+        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 1.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: confirmColor, color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>{confirmText}</button>
+        </div>
+      </div>
     </div>
   );
 }

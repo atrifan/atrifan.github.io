@@ -110,11 +110,11 @@ export async function GET() {
         // Build a map of tool names to agent info
         const agentToolMap: Record<string, { agentUrl: string; iconUrl: string | null }> = {};
         agents.forEach((agent: { agent_name: string; environment_name: string; agent_url: string; icon_url: string | null }) => {
-          // Generate the expected tool name
+          // Generate the expected tool name with a2a_ prefix
           const envName = agent.environment_name || 'default';
           const normalizedEnv = envName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
           const normalizedAgent = agent.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-          const toolName = `${normalizedEnv}-${normalizedAgent}`;
+          const toolName = `a2a_${normalizedEnv}-${normalizedAgent}`;
           agentToolMap[toolName] = { agentUrl: agent.agent_url, iconUrl: agent.icon_url };
         });
 

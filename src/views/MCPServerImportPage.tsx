@@ -332,9 +332,9 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
 
       setSuccessMessage(`Successfully imported ${data.importedCount} tools!`);
 
-      // Redirect after success
+      // Redirect after success with refresh param to force reload
       setTimeout(() => {
-        router.push('/dashboard/mcp-composer');
+        router.push('/dashboard/mcp-composer?refresh=1');
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import MCP server');

@@ -122,8 +122,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // If disabledTools provided, update enabled status
     if (Array.isArray(disabledTools)) {
       const currentTools = await getServerToolsWithDetails(apiKey.id);
-      // Get tool IDs that should be enabled (not in disabledTools)
-      const enabledToolIds = currentTools
+      const currentToolNames = new Set(currentTools.map(st => st.tool.name));
+      const disabledSet = new Set(disabledTools);
+
+      // Find tools that should be enabled but aren't linked yet
+      // These are tools NOT in disabledTools that aren't currently linked
+      // We need to get all available tools to know what should be linked
+      const { getAllTools } = await import('@/src/lib/supabase-services');
+      const allTools = await getAllTools(userId);
+
+      for (const tool of allTools) {
+        // If tool is not disabled and not already linked, link it
+        if (!disabledSet.has(tool.name) && !currentToolNames.has(tool.name)) {
+          await linkToolToServer({
+            api_key_id: apiKey.id,
+            tool_id: tool.id,
+            is_enabled: true,
+          });
+        }
+      }
+
+      // Now update enabled status for all linked tools
+      const updatedCurrentTools = await getServerToolsWithDetails(apiKey.id);
+      const enabledToolIds = updatedCurrentTools
         .filter(st => !disabledTools.includes(st.tool.name))
         .map(st => st.tool_id);
 

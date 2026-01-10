@@ -26,6 +26,8 @@ interface A2AAgent {
     id: string;
     name: string;
     description: string;
+    input_schema?: Record<string, unknown>;
+    output_schema?: Record<string, unknown>;
   };
 }
 
@@ -33,18 +35,44 @@ interface AgentToolsSectionProps {
   onToolSelect?: (toolName: string, selected: boolean) => void;
   selectedTools?: string[];
   onDataChange?: () => void;
+  onHasTools?: (hasTools: boolean) => void;
 }
 
-export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChange }: AgentToolsSectionProps) {
+export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChange, onHasTools }: AgentToolsSectionProps) {
   const [agents, setAgents] = useState<A2AAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
-  const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
-  const [editingAgent, setEditingAgent] = useState<string | null>(null);
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editDescription, setEditDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [viewingAgentCard, setViewingAgentCard] = useState<A2AAgent | null>(null);
+
+  // Edit states
+  const [editingDisplayName, setEditingDisplayName] = useState<string | null>(null);
+  const [editDisplayNameValue, setEditDisplayNameValue] = useState('');
+  const [editingEnv, setEditingEnv] = useState<string | null>(null);
+  const [editEnvValue, setEditEnvValue] = useState('');
+
+  // Action states
+  const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
+  const [refreshingAgent, setRefreshingAgent] = useState<string | null>(null);
+
+  // Modals
+  const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<{ agentId: string; agentName: string } | null>(null);
+  const [confirmRefresh, setConfirmRefresh] = useState<A2AAgent | null>(null);
+  const [viewingToolDocs, setViewingToolDocs] = useState<A2AAgent | null>(null);
+
+  // Notification
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Auto-dismiss notifications
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+  };
 
   // Fetch agents
   const fetchAgents = async () => {
@@ -67,79 +95,144 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
     fetchAgents();
   }, []);
 
+  useEffect(() => {
+    if (onHasTools) {
+      onHasTools(agents.length > 0);
+    }
+  }, [agents.length, onHasTools]);
+
   // Toggle agent expansion
   const toggleAgent = (agentId: string) => {
-    const newExpanded = new Set(expandedAgents);
-    if (newExpanded.has(agentId)) {
-      newExpanded.delete(agentId);
-    } else {
-      newExpanded.add(agentId);
-    }
-    setExpandedAgents(newExpanded);
+    setExpandedAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(agentId)) {
+        next.delete(agentId);
+      } else {
+        next.add(agentId);
+      }
+      return next;
+    });
   };
 
   // Delete agent
   const handleDeleteAgent = async (agentId: string) => {
-    if (!confirm('Are you sure you want to delete this agent?')) return;
-
     setDeletingAgent(agentId);
+    setConfirmDeleteAgent(null);
     try {
       const response = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
       if (response.ok) {
+        showNotification('success', 'Agent deleted successfully');
         await fetchAgents();
         onDataChange?.();
       } else {
         const data = await response.json();
-        setError(data.error || 'Failed to delete agent');
+        showNotification('error', data.error || 'Failed to delete agent');
       }
-    } catch (err) {
-      setError('Failed to delete agent');
+    } catch {
+      showNotification('error', 'Failed to delete agent');
     } finally {
       setDeletingAgent(null);
     }
   };
 
-  // Start editing agent
-  const startEditAgent = (agent: A2AAgent) => {
-    setEditingAgent(agent.id);
-    setEditDisplayName(agent.display_name);
-    setEditDescription(agent.description || '');
-  };
-
-  // Save agent edit
-  const handleSaveAgent = async (agentId: string) => {
+  // Refresh agent from URL
+  const handleRefreshAgent = async (agent: A2AAgent) => {
+    setRefreshingAgent(agent.id);
+    setConfirmRefresh(null);
     try {
-      const response = await fetch(`/api/agents/${agentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          displayName: editDisplayName,
-          description: editDescription,
-        }),
-      });
-
+      const response = await fetch(`/api/agents/${agent.id}/reimport`, { method: 'POST' });
       if (response.ok) {
-        setEditingAgent(null);
+        showNotification('success', 'Agent refreshed successfully');
         await fetchAgents();
         onDataChange?.();
       } else {
         const data = await response.json();
-        setError(data.error || 'Failed to update agent');
+        showNotification('error', data.error || 'Failed to refresh agent');
       }
-    } catch (err) {
-      setError('Failed to update agent');
+    } catch {
+      showNotification('error', 'Failed to refresh agent');
+    } finally {
+      setRefreshingAgent(null);
     }
   };
 
-  // Handle tool selection
-  const handleToolSelect = (toolName: string) => {
+  // Edit display name
+  const startEditDisplayName = (agent: A2AAgent) => {
+    setEditingDisplayName(agent.id);
+    setEditDisplayNameValue(agent.display_name);
+  };
+
+  const saveEditDisplayName = async (agentId: string) => {
+    try {
+      const response = await fetch(`/api/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: editDisplayNameValue }),
+      });
+      if (response.ok) {
+        showNotification('success', 'Display name updated');
+        setEditingDisplayName(null);
+        await fetchAgents();
+        onDataChange?.();
+      } else {
+        const data = await response.json();
+        showNotification('error', data.error || 'Failed to update');
+      }
+    } catch {
+      showNotification('error', 'Failed to update');
+    }
+  };
+
+  // Edit environment
+  const startEditEnv = (agent: A2AAgent) => {
+    setEditingEnv(agent.id);
+    setEditEnvValue(agent.environment_name);
+  };
+
+  const saveEditEnv = async (agentId: string) => {
+    try {
+      const response = await fetch(`/api/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environmentName: editEnvValue }),
+      });
+      if (response.ok) {
+        showNotification('success', 'Environment updated');
+        setEditingEnv(null);
+        await fetchAgents();
+        onDataChange?.();
+      } else {
+        const data = await response.json();
+        showNotification('error', data.error || 'Failed to update');
+      }
+    } catch {
+      showNotification('error', 'Failed to update');
+    }
+  };
+
+  // Get tool name for an agent
+  const getToolName = (agent: A2AAgent) => {
+    if (agent.tool?.name) return agent.tool.name;
+    const envNorm = (agent.environment_name || 'default').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    const agentNorm = agent.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return `a2a_${envNorm}-${agentNorm}`;
+  };
+
+  // Handle tool selection toggle
+  const handleToolToggle = (toolName: string) => {
     const isSelected = selectedTools.includes(toolName);
     onToolSelect?.(toolName, !isSelected);
   };
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))',
+        border: '1px solid rgba(245, 158, 11, 0.25)',
+        borderRadius: '16px',
+        padding: 'clamp(1rem, 3vw, 1.5rem)',
+        textAlign: 'center',
+      }}>
         <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⏳</div>
         <p style={{ color: 'rgba(255,255,255,0.5)' }}>Loading agents...</p>
       </div>
@@ -149,10 +242,10 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
   if (agents.length === 0) {
     return (
       <div style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '12px',
-        padding: '2rem',
+        background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))',
+        border: '1px solid rgba(245, 158, 11, 0.25)',
+        borderRadius: '16px',
+        padding: 'clamp(1rem, 3vw, 1.5rem)',
         textAlign: 'center',
       }}>
         <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🤖</div>
@@ -180,52 +273,49 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
   }
 
   return (
-    <div>
-      {/* Error Display */}
-      {error && (
-        <div style={{
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: '8px',
-          padding: '0.75rem',
-          marginBottom: '1rem',
-          color: '#ef4444',
-          fontSize: '0.85rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <span>⚠️ {error}</span>
-          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
-
-      {/* Section Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '1rem',
-        marginBottom: '1rem',
-      }}>
-        <div>
-          <h2 style={{
-            color: '#f59e0b',
-            fontSize: 'clamp(1rem, 3vw, 1.25rem)',
-            fontWeight: 700,
-            margin: '0 0 0.25rem',
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.08))',
+      border: '1px solid rgba(245, 158, 11, 0.25)',
+      borderRadius: '16px',
+      padding: 'clamp(1rem, 3vw, 1.5rem)',
+      position: 'relative',
+    }}>
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '1rem',
+            right: '1rem',
+            padding: '0.75rem 1rem',
+            borderRadius: '8px',
+            background: notification.type === 'success'
+              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.95))'
+              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95))',
+            border: `1px solid ${notification.type === 'success' ? 'rgba(245, 158, 11, 0.5)' : 'rgba(239, 68, 68, 0.5)'}`,
+            color: '#fff',
+            fontSize: '0.9rem',
+            fontWeight: 500,
+            zIndex: 1100,
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-          }}>
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            cursor: 'pointer',
+          }}
+          onClick={() => setNotification(null)}
+        >
+          {notification.type === 'success' ? '✓' : '✕'} {notification.message}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <h2 style={{ color: '#f59e0b', margin: 0, fontSize: 'clamp(1rem, 3vw, 1.25rem)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             🤖 A2A Agents
           </h2>
-          <p style={{
-            color: 'rgba(255,255,255,0.6)',
-            fontSize: 'clamp(0.8rem, 2vw, 0.85rem)',
-            margin: 0
-          }}>
+          <p style={{ color: 'rgba(255,255,255,0.6)', margin: '0.25rem 0 0', fontSize: 'clamp(0.8rem, 2vw, 0.85rem)' }}>
             Agent-to-Agent protocol agents
           </p>
         </div>
@@ -240,9 +330,12 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
             fontWeight: 600,
             fontSize: '0.85rem',
             textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
           }}
         >
-          + Import Agent
+          <span>+</span> Import More
         </Link>
       </div>
 
@@ -250,32 +343,34 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {agents.map(agent => {
           const isExpanded = expandedAgents.has(agent.id);
-          const isEditing = editingAgent === agent.id;
-          const toolName = agent.tool?.name || `${agent.environment_name}-${agent.agent_name}`;
+          const toolName = getToolName(agent);
           const isSelected = selectedTools.includes(toolName);
 
           return (
             <div
               key={agent.id}
               style={{
-                background: 'rgba(245, 158, 11, 0.05)',
-                border: `1px solid ${isSelected ? 'rgba(245, 158, 11, 0.6)' : 'rgba(245, 158, 11, 0.2)'}`,
+                background: 'rgba(0,0,0,0.2)',
+                border: '1px solid rgba(245, 158, 11, 0.2)',
                 borderRadius: '12px',
                 overflow: 'hidden',
               }}
             >
               {/* Agent Header */}
-              <div
+              <button
                 onClick={() => toggleAgent(agent.id)}
                 style={{
+                  width: '100%',
                   padding: '1rem',
+                  background: 'transparent',
+                  border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
                   gap: '1rem',
                 }}
               >
-                {/* Icon with favicon fallback */}
                 <FaviconImage
                   iconUrl={agent.icon_url}
                   baseUrl={agent.agent_url}
@@ -285,47 +380,34 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                   fallbackEmoji="🤖"
                   fallbackBgColor="rgba(245, 158, 11, 0.2)"
                 />
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>
-                      {agent.display_name}
-                    </span>
-                    {agent.version && (
-                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                        v{agent.version}
-                      </span>
-                    )}
+                <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', marginBottom: '0.25rem' }}>
+                    {agent.display_name}
                   </div>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.25rem 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {agent.description || agent.agent_url}
-                  </p>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 'clamp(0.75rem, 2vw, 0.8rem)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontWeight: 600 }}>
+                      {agent.environment_name || 'default'}
+                    </span>
+                    <span>•</span>
+                    <span>1 tool</span>
+                    <span>•</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                      {agent.agent_url}
+                    </span>
+                  </div>
                 </div>
-
-                {/* Selection Checkbox */}
-                {onToolSelect && (
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={(e) => { e.stopPropagation(); handleToolSelect(toolName); }}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                )}
-
-                {/* Expand Arrow */}
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  {isExpanded ? '▼' : '▶'}
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '1.25rem', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  ▼
                 </span>
-              </div>
+              </button>
 
               {/* Expanded Content */}
               {isExpanded && (
                 <div style={{ borderTop: '1px solid rgba(245, 158, 11, 0.15)', padding: '1rem' }}>
-                  {/* Actions */}
+                  {/* Quick Actions */}
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setViewingAgentCard(agent); }}
+                    <Link
+                      href={`/dashboard/a2a-agent/${agent.id}`}
                       style={{
                         padding: '0.5rem 0.75rem',
                         borderRadius: '6px',
@@ -334,28 +416,35 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                         color: '#f59e0b',
                         fontSize: '0.8rem',
                         fontWeight: 600,
-                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
                       }}
                     >
-                      📋 View Agent Card
-                    </button>
+                      ✏️ Edit Full
+                    </Link>
                     <button
-                      onClick={(e) => { e.stopPropagation(); startEditAgent(agent); }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmRefresh(agent); }}
+                      disabled={refreshingAgent === agent.id}
                       style={{
                         padding: '0.5rem 0.75rem',
                         borderRadius: '6px',
-                        background: 'rgba(102, 126, 234, 0.2)',
-                        border: '1px solid rgba(102, 126, 234, 0.4)',
-                        color: '#667eea',
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                        color: '#10b981',
                         fontSize: '0.8rem',
                         fontWeight: 600,
-                        cursor: 'pointer',
+                        cursor: refreshingAgent === agent.id ? 'wait' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
                       }}
                     >
-                      ✏️ Edit
+                      🔄 {refreshingAgent === agent.id ? 'Refreshing...' : 'Refresh'}
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteAgent(agent.id); }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteAgent({ agentId: agent.id, agentName: agent.display_name }); }}
                       disabled={deletingAgent === agent.id}
                       style={{
                         padding: '0.5rem 0.75rem',
@@ -365,72 +454,123 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                         color: '#ef4444',
                         fontSize: '0.8rem',
                         fontWeight: 600,
-                        cursor: 'pointer',
+                        cursor: deletingAgent === agent.id ? 'wait' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
                       }}
                     >
-                      {deletingAgent === agent.id ? '...' : '🗑️ Delete'}
+                      🗑️ {deletingAgent === agent.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
 
-                  {/* Edit Form */}
-                  {isEditing && (
-                    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
-                      <div style={{ marginBottom: '0.75rem' }}>
-                        <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>Display Name</label>
+                  {/* Display Name Edit */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Display Name
+                    </div>
+                    {editingDisplayName === agent.id ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <input
                           type="text"
-                          value={editDisplayName}
-                          onChange={(e) => setEditDisplayName(e.target.value)}
-                          style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
+                          value={editDisplayNameValue}
+                          onChange={(e) => setEditDisplayNameValue(e.target.value)}
+                          style={{ flex: 1, minWidth: '150px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
                         />
+                        <button onClick={() => saveEditDisplayName(agent.id)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
+                        <button onClick={() => setEditingDisplayName(null)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>Cancel</button>
                       </div>
-                      <div style={{ marginBottom: '0.75rem' }}>
-                        <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>Description</label>
-                        <textarea
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          rows={2}
-                          style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem', resize: 'vertical' }}
-                        />
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.9rem' }}>{agent.display_name}</span>
+                        <button onClick={() => startEditDisplayName(agent)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit display name">✏️</button>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => handleSaveAgent(agent.id)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', background: '#10b981', border: 'none', color: '#fff', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                        <button onClick={() => setEditingAgent(null)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: '0.8rem', cursor: 'pointer' }}>Cancel</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Agent Details */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-                    <div>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Tool Name</span>
-                      <p style={{ color: '#fff', fontSize: '0.85rem', margin: '0.25rem 0 0', fontFamily: 'monospace' }}>{toolName}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>URL</span>
-                      <p style={{ color: '#fff', fontSize: '0.85rem', margin: '0.25rem 0 0', wordBreak: 'break-all' }}>{agent.agent_url}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Environment</span>
-                      <p style={{ color: '#fff', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>{agent.environment_name}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Auth</span>
-                      <p style={{ color: '#fff', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>{agent.auth_type || 'none'}</p>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Tags */}
-                  {agent.tags && agent.tags.length > 0 && (
-                    <div style={{ marginTop: '0.75rem' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Tags</span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
-                        {agent.tags.map(tag => (
-                          <span key={tag} style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{tag}</span>
-                        ))}
+                  {/* Environment Edit */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Environment
+                    </div>
+                    {editingEnv === agent.id ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          value={editEnvValue}
+                          onChange={(e) => setEditEnvValue(e.target.value)}
+                          style={{ flex: 1, minWidth: '150px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                        />
+                        <button onClick={() => saveEditEnv(agent.id)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
+                        <button onClick={() => setEditingEnv(null)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>{agent.environment_name}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
+                        <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{agent.agent_url}</span>
+                        <button onClick={() => startEditEnv(agent)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit environment">✏️</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tool */}
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Tool
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'clamp(0.4rem, 2vw, 0.75rem)',
+                        padding: 'clamp(0.5rem, 2vw, 0.6rem) clamp(0.5rem, 2vw, 0.75rem)',
+                        background: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${isSelected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: '8px',
+                        cursor: onToolSelect ? 'pointer' : 'default',
+                        flexWrap: 'wrap',
+                      }}
+                      onClick={() => { if (onToolSelect) handleToolToggle(toolName); }}
+                    >
+                      {/* Checkbox */}
+                      {onToolSelect && (
+                        <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isSelected ? '#10b981' : 'rgba(255,255,255,0.3)'}`, background: isSelected ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+                        </div>
+                      )}
+
+                      {/* Tool Icon */}
+                      <FaviconImage
+                        iconUrl={agent.icon_url}
+                        baseUrl={agent.agent_url}
+                        alt={agent.display_name}
+                        size={24}
+                        borderRadius={4}
+                        fallbackEmoji="🤖"
+                        fallbackBgColor="rgba(245, 158, 11, 0.2)"
+                      />
+
+                      {/* Tool Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {toolName}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {agent.description || 'A2A Agent tool'}
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                        <button onClick={(e) => { e.stopPropagation(); setViewingToolDocs(agent); }} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontSize: '0.7rem', cursor: 'pointer' }} title="View tool docs">📖</button>
+                        <Link href={`/dashboard/a2a-agent/${agent.id}`} onClick={(e) => e.stopPropagation()} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer', textDecoration: 'none' }} title="Edit tool">✏️</Link>
+                        <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteAgent({ agentId: agent.id, agentName: agent.display_name }); }} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer' }} title="Delete agent">🗑️</button>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -438,20 +578,110 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
         })}
       </div>
 
-      {/* Agent Card Modal */}
-      {viewingAgentCard && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1a1a3e, #0f0f23)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.2)', padding: '1.5rem', maxWidth: '600px', width: '100%', maxHeight: '80vh', overflow: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ color: '#f59e0b', margin: 0 }}>Agent Card: {viewingAgentCard.display_name}</h2>
-              <button onClick={() => setViewingAgentCard(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
-            </div>
-            <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', overflow: 'auto', color: '#fff', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {JSON.stringify(viewingAgentCard.agent_card, null, 2)}
-            </pre>
-          </div>
-        </div>
+      {/* Confirmation Modals */}
+      {confirmDeleteAgent && (
+        <ConfirmModal
+          title="Delete A2A Agent"
+          message={`Are you sure you want to delete "${confirmDeleteAgent.agentName}"? This will remove the agent and its associated tool.`}
+          onConfirm={() => handleDeleteAgent(confirmDeleteAgent.agentId)}
+          onCancel={() => setConfirmDeleteAgent(null)}
+          confirmText="Delete"
+          confirmColor="#ef4444"
+        />
       )}
+
+      {confirmRefresh && (
+        <ConfirmModal
+          title="Refresh Agent"
+          message={`Refresh agent from ${confirmRefresh.agent_url}? This will update the agent with the latest data from the source.`}
+          onConfirm={() => handleRefreshAgent(confirmRefresh)}
+          onCancel={() => setConfirmRefresh(null)}
+          confirmText="Refresh"
+          confirmColor="#10b981"
+        />
+      )}
+
+      {/* Tool Docs Modal */}
+      {viewingToolDocs && (
+        <ToolDocsModal agent={viewingToolDocs} onClose={() => setViewingToolDocs(null)} />
+      )}
+    </div>
+  );
+}
+
+// Confirmation Modal Component
+function ConfirmModal({ title, message, onConfirm, onCancel, confirmText, confirmColor }: {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText: string;
+  confirmColor: string;
+}) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={onCancel}>
+      <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', padding: '1.5rem', maxWidth: '400px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>{title}</h3>
+        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 1.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: confirmColor, color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tool Docs Modal Component
+function ToolDocsModal({ agent, onClose }: { agent: A2AAgent; onClose: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={onClose}>
+      <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '16px', padding: '1.5rem', maxWidth: '700px', width: '100%', maxHeight: '85vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 style={{ color: '#f59e0b', margin: 0, fontSize: '1.25rem' }}>📖 {agent.display_name}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* Description */}
+        {agent.description && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</h3>
+            <p style={{ color: '#fff', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>{agent.description}</p>
+          </div>
+        )}
+
+        {/* Tool Name */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tool Name</h3>
+          <code style={{ color: '#f59e0b', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>
+            {agent.tool?.name || `a2a_${agent.environment_name}-${agent.agent_name}`}
+          </code>
+        </div>
+
+        {/* Input Schema */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Input Schema</h3>
+          <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', overflow: 'auto', color: '#fff', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+            {JSON.stringify(agent.tool?.input_schema || { type: 'object', properties: { message: { type: 'string', description: 'Message to send to the agent' } } }, null, 2)}
+          </pre>
+        </div>
+
+        {/* Output Schema */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Output Schema</h3>
+          <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', overflow: 'auto', color: '#fff', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+            {JSON.stringify(agent.tool?.output_schema || { type: 'object', properties: { response: { type: 'string' } } }, null, 2)}
+          </pre>
+        </div>
+
+        {/* Agent Card */}
+        <div>
+          <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Agent Card</h3>
+          <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', overflow: 'auto', color: '#fff', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+            {JSON.stringify(agent.agent_card, null, 2)}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 }

@@ -45,6 +45,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
+// PUT - Update agent (alias for PATCH)
+export async function PUT(request: NextRequest, context: RouteContext) {
+  return PATCH(request, context);
+}
+
 // PATCH - Update agent
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
@@ -101,8 +106,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const envName = existingAgent.environment_name || 'default';
       const normalizedEnv = envName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       const normalizedAgent = existingAgent.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-      const toolName = `${normalizedEnv}-${normalizedAgent}`;
-      
+      const toolName = `a2a_${normalizedEnv}-${normalizedAgent}`;
+
       await supabase
         .from('tools')
         .update({ description: body.description } as never)
@@ -154,8 +159,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const envName = agentData.environment_name || 'default';
     const normalizedEnv = envName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     const normalizedAgent = agentData.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-    const toolName = `${normalizedEnv}-${normalizedAgent}`;
-    
+    const toolName = `a2a_${normalizedEnv}-${normalizedAgent}`;
+
     await supabase.from('tools').delete().eq('name', toolName);
 
     return NextResponse.json({ success: true });

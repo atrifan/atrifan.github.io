@@ -1661,18 +1661,23 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     filteredNativeTools.push(nativeTool);
                   }
                 } else if (st.tool.tool_type === 'REST') {
-                  // Convert REST tool to MCP format - use stored annotations or fallback
-                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean } | null;
+                  // Convert REST tool to MCP format - use stored annotations or fallback to defaults
+                  // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
+                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
+                  // Infer from tool name if not stored (rest_env-server-METHOD-op format)
+                  const toolNameLower = st.tool.name.toLowerCase();
+                  const isGetMethod = toolNameLower.includes('-get-');
+                  const isDestructiveMethod = toolNameLower.includes('-delete-') || toolNameLower.includes('-put-') || toolNameLower.includes('-patch-');
                   const restTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? st.tool.name.toLowerCase().includes('get'),
-                      destructiveHint: storedAnnotations?.destructiveHint ?? st.tool.name.toLowerCase().includes('delete'),
-                      idempotentHint: true,
-                      openWorldHint: true, // REST tools call external APIs
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? isGetMethod,
+                      destructiveHint: storedAnnotations?.destructiveHint ?? isDestructiveMethod,
+                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
                     },
                     _meta: {
                       'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling API...',
@@ -1684,18 +1689,23 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                   };
                   restTools.push(restTool);
                 } else if (st.tool.tool_type === 'GQL') {
-                  // Convert GraphQL tool to MCP format - use stored annotations or fallback
-                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean } | null;
+                  // Convert GraphQL tool to MCP format - use stored annotations or fallback to defaults
+                  // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
+                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
+                  // Infer from tool name if not stored (gql_env-server-query/mutation-op format)
+                  const toolNameLower = st.tool.name.toLowerCase();
+                  const isQuery = toolNameLower.includes('-query-');
+                  const isMutation = toolNameLower.includes('-mutation-');
                   const gqlTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? st.tool.name.toLowerCase().includes('query'),
-                      destructiveHint: storedAnnotations?.destructiveHint ?? st.tool.name.toLowerCase().includes('mutation'),
-                      idempotentHint: true,
-                      openWorldHint: true, // GraphQL tools call external APIs
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? isQuery,
+                      destructiveHint: storedAnnotations?.destructiveHint ?? isMutation,
+                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
                     },
                     _meta: {
                       'openai/toolInvocation/invoking': st.tool.invoking_message || 'Executing GraphQL...',
@@ -1708,6 +1718,7 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                   restTools.push(gqlTool); // Add to same array as REST tools
                 } else if (st.tool.tool_type === 'MCP') {
                   // Convert MCP proxy tool to MCP format - use stored annotations from source server
+                  // For MCP, we trust the source server's annotations, fallback to safe defaults
                   const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
                   const mcpTool = {
                     name: st.tool.name,
@@ -1715,10 +1726,10 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? false,
+                      readOnlyHint: storedAnnotations?.readOnlyHint ?? true,
                       destructiveHint: storedAnnotations?.destructiveHint ?? false,
-                      idempotentHint: storedAnnotations?.idempotentHint ?? false,
-                      openWorldHint: storedAnnotations?.openWorldHint ?? true, // MCP tools call external servers
+                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
                     },
                     _meta: {
                       'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling MCP server...',
@@ -1731,16 +1742,17 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
                   restTools.push(mcpTool); // Add to same array as other external tools
                 } else if (st.tool.tool_type === 'A2A') {
                   // Convert A2A agent tool to MCP format
+                  // A2A agents use safe defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
                   const a2aTool = {
                     name: st.tool.name,
                     description: st.tool.description,
                     inputSchema: st.tool.input_schema,
                     outputSchema: st.tool.output_schema,
                     annotations: {
-                      readOnlyHint: false,
+                      readOnlyHint: true,
                       destructiveHint: false,
-                      idempotentHint: false,
-                      openWorldHint: true, // A2A tools call external agents
+                      idempotentHint: true,
+                      openWorldHint: true,
                     },
                     _meta: {
                       'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling A2A agent...',

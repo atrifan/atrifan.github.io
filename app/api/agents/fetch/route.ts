@@ -30,6 +30,7 @@ const AGENT_CARD_PATHS = [
   '/.well-known/agent.json',
   '/.well-known/agent.yaml',
   '/.well-known/agent-card.json',
+  '/.well-known/agent-card.yaml',
 ];
 
 // Favicon paths to try

@@ -325,7 +325,7 @@ export function parseGraphQLSchema(introspectionResult: IntrospectionResult): Pa
 
 /**
  * Generate a tool name from environment, server, operation type, and operation name
- * Format: {env}-{server}-{type}-{operation} (max 50 chars)
+ * Format: gql_{env}-{server}-{type}-{operation} (max 54 chars including prefix)
  * Uses dashes for consistency with REST and MCP naming
  */
 export function generateGraphQLToolName(
@@ -346,12 +346,13 @@ export function generateGraphQLToolName(
   const parts = [env, server, type, op].filter(Boolean);
   let name = parts.join('-');
 
-  // Truncate if needed (max 50 chars)
+  // Truncate if needed (max 50 chars for the base name)
   if (name.length > 50) {
     name = name.slice(0, 50).replace(/-$/, '');
   }
 
-  return name;
+  // Add gql_ prefix for GraphQL tools
+  return `gql_${name}`;
 }
 
 /**

@@ -2,11 +2,12 @@
  * MCP Client Library
  *
  * Uses the official @modelcontextprotocol/sdk for proper protocol support.
- * Supports Streamable HTTP transport (SSE) for MCP servers.
+ * Supports both Streamable HTTP transport (2025-03-26) and legacy SSE transport (2024-11-05).
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { MCPServerAuthType } from '../types/supabase';
 
 // Re-export types for compatibility
@@ -54,7 +55,8 @@ export interface MCPClientConfig {
 export class MCPClient {
   private config: MCPClientConfig;
   private client: Client | null = null;
-  private transport: StreamableHTTPClientTransport | null = null;
+  private transport: StreamableHTTPClientTransport | SSEClientTransport | null = null;
+  private transportType: 'streamable-http' | 'sse' | null = null;
 
   constructor(config: MCPClientConfig) {
     this.config = {
@@ -94,27 +96,61 @@ export class MCPClient {
   }
 
   /**
-   * Initialize connection to the MCP server
+   * Initialize connection to the MCP server with backwards compatibility.
+   * Tries Streamable HTTP transport first (2025-03-26), then falls back to SSE (2024-11-05).
    */
   async initialize(): Promise<MCPServerInfo> {
     const url = new URL(this.config.url);
     const headers = this.buildHeaders();
 
-    // Create transport with custom headers
-    this.transport = new StreamableHTTPClientTransport(url, {
-      requestInit: {
-        headers,
-      },
-    });
+    // Try Streamable HTTP transport first (modern protocol)
+    try {
+      this.transport = new StreamableHTTPClientTransport(url, {
+        requestInit: { headers },
+      });
 
-    // Create client
-    this.client = new Client({
-      name: 'Tulzo MCP Proxy',
-      version: '1.0.0',
-    });
+      this.client = new Client({
+        name: 'Tulzo MCP Proxy',
+        version: '1.0.0',
+      });
 
-    // Connect
-    await this.client.connect(this.transport);
+      await this.client.connect(this.transport);
+      this.transportType = 'streamable-http';
+    } catch (streamableError) {
+      // Fall back to legacy SSE transport (older protocol)
+      console.log(`Streamable HTTP failed, trying SSE transport: ${streamableError}`);
+
+      try {
+        // Close any partial connection
+        if (this.transport) {
+          await this.transport.close().catch(() => {});
+          this.transport = null;
+        }
+        if (this.client) {
+          await this.client.close().catch(() => {});
+          this.client = null;
+        }
+
+        // Try SSE transport
+        this.transport = new SSEClientTransport(url, {
+          requestInit: { headers },
+        });
+
+        this.client = new Client({
+          name: 'Tulzo MCP Proxy',
+          version: '1.0.0',
+        });
+
+        await this.client.connect(this.transport);
+        this.transportType = 'sse';
+      } catch (sseError) {
+        throw new Error(
+          `Failed to connect with both transports. ` +
+          `Streamable HTTP: ${streamableError instanceof Error ? streamableError.message : streamableError}. ` +
+          `SSE: ${sseError instanceof Error ? sseError.message : sseError}`
+        );
+      }
+    }
 
     // Get server info from the client
     const serverInfo = this.client.getServerVersion();
@@ -124,6 +160,7 @@ export class MCPClient {
       name: serverInfo?.name,
       version: serverInfo?.version,
       description: serverInfo?.description,
+      protocolVersion: this.transportType === 'sse' ? '2024-11-05' : '2025-03-26',
       capabilities: capabilities ? {
         tools: capabilities.tools,
         resources: capabilities.resources,

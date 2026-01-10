@@ -47,12 +47,12 @@ function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Generate tool name: env-server-originalName
+// Generate tool name: mcp_env-server-originalName
 function generateMCPToolName(envName: string, serverName: string, originalName: string): string {
   const normalizedEnv = normalizeName(envName);
   const normalizedServer = normalizeName(serverName);
   const normalizedTool = normalizeName(originalName);
-  return `${normalizedEnv}-${normalizedServer}-${normalizedTool}`;
+  return `mcp_${normalizedEnv}-${normalizedServer}-${normalizedTool}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
           ? category
           : 'Utilities') as ToolCategory;
 
-        const toolInsert: ToolInsert = {
+        const toolInsertWithAnnotations: ToolInsert = {
           name: toolName,
           description: tool.customDescription || tool.description || `MCP tool: ${tool.name}`,
           category: validCategory,
@@ -159,11 +159,25 @@ export async function POST(request: NextRequest) {
           user_id: userId,
         };
 
-        const { data: toolData, error: toolError } = await supabase
+        // Try with annotations first, fallback without if column doesn't exist
+        let toolData;
+        let toolError;
+
+        ({ data: toolData, error: toolError } = await supabase
           .from('tools')
-          .upsert(toolInsert as never, { onConflict: 'name' })
+          .upsert(toolInsertWithAnnotations as never, { onConflict: 'name' })
           .select()
-          .single();
+          .single());
+
+        // If annotations column doesn't exist, retry without it
+        if (toolError?.code === 'PGRST204' && toolError?.message?.includes('annotations')) {
+          const { annotations: _annotations, ...toolInsertWithoutAnnotations } = toolInsertWithAnnotations;
+          ({ data: toolData, error: toolError } = await supabase
+            .from('tools')
+            .upsert(toolInsertWithoutAnnotations as never, { onConflict: 'name' })
+            .select()
+            .single());
+        }
 
         if (toolError || !toolData) {
           errors.push(`Failed to create tool ${tool.name}: ${toolError?.message}`);

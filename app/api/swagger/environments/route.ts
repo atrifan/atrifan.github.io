@@ -74,6 +74,11 @@ export async function POST(request: NextRequest) {
 
     const envId = (newEnv as { id: string }).id;
 
+    // Link environment to spec via junction table
+    await supabase
+      .from('rest_api_environments')
+      .upsert({ spec_id: specId, environment_id: envId } as never, { onConflict: 'spec_id,environment_id' });
+
     // Get existing endpoints for this spec
     const { data: endpoints } = await supabase
       .from('rest_api_endpoints')

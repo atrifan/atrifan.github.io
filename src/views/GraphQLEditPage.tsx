@@ -8,6 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 
 interface GraphQLTool {
@@ -462,8 +463,9 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <Link href="/dashboard/mcp-composer" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '0.9rem' }}>← Back</Link>
+            <FaviconImage baseUrl={spec.source_url || ''} alt={spec.api_title || spec.server_name} size={32} borderRadius={6} fallbackEmoji="◈" fallbackBgColor="rgba(236, 72, 153, 0.2)" />
             <h1 style={{ color: '#fff', fontSize: '1.5rem', margin: 0 }}>{spec.api_title || spec.server_name}</h1>
-            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', fontWeight: 600 }}>GraphQL</span>
+            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', background: 'rgba(236, 72, 153, 0.2)', color: '#ec4899', fontSize: '0.75rem', fontWeight: 600 }}>GraphQL</span>
           </div>
         </div>
       </div>
