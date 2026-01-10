@@ -1080,38 +1080,107 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
             borderRadius: '16px',
             border: '1px solid rgba(255,255,255,0.2)',
             padding: '1.5rem',
-            maxWidth: '600px',
+            maxWidth: '700px',
             width: '100%',
-            maxHeight: '80vh',
+            maxHeight: '85vh',
             overflow: 'auto',
           }}>
-            <h2 style={{ color: '#f59e0b', marginBottom: '1rem' }}>
-              ⚠️ Could Not Discover Agent Card
+            <h2 style={{ color: '#f59e0b', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>📋</span> No Agent Card Found
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem' }}>
-              We couldn&apos;t automatically discover the agent card. Please paste the agent card JSON or YAML below:
+
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: '8px',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem'
+            }}>
+              <p style={{ color: 'rgba(255,255,255,0.8)', margin: 0, fontSize: '0.9rem' }}>
+                We tried these discovery paths but couldn&apos;t find an agent card:
+              </p>
+              <ul style={{ color: 'rgba(255,255,255,0.6)', margin: '0.5rem 0 0', paddingLeft: '1.25rem', fontSize: '0.8rem' }}>
+                <li><code>/.well-known/agent.json</code></li>
+                <li><code>/.well-known/agent.yaml</code></li>
+                <li><code>/.well-known/agent-card.json</code></li>
+                <li><code>/.well-known/agent-card.yaml</code></li>
+              </ul>
+            </div>
+
+            <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+              Paste the agent card JSON below. The <code style={{ color: '#f59e0b' }}>url</code> field is required for A2A communication:
             </p>
+
             <textarea
               value={manualAgentCardText}
               onChange={(e) => setManualAgentCardText(e.target.value)}
-              placeholder='{"name": "My Agent", "version": "1.0.0", "description": "..."}'
-              rows={10}
-              style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.85rem', resize: 'vertical', marginBottom: '1rem' }}
+              placeholder={`{
+  "name": "My Agent",
+  "version": "1.0.0",
+  "url": "https://agent.example.com/a2a",
+  "description": "Description of what this agent does",
+  "protocolVersion": "0.2.0",
+  "tags": ["utility", "ai"]
+}`}
+              rows={12}
+              style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', marginBottom: '0.75rem', lineHeight: 1.5 }}
             />
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+
+            {/* Validation hint */}
+            {manualAgentCardText.trim() && (() => {
+              try {
+                const parsed = JSON.parse(manualAgentCardText.trim());
+                const hasUrl = !!parsed.url;
+                const hasName = !!parsed.name;
+                return (
+                  <div style={{
+                    background: hasUrl ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${hasUrl ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                    borderRadius: '6px',
+                    padding: '0.5rem 0.75rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.8rem'
+                  }}>
+                    <div style={{ color: hasName ? '#10b981' : '#ef4444' }}>
+                      {hasName ? '✓' : '✗'} name: {hasName ? parsed.name : 'missing'}
+                    </div>
+                    <div style={{ color: hasUrl ? '#10b981' : '#ef4444' }}>
+                      {hasUrl ? '✓' : '⚠️'} url: {hasUrl ? parsed.url : 'missing (will use import URL)'}
+                    </div>
+                    {parsed.version && <div style={{ color: '#10b981' }}>✓ version: {parsed.version}</div>}
+                  </div>
+                );
+              } catch {
+                return (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '6px',
+                    padding: '0.5rem 0.75rem',
+                    marginBottom: '1rem',
+                    color: '#ef4444',
+                    fontSize: '0.8rem'
+                  }}>
+                    ✗ Invalid JSON format
+                  </div>
+                );
+              }
+            })()}
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
                 onClick={() => {
                   setShowManualPasteModal(false);
                   setManualAgentCardText('');
-                  // Continue without agent card
+                  // Continue without agent card - use import URL as agent URL
                   setCurrentStep('configure');
                 }}
                 style={secondaryButtonStyle}
               >
-                Skip (Continue without card)
+                Skip (Use URL as endpoint)
               </button>
               <button onClick={handleManualPasteSubmit} style={primaryButtonStyle}>
-                Import Card
+                Validate & Import
               </button>
             </div>
           </div>

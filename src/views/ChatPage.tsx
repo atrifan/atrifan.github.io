@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { View } from '@adobe/react-spectrum';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
@@ -65,6 +66,37 @@ function formatRelativeTime(dateStr: string): string {
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
+}
+
+// Helper to format message content with clickable links
+function formatMessageContent(content: string): React.ReactNode {
+  // URL regex pattern
+  const urlPattern = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g;
+
+  const parts = content.split(urlPattern);
+
+  return parts.map((part, index) => {
+    if (urlPattern.test(part)) {
+      // Reset regex lastIndex since we're reusing it
+      urlPattern.lastIndex = 0;
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: '#60a5fa',
+            textDecoration: 'underline',
+            wordBreak: 'break-all',
+          }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
 }
 
 // Connector types
@@ -189,6 +221,9 @@ const UsageDonut: React.FC<{ percent: number; size?: number; strokeWidth?: numbe
 };
 
 export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus }) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   // Get tier and available models
   const tier = isPlus ? 'plus' : isPro ? 'pro' : 'free';
   const quota = TOKEN_QUOTAS[tier];
@@ -214,6 +249,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showAddConnector, setShowAddConnector] = useState<ConnectorType | null>(null);
   const [loadingConnectors, setLoadingConnectors] = useState(false);
   const [connectorInfoModal, setConnectorInfoModal] = useState<{ connector: ChatConnector; tools: any[] } | null>(null);
+
+  // A2A context ID for conversation continuity (task ID from external agent)
+  const [a2aContextId, setA2aContextId] = useState<string | null>(null);
 
   // Budget state
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
@@ -304,6 +342,43 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       fetchPersonalities();
     }
   }, [canAccessPro]);
+
+  // Load conversation and A2A context from URL on mount
+  useEffect(() => {
+    const convId = searchParams.get('c');
+    const ctxId = searchParams.get('ctx');
+    if (convId && canAccessPro && !currentConversationId) {
+      loadConversation(convId);
+    }
+    // Restore A2A contextId from URL - always sync from URL if present
+    if (ctxId) {
+      setA2aContextId(ctxId);
+    }
+  }, [searchParams, canAccessPro, currentConversationId]);
+
+  // Sync URL when conversation or contextId changes
+  useEffect(() => {
+    const currentUrlConvId = searchParams.get('c');
+    const currentUrlCtxId = searchParams.get('ctx');
+
+    // Build URL params
+    const params = new URLSearchParams();
+    if (currentConversationId) {
+      params.set('c', currentConversationId);
+    }
+    if (a2aContextId) {
+      params.set('ctx', a2aContextId);
+    }
+
+    const newUrl = params.toString() ? `/chat?${params.toString()}` : '/chat';
+    const currentUrl = currentUrlConvId || currentUrlCtxId
+      ? `/chat?${new URLSearchParams(Object.fromEntries([[currentUrlConvId ? 'c' : '', currentUrlConvId], [currentUrlCtxId ? 'ctx' : '', currentUrlCtxId]].filter(([k]) => k))).toString()}`
+      : '/chat';
+
+    if (newUrl !== currentUrl) {
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [currentConversationId, a2aContextId, router, searchParams]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -710,6 +785,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Start new chat
   const startNewChat = () => {
     setCurrentConversationId(null);
+    setA2aContextId(null); // Reset A2A context for new conversation
     setMessages([]);
     setError(null);
   };
@@ -744,9 +820,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           content: m.content,
         }));
 
+        // Get active personality system prompts
+        const activeSystemPrompts = activePersonalityIds
+          .map(id => personalities.find(p => p.id === id)?.system_prompt)
+          .filter((prompt): prompt is string => !!prompt);
+
         const a2aResponse = await sendA2AMessage(
           {
             agentUrl: selectedAgentConnector.external_url || '',
+            systemPrompts: activeSystemPrompts.length > 0 ? activeSystemPrompts : undefined,
+            contextId: a2aContextId || undefined, // Pass existing context ID for conversation continuity
           },
           a2aMessages
         );
@@ -755,19 +838,69 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           throw new Error(a2aResponse.error || 'Failed to communicate with agent');
         }
 
+        // Store the context ID (task ID) for conversation continuity
+        // Only set if we don't already have one (preserve existing context)
+        if (a2aResponse.contextId && !a2aContextId) {
+          setA2aContextId(a2aResponse.contextId);
+        }
+
+        const assistantMessageContent = a2aResponse.content || 'No response from agent';
         const assistantMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: a2aResponse.content || 'No response from agent',
+          content: assistantMessageContent,
           timestamp: new Date(),
           model: `agent:${selectedAgentConnector.id}`,
           tokens: {
-            input: a2aResponse.inputTokens || 0,
+            input: 0, // Input tokens shown on user message
             output: a2aResponse.outputTokens || 0,
           },
         };
 
-        setMessages(prev => [...prev, assistantMessage]);
+        // Update user message with input tokens
+        setMessages(prev => {
+          const updated = [...prev];
+          // Find the last user message and add input tokens
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'user' && updated[i].id === userMessage.id) {
+              updated[i] = {
+                ...updated[i],
+                tokens: {
+                  input: a2aResponse.inputTokens || 0,
+                  output: 0, // Output tokens shown on assistant message
+                },
+              };
+              break;
+            }
+          }
+          return [...updated, assistantMessage];
+        });
+
+        // Save messages to conversation for history persistence
+        try {
+          const saveResponse = await fetch('/api/a2a/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversationId: currentConversationId,
+              modelId: `agent:${selectedAgentConnector.id}`,
+              userMessage: userMessage.content,
+              assistantMessage: assistantMessageContent,
+              inputTokens: a2aResponse.inputTokens || 0,
+              outputTokens: a2aResponse.outputTokens || 0,
+            }),
+          });
+
+          if (saveResponse.ok) {
+            const saveData = await saveResponse.json();
+            if (saveData.conversationId && !currentConversationId) {
+              setCurrentConversationId(saveData.conversationId);
+              fetchConversations();
+            }
+          }
+        } catch (saveErr) {
+          console.error('Failed to save A2A messages:', saveErr);
+        }
 
         // Update last message tokens for display (cost is $0 for external agents)
         if (a2aResponse.inputTokens || a2aResponse.outputTokens) {
@@ -848,7 +981,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     } finally {
       setIsLoading(false);
     }
-  }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector]);
+  }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector, a2aContextId]);
 
   // Close all sidebars
   const closeSidebars = useCallback(() => {
@@ -1136,12 +1269,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                         )}
                       </div>
                     )}
-                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: '0.95rem' }}>{msg.content}</div>
-                    {msg.tokens && (
+                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.95rem' }}>{formatMessageContent(msg.content)}</div>
+                    {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0) && (
                       <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input}</span>
-                        <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output}</span>
-                        {isAgentMessage && <span style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: 'rgba(255,255,255,0.5)' }}>$0.00</span>}
+                        {msg.role === 'user' && msg.tokens.input > 0 && (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input} prompt</span>
+                        )}
+                        {msg.role === 'assistant' && msg.tokens.output > 0 && (
+                          <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output} generated</span>
+                        )}
+                        {isAgentMessage && msg.role === 'assistant' && <span style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: 'rgba(255,255,255,0.5)' }}>$0.00</span>}
                       </div>
                     )}
                   </div>
@@ -1251,6 +1388,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   onClick={() => {
                     setMessages([]);
                     setCurrentConversationId(null);
+                    setA2aContextId(null);
                     setShowMobileOverlay(false);
                   }}
                   style={{ width: '100%', padding: '0.75rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '12px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
@@ -1488,11 +1626,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 {/* External MCP Servers */}
                 {availableMcpServers.filter(s => s.source_type === 'mcp_import').length > 0 && (
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>External MCP Servers</div>
+                    <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🌐 External MCP Servers</div>
                     {availableMcpServers.filter(s => s.source_type === 'mcp_import').map(server => (
-                      <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addExternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem' }}>{server.display_name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount || 0} tools</div>
+                      <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addExternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent' }}>
+                        <FaviconImage baseUrl={server.source_url} size={28} fallbackEmoji="🌐" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{server.display_name}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount || 0} tools</div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1504,11 +1645,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🤖 External Agents</div>
                     {availableAgents.map(agent => (
                       <div key={agent.id} onClick={() => { if (!connectors.find(c => c.external_url === agent.agent_url)) { addExternalAgentConnector(agent); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.external_url === agent.agent_url) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.external_url === agent.agent_url) ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent' }}>
-                        {agent.icon_url ? (
-                          <FaviconImage iconUrl={agent.icon_url} size={28} />
-                        ) : (
-                          <span style={{ fontSize: '1.5rem' }}>🤖</span>
-                        )}
+                        <FaviconImage iconUrl={agent.icon_url || undefined} baseUrl={agent.agent_url} size={28} fallbackEmoji="🤖" />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{agent.display_name}</div>
                           {agent.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.description}</div>}

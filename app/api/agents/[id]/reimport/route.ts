@@ -128,10 +128,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (card.iconUrl) updateData.icon_url = card.iconUrl;
     if (card.tags && Array.isArray(card.tags)) updateData.tags = card.tags;
 
+    // Get old agent_url before updating (to update connectors)
+    const oldAgentUrl = agent.agent_url;
+
     await supabase
       .from('a2a_agents')
       .update(updateData as never)
       .eq('id', agentId);
+
+    // Update any chat connectors that reference this agent's old URL
+    if (card.url && card.url !== oldAgentUrl) {
+      await supabase
+        .from('chat_connectors')
+        .update({
+          external_url: card.url,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq('user_id', userId)
+        .eq('external_url', oldAgentUrl)
+        .eq('connector_type', 'external_agent');
+    }
 
     // Update the associated tool if it exists
     const validCategory = (['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'].includes(agent.category)

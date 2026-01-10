@@ -19,8 +19,7 @@ import {
   getMCPServerToolDetails,
   getA2AAgentByToolName,
 } from '@/src/lib/supabase-services';
-import { ClientFactory } from '@a2a-js/sdk/client';
-import { v4 as uuidv4 } from 'uuid';
+import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
 import { executeGraphQLCall } from '@/src/lib/graphql-handler';
 import { createMCPClient } from '@/src/lib/mcp-client';
@@ -556,6 +555,7 @@ interface ExtendedToolContext extends ToolExecutionContext {
   apiKey?: string;
   authToken?: string;
   environmentId?: string;
+  mcpSessionId?: string; // MCP session ID for A2A context continuity
 }
 
 // Tool execution - looks up handler in registry (sync for NATIVE tools)
@@ -721,63 +721,48 @@ async function executeToolAsync(
     }
 
     try {
-      // Create A2A client using official SDK
-      const factory = new ClientFactory();
-      const client = await factory.createFromUrl(agent.agent_url);
-
       // Extract query from args (A2A tools expect a 'query' parameter)
       const query = (args.query as string) || JSON.stringify(args);
 
-      // Send message to agent
-      const response = await client.sendMessage({
-        message: {
-          messageId: uuidv4(),
-          role: 'user',
-          parts: [{ kind: 'text', text: query }],
-          kind: 'message',
-        },
-      });
+      // Use MCP session ID as contextId for A2A conversation continuity
+      // Falls back to contextId from args if provided
+      const contextId = context?.mcpSessionId || (args.contextId as string | undefined);
 
-      // Extract text from response
-      let resultText = '';
-      if (response.kind === 'message') {
-        // Direct message response
-        const parts = (response as { parts?: Array<{ kind: string; text?: string }> }).parts || [];
-        resultText = parts
-          .filter((p: { kind: string }) => p.kind === 'text')
-          .map((p: { text?: string }) => p.text || '')
-          .join('\n');
-      } else if (response.kind === 'task') {
-        // Task response - extract from artifacts or history
-        const task = response as {
-          status?: { state: string };
-          artifacts?: Array<{ parts?: Array<{ kind: string; text?: string }> }>;
-          history?: Array<{ role: string; parts?: Array<{ kind: string; text?: string }> }>;
-        };
-        if (task.artifacts && task.artifacts.length > 0) {
-          resultText = task.artifacts
-            .flatMap(a => a.parts || [])
-            .filter(p => p.kind === 'text')
-            .map(p => p.text || '')
-            .join('\n');
-        } else if (task.history) {
-          // Get last agent message from history
-          const agentMessages = task.history.filter(m => m.role === 'agent');
-          if (agentMessages.length > 0) {
-            const lastMessage = agentMessages[agentMessages.length - 1];
-            resultText = (lastMessage.parts || [])
-              .filter(p => p.kind === 'text')
-              .map(p => p.text || '')
-              .join('\n');
-          }
-        }
-        if (!resultText) {
-          resultText = `Task ${task.status?.state || 'completed'}`;
-        }
+      // Build auth config from agent settings
+      const authConfig: Record<string, string> = {};
+      if (agent.auth_config && typeof agent.auth_config === 'object') {
+        Object.assign(authConfig, agent.auth_config);
       }
 
+      // Build headers from agent default headers
+      const headers: Record<string, string> = {};
+      if (agent.default_headers && typeof agent.default_headers === 'object') {
+        Object.assign(headers, agent.default_headers);
+      }
+
+      // Use our simple A2A client which directly calls the agent_url
+      const response = await sendA2AMessage(
+        {
+          agentUrl: agent.agent_url,
+          authType: agent.auth_type as 'none' | 'api_key' | 'bearer' | 'basic',
+          authConfig,
+          headers,
+          contextId, // Pass contextId for conversation continuity
+        },
+        [{ role: 'user', content: query }]
+      );
+
+      if (!response.success) {
+        throw new Error(response.error || 'Agent returned an error');
+      }
+
+      // Return result with contextId for conversation continuity
       return {
-        result: resultText || 'Agent returned no response',
+        result: {
+          content: response.content || 'Agent returned no response',
+          contextId: response.contextId, // Include contextId in result
+          taskState: response.taskState,
+        },
         isRestTool: false,
         toolInfo: {
           hasWidget: false,
@@ -1653,6 +1638,7 @@ interface MCPContext {
   isAuthenticated: boolean;
   apiKey?: string;      // API key for REST calls
   authToken?: string;   // Bearer token for REST calls
+  mcpSessionId?: string; // MCP session ID for A2A context continuity
 }
 
 // Handle MCP requests
@@ -1869,6 +1855,7 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
         const execContext: ExtendedToolContext = {
           apiKey: context.apiKey,
           authToken: context.authToken,
+          mcpSessionId: context.mcpSessionId, // Pass MCP session ID for A2A context
         };
 
         const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);
@@ -1994,6 +1981,9 @@ export async function POST(request: NextRequest) {
       const authorizationHeader = request.headers.get('Authorization');
       const bearerToken = authorizationHeader?.startsWith('Bearer ') ? authorizationHeader.slice(7) : undefined;
 
+      // Extract MCP session ID for A2A context continuity
+      const mcpSessionId = request.headers.get('mcp-session-id') || undefined;
+
       const context: MCPContext = {
         userId: internalUserId,
         apiKeyId: internalApiKeyId || undefined,
@@ -2001,6 +1991,7 @@ export async function POST(request: NextRequest) {
         isAuthenticated: true,
         apiKey: originalApiKey || undefined,
         authToken: bearerToken,
+        mcpSessionId,
       };
       const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);
@@ -2050,6 +2041,9 @@ export async function POST(request: NextRequest) {
       const isApiKeyAuth = authMethod === 'header' && !apiKey.startsWith('ey'); // JWT tokens start with 'ey'
       const isBearerAuth = authMethod === 'oauth' || apiKey.startsWith('ey');
 
+      // Extract MCP session ID for A2A context continuity
+      const mcpSessionId = request.headers.get('mcp-session-id') || undefined;
+
       const context: MCPContext = {
         userId: authResult.userId,
         apiKeyId: authResult.apiKeyId,
@@ -2057,6 +2051,7 @@ export async function POST(request: NextRequest) {
         isAuthenticated: true,
         apiKey: isApiKeyAuth ? apiKey : undefined,
         authToken: isBearerAuth ? apiKey : undefined,
+        mcpSessionId,
       };
       const response = await handleMCPRequest(body as MCPRequest, context);
       return NextResponse.json(response);
