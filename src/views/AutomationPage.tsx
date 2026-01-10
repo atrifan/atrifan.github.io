@@ -216,6 +216,14 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   }, [availableModels, selectedModel]);
 
+  // Add class to body for hiding iubenda
+  useEffect(() => {
+    document.body.classList.add('automation-page-active');
+    return () => {
+      document.body.classList.remove('automation-page-active');
+    };
+  }, []);
+
   // Fetch data on mount
   useEffect(() => {
     applySEO('automation');
@@ -1166,7 +1174,6 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           );
         })()}
 
-        <AdBanner slot={ADS_CONFIG.slots.automationBottom} format="horizontal" style={{ marginTop: '1.5rem' }} />
         <Footer />
       </View>
     </View>
