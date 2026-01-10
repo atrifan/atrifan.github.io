@@ -14,6 +14,7 @@ interface ImportRequest {
   agentName: string;
   displayName: string;
   agentUrl: string;
+  importUrl?: string;
   environmentName?: string;
   agentCard?: Record<string, unknown>;
   version?: string;
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       agentName,
       displayName,
       agentUrl,
+      importUrl,
       environmentName = 'default',
       agentCard = {},
       version,
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
       agent_name: normalizedAgentName,
       display_name: displayName?.trim() || agentName.trim(),
       agent_url: agentUrl.trim(),
+      import_url: importUrl?.trim() || undefined,
       environment_name: environmentName.trim() || 'default',
       agent_card: agentCard,
       version: version || undefined,

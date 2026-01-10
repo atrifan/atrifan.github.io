@@ -16,6 +16,7 @@ interface A2AAgent {
   agent_name: string;
   display_name: string;
   agent_url: string;
+  import_url: string | null;
   environment_name: string;
   auth_type: string;
   auth_config: Record<string, unknown>;
@@ -295,9 +296,9 @@ export function A2AAgentEditPage({ agentId, isPro, isPlus }: Props) {
           )}
         </div>
 
-        {/* Agent URL */}
+        {/* A2A URL (endpoint) */}
         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Agent URL</label>
+          <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>A2A URL <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>(endpoint)</span></label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
             <span style={{ color: '#10b981', fontSize: '1rem' }}>🔗</span>
             <code style={{ color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}>{agent.agent_url}</code>
@@ -313,6 +314,27 @@ export function A2AAgentEditPage({ agentId, isPro, isPlus }: Props) {
             </button>
           </div>
         </div>
+
+        {/* Import URL (if different from agent_url) */}
+        {agent.import_url && agent.import_url !== agent.agent_url && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Import URL <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>(original)</span></label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ color: '#f59e0b', fontSize: '1rem' }}>📥</span>
+              <code style={{ color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}>{agent.import_url}</code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(agent.import_url!);
+                  setSuccess('URL copied to clipboard');
+                  setTimeout(() => setSuccess(null), 2000);
+                }}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.75rem' }}
+              >
+                📋 Copy
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Read-only fields */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>

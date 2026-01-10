@@ -367,6 +367,8 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
 
       // Use URL from agent card if available, otherwise fall back to import URL
       const effectiveAgentUrl = agentCard?.url || url.trim();
+      // Store the original import URL (the URL user entered)
+      const originalImportUrl = url.trim();
 
       const response = await fetch('/api/agents/import', {
         method: 'POST',
@@ -375,6 +377,7 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
           agentName: agentName.trim(),
           displayName: displayName.trim() || agentName.trim(),
           agentUrl: effectiveAgentUrl,
+          importUrl: originalImportUrl !== effectiveAgentUrl ? originalImportUrl : undefined,
           environmentName: environmentName.trim() || 'default',
           agentCard: agentCard || {},
           version: agentCard?.version,

@@ -89,6 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const agent = agentData as {
       id: string;
       agent_url: string;
+      import_url: string | null;
       agent_name: string;
       display_name: string;
       environment_name: string;
@@ -96,13 +97,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       tags: string[];
     };
 
+    // Use import_url if available (original discovery URL), otherwise fall back to agent_url
+    const sourceUrl = agent.import_url || agent.agent_url;
+
     // Fetch agent card from source URL
-    const baseUrl = new URL(agent.agent_url).origin;
+    const baseUrl = new URL(sourceUrl).origin;
     const { card } = await tryFetchAgentCard(baseUrl);
 
     if (!card) {
-      return NextResponse.json({ 
-        error: 'Could not fetch agent card from source URL. The agent may not have a discoverable agent card.' 
+      return NextResponse.json({
+        error: 'Could not fetch agent card from source URL. The agent may not have a discoverable agent card.'
       }, { status: 400 });
     }
 
@@ -111,6 +115,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       agent_card: card,
       updated_at: new Date().toISOString(),
     };
+
+    // Update agent_url if the card has a new URL (A2A endpoint)
+    if (card.url) {
+      updateData.agent_url = card.url;
+    }
 
     if (card.name) updateData.display_name = card.name;
     if (card.version) updateData.version = card.version;

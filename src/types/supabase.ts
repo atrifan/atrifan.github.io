@@ -967,8 +967,10 @@ export interface A2AAgentRow {
   agent_name: string;
   /** Display name for the agent */
   display_name: string;
-  /** Agent URL (base URL for the agent) */
+  /** Agent URL (A2A endpoint URL from agent card) */
   agent_url: string;
+  /** Import URL (original URL used to import the agent) */
+  import_url: string | null;
   /** Environment name for this agent */
   environment_name: string;
   /** Full agent card JSON from .well-known/agent.json */
@@ -1011,6 +1013,7 @@ export interface A2AAgentInsert {
   agent_name: string;
   display_name: string;
   agent_url: string;
+  import_url?: string;
   environment_name?: string;
   agent_card?: Record<string, unknown>;
   version?: string;

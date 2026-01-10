@@ -10,6 +10,7 @@ interface A2AAgent {
   agent_name: string;
   display_name: string;
   agent_url: string;
+  import_url: string | null;
   environment_name: string;
   agent_card: Record<string, unknown>;
   version: string | null;
@@ -507,11 +508,28 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                     ) : (
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <span style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>{agent.environment_name}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                        <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>{agent.agent_url}</span>
                         <button onClick={() => startEditEnv(agent)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit environment">✏️</button>
                       </div>
                     )}
+                  </div>
+
+                  {/* URLs */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      URLs
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ color: '#10b981', fontSize: '0.8rem', minWidth: '60px' }}>🔗 A2A:</span>
+                        <code style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontFamily: 'monospace', wordBreak: 'break-all' }}>{agent.agent_url}</code>
+                      </div>
+                      {agent.import_url && agent.import_url !== agent.agent_url && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: '#f59e0b', fontSize: '0.8rem', minWidth: '60px' }}>📥 Import:</span>
+                          <code style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontFamily: 'monospace', wordBreak: 'break-all' }}>{agent.import_url}</code>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Tool */}
@@ -593,7 +611,7 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
       {confirmRefresh && (
         <ConfirmModal
           title="Refresh Agent"
-          message={`Refresh agent from ${confirmRefresh.agent_url}? This will update the agent with the latest data from the source.`}
+          message={`Refresh agent from ${confirmRefresh.import_url || confirmRefresh.agent_url}? This will update the agent with the latest data from the source.`}
           onConfirm={() => handleRefreshAgent(confirmRefresh)}
           onCancel={() => setConfirmRefresh(null)}
           confirmText="Refresh"

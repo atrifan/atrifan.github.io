@@ -1047,6 +1047,7 @@ export interface A2AAgentRow {
   agent_name: string;
   display_name: string;
   agent_url: string;
+  import_url: string | null;
   environment_name: string;
   agent_card: Record<string, unknown>;
   version: string | null;
