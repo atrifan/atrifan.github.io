@@ -244,9 +244,12 @@ body {
 /* Mobile Chat Overlay */
 .chat-mobile-overlay {
   position: fixed;
-  inset: 0;
+  top: 60px; /* Below the main header */
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(10, 10, 20, 0.98);
-  z-index: 1000;
+  z-index: 999; /* Below main header (1000) */
   display: flex;
   flex-direction: column;
   overflow-y: auto;

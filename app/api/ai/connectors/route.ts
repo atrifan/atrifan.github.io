@@ -26,6 +26,7 @@ export async function GET() {
         display_name,
         description,
         icon,
+        icon_url,
         is_enabled,
         last_connected_at,
         created_at
@@ -54,16 +55,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { 
-      connectorType, 
-      mcpServerId, 
-      externalUrl, 
+    const {
+      connectorType,
+      mcpServerId,
+      externalUrl,
       externalAuthType,
       externalAuthConfig,
       externalHeaders,
-      displayName, 
-      description, 
-      icon 
+      displayName,
+      description,
+      icon,
+      iconUrl
     } = body;
 
     // Validate connector type
@@ -114,6 +116,7 @@ export async function POST(request: NextRequest) {
         display_name: displayName,
         description,
         icon: icon || '🔌',
+        icon_url: iconUrl || null,
       })
       .select()
       .single();

@@ -12,6 +12,7 @@ import { ChatIcon } from '../components/ChatIcon';
 import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
+import { sendA2AMessage } from '../lib/a2a-client';
 import {
   AI_MODELS,
   TOKEN_QUOTAS,
@@ -77,6 +78,7 @@ interface ChatConnector {
   display_name: string;
   description?: string;
   icon: string;
+  icon_url?: string;
   is_enabled: boolean;
 }
 
@@ -254,6 +256,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
+
+  // Check if selected model is actually an external agent (prefixed with 'agent:')
+  const isExternalAgentSelected = selectedModel.startsWith('agent:');
+  const selectedAgentConnector = isExternalAgentSelected
+    ? connectors.find(c => c.connector_type === 'external_agent' && `agent:${c.id}` === selectedModel)
+    : null;
+
+  // Get all external agent connectors for the model selector
+  const externalAgentConnectors = connectors.filter(c => c.connector_type === 'external_agent');
 
   // Budget-based calculations
   const monthlyBudget = budgetData?.budget.monthlyBudgetUsd || DEFAULT_MONTHLY_BUDGET;
@@ -544,6 +555,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           displayName: agent.display_name,
           description: agent.description ? agent.description.slice(0, 50) : 'A2A Agent',
           icon: '🤖',
+          iconUrl: agent.icon_url || null,
           externalUrl: agent.agent_url,
         }),
       });
@@ -687,8 +699,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const sendMessage = useCallback(async () => {
     if (!message.trim() || isLoading) return;
 
-    // Check quota before sending
-    if (isQuotaExceeded) {
+    // Check quota before sending (skip for external agents - they're free)
+    if (isQuotaExceeded && !isExternalAgentSelected) {
       setError('Monthly token quota exceeded. Please wait until the 1st of next month or upgrade your plan.');
       return;
     }
@@ -706,76 +718,118 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setError(null);
 
     try {
-      // Build system prompt from active personalities
-      const combinedSystemPrompt = activePersonalities
-        .map(p => p.system_prompt)
-        .join('\n\n');
+      // Handle external agent communication
+      if (isExternalAgentSelected && selectedAgentConnector) {
+        const a2aMessages = [...messages, userMessage].map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
 
-      const response = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-tier': tier,
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
+        const a2aResponse = await sendA2AMessage(
+          {
+            agentUrl: selectedAgentConnector.external_url || '',
+          },
+          a2aMessages
+        );
+
+        if (!a2aResponse.success) {
+          throw new Error(a2aResponse.error || 'Failed to communicate with agent');
+        }
+
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: a2aResponse.content || 'No response from agent',
+          timestamp: new Date(),
+          model: `agent:${selectedAgentConnector.id}`,
+          tokens: {
+            input: a2aResponse.inputTokens || 0,
+            output: a2aResponse.outputTokens || 0,
+          },
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+
+        // Update last message tokens for display (cost is $0 for external agents)
+        if (a2aResponse.inputTokens || a2aResponse.outputTokens) {
+          setLastMessageTokens({
+            input: a2aResponse.inputTokens || 0,
+            output: a2aResponse.outputTokens || 0
+          });
+        }
+      } else {
+        // Handle regular AI model communication
+        // Build system prompt from active personalities
+        const combinedSystemPrompt = activePersonalities
+          .map(p => p.system_prompt)
+          .join('\n\n');
+
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-tier': tier,
+          },
+          body: JSON.stringify({
+            messages: [...messages, userMessage].map(m => ({
+              role: m.role,
+              content: m.content,
+            })),
+            model: selectedModel,
+            conversationId: currentConversationId,
+            systemPrompt: combinedSystemPrompt || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (errorData.reason === 'budget_exceeded') {
+            setCostUsage(prev => ({ ...prev, used: prev.limit }));
+            throw new Error('Monthly AI budget exceeded. Resets on the 1st.');
+          }
+          throw new Error(errorData.error || 'Failed to send message');
+        }
+
+        const data = await response.json();
+
+        // Update conversation ID if new conversation was created
+        if (data.conversationId && !currentConversationId) {
+          setCurrentConversationId(data.conversationId);
+          // Refresh conversations list
+          fetchConversations();
+        }
+
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.content,
+          timestamp: new Date(),
           model: selectedModel,
-          conversationId: currentConversationId,
-          systemPrompt: combinedSystemPrompt || undefined,
-        }),
-      });
+          tokens: data.usage,
+        };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (errorData.reason === 'budget_exceeded') {
-          setCostUsage(prev => ({ ...prev, used: prev.limit }));
-          throw new Error('Monthly AI budget exceeded. Resets on the 1st.');
+        setMessages(prev => [...prev, assistantMessage]);
+
+        // Update last message tokens for display
+        if (data.usage) {
+          setLastMessageTokens({ input: data.usage.input, output: data.usage.output });
+          // Update cost usage with the cost from this message
+          if (data.usage.cost) {
+            setCostUsage(prev => ({
+              ...prev,
+              used: prev.used + data.usage.cost,
+            }));
+          }
+          // Refresh budget data to update the display
+          fetchBudget();
         }
-        throw new Error(errorData.error || 'Failed to send message');
-      }
-
-      const data = await response.json();
-
-      // Update conversation ID if new conversation was created
-      if (data.conversationId && !currentConversationId) {
-        setCurrentConversationId(data.conversationId);
-        // Refresh conversations list
-        fetchConversations();
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.content,
-        timestamp: new Date(),
-        model: selectedModel,
-        tokens: data.usage,
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Update last message tokens for display
-      if (data.usage) {
-        setLastMessageTokens({ input: data.usage.input, output: data.usage.output });
-        // Update cost usage with the cost from this message
-        if (data.usage.cost) {
-          setCostUsage(prev => ({
-            ...prev,
-            used: prev.used + data.usage.cost,
-          }));
-        }
-        // Refresh budget data to update the display
-        fetchBudget();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
-  }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities]);
+  }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector]);
 
   // Close all sidebars
   const closeSidebars = useCallback(() => {
@@ -966,44 +1020,87 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         {/* Messages */}
         {messages.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '50vh', padding: '2rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{selectedModelData?.icon || '💬'}</div>
-            <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Start chatting with {selectedModelData?.name}</h2>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', maxWidth: '400px' }}>Ask questions, get help with calculations, or explore your connected tools.</p>
-            {(connectors.length > 0 || activePersonalityIds.length > 0) && (
-              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {connectors.length > 0 && <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🔌 {connectors.length} connector{connectors.length > 1 ? 's' : ''}</span>}
-                {activePersonalityIds.length > 0 && <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🎭 {activePersonalityIds.length} persona{activePersonalityIds.length > 1 ? 's' : ''}</span>}
-              </div>
+            {isExternalAgentSelected && selectedAgentConnector ? (
+              <>
+                {/* External Agent Welcome */}
+                <div style={{ marginBottom: '1rem' }}>
+                  {selectedAgentConnector.icon_url ? (
+                    <FaviconImage iconUrl={selectedAgentConnector.icon_url} size={64} />
+                  ) : (
+                    <div style={{ fontSize: '3rem' }}>🤖</div>
+                  )}
+                </div>
+                <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Start chatting with {selectedAgentConnector.display_name}</h2>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', maxWidth: '400px' }}>Ask questions, get help or chat.</p>
+                <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🤖 External Agent</span>
+                  <span style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'rgba(255,255,255,0.6)', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>$0.00 cost</span>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* AI Model Welcome */}
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{selectedModelData?.icon || '💬'}</div>
+                <h2 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Start chatting with {selectedModelData?.name}</h2>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', maxWidth: '400px' }}>Ask questions, get help with calculations, or explore your connected tools.</p>
+                {(connectors.length > 0 || activePersonalityIds.length > 0) && (
+                  <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {connectors.length > 0 && <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🔌 {connectors.length} connector{connectors.length > 1 ? 's' : ''}</span>}
+                    {activePersonalityIds.length > 0 && <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🎭 {activePersonalityIds.length} persona{activePersonalityIds.length > 1 ? 's' : ''}</span>}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.5rem', justifyContent: 'center' }}>
+                  {['Calculate my budget', 'Help me sleep better', 'What\'s my trading risk?', 'Convert units'].map(suggestion => (
+                    <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '20px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.5rem', justifyContent: 'center' }}>
-              {['Calculate my budget', 'Help me sleep better', 'What\'s my trading risk?', 'Convert units'].map(suggestion => (
-                <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '20px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '0.85rem' }}>
-                  {suggestion}
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1rem' }}>
-            {messages.map(msg => (
-              <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{ maxWidth: '80%', padding: '0.875rem 1rem', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : 'rgba(255,255,255,0.1)', color: '#fff' }}>
-                  {msg.role === 'assistant' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
-                      <span>{selectedModelData?.icon}</span>
-                      <span>{selectedModelData?.name}</span>
-                    </div>
-                  )}
-                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: '0.95rem' }}>{msg.content}</div>
-                  {msg.tokens && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input}</span>
-                      <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output}</span>
-                    </div>
-                  )}
+            {messages.map(msg => {
+              // Check if this message is from an external agent
+              const isAgentMessage = msg.model?.startsWith('agent:');
+              const agentConnectorId = isAgentMessage ? msg.model?.replace('agent:', '') : null;
+              const agentConnector = agentConnectorId ? connectors.find(c => c.id === agentConnectorId) : null;
+
+              return (
+                <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{ maxWidth: '80%', padding: '0.875rem 1rem', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : isAgentMessage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)', color: '#fff' }}>
+                    {msg.role === 'assistant' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                        {isAgentMessage && agentConnector ? (
+                          <>
+                            {agentConnector.icon_url ? (
+                              <FaviconImage iconUrl={agentConnector.icon_url} size={14} />
+                            ) : (
+                              <span>🤖</span>
+                            )}
+                            <span>{agentConnector.display_name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{selectedModelData?.icon}</span>
+                            <span>{selectedModelData?.name}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: '0.95rem' }}>{msg.content}</div>
+                    {msg.tokens && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input}</span>
+                        <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output}</span>
+                        {isAgentMessage && <span style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: 'rgba(255,255,255,0.5)' }}>$0.00</span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {isLoading && (
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <div style={{ padding: '0.875rem 1rem', borderRadius: '18px 18px 18px 4px', background: 'rgba(255,255,255,0.1)' }}>
@@ -1115,10 +1212,57 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
                 {/* Model Selection */}
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Model</div>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Model / Agent</div>
                   <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', padding: '0.75rem', color: '#fff', fontSize: '1rem', cursor: 'pointer', outline: 'none' }}>
-                    {availableModels.map(m => (<option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>{m.icon} {m.name}</option>))}
+                    <optgroup label="AI Models" style={{ background: '#1a1a2e' }}>
+                      {availableModels.map(m => (<option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>{m.icon} {m.name}</option>))}
+                    </optgroup>
+                    {externalAgentConnectors.length > 0 && (
+                      <optgroup label="External Agents" style={{ background: '#1a1a2e' }}>
+                        {externalAgentConnectors.map(agent => (
+                          <option key={agent.id} value={`agent:${agent.id}`} style={{ background: '#1a1a2e' }}>🤖 {agent.display_name}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
+
+                  {/* Model Stats Collapsible */}
+                  {(budgetData && budgetData.models.length > 0) || externalAgentConnectors.length > 0 ? (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <button onClick={() => setModelStatsExpanded(!modelStatsExpanded)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.8rem' }}>
+                        <span>📊 Usage Statistics</span>
+                        <span style={{ transform: modelStatsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                      </button>
+                      {modelStatsExpanded && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                          {budgetData?.models.map(m => (
+                            <div key={m.modelId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              <span style={{ fontSize: '1rem' }}>{m.icon}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.modelName}</div>
+                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>{m.requestCount} requests • {formatCurrency(m.usedCost)}</div>
+                              </div>
+                              <UsageDonut percent={m.usagePercent} size={24} strokeWidth={3} />
+                            </div>
+                          ))}
+                          {/* External Agents Stats */}
+                          {externalAgentConnectors.map(agent => (
+                            <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              {agent.icon_url ? (
+                                <FaviconImage iconUrl={agent.icon_url} size={20} />
+                              ) : (
+                                <span style={{ fontSize: '1rem' }}>🤖</span>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.display_name}</div>
+                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>External Agent • $0.00</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Connectors Section */}
@@ -1130,8 +1274,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   {connectors.length > 0 && (
                     <div style={{ marginBottom: '0.5rem' }}>
                       {connectors.map(c => (
-                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', marginBottom: '0.25rem' }}>
-                          <span style={{ color: '#fff', fontSize: '0.85rem' }}>{c.display_name}</span>
+                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: c.connector_type === 'external_agent' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', marginBottom: '0.25rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {c.icon_url ? (
+                              <FaviconImage iconUrl={c.icon_url} size={20} />
+                            ) : (
+                              <span style={{ fontSize: '1rem' }}>{c.icon || (c.connector_type === 'external_agent' ? '🤖' : '🔌')}</span>
+                            )}
+                            <span style={{ color: '#fff', fontSize: '0.85rem' }}>{c.display_name}</span>
+                          </div>
                           <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>✕</button>
                         </div>
                       ))}
@@ -1200,12 +1351,32 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
                 {/* External MCP Servers */}
                 {availableMcpServers.filter(s => s.source_type === 'mcp_import').length > 0 && (
-                  <div>
+                  <div style={{ marginBottom: '1.5rem' }}>
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>External MCP Servers</div>
                     {availableMcpServers.filter(s => s.source_type === 'mcp_import').map(server => (
                       <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addExternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
                         <div style={{ color: '#fff', fontSize: '0.85rem' }}>{server.display_name}</div>
                         <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount || 0} tools</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* External Agents */}
+                {availableAgents.length > 0 && (
+                  <div>
+                    <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🤖 External Agents</div>
+                    {availableAgents.map(agent => (
+                      <div key={agent.id} onClick={() => { if (!connectors.find(c => c.external_url === agent.agent_url)) { addExternalAgentConnector(agent); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.external_url === agent.agent_url) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.external_url === agent.agent_url) ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent' }}>
+                        {agent.icon_url ? (
+                          <FaviconImage iconUrl={agent.icon_url} size={28} />
+                        ) : (
+                          <span style={{ fontSize: '1.5rem' }}>🤖</span>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{agent.display_name}</div>
+                          {agent.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.description}</div>}
+                        </div>
                       </div>
                     ))}
                   </div>
