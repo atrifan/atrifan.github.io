@@ -130,6 +130,16 @@ Generate the complete TypeScript implementation.`;
         .eq('id', automationId)
         .eq('user_id', userId);
 
+      // Save export history
+      await supabase.from('automation_export_history').insert({
+        automation_id: automationId,
+        user_id: userId,
+        mermaid_diagram: mermaidDiagram,
+        typescript_code: typescriptCode,
+        input_tokens: usage.prompt_tokens,
+        output_tokens: usage.completion_tokens,
+      });
+
       // Track token usage
       await supabase.from('ai_token_usage').insert({
         user_id: userId,

@@ -60,6 +60,15 @@ interface PromptHistory {
   created_at: string;
 }
 
+interface ExportHistory {
+  id: string;
+  mermaid_diagram: string;
+  typescript_code: string;
+  input_tokens: number;
+  output_tokens: number;
+  created_at: string;
+}
+
 interface Personality {
   id: string;
   name: string;
@@ -111,6 +120,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [currentAutomation, setCurrentAutomation] = useState<Automation | null>(null);
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
+  const [exportHistory, setExportHistory] = useState<ExportHistory[]>([]);
 
   // Builder state
   const [prompt, setPrompt] = useState('');
@@ -337,6 +347,40 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   };
 
+  // Fetch prompt history for an automation
+  const fetchPromptHistory = useCallback(async (automationId: string) => {
+    try {
+      const response = await fetch(`/api/ai/automations/history?automationId=${automationId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setPromptHistory(data.history || []);
+      } else {
+        console.error('Failed to fetch prompt history');
+        setPromptHistory([]);
+      }
+    } catch (error) {
+      console.error('Error fetching prompt history:', error);
+      setPromptHistory([]);
+    }
+  }, []);
+
+  // Fetch export history for an automation
+  const fetchExportHistory = useCallback(async (automationId: string) => {
+    try {
+      const response = await fetch(`/api/ai/automations/export-history?automationId=${automationId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setExportHistory(data.history || []);
+      } else {
+        console.error('Failed to fetch export history');
+        setExportHistory([]);
+      }
+    } catch (error) {
+      console.error('Error fetching export history:', error);
+      setExportHistory([]);
+    }
+  }, []);
+
   // Generate flow from prompt
   const generateFlow = useCallback(async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -368,13 +412,17 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         if (data.usage) setLastTokenUsage(data.usage);
         setPrompt('');
         fetchBudget();
+        // Refresh prompt history if we have an automation
+        if (currentAutomation?.id) {
+          fetchPromptHistory(currentAutomation.id);
+        }
       }
     } catch (error) {
       console.error('Failed to generate flow:', error);
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory]);
 
   // Save automation
   const saveAutomation = async () => {
@@ -433,6 +481,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         setShowExportModal(false);
         setView('code');
         fetchBudget();
+        // Refresh export history
+        if (currentAutomation?.id) {
+          fetchExportHistory(currentAutomation.id);
+        }
       }
     } catch (error) {
       console.error('Failed to export:', error);
@@ -460,6 +512,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     setCurrentAutomation(null);
     setMermaidDiagram('flowchart TD\n  start([Start]) --> end_node([End])');
     setPromptHistory([]);
+    setExportHistory([]);
     setExportedCode('');
     setAutomationName('');
     setAutomationDescription('');
@@ -477,6 +530,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     setSelectedSchedule(auto.schedule_type);
     setExportedCode(auto.typescript_code || '');
     setView('builder');
+    // Fetch prompt and export history for this automation
+    fetchPromptHistory(auto.id);
+    fetchExportHistory(auto.id);
   };
 
   // Show upgrade modal for non-Pro users
@@ -856,10 +912,14 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
             )}
 
+            {/* Prompt History Section */}
+            <h3 style={{ color: '#f59e0b', fontSize: '1rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📝</span> Mermaid Generation History
+            </h3>
             {promptHistory.length === 0 ? (
-              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '2rem' }}>No prompts yet. Start building in the Builder tab!</p>
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>No prompts yet. Start building in the Builder tab!</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
                 {promptHistory.map((ph, i) => (
                   <div key={ph.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
@@ -873,11 +933,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                       <p style={{ color: '#fff', fontSize: '0.9rem', margin: 0, padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>{ph.prompt}</p>
                     </div>
 
-                    {/* Mermaid Response */}
+                    {/* Visual Mermaid Diagram */}
                     {ph.response_mermaid && (
                       <div style={{ marginBottom: '0.75rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Generated Mermaid:</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Generated Diagram:</span>
                           <button
                             onClick={() => {
                               setMermaidDiagram(ph.response_mermaid);
@@ -888,31 +948,110 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                             ↩️ Restore
                           </button>
                         </div>
-                        <pre style={{
-                          color: 'rgba(255,255,255,0.7)',
-                          fontSize: '0.75rem',
-                          margin: 0,
-                          padding: '0.5rem',
-                          background: 'rgba(0,0,0,0.3)',
-                          borderRadius: '6px',
-                          overflow: 'auto',
-                          maxHeight: '100px',
-                          whiteSpace: 'pre-wrap',
-                          fontFamily: 'monospace'
-                        }}>{ph.response_mermaid}</pre>
+                        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.5rem', maxHeight: '200px', overflow: 'auto' }}>
+                          <MermaidDiagram definition={ph.response_mermaid} />
+                        </div>
                       </div>
                     )}
 
-                    {/* Token Usage */}
+                    {/* Token Usage for Mermaid Generation */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', fontSize: '0.7rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Mermaid tokens:</span>
                       <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
-                        ↑ {ph.input_tokens} input
+                        ↑ {ph.input_tokens.toLocaleString()} input
                       </span>
                       <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>
-                        ↓ {ph.output_tokens} output
+                        ↓ {ph.output_tokens.toLocaleString()} output
                       </span>
                       <span style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        = {ph.input_tokens + ph.output_tokens} total
+                        = {(ph.input_tokens + ph.output_tokens).toLocaleString()} total
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Export History Section */}
+            <h3 style={{ color: '#10b981', fontSize: '1rem', marginBottom: '0.75rem', marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>💻</span> TypeScript Export History
+            </h3>
+            {exportHistory.length === 0 ? (
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>No exports yet. Use the Export button to generate TypeScript code!</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {exportHistory.map((eh, i) => (
+                  <div key={eh.id} style={{ background: 'rgba(16, 185, 129, 0.05)', borderRadius: '10px', padding: '1rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span style={{ color: '#10b981', fontSize: '0.8rem', fontWeight: 600 }}>Export #{exportHistory.length - i}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{new Date(eh.created_at).toLocaleString()}</span>
+                    </div>
+
+                    {/* Source Diagram Preview */}
+                    {eh.mermaid_diagram && (
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.25rem' }}>Source diagram:</div>
+                        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.5rem', maxHeight: '150px', overflow: 'auto' }}>
+                          <MermaidDiagram definition={eh.mermaid_diagram} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generated TypeScript Code */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Generated TypeScript:</span>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <button
+                            onClick={() => {
+                              setExportedCode(eh.typescript_code);
+                              setView('code');
+                            }}
+                            style={{ background: 'rgba(59, 130, 246, 0.2)', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', color: '#60a5fa', cursor: 'pointer', fontSize: '0.65rem' }}
+                          >
+                            👁️ View
+                          </button>
+                          <button
+                            onClick={() => {
+                              const blob = new Blob([eh.typescript_code], { type: 'text/typescript' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `automation-${eh.id.slice(0, 8)}.ts`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            style={{ background: 'rgba(16, 185, 129, 0.2)', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', color: '#10b981', cursor: 'pointer', fontSize: '0.65rem' }}
+                          >
+                            ⬇️ Download
+                          </button>
+                        </div>
+                      </div>
+                      <pre style={{
+                        color: 'rgba(255,255,255,0.7)',
+                        fontSize: '0.7rem',
+                        margin: 0,
+                        padding: '0.5rem',
+                        background: 'rgba(0,0,0,0.3)',
+                        borderRadius: '6px',
+                        overflow: 'auto',
+                        maxHeight: '100px',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace'
+                      }}>{eh.typescript_code.slice(0, 300)}{eh.typescript_code.length > 300 ? '...' : ''}</pre>
+                    </div>
+
+                    {/* Token Usage for Export */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', fontSize: '0.7rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Export tokens:</span>
+                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
+                        ↑ {eh.input_tokens.toLocaleString()} input
+                      </span>
+                      <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>
+                        ↓ {eh.output_tokens.toLocaleString()} output
+                      </span>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        = {(eh.input_tokens + eh.output_tokens).toLocaleString()} total
                       </span>
                     </div>
                   </div>
