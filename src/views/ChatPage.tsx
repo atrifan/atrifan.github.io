@@ -227,6 +227,21 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showChatConfig, setShowChatConfig] = useState(false);
   const chatConfigRef = useRef<HTMLDivElement>(null);
 
+  // Mobile overlay state
+  const [showMobileOverlay, setShowMobileOverlay] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Model statistics collapsed state (desktop)
+  const [modelStatsExpanded, setModelStatsExpanded] = useState(false);
+
+  // Detect mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
 
@@ -853,8 +868,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         {/* Top Ad */}
         <AdBanner slot={ADS_CONFIG.slots.chatTop} format="horizontal" />
 
-        {/* Hero Header - Centered like CUT */}
-        <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+        {/* Hero Header - Desktop only */}
+        <View UNSAFE_style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 2rem)' }} UNSAFE_className="desktop-only">
           <div className="animate-float" style={{ marginBottom: '0.5rem' }}>
             <ChatIcon size={100} />
           </div>
@@ -895,8 +910,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           )}
         </View>
 
-        {/* Action Buttons - Compact on mobile */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.35rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {/* Action Buttons - Desktop only */}
+        <div className="desktop-only" style={{ display: 'flex', justifyContent: 'center', gap: '0.35rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <button onClick={() => { setShowHistory(!showHistory); setShowConnectors(false); setShowPersonalities(false); }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
             📜 History
           </button>
@@ -918,6 +933,41 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           </button>
           <button onClick={startNewChat} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
             + New
+          </button>
+        </div>
+
+        {/* Mobile FAB Buttons - Wheel (settings) + Pen (new) */}
+        <div className="chat-fab-container">
+          <button
+            className="chat-fab chat-fab-secondary"
+            onClick={startNewChat}
+            title="New Chat"
+          >
+            ✏️
+          </button>
+          <button
+            className="chat-fab chat-fab-primary"
+            onClick={() => setShowMobileOverlay(true)}
+            title="Chat Settings"
+          >
+            ⚙️
+            {(connectors.length > 0 || activePersonalityIds.length > 0) && (
+              <span style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                background: '#f59e0b',
+                color: '#000',
+                borderRadius: '10px',
+                padding: '0.1rem 0.35rem',
+                fontSize: '0.6rem',
+                fontWeight: 600,
+                minWidth: '16px',
+                textAlign: 'center',
+              }}>
+                {connectors.length + activePersonalityIds.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1211,47 +1261,63 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 </div>
               )}
 
-              {/* Personalities Panel */}
+              {/* Personalities Panel - Matching Connectors structure */}
               {showPersonalities && (
                 <div style={{ marginTop: (showHistory || showConnectors) ? '1.5rem' : 0 }}>
                   <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     🎭 Personalities
                   </h3>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: '0 0 0.75rem' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: '0 0 1rem' }}>
                     Define system prompts that shape AI behavior
                   </p>
 
-                  {/* Active personalities summary */}
+                  {/* Active Personalities Section */}
                   {activePersonalityIds.length > 0 && (
-                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '0.5rem', marginBottom: '0.75rem' }}>
-                      <div style={{ color: '#f59e0b', fontSize: '0.75rem', fontWeight: 500 }}>
-                        {activePersonalityIds.length} active • ~{totalSystemPromptTokens} tokens
+                    <div style={{ marginBottom: '1rem' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Active</div>
+                      {activePersonalities.map(p => (
+                        <div key={p.id} style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '0.6rem', marginBottom: '0.4rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span>{p.icon}</span>
+                              <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{p.name}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>~{p.prompt_token_count}t</span>
+                              <button onClick={() => togglePersonality(p.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }} title="Remove">✕</button>
+                            </div>
+                          </div>
+                          {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>{p.description}</div>}
+                        </div>
+                      ))}
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                        Total: ~{totalSystemPromptTokens} tokens in system prompt
                       </div>
                     </div>
                   )}
 
-                  {/* Personality list */}
-                  {personalities.map(p => {
-                    const isActive = activePersonalityIds.includes(p.id);
-                    return (
-                      <div key={p.id} style={{ background: isActive ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255,255,255,0.05)', border: isActive ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid transparent', borderRadius: '8px', padding: '0.6rem', marginBottom: '0.4rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span>{p.icon}</span>
-                            <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{p.name}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>~{p.prompt_token_count}t</span>
-                            <button onClick={() => togglePersonality(p.id)} style={{ background: isActive ? '#f59e0b' : 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', padding: '0.2rem 0.4rem', color: isActive ? '#000' : '#fff', cursor: 'pointer', fontSize: '0.65rem' }}>
-                              {isActive ? '✓' : '+'}
-                            </button>
-                            <button onClick={() => deletePersonality(p.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
-                          </div>
+                  {/* Available Personalities */}
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                    {activePersonalityIds.length > 0 ? 'Available' : 'All Personalities'}
+                  </div>
+                  {personalities.filter(p => !activePersonalityIds.includes(p.id)).map(p => (
+                    <div key={p.id} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid transparent', borderRadius: '8px', padding: '0.6rem', marginBottom: '0.4rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span>{p.icon}</span>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{p.name}</span>
                         </div>
-                        {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>{p.description}</div>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>~{p.prompt_token_count}t</span>
+                          <button onClick={() => togglePersonality(p.id)} style={{ background: 'rgba(245, 158, 11, 0.3)', border: 'none', borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#f59e0b', cursor: 'pointer', fontSize: '0.75rem' }}>
+                            + Add
+                          </button>
+                          <button onClick={() => deletePersonality(p.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
+                        </div>
                       </div>
-                    );
-                  })}
+                      {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>{p.description}</div>}
+                    </div>
+                  ))}
 
                   {/* Create new personality */}
                   {showCreatePersonality ? (
@@ -1300,8 +1366,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
           {/* Main Chat Area */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Budget Usage Bar */}
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+            {/* Budget Usage Bar - Desktop only */}
+            <div className="desktop-only" style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '1rem' }}>💰</span>
@@ -1362,94 +1428,110 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             </div>
 
-            {/* Model Selector with Budget Donut */}
-            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {tier === 'plus' ? 'Select Model' : 'Your Model'}
-                </h3>
-                {tier === 'pro' && (
-                  <Link href="/pricing" style={{ textDecoration: 'none' }}>
-                    <span style={{ color: '#f59e0b', fontSize: '0.75rem', cursor: 'pointer' }}>
-                      ⬆️ Upgrade to Plus for more models
-                    </span>
-                  </Link>
-                )}
+            {/* Model Statistics - Desktop only, collapsed by default */}
+            <div className="desktop-only" style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div
+                className="model-stats-header"
+                onClick={() => setModelStatsExpanded(!modelStatsExpanded)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Model Statistics
+                  </h3>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                    ({selectedModelData?.icon} {selectedModelData?.name})
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {tier === 'pro' && (
+                    <Link href="/pricing" style={{ textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
+                      <span style={{ color: '#f59e0b', fontSize: '0.75rem', cursor: 'pointer' }}>
+                        ⬆️ Upgrade for more models
+                      </span>
+                    </Link>
+                  )}
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', transition: 'transform 0.2s', transform: modelStatsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                    ▼
+                  </span>
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.5rem' }}>
-                {availableModels.map(model => {
-                  const modelBudget = budgetData?.models.find(m => m.modelId === model.id);
-                  const modelUsagePercent = modelBudget?.usagePercent || 0;
-                  const isSelected = selectedModel === model.id;
+              <div className={`model-stats-content ${modelStatsExpanded ? 'expanded' : ''}`}>
+                <div style={{ paddingTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.5rem' }}>
+                  {availableModels.map(model => {
+                    const modelBudget = budgetData?.models.find(m => m.modelId === model.id);
+                    const modelUsagePercent = modelBudget?.usagePercent || 0;
+                    const isSelected = selectedModel === model.id;
 
-                  return (
-                    <button
-                      key={model.id}
-                      onClick={() => setSelectedModel(model.id)}
-                      style={{
-                        background: isSelected
-                          ? 'linear-gradient(135deg, #8b5cf6, #6366f1)'
-                          : 'rgba(255,255,255,0.08)',
-                        border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '10px',
-                        padding: '0.75rem',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        position: 'relative',
-                      }}
-                    >
-                      {/* Donut chart in corner */}
-                      <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <UsageDonut percent={modelUsagePercent} size={28} strokeWidth={3} />
-                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.6rem' }}>
-                          {Math.round(100 - modelUsagePercent)}%
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                        <span>{model.icon}</span>
-                        <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 600 }}>{model.name}</span>
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{model.provider}</div>
-
-                      {/* Budget info for this model */}
-                      {modelBudget && (
-                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
-                            <span>Used: {formatTokenCount(modelBudget.usedTokens)}</span>
-                            <span>{formatCurrency(modelBudget.usedCost)}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.15rem' }}>
-                            <span>Safe: {formatTokenCount(modelBudget.safeTokensForBudget)}</span>
-                            <span>{formatTokenCount(modelBudget.remainingTokens)} left</span>
-                          </div>
+                    return (
+                      <button
+                        key={model.id}
+                        onClick={() => setSelectedModel(model.id)}
+                        style={{
+                          background: isSelected
+                            ? 'linear-gradient(135deg, #8b5cf6, #6366f1)'
+                            : 'rgba(255,255,255,0.08)',
+                          border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '10px',
+                          padding: '0.75rem',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          position: 'relative',
+                        }}
+                      >
+                        {/* Donut chart in corner */}
+                        <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <UsageDonut percent={modelUsagePercent} size={28} strokeWidth={3} />
+                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.6rem' }}>
+                            {Math.round(100 - modelUsagePercent)}%
+                          </span>
                         </div>
-                      )}
 
-                      {/* Cost badges */}
-                      <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
-                        <span style={{
-                          fontSize: '0.55rem',
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          color: '#10b981',
-                          padding: '0.1rem 0.35rem',
-                          borderRadius: '6px',
-                        }}>
-                          ${model.inputCostPer1M}/M in
-                        </span>
-                        <span style={{
-                          fontSize: '0.55rem',
-                          background: 'rgba(59, 130, 246, 0.2)',
-                          color: '#60a5fa',
-                          padding: '0.1rem 0.35rem',
-                          borderRadius: '6px',
-                        }}>
-                          ${model.outputCostPer1M}/M out
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                          <span>{model.icon}</span>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 600 }}>{model.name}</span>
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{model.provider}</div>
+
+                        {/* Budget info for this model */}
+                        {modelBudget && (
+                          <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
+                              <span>Used: {formatTokenCount(modelBudget.usedTokens)}</span>
+                              <span>{formatCurrency(modelBudget.usedCost)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.15rem' }}>
+                              <span>Safe: {formatTokenCount(modelBudget.safeTokensForBudget)}</span>
+                              <span>{formatTokenCount(modelBudget.remainingTokens)} left</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cost badges */}
+                        <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{
+                            fontSize: '0.55rem',
+                            background: 'rgba(16, 185, 129, 0.2)',
+                            color: '#10b981',
+                            padding: '0.1rem 0.35rem',
+                            borderRadius: '6px',
+                          }}>
+                            ${model.inputCostPer1M}/M in
+                          </span>
+                          <span style={{
+                            fontSize: '0.55rem',
+                            background: 'rgba(59, 130, 246, 0.2)',
+                            color: '#60a5fa',
+                            padding: '0.1rem 0.35rem',
+                            borderRadius: '6px',
+                          }}>
+                            ${model.outputCostPer1M}/M out
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1773,6 +1855,143 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         {/* Footer Banner */}
         <AdBanner slot={ADS_CONFIG.slots.chatBottom} format="horizontal" style={{ marginTop: '1.5rem' }} />
         <Footer />
+
+        {/* Mobile Overlay - Full screen settings panel */}
+        {showMobileOverlay && isMobile && (
+          <div className="chat-mobile-overlay">
+            <div className="chat-mobile-overlay-header">
+              <h2 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Chat Settings</h2>
+              <button
+                onClick={() => setShowMobileOverlay(false)}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="chat-mobile-overlay-content">
+              {/* Budget Indicator for Mobile */}
+              <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}>💰 Budget</span>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
+                    {formatCurrency(totalCostSpent)} / {formatCurrency(monthlyBudget)}
+                  </span>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${budgetUsagePercent}%`,
+                    height: '100%',
+                    background: budgetUsagePercent > 90 ? '#ef4444' : budgetUsagePercent > 70 ? '#f59e0b' : '#10b981',
+                    borderRadius: '8px',
+                  }} />
+                </div>
+              </div>
+
+              {/* Model Selection */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Model</div>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '10px',
+                    padding: '0.75rem',
+                    color: '#fff',
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {availableModels.map(m => (
+                    <option key={m.id} value={m.id} style={{ background: '#1a1a2e' }}>
+                      {m.icon} {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Chat History - Compact list */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>📜 History</div>
+                <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                  {conversations.length === 0 ? (
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', padding: '0.5rem' }}>No conversations yet</div>
+                  ) : (
+                    conversations.slice(0, 10).map(conv => (
+                      <div
+                        key={conv.id}
+                        className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}
+                        onClick={() => { loadConversation(conv.id); setShowMobileOverlay(false); }}
+                      >
+                        <div className="chat-history-title">{conv.title}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', marginTop: '0.15rem' }}>
+                          {formatRelativeTime(conv.updated_at)}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Active Connectors */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔌 Connectors ({connectors.length})</span>
+                </div>
+                {connectors.length > 0 && (
+                  <div className="active-section">
+                    <div className="active-section-label">Active</div>
+                    {connectors.map(c => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(139, 92, 246, 0.15)', padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span>{c.icon}</span>
+                          <span style={{ color: '#fff', fontSize: '0.85rem' }}>{c.display_name}</span>
+                        </div>
+                        <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setShowMobileOverlay(false); setShowConnectors(true); }}
+                  style={{ width: '100%', background: 'rgba(139, 92, 246, 0.2)', border: '1px dashed rgba(139, 92, 246, 0.5)', borderRadius: '8px', padding: '0.6rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  + Add Connectors
+                </button>
+              </div>
+
+              {/* Active Personas */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🎭 Personas ({activePersonalityIds.length})</span>
+                </div>
+                {activePersonalityIds.length > 0 && (
+                  <div className="active-section">
+                    <div className="active-section-label">Active</div>
+                    {activePersonalities.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(245, 158, 11, 0.15)', padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span>{p.icon}</span>
+                          <span style={{ color: '#fff', fontSize: '0.85rem' }}>{p.name}</span>
+                        </div>
+                        <button onClick={() => togglePersonality(p.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setShowMobileOverlay(false); setShowPersonalities(true); }}
+                  style={{ width: '100%', background: 'rgba(245, 158, 11, 0.2)', border: '1px dashed rgba(245, 158, 11, 0.5)', borderRadius: '8px', padding: '0.6rem', color: '#f59e0b', cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  + Add Personas
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Connector Info Modal */}
         {connectorInfoModal && (() => {

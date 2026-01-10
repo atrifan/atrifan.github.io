@@ -692,7 +692,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
             {/* Builder Panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Prompt Input */}
+              {/* Mermaid Diagram - Now at the top */}
+              <div style={{ flex: 1 }}>
+                <MermaidDiagram definition={mermaidDiagram} title={currentAutomation?.name || 'Workflow'} />
+              </div>
+
+              {/* Prompt Input - Now below the diagram */}
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '0.75rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <h3 style={{ color: '#fff', fontSize: 'clamp(0.875rem, 2vw, 1rem)', margin: '0 0 0.75rem' }}>✨ Describe your workflow</h3>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
@@ -779,18 +784,26 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                   Enter to generate • ⌘+Enter for new line
                 </p>
                 {lastTokenUsage && (
-                  <div style={{ marginTop: '0.35rem', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', color: 'rgba(255,255,255,0.4)' }}>
-                    Last: ↑{lastTokenUsage.input} ↓{lastTokenUsage.output} tokens
+                  <div style={{ marginTop: '0.35rem', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
+                      ↑ {lastTokenUsage.input} input
+                    </span>
+                    <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>
+                      ↓ {lastTokenUsage.output} output
+                    </span>
+                    {activePersonalityIds.length > 0 && (
+                      <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#f59e0b' }}>
+                        🎭 ~{personalities.filter(p => activePersonalityIds.includes(p.id)).reduce((sum, p) => sum + p.prompt_token_count, 0)} persona
+                      </span>
+                    )}
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      = {lastTokenUsage.input + lastTokenUsage.output} total
+                    </span>
                   </div>
                 )}
                 {lastExplanation && (
                   <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '0.375rem', fontSize: 'clamp(0.8rem, 1.8vw, 0.9rem)', color: 'rgba(255,255,255,0.7)' }}>{lastExplanation}</div>
                 )}
-              </div>
-
-              {/* Mermaid Diagram */}
-              <div style={{ flex: 1 }}>
-                <MermaidDiagram definition={mermaidDiagram} title={currentAutomation?.name || 'Workflow'} />
               </div>
 
               {/* Actions */}
@@ -808,6 +821,41 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         {view === 'history' && currentAutomation && (
           <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
             <h2 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 1rem' }}>📜 Prompt History for "{currentAutomation.name}"</h2>
+
+            {/* Generated Code Section */}
+            {currentAutomation.typescript_code && (
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h3 style={{ color: '#a78bfa', fontSize: '0.9rem', margin: 0 }}>💻 Generated TypeScript Code</h3>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => setView('code')}
+                      style={{ background: 'rgba(139, 92, 246, 0.3)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.6rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      👁️ View
+                    </button>
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([currentAutomation.typescript_code || ''], { type: 'text/typescript' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${currentAutomation.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ts`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{ background: 'rgba(16, 185, 129, 0.3)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.6rem', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ⬇️ Download
+                    </button>
+                  </div>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: 0 }}>
+                  Last generated code is available for review and download
+                </p>
+              </div>
+            )}
+
             {promptHistory.length === 0 ? (
               <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '2rem' }}>No prompts yet. Start building in the Builder tab!</p>
             ) : (
@@ -815,11 +863,58 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 {promptHistory.map((ph, i) => (
                   <div key={ph.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <span style={{ color: '#f59e0b', fontSize: '0.8rem' }}>#{promptHistory.length - i}</span>
+                      <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 600 }}>#{promptHistory.length - i}</span>
                       <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{new Date(ph.created_at).toLocaleString()}</span>
                     </div>
-                    <p style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>{ph.prompt}</p>
-                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>↑{ph.input_tokens} ↓{ph.output_tokens} tokens</div>
+
+                    {/* User Prompt */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.25rem' }}>Your prompt:</div>
+                      <p style={{ color: '#fff', fontSize: '0.9rem', margin: 0, padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>{ph.prompt}</p>
+                    </div>
+
+                    {/* Mermaid Response */}
+                    {ph.response_mermaid && (
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Generated Mermaid:</span>
+                          <button
+                            onClick={() => {
+                              setMermaidDiagram(ph.response_mermaid);
+                              setView('builder');
+                            }}
+                            style={{ background: 'rgba(245, 158, 11, 0.2)', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', color: '#f59e0b', cursor: 'pointer', fontSize: '0.65rem' }}
+                          >
+                            ↩️ Restore
+                          </button>
+                        </div>
+                        <pre style={{
+                          color: 'rgba(255,255,255,0.7)',
+                          fontSize: '0.75rem',
+                          margin: 0,
+                          padding: '0.5rem',
+                          background: 'rgba(0,0,0,0.3)',
+                          borderRadius: '6px',
+                          overflow: 'auto',
+                          maxHeight: '100px',
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: 'monospace'
+                        }}>{ph.response_mermaid}</pre>
+                      </div>
+                    )}
+
+                    {/* Token Usage */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', fontSize: '0.7rem' }}>
+                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
+                        ↑ {ph.input_tokens} input
+                      </span>
+                      <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>
+                        ↓ {ph.output_tokens} output
+                      </span>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        = {ph.input_tokens + ph.output_tokens} total
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
