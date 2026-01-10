@@ -490,22 +490,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Add internal MCP connector
   const addInternalMcpConnector = async (server: MCPServer) => {
     try {
-      // Construct the internal MCP URL: PUBLIC_URL/api/mcp/<api_key>/<server_name>
-      // We need to get the API key for this server - for now use the server_name
-      const baseUrl = process.env.NEXT_PUBLIC_URL || window.location.origin;
-      const serverPath = server.server_name === 'default' ? '' : `/${server.server_name}`;
-      const internalUrl = `${baseUrl}/api/mcp/[api_key]${serverPath}`;
-
+      // For internal MCP, we store the api_key_id in external_url as a reference
+      // The server.id for api_key type is the api_key id
       const response = await fetch('/api/ai/connectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectorType: 'internal_mcp',
-          mcpServerId: server.id,
+          // Don't pass mcpServerId for internal_mcp - it's not an mcp_server
           displayName: server.display_name,
           description: `${server.toolCount} tools`,
           icon: '🔧',
-          externalUrl: internalUrl,
+          // Store api_key_id in external_url for reference
+          externalUrl: `api_key:${server.id}`,
         }),
       });
       if (response.ok) {
@@ -1173,7 +1170,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
           {/* Helper text */}
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', textAlign: 'center', marginTop: '0.5rem' }}>
-            Enter to send • ⌘+Enter for new line • {formatCurrency(remainingBudget)} left
+            Enter to send • ⌘+Enter for new line • {isExternalAgentSelected ? '∞ tokens (free)' : `~${formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens left`}
           </p>
         </div>
       </div>
@@ -1199,6 +1196,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             {/* MAIN MODE */}
             {mobileOverlayMode === 'main' && (
               <>
+                {/* New Chat Button */}
+                <button
+                  onClick={() => {
+                    setMessages([]);
+                    setCurrentConversationId(null);
+                    setShowMobileOverlay(false);
+                  }}
+                  style={{ width: '100%', padding: '0.75rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '12px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                >
+                  ✨ New Chat
+                </button>
+
                 {/* Budget Indicator */}
                 <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -1336,16 +1345,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             {mobileOverlayMode === 'connectors' && (
               <div>
                 {/* Internal MCP Servers */}
-                {/* Internal MCP Servers */}
                 {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').length > 0 && (
                   <div style={{ marginBottom: '1.5rem' }}>
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>Internal MCP Servers</div>
-                    {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').map(server => (
-                      <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addInternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem' }}>{server.display_name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount} tools</div>
-                      </div>
-                    ))}
+                    {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').map(server => {
+                      const isConnected = connectors.find(c => c.external_url === `api_key:${server.id}`);
+                      return (
+                        <div key={server.id} onClick={() => { if (!isConnected) { addInternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: isConnected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: isConnected ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
+                          <div style={{ color: '#fff', fontSize: '0.85rem' }}>{server.display_name}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount} tools</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

@@ -16,7 +16,11 @@ export async function GET() {
     }
 
     // Get all connectors for this user
-    const { data: connectors, error } = await db
+    // Try with icon_url first, fall back to without if column doesn't exist
+    let connectors = null;
+    let error = null;
+
+    const result = await db
       .from('chat_connectors')
       .select(`
         id,
@@ -33,6 +37,32 @@ export async function GET() {
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+
+    if (result.error?.code === '42703') {
+      // Column doesn't exist, try without icon_url
+      const fallbackResult = await db
+        .from('chat_connectors')
+        .select(`
+          id,
+          connector_type,
+          mcp_server_id,
+          external_url,
+          display_name,
+          description,
+          icon,
+          is_enabled,
+          last_connected_at,
+          created_at
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      connectors = (fallbackResult.data || []).map((c: Record<string, unknown>) => ({ ...c, icon_url: null }));
+      error = fallbackResult.error;
+    } else {
+      connectors = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Error fetching connectors:', error);
@@ -88,11 +118,13 @@ export async function POST(request: NextRequest) {
     }
 
     // For internal_mcp (api_key servers), verify the api_key exists and belongs to user
-    if (connectorType === 'internal_mcp' && mcpServerId) {
+    // The api_key_id is stored in externalUrl as "api_key:<id>"
+    if (connectorType === 'internal_mcp' && externalUrl?.startsWith('api_key:')) {
+      const apiKeyId = externalUrl.replace('api_key:', '');
       const { data: apiKey } = await db
         .from('api_keys')
         .select('id, server_name')
-        .eq('id', mcpServerId)
+        .eq('id', apiKeyId)
         .eq('user_id', userId)
         .single();
 
@@ -103,33 +135,50 @@ export async function POST(request: NextRequest) {
 
     // Note: mcp_server_id only works for external_mcp (references mcp_servers table)
     // For internal_mcp, we store the api_key_id in external_url as a reference
-    const { data, error } = await db
+    // Try with icon_url first, fall back to without if column doesn't exist
+    const insertData: Record<string, unknown> = {
+      user_id: userId,
+      connector_type: connectorType,
+      mcp_server_id: connectorType === 'external_mcp' ? mcpServerId : null,
+      external_url: externalUrl || null,
+      external_auth_type: externalAuthType || 'none',
+      external_auth_config: externalAuthConfig || {},
+      external_headers: externalHeaders || {},
+      display_name: displayName,
+      description,
+      icon: icon || '🔌',
+    };
+
+    // Only add icon_url if provided (column may not exist yet)
+    if (iconUrl) {
+      insertData.icon_url = iconUrl;
+    }
+
+    let result = await db
       .from('chat_connectors')
-      .insert({
-        user_id: userId,
-        connector_type: connectorType,
-        mcp_server_id: connectorType === 'external_mcp' ? mcpServerId : null,
-        external_url: externalUrl || null,
-        external_auth_type: externalAuthType || 'none',
-        external_auth_config: externalAuthConfig || {},
-        external_headers: externalHeaders || {},
-        display_name: displayName,
-        description,
-        icon: icon || '🔌',
-        icon_url: iconUrl || null,
-      })
+      .insert(insertData)
       .select()
       .single();
 
-    if (error) {
-      console.error('Error creating connector:', error);
-      if (error.code === '23505') {
+    // If icon_url column doesn't exist, retry without it
+    if (result.error?.code === '42703' && iconUrl) {
+      delete insertData.icon_url;
+      result = await db
+        .from('chat_connectors')
+        .insert(insertData)
+        .select()
+        .single();
+    }
+
+    if (result.error) {
+      console.error('Error creating connector:', result.error);
+      if (result.error.code === '23505') {
         return NextResponse.json({ error: 'Connector already exists' }, { status: 409 });
       }
       return NextResponse.json({ error: 'Failed to create connector' }, { status: 500 });
     }
 
-    return NextResponse.json({ connector: data });
+    return NextResponse.json({ connector: result.data });
   } catch (error) {
     console.error('Error in connectors POST:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
