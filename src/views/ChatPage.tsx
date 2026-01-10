@@ -9,6 +9,7 @@ import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { ChatIcon } from '../components/ChatIcon';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import {
@@ -87,6 +88,16 @@ interface MCPServer {
   source_type?: 'native' | 'api_key' | 'mcp_import';
   toolCount: number;
   category?: string;
+}
+
+// A2A Agent types
+interface A2AAgent {
+  id: string;
+  agent_name: string;
+  display_name: string;
+  agent_url: string;
+  description?: string;
+  icon_url?: string;
 }
 
 // Personality types
@@ -196,6 +207,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Connectors state
   const [connectors, setConnectors] = useState<ChatConnector[]>([]);
   const [availableMcpServers, setAvailableMcpServers] = useState<MCPServer[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<A2AAgent[]>([]);
   const [showAddConnector, setShowAddConnector] = useState<ConnectorType | null>(null);
   const [loadingConnectors, setLoadingConnectors] = useState(false);
   const [connectorInfoModal, setConnectorInfoModal] = useState<{ connector: ChatConnector; tools: any[] } | null>(null);
@@ -251,6 +263,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       fetchCostUsage();
       fetchConnectors();
       fetchMcpServers();
+      fetchAgents();
       fetchBudget();
       fetchPersonalities();
     }
@@ -413,6 +426,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   };
 
+  // Fetch available A2A agents
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch('/api/agents/list');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableAgents(data.agents || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch agents:', err);
+    }
+  };
+
   // Add internal MCP connector
   const addInternalMcpConnector = async (server: MCPServer) => {
     try {
@@ -433,6 +459,53 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       }
     } catch (err) {
       console.error('Failed to add connector:', err);
+    }
+  };
+
+  // Add external MCP connector
+  const addExternalMcpConnector = async (server: MCPServer) => {
+    try {
+      const response = await fetch('/api/ai/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectorType: 'external_mcp',
+          mcpServerId: server.id,
+          displayName: server.display_name,
+          description: `${server.toolCount} tools from ${server.source_url || 'external server'}`,
+          icon: '🌐',
+          externalUrl: server.source_url,
+        }),
+      });
+      if (response.ok) {
+        fetchConnectors();
+        setShowAddConnector(null);
+      }
+    } catch (err) {
+      console.error('Failed to add external connector:', err);
+    }
+  };
+
+  // Add external agent connector
+  const addExternalAgentConnector = async (agent: A2AAgent) => {
+    try {
+      const response = await fetch('/api/ai/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectorType: 'external_agent',
+          displayName: agent.display_name,
+          description: agent.description || `A2A Agent at ${agent.agent_url}`,
+          icon: '🤖',
+          externalUrl: agent.agent_url,
+        }),
+      });
+      if (response.ok) {
+        fetchConnectors();
+        setShowAddConnector(null);
+      }
+    } catch (err) {
+      console.error('Failed to add external agent connector:', err);
     }
   };
 
@@ -861,59 +934,172 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     <button onClick={() => setShowAddConnector(showAddConnector === 'internal_mcp' ? null : 'internal_mcp')} style={{ width: '100%', background: showAddConnector === 'internal_mcp' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(102, 126, 234, 0.3)', borderRadius: '8px', padding: '0.6rem', color: '#667eea', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}>
                       🔧 Internal MCP Server
                     </button>
-                    <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
-                      <button style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(102, 126, 234, 0.3)', borderRadius: '8px', padding: '0.6rem', color: '#667eea', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}>
-                        🌐 External MCP Server
-                      </button>
-                    </Link>
+                    <button onClick={() => setShowAddConnector(showAddConnector === 'external_mcp' ? null : 'external_mcp')} style={{ width: '100%', background: showAddConnector === 'external_mcp' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '0.6rem', color: '#10b981', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}>
+                      🌐 External MCP Server
+                    </button>
                     <button disabled style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.6rem', color: 'rgba(255,255,255,0.3)', cursor: 'not-allowed', fontSize: '0.8rem', textAlign: 'left' }}>
                       🤖 Internal Agent <span style={{ fontSize: '0.65rem' }}>(Coming Soon)</span>
                     </button>
-                    <button disabled style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.6rem', color: 'rgba(255,255,255,0.3)', cursor: 'not-allowed', fontSize: '0.8rem', textAlign: 'left' }}>
-                      🌍 External Agent <span style={{ fontSize: '0.65rem' }}>(Coming Soon)</span>
+                    <button onClick={() => setShowAddConnector(showAddConnector === 'external_agent' ? null : 'external_agent')} style={{ width: '100%', background: showAddConnector === 'external_agent' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '0.6rem', color: '#f59e0b', cursor: 'pointer', fontSize: '0.8rem', textAlign: 'left' }}>
+                      🌍 External Agent
                     </button>
                   </div>
 
                   {/* Internal MCP Server Selection */}
                   {showAddConnector === 'internal_mcp' && (
                     <div style={{ marginTop: '0.75rem', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '8px', padding: '0.75rem', border: '1px solid rgba(102, 126, 234, 0.2)' }}>
-                      <div style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.5rem' }}>Select MCP Server</div>
-                      {availableMcpServers.length === 0 ? (
+                      <div style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.5rem' }}>Select Internal MCP Server</div>
+                      {(() => {
+                        const internalServers = availableMcpServers.filter(s => s.source_type === 'api_key');
+                        if (internalServers.length === 0) {
+                          return (
+                            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>No internal servers created</p>
+                              <Link href="/dashboard/mcp-composer" style={{ textDecoration: 'none' }}>
+                                <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                  + Create MCP Server
+                                </button>
+                              </Link>
+                            </div>
+                          );
+                        }
+                        return (
+                          <>
+                            {internalServers.map(server => {
+                              const isLinked = connectors.some(c => c.mcp_server_id === server.id);
+                              return (
+                                <div key={server.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.4rem' }}>
+                                  <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span style={{ fontSize: '1rem' }}>🔧</span>
+                                      <span style={{ color: '#fff', fontSize: '0.8rem' }}>{server.display_name}</span>
+                                    </div>
+                                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginLeft: '1.35rem' }}>{server.toolCount} tools</div>
+                                  </div>
+                                  {isLinked ? (
+                                    <span style={{ color: '#10b981', fontSize: '0.75rem' }}>✓ Linked</span>
+                                  ) : (
+                                    <button onClick={() => addInternalMcpConnector(server)} style={{ background: 'rgba(139, 92, 246, 0.3)', border: 'none', borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                      + Add
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            <Link href="/dashboard/mcp-composer" style={{ textDecoration: 'none' }}>
+                              <button style={{ width: '100%', background: 'rgba(139, 92, 246, 0.2)', border: '1px dashed rgba(139, 92, 246, 0.5)', borderRadius: '6px', padding: '0.5rem', color: '#a78bfa', cursor: 'pointer', marginTop: '0.5rem', fontSize: '0.75rem' }}>
+                                + Create New MCP Server
+                              </button>
+                            </Link>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* External MCP Server Selection */}
+                  {showAddConnector === 'external_mcp' && (
+                    <div style={{ marginTop: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', padding: '0.75rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                      <div style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.5rem' }}>Select External MCP Server</div>
+                      {(() => {
+                        const externalServers = availableMcpServers.filter(s => s.source_type === 'mcp_import');
+                        if (externalServers.length === 0) {
+                          return (
+                            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>No external servers imported</p>
+                              <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
+                                <button style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                  + Import External Server
+                                </button>
+                              </Link>
+                            </div>
+                          );
+                        }
+                        return (
+                          <>
+                            {externalServers.map(server => {
+                              const isLinked = connectors.some(c => c.mcp_server_id === server.id);
+                              return (
+                                <div key={server.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.4rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
+                                    <FaviconImage
+                                      baseUrl={server.source_url}
+                                      alt={server.display_name}
+                                      size={20}
+                                      borderRadius={4}
+                                      fallbackEmoji="🌐"
+                                      fallbackBgColor="rgba(16, 185, 129, 0.2)"
+                                    />
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ color: '#fff', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{server.display_name}</div>
+                                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount} tools</div>
+                                    </div>
+                                  </div>
+                                  {isLinked ? (
+                                    <span style={{ color: '#10b981', fontSize: '0.75rem', flexShrink: 0 }}>✓ Linked</span>
+                                  ) : (
+                                    <button onClick={() => addExternalMcpConnector(server)} style={{ background: 'rgba(16, 185, 129, 0.3)', border: 'none', borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0 }}>
+                                      + Add
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
+                              <button style={{ width: '100%', background: 'rgba(16, 185, 129, 0.2)', border: '1px dashed rgba(16, 185, 129, 0.5)', borderRadius: '6px', padding: '0.5rem', color: '#10b981', cursor: 'pointer', marginTop: '0.5rem', fontSize: '0.75rem' }}>
+                                + Import New External Server
+                              </button>
+                            </Link>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* External Agent Selection */}
+                  {showAddConnector === 'external_agent' && (
+                    <div style={{ marginTop: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', padding: '0.75rem', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                      <div style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.5rem' }}>Select External Agent</div>
+                      {availableAgents.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>No servers available</p>
-                          <Link href="/dashboard/mcp-composer" style={{ textDecoration: 'none' }}>
-                            <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
-                              + Create MCP Server
+                          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>No external agents imported</p>
+                          <Link href="/dashboard/a2a-import" style={{ textDecoration: 'none' }}>
+                            <button style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                              + Import External Agent
                             </button>
                           </Link>
                         </div>
                       ) : (
                         <>
-                          {availableMcpServers.map(server => {
-                            const isLinked = connectors.some(c => c.mcp_server_id === server.id);
-                            const sourceLabel = server.source_type === 'api_key' ? '🔧 Native' : server.source_type === 'mcp_import' ? '🔌 MCP' : '📦';
+                          {availableAgents.map(agent => {
+                            const isLinked = connectors.some(c => c.external_url === agent.agent_url);
                             return (
-                              <div key={server.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.4rem' }}>
-                                <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                    <span style={{ color: '#fff', fontSize: '0.8rem' }}>{server.display_name}</span>
-                                    <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.6rem' }}>{sourceLabel}</span>
-                                  </div>
-                                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount} tools</div>
+                              <div key={agent.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.4rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
+                                  <FaviconImage
+                                    iconUrl={agent.icon_url}
+                                    baseUrl={agent.agent_url}
+                                    alt={agent.display_name}
+                                    size={20}
+                                    borderRadius={4}
+                                    fallbackEmoji="🤖"
+                                    fallbackBgColor="rgba(245, 158, 11, 0.2)"
+                                  />
+                                  <span style={{ color: '#fff', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.display_name}</span>
                                 </div>
                                 {isLinked ? (
-                                  <span style={{ color: '#10b981', fontSize: '0.75rem' }}>✓ Linked</span>
+                                  <span style={{ color: '#f59e0b', fontSize: '0.75rem', flexShrink: 0 }}>✓ Linked</span>
                                 ) : (
-                                  <button onClick={() => addInternalMcpConnector(server)} style={{ background: 'rgba(139, 92, 246, 0.3)', border: 'none', borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                  <button onClick={() => addExternalAgentConnector(agent)} style={{ background: 'rgba(245, 158, 11, 0.3)', border: 'none', borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#f59e0b', cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0 }}>
                                     + Add
                                   </button>
                                 )}
                               </div>
                             );
                           })}
-                          <Link href="/dashboard/mcp-composer" style={{ textDecoration: 'none' }}>
-                            <button style={{ width: '100%', background: 'rgba(139, 92, 246, 0.2)', border: '1px dashed rgba(139, 92, 246, 0.5)', borderRadius: '6px', padding: '0.5rem', color: '#a78bfa', cursor: 'pointer', marginTop: '0.5rem', fontSize: '0.75rem' }}>
-                              + Create New MCP Server
+                          <Link href="/dashboard/a2a-import" style={{ textDecoration: 'none' }}>
+                            <button style={{ width: '100%', background: 'rgba(245, 158, 11, 0.2)', border: '1px dashed rgba(245, 158, 11, 0.5)', borderRadius: '6px', padding: '0.5rem', color: '#f59e0b', cursor: 'pointer', marginTop: '0.5rem', fontSize: '0.75rem' }}>
+                              + Import New External Agent
                             </button>
                           </Link>
                         </>
