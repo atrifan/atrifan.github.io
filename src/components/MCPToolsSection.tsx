@@ -494,7 +494,7 @@ export function MCPToolsSection({ onToolSelect, selectedTools = [], onDataChange
                       {server.environment_name || server.server_name}
                     </span>
                     <span>•</span>
-                    <span>{server.toolCount || tools.length} tool{(server.toolCount || tools.length) !== 1 ? 's' : ''}</span>
+                    <span>{server.toolCount ?? tools.length} tool{(server.toolCount ?? tools.length) !== 1 ? 's' : ''}</span>
                     <span>•</span>
                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
                       {server.source_url}

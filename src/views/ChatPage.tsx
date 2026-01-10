@@ -225,6 +225,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
   // Chat config popover state
   const [showChatConfig, setShowChatConfig] = useState(false);
+  const chatConfigRef = useRef<HTMLDivElement>(null);
 
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
@@ -280,6 +281,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   useEffect(() => {
     applySEO('chat');
   }, []);
+
+  // Close chat config popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chatConfigRef.current && !chatConfigRef.current.contains(event.target as Node)) {
+        setShowChatConfig(false);
+      }
+    };
+
+    if (showChatConfig) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showChatConfig]);
 
   // Fetch conversation history
   const fetchConversations = async () => {
@@ -539,8 +557,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Show connector info modal with tools
   const showConnectorInfo = async (connector: ChatConnector) => {
     try {
-      // Fetch tools for this connector's MCP server
-      if (connector.mcp_server_id) {
+      // For external_mcp, fetch from mcp_servers table
+      if (connector.connector_type === 'external_mcp' && connector.mcp_server_id) {
         const response = await fetch(`/api/mcp-servers/${connector.mcp_server_id}`);
         if (response.ok) {
           const data = await response.json();
@@ -554,12 +572,60 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           }));
           setConnectorInfoModal({ connector, tools });
         } else {
-          // Fallback - show modal with empty tools
+          setConnectorInfoModal({ connector, tools: [] });
+        }
+      }
+      // For internal_mcp (api_key servers), we need to find the api_key id
+      // The mcpServerId for internal_mcp is actually the api_key id
+      else if (connector.connector_type === 'internal_mcp') {
+        // Find the matching server from availableMcpServers
+        const server = availableMcpServers.find(s => s.display_name === connector.display_name);
+        if (server) {
+          const response = await fetch(`/api/servers/${server.id}/tools`);
+          if (response.ok) {
+            const data = await response.json();
+            const tools = (data.tools || []).map((t: any) => ({
+              name: t.name,
+              description: t.description,
+              inputSchema: t.inputSchema,
+              outputSchema: t.outputSchema,
+              isEnabled: t.isEnabled,
+            }));
+            setConnectorInfoModal({ connector, tools });
+          } else {
+            setConnectorInfoModal({ connector, tools: [] });
+          }
+        } else {
           setConnectorInfoModal({ connector, tools: [] });
         }
       } else {
-        // External connector - no tools to fetch
-        setConnectorInfoModal({ connector, tools: [] });
+        // External agent - show default A2A tool with query input
+        const agentToolName = connector.display_name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const defaultAgentTool = {
+          name: `a2a_${agentToolName}`,
+          description: connector.description || `Send a message to the ${connector.display_name} agent and receive a response.`,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The message or query to send to the agent',
+              },
+            },
+            required: ['query'],
+          },
+          outputSchema: {
+            type: 'object',
+            properties: {
+              response: {
+                type: 'string',
+                description: 'The agent\'s response message',
+              },
+            },
+          },
+          isEnabled: true,
+        };
+        setConnectorInfoModal({ connector, tools: [defaultAgentTool] });
       }
     } catch (err) {
       console.error('Failed to fetch connector tools:', err);
@@ -936,8 +1002,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                               <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{conn.display_name}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              {conn.mcp_server_id ? (
-                                <Link href={`/dashboard/mcp-composer?edit=${conn.mcp_server_id}`} style={{ textDecoration: 'none' }}>
+                              {conn.connector_type === 'external_mcp' && conn.mcp_server_id ? (
+                                <Link href={`/dashboard/mcp-server/${conn.mcp_server_id}`} style={{ textDecoration: 'none' }}>
+                                  <button style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.25rem' }} title="Edit server">✏️</button>
+                                </Link>
+                              ) : conn.connector_type === 'internal_mcp' ? (
+                                <Link href="/dashboard/mcp-composer" style={{ textDecoration: 'none' }}>
                                   <button style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.25rem' }} title="Edit server">✏️</button>
                                 </Link>
                               ) : conn.external_url ? (
@@ -1478,7 +1548,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', marginTop: '1rem' }}>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
                   {/* Chat Config Button */}
-                  <div style={{ position: 'relative' }}>
+                  <div ref={chatConfigRef} style={{ position: 'relative' }}>
                     <button
                       onClick={() => setShowChatConfig(!showChatConfig)}
                       title="Chat configuration"
@@ -1705,11 +1775,27 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         <Footer />
 
         {/* Connector Info Modal */}
-        {connectorInfoModal && (
+        {connectorInfoModal && (() => {
+          const isExternalConnector = connectorInfoModal.connector.connector_type === 'external_mcp' || connectorInfoModal.connector.connector_type === 'external_agent';
+          return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setConnectorInfoModal(null)}>
             <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ color: '#fff', margin: 0 }}>{connectorInfoModal.connector.icon} {connectorInfoModal.connector.display_name}</h3>
+                <h3 style={{ color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {isExternalConnector && connectorInfoModal.connector.external_url ? (
+                    <FaviconImage
+                      baseUrl={connectorInfoModal.connector.external_url}
+                      alt={connectorInfoModal.connector.display_name}
+                      size={24}
+                      borderRadius={4}
+                      fallbackEmoji={connectorInfoModal.connector.icon}
+                      fallbackBgColor="transparent"
+                    />
+                  ) : (
+                    <span>{connectorInfoModal.connector.icon}</span>
+                  )}
+                  {connectorInfoModal.connector.display_name}
+                </h3>
                 <button onClick={() => setConnectorInfoModal(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>×</button>
               </div>
               <div style={{ marginBottom: '1rem' }}>
@@ -1735,7 +1821,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     </div>
                     {connectorInfoModal.tools.map((tool: any, idx: number) => (
                       <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <h4 style={{ color: '#667eea', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{tool.name}</h4>
+                        <h4 style={{ color: '#667eea', margin: '0 0 0.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {isExternalConnector && connectorInfoModal.connector.external_url && (
+                            <FaviconImage
+                              baseUrl={connectorInfoModal.connector.external_url}
+                              alt={tool.name}
+                              size={14}
+                              borderRadius={2}
+                              fallbackEmoji="🔧"
+                              fallbackBgColor="transparent"
+                            />
+                          )}
+                          {tool.name}
+                        </h4>
                         <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>{tool.description}</p>
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
                           <div>
@@ -1763,7 +1861,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </View>
     </View>
   );

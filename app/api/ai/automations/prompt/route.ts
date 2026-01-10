@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { generateText } from 'ai';
 import { AI_MODELS } from '@/src/config/ai-tokens.config';
 
 export const dynamic = 'force-dynamic';
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseClient();
     const body = await request.json();
-    const { automationId, prompt, currentMermaid, modelId, availableTools } = body;
+    const { automationId, prompt, currentMermaid, modelId, availableTools, personaSystemPrompt } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -71,36 +72,33 @@ export async function POST(request: NextRequest) {
       contextMessage += `\n\nAvailable MCP tools:\n${availableTools.map((t: { server: string; name: string; description: string }) => `- ${t.server}.${t.name}: ${t.description}`).join('\n')}`;
     }
 
-    // Call AI to generate flow
-    const model = modelId || 'meta-llama/llama-3.1-8b-instruct:free';
-    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.AI_GATEWAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://zip.run',
-        'X-Title': 'ZIP.RUN Automation Builder',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: AUTOMATION_SYSTEM_PROMPT },
-          { role: 'user', content: contextMessage },
-        ],
-        max_tokens: 2048,
-        response_format: { type: 'json_object' },
-      }),
-    });
+    // Build combined system prompt: persona prompts + automation system prompt
+    const combinedSystemPrompt = personaSystemPrompt
+      ? `${personaSystemPrompt}\n\n---\n\n${AUTOMATION_SYSTEM_PROMPT}`
+      : AUTOMATION_SYSTEM_PROMPT;
 
-    if (!openRouterResponse.ok) {
-      const errorData = await openRouterResponse.json();
-      console.error('OpenRouter error:', errorData);
+    // Call AI to generate flow using Vercel AI SDK with built-in gateway support
+    const model = modelId || 'mistral/ministral-3b';
+    let responseContent = '';
+    let usage = { prompt_tokens: 0, completion_tokens: 0 };
+
+    try {
+      const result = await generateText({
+        model, // AI SDK v6 has built-in gateway support
+        system: combinedSystemPrompt,
+        prompt: contextMessage,
+        maxOutputTokens: 2048,
+      });
+
+      responseContent = result.text;
+      usage = {
+        prompt_tokens: result.usage?.inputTokens || 0,
+        completion_tokens: result.usage?.outputTokens || 0,
+      };
+    } catch (error) {
+      console.error('AI Gateway error:', error);
       return NextResponse.json({ error: 'AI service error' }, { status: 500 });
     }
-
-    const aiData = await openRouterResponse.json();
-    const responseContent = aiData.choices?.[0]?.message?.content || '';
-    const usage = aiData.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
     // Parse AI response
     let parsedResponse;

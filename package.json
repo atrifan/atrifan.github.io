@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@adobe/react-spectrum": "^3.36.0",
+    "@ai-sdk/openai": "^3.0.7",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@clerk/nextjs": "^6.36.5",
     "@clerk/themes": "^2.4.46",
@@ -18,6 +19,7 @@
     "@spectrum-icons/illustrations": "^3.6.14",
     "@spectrum-icons/workflow": "^4.2.13",
     "@supabase/supabase-js": "^2.78.0",
+    "ai": "^6.0.26",
     "graphql": "^16.12.0",
     "graphql-request": "^7.4.0",
     "html2canvas": "^1.4.1",

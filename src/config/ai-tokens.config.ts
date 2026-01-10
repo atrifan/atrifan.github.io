@@ -1,6 +1,5 @@
-'use client';
-
 // AI Token Configuration for Subscription Tiers
+// Note: This file is shared between client and server - do not add 'use client'
 
 export interface AIModel {
   id: string;

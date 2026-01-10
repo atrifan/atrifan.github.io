@@ -1461,7 +1461,30 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>{viewingToolDocs.name}</h3>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {viewingToolDocs.sourceUrl && (
+                    <FaviconImage
+                      iconUrl={viewingToolDocs.iconUrl}
+                      baseUrl={viewingToolDocs.sourceUrl}
+                      alt={viewingToolDocs.name}
+                      size={24}
+                      borderRadius={4}
+                      fallbackEmoji={
+                        viewingToolDocs.toolType === 'REST' ? '☁️' :
+                        viewingToolDocs.toolType === 'MCP' ? '🔌' :
+                        viewingToolDocs.toolType === 'GQL' ? '◈' :
+                        viewingToolDocs.toolType === 'A2A' ? '🤖' : '📦'
+                      }
+                      fallbackBgColor={
+                        viewingToolDocs.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' :
+                        viewingToolDocs.toolType === 'MCP' ? 'rgba(59, 130, 246, 0.2)' :
+                        viewingToolDocs.toolType === 'GQL' ? 'rgba(236, 72, 153, 0.2)' :
+                        viewingToolDocs.toolType === 'A2A' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                      }
+                    />
+                  )}
+                  {viewingToolDocs.name}
+                </h3>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
                   <span style={{
                     padding: '0.2rem 0.5rem',

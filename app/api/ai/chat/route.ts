@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { AI_MODELS, TOKEN_QUOTAS, THROTTLE_CONFIG } from '@/src/config/ai-tokens.config';
+import { generateText } from 'ai';
+import { AI_MODELS, TOKEN_QUOTAS } from '@/src/config/ai-tokens.config';
 
 // Dynamic route - don't prerender
 export const dynamic = 'force-dynamic';
@@ -44,13 +45,6 @@ export async function POST(request: NextRequest) {
     const { messages, model: modelId, conversationId, systemPrompt } = body;
     const userMessage = messages[messages.length - 1]?.content || '';
 
-    // Build messages array with optional system prompt
-    const apiMessages = [];
-    if (systemPrompt) {
-      apiMessages.push({ role: 'system', content: systemPrompt });
-    }
-    apiMessages.push(...messages);
-
     // Validate model access
     if (!quota.models.includes(modelId)) {
       return NextResponse.json({
@@ -92,34 +86,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid model' }, { status: 400 });
     }
 
-    // Call OpenRouter API
-    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.AI_GATEWAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://zip.run',
-        'X-Title': 'ZIP.RUN AI Chat',
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: apiMessages,
-        max_tokens: 4096,
-      }),
-    });
+    // Call AI using Vercel AI SDK with built-in gateway support
+    let assistantMessage = '';
+    let usage = { prompt_tokens: 0, completion_tokens: 0 };
 
-    if (!openRouterResponse.ok) {
-      const errorData = await openRouterResponse.json();
-      console.error('OpenRouter error:', errorData);
-      return NextResponse.json({ 
-        error: 'AI service error', 
-        details: errorData.error?.message || 'Unknown error' 
+    try {
+      // Build system prompt if provided
+      const systemPromptText = systemPrompt || undefined;
+
+      const result = await generateText({
+        model: modelId, // AI SDK v6 has built-in gateway support
+        system: systemPromptText,
+        messages: messages.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+        maxOutputTokens: 4096,
+      });
+
+      assistantMessage = result.text;
+      usage = {
+        prompt_tokens: result.usage?.inputTokens || 0,
+        completion_tokens: result.usage?.outputTokens || 0,
+      };
+    } catch (error) {
+      console.error('AI Gateway error:', error);
+      return NextResponse.json({
+        error: 'AI service error',
+        details: error instanceof Error ? error.message : 'Unknown error'
       }, { status: 502 });
     }
-
-    const data = await openRouterResponse.json();
-    const assistantMessage = data.choices?.[0]?.message?.content || '';
-    const usage = data.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
     // Record usage and save messages to database
     let activeConversationId = conversationId;

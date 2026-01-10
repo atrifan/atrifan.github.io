@@ -10,6 +10,7 @@ import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { MermaidDiagram } from '../components/MermaidDiagram';
 import { AutomationIcon } from '../components/AutomationIcon';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
@@ -63,6 +64,7 @@ interface Personality {
   id: string;
   name: string;
   icon: string;
+  system_prompt: string;
   prompt_token_count: number;
 }
 
@@ -71,6 +73,11 @@ interface MCPTool {
   serverId?: string;
   name: string;
   description: string;
+  sourceType?: 'native' | 'api_key' | 'mcp_import';
+  sourceUrl?: string;
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  hasWidget?: boolean;
 }
 
 interface BudgetData {
@@ -256,7 +263,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         if (toolsResponse.ok) {
           const toolsData = await toolsResponse.json();
           for (const tool of toolsData.tools || []) {
-            allTools.push({ server: 'default', name: tool.name, description: tool.description });
+            allTools.push({ server: 'default', name: tool.name, description: tool.description, sourceType: 'native' });
           }
         }
       } catch (err) {
@@ -273,7 +280,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             if (server.serverName === 'default') continue;
             for (const tool of server.tools || []) {
               if (tool.isEnabled) {
-                allTools.push({ server: server.serverName, serverId: server.id, name: tool.name, description: tool.description });
+                allTools.push({ server: server.serverName, serverId: server.id, name: tool.name, description: tool.description, sourceType: 'api_key' });
               }
             }
           }
@@ -282,16 +289,41 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         console.error('Failed to fetch server tools:', err);
       }
 
-      // 3. Fetch MCP server tools
+      // 3. Fetch MCP server tools (external imports) - fetch actual tools from each server
       try {
         const mcpResponse = await fetch('/api/mcp-servers/list');
         if (mcpResponse.ok) {
           const mcpData = await mcpResponse.json();
-          // For each MCP server, we'd need to fetch its tools
-          // For now, just note that they exist
+          // Fetch actual tools from each MCP server
           for (const server of mcpData.servers || []) {
-            if (server.source_type === 'mcp_import' && server.toolCount > 0) {
-              allTools.push({ server: server.server_name, serverId: server.id, name: `[${server.toolCount} tools]`, description: `MCP server with ${server.toolCount} tools` });
+            if (server.source_type === 'mcp_import') {
+              try {
+                const serverResponse = await fetch(`/api/mcp-servers/${server.id}`);
+                if (serverResponse.ok) {
+                  const serverData = await serverResponse.json();
+                  // Transform tools from the nested structure
+                  const serverTools = (serverData.tools || []).map((st: {
+                    tool?: { name?: string; description?: string; input_schema?: Record<string, unknown>; output_schema?: Record<string, unknown>; has_widget?: boolean };
+                    original_name?: string;
+                    original_description?: string;
+                    is_enabled?: boolean;
+                    has_widget?: boolean;
+                  }) => ({
+                    server: server.server_name,
+                    serverId: server.id,
+                    name: st.tool?.name || st.original_name || 'Unknown',
+                    description: st.tool?.description || st.original_description || '',
+                    sourceType: 'mcp_import' as const,
+                    sourceUrl: server.source_url,
+                    inputSchema: st.tool?.input_schema,
+                    outputSchema: st.tool?.output_schema,
+                    hasWidget: st.tool?.has_widget || st.has_widget || false,
+                  }));
+                  allTools.push(...serverTools);
+                }
+              } catch (err) {
+                console.error(`Failed to fetch tools for MCP server ${server.server_name}:`, err);
+              }
             }
           }
         }
@@ -311,6 +343,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     setIsGenerating(true);
     setLastTokenUsage(null);
 
+    // Build combined system prompt from active personalities
+    const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
+    const personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
+
     try {
       const response = await fetch('/api/ai/automations/prompt', {
         method: 'POST',
@@ -321,6 +357,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           currentMermaid: mermaidDiagram,
           modelId: selectedModel,
           availableTools: activeTools,
+          personaSystemPrompt: personaSystemPrompt || undefined,
         }),
       });
 
@@ -337,7 +374,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds]);
 
   // Save automation
   const saveAutomation = async () => {
@@ -371,6 +408,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     if (!currentAutomation) return;
     setIsExporting(true);
 
+    // Build combined system prompt from active personalities
+    const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
+    const personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
+
     try {
       const response = await fetch('/api/ai/automations/export', {
         method: 'POST',
@@ -381,6 +422,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           mermaidDiagram,
           modelId: selectedModel,
           automationName: currentAutomation.name,
+          personaSystemPrompt: personaSystemPrompt || undefined,
         }),
       });
 
@@ -613,11 +655,28 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                     {Object.entries(toolsByServer).map(([server, tools]) => {
                       const isSelected = selectedServers.has(server);
                       const serverId = tools[0]?.serverId;
-                      const editUrl = serverId ? `/dashboard/mcp-composer?edit=${serverId}` : '/dashboard';
+                      const sourceType = tools[0]?.sourceType;
+                      const sourceUrl = tools[0]?.sourceUrl;
+                      // External MCP servers go to /dashboard/mcp-server/{id}, internal ones go to mcp-composer
+                      const editUrl = sourceType === 'mcp_import' && serverId
+                        ? `/dashboard/mcp-server/${serverId}`
+                        : serverId
+                          ? `/dashboard/mcp-composer?edit=${serverId}`
+                          : '/dashboard';
                       return (
                         <div key={server} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.4rem', background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent', borderRadius: '4px' }}>
                           <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', flex: 1 }}>
                             <input type="checkbox" checked={isSelected} onChange={() => toggleServerSelect(server)} style={{ accentColor: '#a78bfa', cursor: 'pointer', width: '14px', height: '14px' }} />
+                            {sourceType === 'mcp_import' && sourceUrl && (
+                              <FaviconImage
+                                baseUrl={sourceUrl}
+                                alt={server}
+                                size={14}
+                                borderRadius={2}
+                                fallbackEmoji="🔌"
+                                fallbackBgColor="transparent"
+                              />
+                            )}
                             <span style={{ color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1 }}>{server}</span>
                             <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{tools.length}</span>
                           </label>
@@ -812,41 +871,66 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         )}
 
         {/* Tool Info Modal */}
-        {toolInfoModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setToolInfoModal(null)}>
-            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ color: '#fff', margin: 0 }}>🔧 {toolInfoModal.server} Tools</h3>
-                <button onClick={() => setToolInfoModal(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>×</button>
+        {toolInfoModal && (() => {
+          const sourceUrl = toolInfoModal.tools[0]?.sourceUrl;
+          const sourceType = toolInfoModal.tools[0]?.sourceType;
+          return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setToolInfoModal(null)}>
+            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '600px', width: '100%', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
+                <h3 style={{ color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem', minWidth: 0, overflow: 'hidden' }}>
+                  {sourceType === 'mcp_import' && sourceUrl ? (
+                    <FaviconImage
+                      baseUrl={sourceUrl}
+                      alt={toolInfoModal.server}
+                      size={24}
+                      borderRadius={4}
+                      fallbackEmoji="🔌"
+                      fallbackBgColor="transparent"
+                    />
+                  ) : (
+                    <span>🔧</span>
+                  )}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toolInfoModal.server} Tools</span>
+                </h3>
+                <button onClick={() => setToolInfoModal(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem', flexShrink: 0 }}>×</button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
                 {toolInfoModal.tools.map((tool, idx) => (
-                  <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <h4 style={{ color: '#f59e0b', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{tool.name}</h4>
-                    <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: '0 0 0.75rem' }}>{tool.description}</p>
-                    <div style={{ display: 'grid', gap: '0.5rem' }}>
-                      <div>
+                  <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '0.75rem', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      <h4 style={{ color: '#f59e0b', margin: 0, fontSize: '0.9rem', wordBreak: 'break-word' }}>{tool.name}</h4>
+                      {tool.hasWidget && (
+                        <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontSize: '0.65rem', fontWeight: 600, flexShrink: 0 }}>
+                          🎨 Widget
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: '0 0 0.75rem', wordBreak: 'break-word' }}>{tool.description}</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ minWidth: 0 }}>
                         <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Input Schema:</span>
-                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#a78bfa', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
-                          {JSON.stringify((tool as any).inputSchema || { type: 'object', properties: {} }, null, 2)}
+                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.65rem', color: '#a78bfa', margin: 0, overflowX: 'auto', overflowY: 'auto', maxHeight: '80px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {JSON.stringify(tool.inputSchema || { type: 'object', properties: {} }, null, 2)}
                         </pre>
                       </div>
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', display: 'block', marginBottom: '0.25rem' }}>Output Schema:</span>
-                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.7rem', color: '#10b981', margin: 0, overflow: 'auto', maxHeight: '100px' }}>
-                          {JSON.stringify((tool as any).outputSchema || { type: 'object' }, null, 2)}
+                        <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.65rem', color: '#10b981', margin: 0, overflowX: 'auto', overflowY: 'auto', maxHeight: '80px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {JSON.stringify(tool.outputSchema || { type: 'object' }, null, 2)}
                         </pre>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
                 <button onClick={() => setToolInfoModal(null)} style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #f59e0b, #ea580c)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         <AdBanner slot={ADS_CONFIG.slots.automationBottom} format="horizontal" style={{ marginTop: '1.5rem' }} />
         <Footer />

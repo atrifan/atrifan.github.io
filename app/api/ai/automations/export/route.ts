@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { generateText } from 'ai';
 import { AI_MODELS } from '@/src/config/ai-tokens.config';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseClient();
     const body = await request.json();
-    const { automationId, flowDefinition, mermaidDiagram, modelId, automationName } = body;
+    const { automationId, flowDefinition, mermaidDiagram, modelId, automationName, personaSystemPrompt } = body;
 
     if (!flowDefinition && !mermaidDiagram) {
       return NextResponse.json({ error: 'Flow definition or mermaid diagram is required' }, { status: 400 });
@@ -80,35 +81,33 @@ ${mermaidDiagram}
 
 Generate the complete TypeScript implementation.`;
 
-    // Call AI to generate code
-    const model = modelId || 'anthropic/claude-3.5-sonnet';
-    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.AI_GATEWAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://zip.run',
-        'X-Title': 'ZIP.RUN Automation Export',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: EXPORT_SYSTEM_PROMPT },
-          { role: 'user', content: contextMessage },
-        ],
-        max_tokens: 4096,
-      }),
-    });
+    // Build combined system prompt: persona prompts + export system prompt
+    const combinedSystemPrompt = personaSystemPrompt
+      ? `${personaSystemPrompt}\n\n---\n\n${EXPORT_SYSTEM_PROMPT}`
+      : EXPORT_SYSTEM_PROMPT;
 
-    if (!openRouterResponse.ok) {
-      const errorData = await openRouterResponse.json();
-      console.error('OpenRouter error:', errorData);
+    // Call AI to generate code using Vercel AI SDK with built-in gateway support
+    const model = modelId || 'mistral/ministral-3b';
+    let responseContent = '';
+    let usage = { prompt_tokens: 0, completion_tokens: 0 };
+
+    try {
+      const result = await generateText({
+        model, // AI SDK v6 has built-in gateway support
+        system: combinedSystemPrompt,
+        prompt: contextMessage,
+        maxOutputTokens: 4096,
+      });
+
+      responseContent = result.text;
+      usage = {
+        prompt_tokens: result.usage?.inputTokens || 0,
+        completion_tokens: result.usage?.outputTokens || 0,
+      };
+    } catch (error) {
+      console.error('AI Gateway error:', error);
       return NextResponse.json({ error: 'AI service error' }, { status: 500 });
     }
-
-    const aiData = await openRouterResponse.json();
-    const responseContent = aiData.choices?.[0]?.message?.content || '';
-    const usage = aiData.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
     // Extract TypeScript code from response
     let typescriptCode = responseContent;
