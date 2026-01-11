@@ -53,14 +53,15 @@ export async function GET(request: NextRequest) {
     const totalCost = usage?.reduce((sum, u) => sum + parseFloat(u.cost_usd), 0) || 0;
 
     // Usage by model
-    const usageByModel: Record<string, { input: number; output: number; cost: number }> = {};
+    const usageByModel: Record<string, { input: number; output: number; cost: number; count: number }> = {};
     usage?.forEach(u => {
       if (!usageByModel[u.model_id]) {
-        usageByModel[u.model_id] = { input: 0, output: 0, cost: 0 };
+        usageByModel[u.model_id] = { input: 0, output: 0, cost: 0, count: 0 };
       }
       usageByModel[u.model_id].input += u.input_tokens;
       usageByModel[u.model_id].output += u.output_tokens;
       usageByModel[u.model_id].cost += parseFloat(u.cost_usd);
+      usageByModel[u.model_id].count += 1;
     });
 
     const budgetRemaining = Math.max(0, (quota?.aiCostBudget || 0) - totalCost);

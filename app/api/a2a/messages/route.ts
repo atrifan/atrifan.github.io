@@ -126,6 +126,17 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', activeConversationId);
 
+    // Record usage to ai_token_usage for statistics (external agents are free, cost = 0)
+    await supabase.from('ai_token_usage').insert({
+      user_id: userId,
+      model_id: modelId,
+      input_tokens: inputTokens || 0,
+      output_tokens: outputTokens || 0,
+      cost_usd: 0, // External agents are free
+      conversation_id: activeConversationId,
+      message_type: 'chat',
+    });
+
     return NextResponse.json({
       success: true,
       conversationId: activeConversationId,

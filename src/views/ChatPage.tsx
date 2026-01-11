@@ -302,6 +302,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     limit: quota.aiCostBudget,
   });
 
+  // External agent usage stats (from /api/ai/usage byModel)
+  const [externalAgentUsage, setExternalAgentUsage] = useState<Record<string, { input: number; output: number; cost: number; count: number }>>({});
+
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
 
@@ -559,6 +562,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           used: parseFloat(data.usage?.totalCost) || 0,
           limit: data.quota?.aiCostBudget || quota.aiCostBudget,
         });
+
+        // Extract external agent usage from byModel (model IDs starting with "agent:")
+        if (data.usage?.byModel) {
+          const agentUsage: Record<string, { input: number; output: number; cost: number; count: number }> = {};
+          Object.entries(data.usage.byModel).forEach(([modelId, usage]) => {
+            if (modelId.startsWith('agent:')) {
+              const u = usage as { input: number; output: number; cost: number; count: number };
+              agentUsage[modelId] = {
+                input: u.input || 0,
+                output: u.output || 0,
+                cost: u.cost || 0,
+                count: u.count || 0,
+              };
+            }
+          });
+          setExternalAgentUsage(agentUsage);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch usage:', err);
@@ -1696,11 +1716,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                           })}
                           {/* External Agents Stats */}
                           {externalAgentConnectors.map(agent => {
-                            // Calculate tokens from current conversation messages for this agent
-                            const agentMessages = messages.filter(m => m.model === `agent:${agent.id}`);
-                            const agentInputTokens = agentMessages.reduce((sum, m) => sum + (m.tokens?.input || 0), 0);
-                            const agentOutputTokens = agentMessages.reduce((sum, m) => sum + (m.tokens?.output || 0), 0);
-                            const agentRequestCount = agentMessages.length;
+                            // Get aggregated usage from API (all conversations this month)
+                            const agentModelId = `agent:${agent.id}`;
+                            const agentUsage = externalAgentUsage[agentModelId];
+                            const agentInputTokens = agentUsage?.input || 0;
+                            const agentOutputTokens = agentUsage?.output || 0;
+                            const agentRequestCount = agentUsage?.count || 0;
                             return (
                               <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                 <FaviconImage
