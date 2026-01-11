@@ -423,10 +423,33 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   }, [currentConversationId, a2aContextId, router, searchParams]);
 
+  // Scroll to bottom helper
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // On mobile, scroll to bottom when typing starts (keyboard opens)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only on mobile, and only for printable characters
+      if (window.innerWidth >= 768) return;
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Focus textarea and scroll to bottom
+        if (textareaRef.current && document.activeElement !== textareaRef.current) {
+          textareaRef.current.focus();
+        }
+        scrollToBottom();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [scrollToBottom]);
 
   useEffect(() => {
     applySEO('chat');
@@ -1476,6 +1499,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             {/* Textarea with token counter */}
             <div style={{ flex: 1, position: 'relative' }}>
               <textarea
+                ref={textareaRef}
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
@@ -1485,6 +1509,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
                 }}
                 onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  // On mobile, scroll to bottom when textarea is focused
+                  if (window.innerWidth < 768) {
+                    setTimeout(scrollToBottom, 100);
+                  }
+                }}
                 placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${selectedModelData?.name || 'AI'}...`}
                 disabled={isQuotaExceeded || isLoading}
                 rows={1}

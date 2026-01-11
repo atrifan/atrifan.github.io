@@ -734,6 +734,13 @@ body {
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* Mobile: add top padding to account for fixed header */
+@media (max-width: 767px) {
+  .chat-fullscreen-messages {
+    padding-top: 60px; /* Height of mobile header */
+  }
+}
+
 @media (min-width: 768px) {
   .chat-fullscreen-messages {
     padding: 1.5rem 2rem;
