@@ -297,24 +297,41 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // iOS Safari keyboard handling - scroll input into view when keyboard opens
+  // Mobile keyboard handling - works on iOS Safari, Chrome, Edge, Android
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.visualViewport) return;
+    if (typeof window === 'undefined') return;
 
-    const handleViewportResize = () => {
-      // When keyboard opens, iOS visual viewport height shrinks
-      // Scroll the focused element into view
-      if (document.activeElement?.tagName === 'TEXTAREA') {
-        setTimeout(() => {
-          document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
-      }
-    };
+    // Use Visual Viewport API if available (modern browsers)
+    if (window.visualViewport) {
+      const handleViewportResize = () => {
+        // When keyboard opens, visual viewport height shrinks
+        // Scroll the focused element into view
+        if (document.activeElement?.tagName === 'TEXTAREA') {
+          setTimeout(() => {
+            document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      };
 
-    window.visualViewport.addEventListener('resize', handleViewportResize);
-    return () => {
-      window.visualViewport?.removeEventListener('resize', handleViewportResize);
-    };
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewportResize);
+      };
+    } else {
+      // Fallback for older browsers - use window resize
+      const handleResize = () => {
+        if (document.activeElement?.tagName === 'TEXTAREA') {
+          setTimeout(() => {
+            document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+      return () => {
+        window.removeEventListener('resize', handleResize);
+      };
+    }
   }, []);
 
   // Last message token info

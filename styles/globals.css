@@ -743,18 +743,18 @@ body {
     padding-top: 60px; /* Height of mobile header */
   }
 
-  /* iOS Safari keyboard handling */
+  /* Mobile keyboard handling - works on iOS Safari, Chrome, Edge */
   .chat-fullscreen-input {
-    /* Ensure input stays above keyboard on iOS */
-    position: sticky;
-    bottom: 0;
-    /* Prevent iOS zoom on input focus */
+    /* Prevent zoom on input focus */
     touch-action: manipulation;
   }
 
   .chat-fullscreen-input textarea {
-    /* Prevent iOS zoom on focus (requires 16px minimum) */
+    /* Prevent auto-zoom on focus (16px minimum prevents iOS zoom) */
     font-size: 16px !important;
+    /* Smooth appearance */
+    -webkit-appearance: none;
+    appearance: none;
   }
 }
 
@@ -768,10 +768,20 @@ body {
   }
 }
 
-/* iOS Safari visual viewport fix for keyboard */
-@supports (-webkit-touch-callout: none) {
+/* Mobile keyboard viewport fix - universal approach */
+@media (max-width: 767px) {
+  /* Use dvh for dynamic viewport that responds to keyboard */
   .chat-fullscreen {
-    /* Use visual viewport height on iOS */
+    height: 100dvh;
+    /* Fallbacks for older browsers */
     height: -webkit-fill-available;
+  }
+
+  /* When keyboard is open, ensure messages scroll properly */
+  .chat-fullscreen-messages {
+    /* Allow flex to handle the remaining space */
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
