@@ -62,6 +62,7 @@ export class HomePage extends Component<{}, HomePageState> {
     // Detect touch device
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     this.setState({ isTouchDevice });
+    applySEO('home');
   }
 
   private toggleCategory = (category: string) => {
@@ -75,10 +76,6 @@ export class HomePage extends Component<{}, HomePageState> {
       return { collapsedCategories: newCollapsed };
     });
   };
-
-  componentDidMount() {
-    applySEO('home');
-  }
 
   private renderToolIcon = (toolId: string, size: number): JSX.Element => {
     const iconMap: Record<string, JSX.Element> = {
