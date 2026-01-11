@@ -285,6 +285,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Input bar model selector dropdown state
+  const [showInputModelDropdown, setShowInputModelDropdown] = useState(false);
+  const inputModelDropdownRef = useRef<HTMLDivElement>(null);
+
   // Detect mobile on mount and resize
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -491,6 +495,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showModelDropdown]);
+
+  // Close input bar model dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inputModelDropdownRef.current && !inputModelDropdownRef.current.contains(event.target as Node)) {
+        setShowInputModelDropdown(false);
+      }
+    };
+
+    if (showInputModelDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showInputModelDropdown]);
 
   // Fetch conversation history
   const fetchConversations = async () => {
@@ -1539,7 +1560,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     setTimeout(scrollToBottom, 100);
                   }
                 }}
-                placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${selectedModelData?.name || 'AI'}...`}
+                placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${isExternalAgentSelected && selectedAgentConnector ? selectedAgentConnector.display_name : (selectedModelData?.name || 'AI')}...`}
                 disabled={isQuotaExceeded || isLoading}
                 rows={1}
                 style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '0.75rem 1rem', paddingRight: '5rem', color: '#fff', fontSize: '1rem', lineHeight: 1.4, resize: 'none', minHeight: '44px', maxHeight: '120px', outline: 'none', fontFamily: 'inherit' }}
@@ -1571,10 +1592,127 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             </button>
           </div>
 
-          {/* Helper text */}
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', textAlign: 'center', marginTop: '0.5rem' }}>
-            Enter to send • ⌘+Enter for new line • {isExternalAgentSelected ? '∞ tokens (free)' : `~${formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens left • ${formatCurrency(remainingBudget)} remaining`}
-          </p>
+          {/* Model selector + Helper text */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+            {/* Model selector button with dropdown */}
+            <div ref={inputModelDropdownRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowInputModelDropdown(!showInputModelDropdown)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.5rem',
+                  color: 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  fontSize: '0.7rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {isExternalAgentSelected && selectedAgentConnector ? (
+                  <>
+                    <FaviconImage
+                      iconUrl={selectedAgentConnector.icon_url || undefined}
+                      baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined}
+                      size={14}
+                      fallbackEmoji="🤖"
+                    />
+                    <span style={{ maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedAgentConnector.display_name}</span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: '0.8rem' }}>{selectedModelData?.icon || '💬'}</span>
+                    <span>{selectedModelData?.name || 'Model'}</span>
+                  </>
+                )}
+                <span style={{ transform: showInputModelDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', fontSize: '0.6rem', opacity: 0.6 }}>▼</span>
+              </button>
+
+              {/* Dropdown menu - opens upward */}
+              {showInputModelDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  marginBottom: '4px',
+                  background: '#1a1a2e',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '10px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  zIndex: 100,
+                  minWidth: '180px',
+                  boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
+                }}>
+                  {/* AI Models Section */}
+                  <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
+                  {availableModels.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setShowInputModelDropdown(false); }}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem 0.75rem',
+                        background: selectedModel === m.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                        border: 'none',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.8rem',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span>{m.icon}</span>
+                      <span>{m.name}</span>
+                    </button>
+                  ))}
+                  {/* External Agents Section */}
+                  {externalAgentConnectors.length > 0 && (
+                    <>
+                      <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
+                      {externalAgentConnectors.map(agent => (
+                        <button
+                          key={agent.id}
+                          onClick={() => { setSelectedModel(`agent:${agent.id}`); setShowInputModelDropdown(false); }}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem 0.75rem',
+                            background: selectedModel === `agent:${agent.id}` ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            fontSize: '0.8rem',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <FaviconImage iconUrl={agent.icon_url || undefined} baseUrl={agent.external_url?.startsWith('http') ? agent.external_url : undefined} size={16} fallbackEmoji="🤖" />
+                          <span>{agent.display_name}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Token/budget info */}
+            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
+              {isExternalAgentSelected ? (
+                '∞ tokens (free)'
+              ) : (
+                <>~{formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens • {formatCurrency(remainingBudget)} left</>
+              )}
+            </span>
+          </div>
         </div>
       </div>
 
