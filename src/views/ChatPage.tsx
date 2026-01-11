@@ -252,6 +252,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [loadingConnectors, setLoadingConnectors] = useState(false);
   const [connectorInfoModal, setConnectorInfoModal] = useState<{ connector: ChatConnector; tools: any[] } | null>(null);
 
+  // Reasoning for connectors orchestration
+  const [enableReasoning, setEnableReasoning] = useState(false);
+  const [showReasoningInfoModal, setShowReasoningInfoModal] = useState(false);
+
   // A2A context ID for conversation continuity (task ID from external agent)
   const [a2aContextId, setA2aContextId] = useState<string | null>(null);
 
@@ -1899,6 +1903,57 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   ) : null}
                 </div>
 
+                {/* Reasoning Toggle - Only show when connectors exist */}
+                {connectors.length > 0 && (
+                  <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                        <span style={{ fontSize: '1rem' }}>🧠</span>
+                        <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Enable reasoning for connectors</span>
+                        <button
+                          onClick={() => setShowReasoningInfoModal(true)}
+                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.8rem', padding: '0.1rem 0.3rem' }}
+                          title="Learn more"
+                        >
+                          ⓘ
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => !isExternalAgentSelected && setEnableReasoning(!enableReasoning)}
+                        disabled={isExternalAgentSelected}
+                        style={{
+                          width: '44px',
+                          height: '24px',
+                          borderRadius: '12px',
+                          border: 'none',
+                          background: isExternalAgentSelected ? 'rgba(255,255,255,0.1)' : enableReasoning ? '#8b5cf6' : 'rgba(255,255,255,0.2)',
+                          cursor: isExternalAgentSelected ? 'not-allowed' : 'pointer',
+                          position: 'relative',
+                          transition: 'background 0.2s',
+                          opacity: isExternalAgentSelected ? 0.5 : 1,
+                        }}
+                      >
+                        <div style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: '#fff',
+                          position: 'absolute',
+                          top: '3px',
+                          left: enableReasoning && !isExternalAgentSelected ? '23px' : '3px',
+                          transition: 'left 0.2s',
+                        }} />
+                      </button>
+                    </div>
+                    {isExternalAgentSelected && (
+                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>
+                        <span>ⓘ</span>
+                        <span>Cannot use external agents to reason through connectors</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Connectors Section */}
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -2067,6 +2122,42 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             ))}
             <button onClick={() => setConnectorInfoModal(null)} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Reasoning Info Modal */}
+      {showReasoningInfoModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowReasoningInfoModal(false)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '400px', width: '100%', border: '1px solid rgba(139, 92, 246, 0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🧠</div>
+              <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 0.5rem' }}>Reasoning for Connectors</h3>
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+              <p style={{ margin: '0 0 0.75rem' }}>
+                When enabled, the AI will use advanced reasoning to better orchestrate your connected tools and agents.
+              </p>
+              <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                  <span style={{ color: '#f59e0b', fontSize: '1rem' }}>⚠️</span>
+                  <div>
+                    <div style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>Token Usage</div>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+                      Reasoning can consume more tokens. The additional tokens used will be displayed in the output tokens stats.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setShowReasoningInfoModal(false)} style={{ flex: 1, padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                Close
+              </button>
+              <button onClick={() => setShowReasoningInfoModal(false)} style={{ flex: 1, padding: '0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                OK
+              </button>
+            </div>
           </div>
         </div>
       )}
