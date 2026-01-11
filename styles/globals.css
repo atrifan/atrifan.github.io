@@ -683,6 +683,9 @@ body {
   flex-direction: column;
   z-index: 40;
   overflow: hidden;
+  /* iOS Safari keyboard fix */
+  height: 100%;
+  height: 100dvh;
 }
 
 .chat-fullscreen-header {
@@ -739,6 +742,20 @@ body {
   .chat-fullscreen-messages {
     padding-top: 60px; /* Height of mobile header */
   }
+
+  /* iOS Safari keyboard handling */
+  .chat-fullscreen-input {
+    /* Ensure input stays above keyboard on iOS */
+    position: sticky;
+    bottom: 0;
+    /* Prevent iOS zoom on input focus */
+    touch-action: manipulation;
+  }
+
+  .chat-fullscreen-input textarea {
+    /* Prevent iOS zoom on focus (requires 16px minimum) */
+    font-size: 16px !important;
+  }
 }
 
 @media (min-width: 768px) {
@@ -748,5 +765,13 @@ body {
 
   .chat-fullscreen-input {
     padding: 1rem 2rem;
+  }
+}
+
+/* iOS Safari visual viewport fix for keyboard */
+@supports (-webkit-touch-callout: none) {
+  .chat-fullscreen {
+    /* Use visual viewport height on iOS */
+    height: -webkit-fill-available;
   }
 }

@@ -297,6 +297,26 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // iOS Safari keyboard handling - scroll input into view when keyboard opens
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const handleViewportResize = () => {
+      // When keyboard opens, iOS visual viewport height shrinks
+      // Scroll the focused element into view
+      if (document.activeElement?.tagName === 'TEXTAREA') {
+        setTimeout(() => {
+          document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    };
+
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportResize);
+    };
+  }, []);
+
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
 
