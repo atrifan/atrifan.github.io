@@ -957,6 +957,7 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
             onOAuth2ConfigChange={setOAuth2Config}
             showClientSecret={showClientSecret}
             onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
+            domainForCheck={swaggerUrl}
             description="If your Swagger endpoint requires authentication, provide credentials below."
             inputStyle={inputStyle}
           />

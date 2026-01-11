@@ -722,6 +722,7 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
               onOAuth2ConfigChange={setOAuth2Config}
               showClientSecret={showClientSecret}
               onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
+              domainForCheck={url}
               description="If your MCP server requires authentication, provide credentials below."
               inputStyle={inputStyle}
             />

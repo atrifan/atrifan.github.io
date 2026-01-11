@@ -943,6 +943,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
               onOAuth2ConfigChange={setOAuth2Config}
               showClientSecret={showClientSecret}
               onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
+              domainForCheck={url}
               description="If your GraphQL endpoint requires authentication, provide credentials below."
               inputStyle={inputStyle}
             />

@@ -1,6 +1,7 @@
 'use client';
 
-import { CSSProperties } from 'react';
+import { CSSProperties, useState, useEffect, useRef } from 'react';
+import { discoverOpenIDConfig, getDefaultScopes, type OpenIDConfiguration } from '../lib/openid-discovery';
 
 // Auth type union
 export type AuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
@@ -59,6 +60,10 @@ export interface AuthenticationCardProps {
   showClientSecret?: boolean;
   onShowClientSecretToggle?: () => void;
 
+  // OpenID Discovery (optional)
+  // When provided, attempts to discover OpenID configuration from this URL
+  domainForCheck?: string;
+
   // Customization
   description?: string;
   inputStyle: CSSProperties;
@@ -85,11 +90,67 @@ export function AuthenticationCard({
   onOAuth2ConfigChange,
   showClientSecret = false,
   onShowClientSecretToggle,
+  domainForCheck,
   description = 'If your endpoint requires authentication, provide credentials below.',
   inputStyle,
 }: AuthenticationCardProps) {
 
   const isOAuth2Enabled = oauth2Config?.enabled ?? false;
+
+  // OpenID Discovery state
+  const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
+  const [discoveredConfig, setDiscoveredConfig] = useState<OpenIDConfiguration | null>(null);
+  const [discoveryUrl, setDiscoveryUrl] = useState<string>('');
+  const lastCheckedDomain = useRef<string>('');
+  const discoveryDismissed = useRef<boolean>(false);
+
+  // OpenID Discovery effect
+  useEffect(() => {
+    if (!domainForCheck || !onOAuth2ConfigChange) return;
+    if (isOAuth2Enabled) return; // Don't check if already using OAuth2
+    if (lastCheckedDomain.current === domainForCheck) return; // Already checked this domain
+    if (discoveryDismissed.current) return; // User dismissed the modal
+
+    lastCheckedDomain.current = domainForCheck;
+
+    const checkOpenID = async () => {
+      const result = await discoverOpenIDConfig(domainForCheck);
+      if (result.found && result.config) {
+        setDiscoveredConfig(result.config);
+        setDiscoveryUrl(result.discoveryUrl || '');
+        setShowDiscoveryModal(true);
+      }
+    };
+
+    checkOpenID();
+  }, [domainForCheck, onOAuth2ConfigChange, isOAuth2Enabled]);
+
+  const handleApproveDiscovery = () => {
+    if (!discoveredConfig || !onOAuth2ConfigChange) return;
+
+    const newConfig: OAuth2Config = {
+      enabled: true,
+      authorizationEndpoint: discoveredConfig.authorization_endpoint || '',
+      tokenEndpoint: discoveredConfig.token_endpoint || '',
+      scopes: getDefaultScopes(discoveredConfig),
+      useDcr: !!discoveredConfig.registration_endpoint,
+      clientId: '',
+      clientSecret: '',
+      registrationEndpoint: discoveredConfig.registration_endpoint || '',
+    };
+
+    onOAuth2ConfigChange(newConfig);
+    onAuthTypeChange('oauth2');
+    onApiKeyChange('');
+    onBearerTokenChange('');
+    onBasicCredentialsChange('');
+    setShowDiscoveryModal(false);
+  };
+
+  const handleDismissDiscovery = () => {
+    discoveryDismissed.current = true;
+    setShowDiscoveryModal(false);
+  };
 
   const handleOAuth2Toggle = () => {
     if (!onOAuth2ConfigChange) return;
@@ -161,7 +222,82 @@ export function AuthenticationCard({
     cursor: 'not-allowed',
   };
 
+  // Modal styles
+  const modalOverlayStyle: CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  };
+
+  const modalStyle: CSSProperties = {
+    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+    borderRadius: '16px',
+    padding: '2rem',
+    maxWidth: '500px',
+    width: '90%',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+  };
+
   return (
+    <>
+      {/* OpenID Discovery Modal */}
+      {showDiscoveryModal && discoveredConfig && (
+        <div style={modalOverlayStyle} onClick={handleDismissDiscovery}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🔐 OpenID Configuration Detected
+            </div>
+            <p style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+              We detected an OpenID Connect / OAuth 2.0 configuration on your domain.
+              Would you like to use it for authentication?
+            </p>
+            <div style={{ background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+              <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Discovery URL</div>
+              <div style={{ color: '#fff', wordBreak: 'break-all', marginBottom: '0.75rem' }}>{discoveryUrl}</div>
+              {discoveredConfig.authorization_endpoint && (
+                <>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Authorization Endpoint</div>
+                  <div style={{ color: '#fff', wordBreak: 'break-all', marginBottom: '0.75rem' }}>{discoveredConfig.authorization_endpoint}</div>
+                </>
+              )}
+              {discoveredConfig.token_endpoint && (
+                <>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Token Endpoint</div>
+                  <div style={{ color: '#fff', wordBreak: 'break-all', marginBottom: '0.75rem' }}>{discoveredConfig.token_endpoint}</div>
+                </>
+              )}
+              {discoveredConfig.registration_endpoint && (
+                <>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Registration Endpoint (DCR)</div>
+                  <div style={{ color: '#fff', wordBreak: 'break-all' }}>{discoveredConfig.registration_endpoint}</div>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#fff', padding: '0.75rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
+                onClick={handleDismissDiscovery}
+              >
+                No, thanks
+              </button>
+              <button
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff', padding: '0.75rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
+                onClick={handleApproveDiscovery}
+              >
+                Use OAuth 2.0
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <div style={{
       background: 'rgba(251, 191, 36, 0.1)',
       border: '1px solid rgba(251, 191, 36, 0.3)',
@@ -265,29 +401,29 @@ export function AuthenticationCard({
                     />
                   </div>
                 ) : (
-                  /* Manual Client Credentials */
+                  /* Manual Client Credentials - Required when not using DCR */
                   <>
                     <div style={{ marginBottom: '0.5rem' }}>
                       <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
-                        Client ID
+                        Client ID <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <input
                         type="text"
                         value={oauth2Config.clientId}
                         onChange={(e) => updateOAuth2Field('clientId', e.target.value)}
-                        placeholder="your-client-id"
+                        placeholder="your-client-id (required)"
                         style={{ ...inputStyle, fontSize: '0.85rem' }}
                       />
                     </div>
                     <div style={{ position: 'relative' }}>
                       <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
-                        Client Secret
+                        Client Secret <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <input
                         type={showClientSecret ? 'text' : 'password'}
                         value={oauth2Config.clientSecret}
                         onChange={(e) => updateOAuth2Field('clientSecret', e.target.value)}
-                        placeholder="your-client-secret"
+                        placeholder="your-client-secret (required)"
                         style={{ ...inputStyle, fontSize: '0.85rem', paddingRight: '3rem' }}
                       />
                       {onShowClientSecretToggle && (
@@ -390,6 +526,37 @@ export function AuthenticationCard({
         </div>
       </div>
     </div>
+    </>
   );
+}
+
+/**
+ * Validates OAuth2 configuration before submission
+ * Returns an error message if validation fails, null if valid
+ */
+export function validateOAuth2Config(oauth2Config: OAuth2Config | undefined): string | null {
+  if (!oauth2Config?.enabled) return null;
+
+  if (!oauth2Config.authorizationEndpoint.trim()) {
+    return 'Authorization Endpoint is required for OAuth 2.0';
+  }
+  if (!oauth2Config.tokenEndpoint.trim()) {
+    return 'Token Endpoint is required for OAuth 2.0';
+  }
+  if (!oauth2Config.scopes.trim()) {
+    return 'Scopes are required for OAuth 2.0';
+  }
+
+  if (oauth2Config.useDcr) {
+    if (!oauth2Config.registrationEndpoint.trim()) {
+      return 'Registration Endpoint is required when using DCR';
+    }
+  } else {
+    if (!oauth2Config.clientId.trim() || !oauth2Config.clientSecret.trim()) {
+      return 'Client ID and Client Secret are required when not using DCR';
+    }
+  }
+
+  return null;
 }
 

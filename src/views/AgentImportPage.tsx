@@ -772,6 +772,7 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
               onOAuth2ConfigChange={setOAuth2Config}
               showClientSecret={showClientSecret}
               onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
+              domainForCheck={url}
               inputStyle={inputStyle}
             />
 
