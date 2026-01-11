@@ -80,6 +80,34 @@ body {
   background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
   min-height: 100vh;
   color: #ffffff;
+  /* Prevent text selection on double-tap for mobile */
+  -webkit-touch-callout: none;
+}
+
+/* Global touch-friendly button/link styles */
+button, a, [role="button"] {
+  /* Remove tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+  /* Ensure minimum touch target size (44x44 recommended by Apple/Google) */
+  touch-action: manipulation;
+}
+
+/* Ensure buttons have proper touch feedback */
+button:active:not(:disabled),
+[role="button"]:active {
+  opacity: 0.8;
+}
+
+/* Disable hover effects on touch devices to prevent sticky hover */
+@media (hover: none) {
+  *:hover {
+    /* Reset any hover transforms/effects on touch devices */
+  }
+}
+
+/* Only apply hover effects on devices with proper hover capability */
+@media (hover: hover) and (pointer: fine) {
+  /* Desktop hover effects are enabled */
 }
 
 /* Custom scrollbar */
@@ -182,14 +210,24 @@ body {
 }
 
 
-/* Card hover effects */
+/* Card hover effects - only on devices with hover capability */
 .hover-lift {
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* Prevent sticky hover on touch devices */
+  -webkit-tap-highlight-color: transparent;
 }
 
-.hover-lift:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: var(--card-shadow-hover);
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--card-shadow-hover);
+  }
+}
+
+/* Touch feedback for mobile */
+.hover-lift:active {
+  transform: scale(0.98);
+  opacity: 0.9;
 }
 
 /* Result cards */
@@ -199,11 +237,18 @@ body {
   padding: 2rem;
   box-shadow: var(--card-shadow);
   transition: all 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.result-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--card-shadow-hover);
+@media (hover: hover) and (pointer: fine) {
+  .result-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--card-shadow-hover);
+  }
+}
+
+.result-card:active {
+  transform: scale(0.98);
 }
 
 /* Large number display */
@@ -283,6 +328,9 @@ body {
   flex: 1;
   padding: 1rem;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Prevent pull-to-refresh on Android Chrome */
+  overscroll-behavior: contain;
 }
 
 /* Desktop-only elements */
@@ -438,6 +486,12 @@ body {
     justify-content: center;
     flex-shrink: 0;
     position: relative;
+    transition: transform 0.1s ease, background 0.1s ease;
+  }
+
+  .chat-mobile-config-btn:active {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .chat-mobile-send-btn {
@@ -453,6 +507,11 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: transform 0.1s ease;
+  }
+
+  .chat-mobile-send-btn:active:not(:disabled) {
+    transform: scale(0.92);
   }
 
   .chat-mobile-send-btn:disabled {
@@ -523,6 +582,10 @@ body {
 
   .chat-desktop-config-btn:hover {
     background: rgba(139, 92, 246, 0.2);
+  }
+
+  .chat-desktop-config-btn:active {
+    transform: scale(0.95);
   }
 
   .chat-desktop-config-btn.active {
@@ -607,8 +670,14 @@ body {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.chat-history-item-compact:hover {
-  background: rgba(255, 255, 255, 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .chat-history-item-compact:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.chat-history-item-compact:active {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .chat-history-item-compact.active {

@@ -64,6 +64,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: '#667eea',
+  // iOS notch/safe area handling
+  viewportFit: 'cover',
+  // Android keyboard behavior - resizes content instead of panning
+  interactiveWidget: 'resizes-content',
 };
 
 export default function RootLayout({

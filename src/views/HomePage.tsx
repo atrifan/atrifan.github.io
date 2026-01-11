@@ -41,6 +41,7 @@ interface HomePageState {
   hoveredTool: string | null;
   showPlanetaryNav: boolean;
   collapsedCategories: Set<string>;
+  isTouchDevice: boolean;
 }
 
 /**
@@ -53,7 +54,14 @@ export class HomePage extends Component<{}, HomePageState> {
       hoveredTool: null,
       showPlanetaryNav: false,
       collapsedCategories: new Set<string>(),
+      isTouchDevice: false,
     };
+  }
+
+  componentDidMount() {
+    // Detect touch device
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.setState({ isTouchDevice });
   }
 
   private toggleCategory = (category: string) => {
@@ -187,11 +195,13 @@ export class HomePage extends Component<{}, HomePageState> {
             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
           }}
           onMouseEnter={(e) => {
+            if (this.state.isTouchDevice) return;
             this.setState({ hoveredTool: tool.id });
             e.currentTarget.style.transform = 'translateY(-4px)';
             e.currentTarget.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.35)';
           }}
           onMouseLeave={(e) => {
+            if (this.state.isTouchDevice) return;
             this.setState({ hoveredTool: null });
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.25)';
@@ -309,9 +319,11 @@ export class HomePage extends Component<{}, HomePageState> {
               }}
               onClick={() => this.setState({ showPlanetaryNav: true })}
               onMouseEnter={(e) => {
+                if (this.state.isTouchDevice) return;
                 e.currentTarget.style.transform = 'scale(1.1) rotate(5deg)';
               }}
               onMouseLeave={(e) => {
+                if (this.state.isTouchDevice) return;
                 e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
               }}
               title="Click to see planetary navigation"
@@ -412,8 +424,8 @@ export class HomePage extends Component<{}, HomePageState> {
                       touchAction: 'manipulation',
                       WebkitTapHighlightColor: 'rgba(255, 255, 255, 0.1)',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
+                    onMouseEnter={(e) => { if (!this.state.isTouchDevice) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
+                    onMouseLeave={(e) => { if (!this.state.isTouchDevice) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; }}
                   >
                     <span style={{
                       fontSize: '1rem',
