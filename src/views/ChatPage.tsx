@@ -301,30 +301,32 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const scrollTextareaIntoView = () => {
+      const textarea = document.activeElement;
+      if (textarea?.tagName === 'TEXTAREA') {
+        // Use scrollIntoView with 'end' to keep textarea at bottom above keyboard
+        setTimeout(() => {
+          textarea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+      }
+    };
+
     // Use Visual Viewport API if available (modern browsers)
     if (window.visualViewport) {
       const handleViewportResize = () => {
-        // When keyboard opens, visual viewport height shrinks
-        // Scroll the focused element into view
-        if (document.activeElement?.tagName === 'TEXTAREA') {
-          setTimeout(() => {
-            document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 100);
-        }
+        scrollTextareaIntoView();
       };
 
       window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('scroll', handleViewportResize);
       return () => {
         window.visualViewport?.removeEventListener('resize', handleViewportResize);
+        window.visualViewport?.removeEventListener('scroll', handleViewportResize);
       };
     } else {
       // Fallback for older browsers - use window resize
       const handleResize = () => {
-        if (document.activeElement?.tagName === 'TEXTAREA') {
-          setTimeout(() => {
-            document.activeElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 300);
-        }
+        setTimeout(scrollTextareaIntoView, 300);
       };
 
       window.addEventListener('resize', handleResize);
@@ -1460,9 +1462,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     {activePersonalityIds.length > 0 && <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>🎭 {activePersonalityIds.length} persona{activePersonalityIds.length > 1 ? 's' : ''}</span>}
                   </div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.5rem', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '0.4rem', marginTop: '1.5rem', justifyContent: 'center', maxWidth: '100%', overflow: 'hidden' }}>
                   {['Calculate my budget', 'Help me sleep better', 'What\'s my trading risk?', 'Convert units'].map(suggestion => (
-                    <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '20px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <button key={suggestion} onClick={() => setMessage(suggestion)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '16px', padding: '0.35rem 0.75rem', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', flexShrink: 1 }}>
                       {suggestion}
                     </button>
                   ))}
@@ -1591,10 +1593,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
                 }}
                 onKeyDown={handleKeyDown}
-                onFocus={() => {
-                  // On mobile, scroll to bottom when textarea is focused
+                onFocus={(e) => {
+                  // On mobile, scroll textarea into view when keyboard opens
                   if (window.innerWidth < 768) {
-                    setTimeout(scrollToBottom, 100);
+                    setTimeout(() => {
+                      e.target.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }, 300);
                   }
                 }}
                 placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${isExternalAgentSelected && selectedAgentConnector ? selectedAgentConnector.display_name : (selectedModelData?.name || 'AI')}...`}
