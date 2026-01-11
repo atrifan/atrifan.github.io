@@ -1052,7 +1052,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           });
         }
 
-        // Refresh budget data to update usage statistics display
+        // Refresh usage statistics display (fetchCostUsage updates externalAgentUsage)
+        fetchCostUsage();
         fetchBudget();
       } else {
         // Handle regular AI model communication
