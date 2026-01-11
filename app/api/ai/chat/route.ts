@@ -180,6 +180,22 @@ export async function POST(request: NextRequest) {
           input_tokens: 0,
           output_tokens: usage.completion_tokens,
         });
+
+        // Update conversation message count and tokens
+        const { data: conv } = await supabase
+          .from('chat_conversations')
+          .select('message_count, total_tokens')
+          .eq('id', activeConversationId)
+          .single();
+
+        await supabase
+          .from('chat_conversations')
+          .update({
+            message_count: (conv?.message_count || 0) + 2,
+            total_tokens: (conv?.total_tokens || 0) + usage.prompt_tokens + usage.completion_tokens,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', activeConversationId);
       }
     }
 

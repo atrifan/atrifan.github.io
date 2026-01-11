@@ -1,6 +1,6 @@
 /**
  * POST /api/a2a/proxy
- * 
+ *
  * Proxies A2A requests to external agents to avoid CORS issues.
  * The browser calls this endpoint, which then forwards the request to the external agent.
  */
@@ -8,8 +8,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { v4 as uuidv4 } from 'uuid';
+import * as https from 'https';
+import * as http from 'http';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Make HTTP/1.1 request using native Node.js http/https modules
+ * This avoids HTTP/2 protocol issues with some servers (like Adobe)
+ */
+function makeHttp1Request(
+  url: string,
+  options: { method: string; headers: Record<string, string>; body: string; timeout: number }
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const isHttps = parsedUrl.protocol === 'https:';
+    const lib = isHttps ? https : http;
+
+    const reqOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: options.method,
+      headers: {
+        ...options.headers,
+        'Content-Length': Buffer.byteLength(options.body),
+      },
+      timeout: options.timeout,
+    };
+
+    const req = lib.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        const responseHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(res.headers)) {
+          if (typeof value === 'string') {
+            responseHeaders[key] = value;
+          } else if (Array.isArray(value)) {
+            responseHeaders[key] = value.join(', ');
+          }
+        }
+        resolve({
+          status: res.statusCode || 500,
+          headers: responseHeaders,
+          body: data,
+        });
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.write(options.body);
+    req.end();
+  });
+}
 
 interface A2AProxyRequest {
   agentUrl: string;
@@ -42,10 +103,11 @@ export async function POST(request: NextRequest) {
 
     // Build headers for the external request - only Content-Type, no auth for now
     // Explicitly request non-streaming JSON response
+    // Note: Some servers (like Adobe) require HTTP/1.1 - we set Connection: close to avoid HTTP/2 issues
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'Connection': 'keep-alive',
+      'Connection': 'close', // Force connection close to avoid HTTP/2 negotiation issues
       'User-Agent': 'ZipRunPlace-A2A-Client/1.0',
     };
 
@@ -129,33 +191,36 @@ export async function POST(request: NextRequest) {
     console.log('[A2A Proxy] Sending request to:', agentUrl);
     console.log('[A2A Proxy] Request body:', JSON.stringify(requestBody, null, 2));
 
-    // Make the request to the external agent with 3 minute timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+    // Make the request using HTTP/1.1 (native Node.js http/https modules)
+    // This avoids HTTP/2 protocol issues with some servers (like Adobe)
+    const requestBodyStr = JSON.stringify(requestBody);
+    let httpResponse: { status: number; headers: Record<string, string>; body: string };
 
-    let response: Response;
     try {
-      response = await fetch(agentUrl, {
+      httpResponse = await makeHttp1Request(agentUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
+        body: requestBodyStr,
+        timeout: 180000, // 3 minutes
       });
-    } finally {
-      clearTimeout(timeoutId);
+    } catch (err) {
+      console.error('[A2A Proxy] HTTP/1.1 request failed:', err);
+      return NextResponse.json({
+        success: false,
+        error: err instanceof Error ? err.message : 'Request failed',
+      }, { status: 500 });
     }
 
-    console.log('[A2A Proxy] Response status:', response.status);
+    console.log('[A2A Proxy] Response status:', httpResponse.status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[A2A Proxy] Error response status:', response.status);
-      console.error('[A2A Proxy] Error response headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
-      console.error('[A2A Proxy] Error response body:', errorText);
+    if (httpResponse.status >= 400) {
+      console.error('[A2A Proxy] Error response status:', httpResponse.status);
+      console.error('[A2A Proxy] Error response headers:', JSON.stringify(httpResponse.headers, null, 2));
+      console.error('[A2A Proxy] Error response body:', httpResponse.body);
 
       // Try to parse as JSON for more details
       try {
-        const errorJson = JSON.parse(errorText);
+        const errorJson = JSON.parse(httpResponse.body);
         console.error('[A2A Proxy] Error response JSON:', JSON.stringify(errorJson, null, 2));
       } catch {
         // Not JSON, already logged as text
@@ -163,11 +228,20 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        error: `Agent returned ${response.status}: ${errorText}`,
+        error: `Agent returned ${httpResponse.status}: ${httpResponse.body}`,
       });
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(httpResponse.body);
+    } catch {
+      console.error('[A2A Proxy] Failed to parse response as JSON:', httpResponse.body);
+      return NextResponse.json({
+        success: false,
+        error: 'Agent returned invalid JSON response',
+      });
+    }
     console.log('[A2A Proxy] Raw response:', JSON.stringify(data, null, 2));
 
     // Parse A2A response format
@@ -251,4 +325,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
-
