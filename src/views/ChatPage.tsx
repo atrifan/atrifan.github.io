@@ -298,40 +298,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   }, []);
 
   // Mobile keyboard handling - works on iOS Safari, Chrome, Edge, Android
+  // Only scroll textarea into view when keyboard OPENS (viewport shrinks), not on every scroll
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const scrollTextareaIntoView = () => {
+    let lastViewportHeight = window.visualViewport?.height || window.innerHeight;
+
+    const handleViewportResize = () => {
+      const currentHeight = window.visualViewport?.height || window.innerHeight;
       const textarea = document.activeElement;
-      if (textarea?.tagName === 'TEXTAREA') {
-        // Use scrollIntoView with 'end' to keep textarea at bottom above keyboard
+
+      // Only scroll if viewport got SMALLER (keyboard opened) and textarea is focused
+      if (currentHeight < lastViewportHeight && textarea?.tagName === 'TEXTAREA') {
         setTimeout(() => {
           textarea.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }, 100);
       }
+
+      lastViewportHeight = currentHeight;
     };
 
     // Use Visual Viewport API if available (modern browsers)
     if (window.visualViewport) {
-      const handleViewportResize = () => {
-        scrollTextareaIntoView();
-      };
-
       window.visualViewport.addEventListener('resize', handleViewportResize);
-      window.visualViewport.addEventListener('scroll', handleViewportResize);
       return () => {
         window.visualViewport?.removeEventListener('resize', handleViewportResize);
-        window.visualViewport?.removeEventListener('scroll', handleViewportResize);
       };
     } else {
       // Fallback for older browsers - use window resize
-      const handleResize = () => {
-        setTimeout(scrollTextareaIntoView, 300);
-      };
-
-      window.addEventListener('resize', handleResize);
+      window.addEventListener('resize', handleViewportResize);
       return () => {
-        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('resize', handleViewportResize);
       };
     }
   }, []);
