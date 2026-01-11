@@ -297,41 +297,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Mobile keyboard handling - works on iOS Safari, Chrome, Edge, Android
-  // Only scroll textarea into view when keyboard OPENS (viewport shrinks), not on every scroll
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let lastViewportHeight = window.visualViewport?.height || window.innerHeight;
-
-    const handleViewportResize = () => {
-      const currentHeight = window.visualViewport?.height || window.innerHeight;
-      const textarea = document.activeElement;
-
-      // Only scroll if viewport got SMALLER (keyboard opened) and textarea is focused
-      if (currentHeight < lastViewportHeight && textarea?.tagName === 'TEXTAREA') {
-        setTimeout(() => {
-          textarea.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 100);
-      }
-
-      lastViewportHeight = currentHeight;
-    };
-
-    // Use Visual Viewport API if available (modern browsers)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportResize);
-      return () => {
-        window.visualViewport?.removeEventListener('resize', handleViewportResize);
-      };
-    } else {
-      // Fallback for older browsers - use window resize
-      window.addEventListener('resize', handleViewportResize);
-      return () => {
-        window.removeEventListener('resize', handleViewportResize);
-      };
-    }
-  }, []);
+  // Mobile keyboard handling removed - let CSS handle the layout
+  // The 100dvh and flex layout should automatically adjust when keyboard opens
 
   // Last message token info
   const [lastMessageTokens, setLastMessageTokens] = useState<{ input: number; output: number } | null>(null);
@@ -1601,13 +1568,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
                 }}
                 onKeyDown={handleKeyDown}
-                onFocus={(e) => {
-                  // On mobile, scroll textarea into view when keyboard opens
-                  if (window.innerWidth < 768) {
-                    setTimeout(() => {
-                      e.target.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                    }, 300);
-                  }
+                onFocus={() => {
+                  // Keyboard will open - let the viewport resize handler deal with scrolling
+                  // Don't force scroll here to allow user to scroll freely
                 }}
                 placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${isExternalAgentSelected && selectedAgentConnector ? selectedAgentConnector.display_name : (selectedModelData?.name || 'AI')}...`}
                 disabled={isQuotaExceeded || isLoading}
