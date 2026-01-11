@@ -361,7 +361,18 @@ export interface ServerToolUpdate {
 // ============ REST API Specs Table ============
 
 /** Authorization types for REST APIs */
-export type RestAuthType = 'none' | 'bearer' | 'api_key' | 'basic' | 'custom';
+export type RestAuthType = 'none' | 'bearer' | 'api_key' | 'basic' | 'custom' | 'oauth2';
+
+/** OAuth2 configuration stored in auth_config JSONB */
+export interface OAuth2AuthConfig {
+  authorization_endpoint: string;
+  token_endpoint: string;
+  scopes: string;
+  use_dcr: boolean;
+  client_id: string;
+  client_secret: string;
+  registration_endpoint: string;
+}
 
 /** Spec format */
 export type SpecFormat = 'json' | 'yaml';

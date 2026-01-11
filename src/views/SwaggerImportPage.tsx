@@ -468,8 +468,10 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
       const headerObj = buildHeaders();
 
       // Determine auth type for storage based on what's filled
-      let storedAuthType: 'none' | 'api_key' | 'bearer' | 'basic' = 'none';
-      if (urlApiKey.trim()) {
+      let storedAuthType: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2' = 'none';
+      if (authType === 'oauth2' && oauth2Config.enabled) {
+        storedAuthType = 'oauth2';
+      } else if (urlApiKey.trim()) {
         storedAuthType = 'api_key';
       } else if (authToken.trim()) {
         storedAuthType = 'bearer';
@@ -477,23 +479,39 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
         storedAuthType = 'basic';
       }
 
+      // Build request body
+      const requestBody: Record<string, unknown> = {
+        serverName,
+        specFormat,
+        spec: parseResult?.spec,
+        rawSpec: specInput,
+        sourceUrl: importMethod === 'url' ? swaggerUrl : undefined,
+        importMethod,
+        apiInfo: parseResult?.apiInfo,
+        tools: toolsWithWidgetInfo,
+        environments,
+        category: selectedCategory,
+        defaultHeaders: headerObj,
+        authType: storedAuthType,
+      };
+
+      // Add OAuth2 config if applicable
+      if (storedAuthType === 'oauth2') {
+        requestBody.oauth2Config = {
+          authorizationEndpoint: oauth2Config.authorizationEndpoint,
+          tokenEndpoint: oauth2Config.tokenEndpoint,
+          scopes: oauth2Config.scopes,
+          useDcr: oauth2Config.useDcr,
+          clientId: oauth2Config.clientId,
+          clientSecret: oauth2Config.clientSecret,
+          registrationEndpoint: oauth2Config.registrationEndpoint,
+        };
+      }
+
       const response = await fetch('/api/swagger/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverName,
-          specFormat,
-          spec: parseResult?.spec,
-          rawSpec: specInput,
-          sourceUrl: importMethod === 'url' ? swaggerUrl : undefined,
-          importMethod,
-          apiInfo: parseResult?.apiInfo,
-          tools: toolsWithWidgetInfo,
-          environments,
-          category: selectedCategory,
-          defaultHeaders: headerObj,
-          authType: storedAuthType,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();

@@ -517,27 +517,45 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
 
       // Determine auth type for storage
       let storedAuthType: AuthType = 'none';
-      if (urlApiKey.trim()) {
+      if (authType === 'oauth2' && oauth2Config.enabled) {
+        storedAuthType = 'oauth2';
+      } else if (urlApiKey.trim()) {
         storedAuthType = 'api_key';
       } else if (authToken.trim()) {
         storedAuthType = authType;
       }
 
+      // Build request body
+      const requestBody: Record<string, unknown> = {
+        serverName: normalizeName(serverName.trim()),
+        sourceUrl: url.trim(),
+        schema: fetchResult?.schema,
+        apiTitle: apiTitle.trim() || serverName.trim(),
+        apiDescription: apiDescription.trim(),
+        defaultHeaders: headerObj,
+        authType: storedAuthType,
+        category: selectedCategory,
+        environments,
+        selectedOperations: Array.from(selectedOperations),
+      };
+
+      // Add OAuth2 config if applicable
+      if (storedAuthType === 'oauth2') {
+        requestBody.oauth2Config = {
+          authorizationEndpoint: oauth2Config.authorizationEndpoint,
+          tokenEndpoint: oauth2Config.tokenEndpoint,
+          scopes: oauth2Config.scopes,
+          useDcr: oauth2Config.useDcr,
+          clientId: oauth2Config.clientId,
+          clientSecret: oauth2Config.clientSecret,
+          registrationEndpoint: oauth2Config.registrationEndpoint,
+        };
+      }
+
       const response = await fetch('/api/graphql/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverName: normalizeName(serverName.trim()),
-          sourceUrl: url.trim(),
-          schema: fetchResult?.schema,
-          apiTitle: apiTitle.trim() || serverName.trim(),
-          apiDescription: apiDescription.trim(),
-          defaultHeaders: headerObj,
-          authType: storedAuthType,
-          category: selectedCategory,
-          environments,
-          selectedOperations: Array.from(selectedOperations),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();

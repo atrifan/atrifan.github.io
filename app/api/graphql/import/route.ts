@@ -18,6 +18,16 @@ interface EnvironmentConfig {
   host: string;
 }
 
+interface OAuth2ConfigInput {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  scopes: string;
+  useDcr: boolean;
+  clientId: string;
+  clientSecret: string;
+  registrationEndpoint: string;
+}
+
 interface ImportRequest {
   serverName: string;
   sourceUrl: string;
@@ -28,6 +38,8 @@ interface ImportRequest {
   category?: string;
   environments?: EnvironmentConfig[];
   selectedOperations?: string[]; // Optional: if provided, only import these operations
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+  oauth2Config?: OAuth2ConfigInput;
 }
 
 export async function POST(request: NextRequest) {
@@ -39,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body: ImportRequest = await request.json();
-    const { serverName, sourceUrl, schema, apiTitle, apiDescription, defaultHeaders, category, environments, selectedOperations } = body;
+    const { serverName, sourceUrl, schema, apiTitle, apiDescription, defaultHeaders, category, environments, selectedOperations, authType: requestedAuthType, oauth2Config } = body;
 
     // Validate category - first check if it's a custom category in the database
     const validCategories: ToolCategory[] = ['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'];
@@ -87,14 +99,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine auth type based on provided headers
-    let authType: 'none' | 'api_key' | 'bearer' | 'basic' = 'none';
+    // Determine auth type - use explicit authType if provided, otherwise detect from headers
+    let authType: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2' = requestedAuthType || 'none';
     const authConfig: Record<string, unknown> = {};
 
-    if (defaultHeaders) {
+    if (authType === 'oauth2' && oauth2Config) {
+      // Store OAuth2 configuration with snake_case keys for database consistency
+      authConfig.authorization_endpoint = oauth2Config.authorizationEndpoint;
+      authConfig.token_endpoint = oauth2Config.tokenEndpoint;
+      authConfig.scopes = oauth2Config.scopes;
+      authConfig.use_dcr = oauth2Config.useDcr;
+      authConfig.client_id = oauth2Config.clientId;
+      authConfig.client_secret = oauth2Config.clientSecret;
+      authConfig.registration_endpoint = oauth2Config.registrationEndpoint;
+    } else if (!requestedAuthType && defaultHeaders) {
+      // Auto-detect from headers if no explicit authType
       if (defaultHeaders['x-api-key']) {
         authType = 'api_key';
-        authConfig.header_name = 'x-api-key'; // snake_case to match graphql-handler.ts
+        authConfig.header_name = 'x-api-key';
       } else if (defaultHeaders['Authorization']?.startsWith('Bearer ')) {
         authType = 'bearer';
       }

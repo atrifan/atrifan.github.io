@@ -5,6 +5,16 @@ import { generateToolName } from '@/src/lib/openapi-parser';
 import type { ExtractedTool } from '@/src/lib/openapi-parser';
 import type { ToolInsert, RestApiSpecInsert, RestApiEndpointInsert, EnvironmentInsert, ToolCategory } from '@/src/types/supabase';
 
+interface OAuth2ConfigInput {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  scopes: string;
+  useDcr: boolean;
+  clientId: string;
+  clientSecret: string;
+  registrationEndpoint: string;
+}
+
 interface ImportRequest {
   serverName: string;
   specFormat: 'json' | 'yaml';
@@ -22,7 +32,8 @@ interface ImportRequest {
   environments: Array<{ name: string; host: string }>;
   category?: string;
   defaultHeaders?: Record<string, string>;
-  authType?: 'none' | 'api_key' | 'bearer' | 'basic';
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+  oauth2Config?: OAuth2ConfigInput;
 }
 
 /**
@@ -38,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body: ImportRequest = await request.json();
-    const { serverName, specFormat, spec, rawSpec, sourceUrl, importMethod, apiInfo, tools, environments, category, defaultHeaders, authType } = body;
+    const { serverName, specFormat, spec, rawSpec, sourceUrl, importMethod, apiInfo, tools, environments, category, defaultHeaders, authType, oauth2Config } = body;
 
     // Validate category against allowed values
     const validCategories: ToolCategory[] = ['Health & Fitness', 'Finance', 'Date & Time', 'Fun & Games', 'Utilities', 'Astronomy'];
@@ -63,6 +74,15 @@ export async function POST(request: NextRequest) {
     const authConfig: Record<string, unknown> = {};
     if (authType === 'api_key' && defaultHeaders?.['x-api-key']) {
       authConfig.header_name = 'x-api-key';
+    } else if (authType === 'oauth2' && oauth2Config) {
+      // Store OAuth2 configuration with snake_case keys for database consistency
+      authConfig.authorization_endpoint = oauth2Config.authorizationEndpoint;
+      authConfig.token_endpoint = oauth2Config.tokenEndpoint;
+      authConfig.scopes = oauth2Config.scopes;
+      authConfig.use_dcr = oauth2Config.useDcr;
+      authConfig.client_id = oauth2Config.clientId;
+      authConfig.client_secret = oauth2Config.clientSecret;
+      authConfig.registration_endpoint = oauth2Config.registrationEndpoint;
     }
 
     // 1. Create or update REST API spec
