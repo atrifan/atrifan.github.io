@@ -374,6 +374,13 @@ body {
     overflow-y: auto;
     padding: 1rem;
     padding-bottom: 80px;
+    /* Hide scrollbar but keep scroll functionality */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  .chat-mobile-messages::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   .chat-mobile-input-bar {
@@ -404,6 +411,13 @@ body {
     min-height: 40px;
     max-height: 120px;
     outline: none;
+    /* Hide scrollbar but keep scroll functionality */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  .chat-mobile-input-bar textarea::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   .chat-mobile-input-bar textarea::placeholder {
@@ -693,6 +707,13 @@ body {
   overflow-y: auto;
   padding: 1rem;
   padding-bottom: 1rem;
+  /* Hide scrollbar but keep scroll functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.chat-fullscreen-messages::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .chat-fullscreen-input {
@@ -701,6 +722,16 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0.75rem 1rem;
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Hide scrollbar on chat textarea */
+.chat-fullscreen-input textarea {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.chat-fullscreen-input textarea::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 @media (min-width: 768px) {

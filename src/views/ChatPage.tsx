@@ -11,6 +11,7 @@ import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { ChatIcon } from '../components/ChatIcon';
 import { FaviconImage } from '../components/FaviconImage';
+import { MarkdownContent } from '../components/MarkdownContent';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { sendA2AMessage } from '../lib/a2a-client';
@@ -24,6 +25,7 @@ import {
   DEFAULT_MONTHLY_BUDGET,
   getBudgetUsagePercent,
   calculateSafeTokensForBudget,
+  calculateTokenCost,
 } from '../config/ai-tokens.config';
 
 interface ChatPageProps {
@@ -333,6 +335,35 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const usagePercent = budgetData ? budgetUsagePercent : getUsagePercentage(costUsage.used, tier);
   const isQuotaExceeded = budgetData ? isBudgetExceeded : costUsage.used >= costUsage.limit;
 
+  // Token estimation function (rough: ~4 chars per token)
+  const estimateTokens = (text: string): number => {
+    if (!text) return 0;
+    return Math.ceil(text.length / 4);
+  };
+
+  // Calculate aggregated tokens from all messages in conversation
+  // Input tokens are on user messages, output tokens are on assistant messages
+  // (Assistant messages also have input tokens for cost calculation, but we don't double-count for display)
+  const conversationTokens = messages.reduce(
+    (acc, msg) => ({
+      input: acc.input + (msg.role === 'user' ? (msg.tokens?.input || 0) : 0),
+      output: acc.output + (msg.role === 'assistant' ? (msg.tokens?.output || 0) : 0),
+    }),
+    { input: 0, output: 0 }
+  );
+
+  // Calculate total conversation cost from assistant messages (each has input + output tokens)
+  const conversationCost = messages
+    .filter(msg => msg.role === 'assistant' && msg.tokens)
+    .reduce((total, msg) => {
+      const isAgent = msg.model?.startsWith('agent:');
+      if (isAgent) return total; // External agents are free
+      return total + calculateTokenCost(msg.model || selectedModel, msg.tokens!.input, msg.tokens!.output);
+    }, 0);
+
+  // Estimate tokens for current input
+  const currentInputTokens = estimateTokens(message);
+
   // Fetch conversations and connectors on mount
   useEffect(() => {
     if (canAccessPro) {
@@ -346,32 +377,41 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   }, [canAccessPro]);
 
-  // Load conversation and A2A context from URL on mount
+  // Load conversation and A2A context from URL on mount only
+  const initialLoadDone = useRef(false);
   useEffect(() => {
+    if (initialLoadDone.current) return;
+
     const convId = searchParams.get('c');
     const ctxId = searchParams.get('ctx');
-    if (convId && canAccessPro && !currentConversationId) {
-      loadConversation(convId);
+
+    if (canAccessPro) {
+      initialLoadDone.current = true;
+      if (convId) {
+        loadConversation(convId);
+      }
+      if (ctxId) {
+        setA2aContextId(ctxId);
+      }
     }
-    // Restore A2A contextId from URL - always sync from URL if present
-    if (ctxId) {
-      setA2aContextId(ctxId);
-    }
-  }, [searchParams, canAccessPro, currentConversationId]);
+  }, [searchParams, canAccessPro]);
 
   // Sync URL when conversation or contextId changes
+  // Only include ctx param when there's a conversation ID (ctx is meaningless without a saved conversation)
   useEffect(() => {
     const currentUrlConvId = searchParams.get('c');
     const currentUrlCtxId = searchParams.get('ctx');
 
-    // Build URL params
+    // Build URL params - only include ctx if there's a conversation
     const params = new URLSearchParams();
     if (currentConversationId) {
       params.set('c', currentConversationId);
+      // Only include ctx when we have a conversation ID
+      if (a2aContextId) {
+        params.set('ctx', a2aContextId);
+      }
     }
-    if (a2aContextId) {
-      params.set('ctx', a2aContextId);
-    }
+    // If no conversation ID, don't include ctx in URL (it's a new chat)
 
     const newUrl = params.toString() ? `/chat?${params.toString()}` : '/chat';
     const currentUrl = currentUrlConvId || currentUrlCtxId
@@ -808,7 +848,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       if (response.ok) {
         const data = await response.json();
         setCurrentConversationId(convId);
-        setSelectedModel(data.conversation.model_id);
+
+        const modelId = data.conversation.model_id;
+
+        // Always restore a2a_context_id from the conversation (or clear if not present)
+        setA2aContextId(data.conversation.a2a_context_id || null);
+
+        // Restore the model selection (works for both regular AI models and external agents)
+        if (modelId) {
+          setSelectedModel(modelId);
+        }
+
         setMessages(
           (data.messages || []).map((m: any) => ({
             id: m.id,
@@ -884,8 +934,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }
 
         // Store the context ID (task ID) for conversation continuity
-        // Only set if we don't already have one (preserve existing context)
-        if (a2aResponse.contextId && !a2aContextId) {
+        // Always update if server returns a contextId (it may change between messages)
+        if (a2aResponse.contextId && a2aResponse.contextId !== a2aContextId) {
           setA2aContextId(a2aResponse.contextId);
         }
 
@@ -896,8 +946,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           content: assistantMessageContent,
           timestamp: new Date(),
           model: `agent:${selectedAgentConnector.id}`,
+          // Store both input and output tokens on assistant message for cost calculation (external agents are free)
           tokens: {
-            input: 0, // Input tokens shown on user message
+            input: a2aResponse.inputTokens || 0,
             output: a2aResponse.outputTokens || 0,
           },
         };
@@ -922,6 +973,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         });
 
         // Save messages to conversation for history persistence
+        // Use the latest contextId (either from response or existing)
+        const contextIdToSave = a2aResponse.contextId || a2aContextId;
         try {
           const saveResponse = await fetch('/api/a2a/messages', {
             method: 'POST',
@@ -933,6 +986,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               assistantMessage: assistantMessageContent,
               inputTokens: a2aResponse.inputTokens || 0,
               outputTokens: a2aResponse.outputTokens || 0,
+              a2aContextId: contextIdToSave,
             }),
           });
 
@@ -1002,10 +1056,28 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           content: data.content,
           timestamp: new Date(),
           model: selectedModel,
-          tokens: data.usage,
+          // Store both input and output tokens on assistant message for cost calculation
+          tokens: { input: data.usage?.input || 0, output: data.usage?.output || 0 },
         };
 
-        setMessages(prev => [...prev, assistantMessage]);
+        // Update user message with input tokens (for display) and add assistant message
+        setMessages(prev => {
+          const updated = [...prev];
+          // Find the last user message and add input tokens
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'user' && updated[i].id === userMessage.id) {
+              updated[i] = {
+                ...updated[i],
+                tokens: {
+                  input: data.usage?.input || 0,
+                  output: 0,
+                },
+              };
+              break;
+            }
+          }
+          return [...updated, assistantMessage];
+        });
 
         // Update last message tokens for display
         if (data.usage) {
@@ -1300,6 +1372,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               const isAgentMessage = msg.model?.startsWith('agent:');
               const agentConnectorId = isAgentMessage ? msg.model?.replace('agent:', '') : null;
               const agentConnector = agentConnectorId ? connectors.find(c => c.id === agentConnectorId) : null;
+              // Look up the model data for this specific message
+              const msgModelData = msg.model ? AI_MODELS.find(m => m.id === msg.model) : null;
 
               return (
                 <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -1318,13 +1392,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                           </>
                         ) : (
                           <>
-                            <span>{selectedModelData?.icon}</span>
-                            <span>{selectedModelData?.name}</span>
+                            <span>{msgModelData?.icon || selectedModelData?.icon}</span>
+                            <span>{msgModelData?.name || selectedModelData?.name || 'AI'}</span>
                           </>
                         )}
                       </div>
                     )}
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.95rem' }}>{formatMessageContent(msg.content)}</div>
+                    {msg.role === 'assistant' ? (
+                      <MarkdownContent content={msg.content} />
+                    ) : (
+                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.95rem' }}>{formatMessageContent(msg.content)}</div>
+                    )}
                     {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0) && (
                       <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {msg.role === 'user' && msg.tokens.input > 0 && (
@@ -1333,7 +1411,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                         {msg.role === 'assistant' && msg.tokens.output > 0 && (
                           <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output} generated</span>
                         )}
-                        {isAgentMessage && msg.role === 'assistant' && <span style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: 'rgba(255,255,255,0.5)' }}>$0.00</span>}
+                        {msg.role === 'assistant' && (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: isAgentMessage ? 'rgba(255,255,255,0.5)' : '#f59e0b' }}>
+                            {isAgentMessage ? '$0.00' : formatCurrency(calculateTokenCost(msg.model || selectedModel, msg.tokens.input, msg.tokens.output))}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1359,6 +1441,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       {/* Fixed Input Bar - Bottom */}
       <div className="chat-fullscreen-input">
         <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+          {/* Aggregated token stats */}
+          {messages.length > 0 && (conversationTokens.input > 0 || conversationTokens.output > 0) && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.7rem' }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+                Conversation:
+                <span style={{ color: '#10b981', marginLeft: '0.35rem' }}>↑ {formatTokenCount(conversationTokens.input)} in</span>
+                <span style={{ color: '#60a5fa', marginLeft: '0.5rem' }}>↓ {formatTokenCount(conversationTokens.output)} out</span>
+                <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>{formatCurrency(conversationCost)}</span>
+              </span>
+            </div>
+          )}
+
           {/* Error message */}
           {error && (
             <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', color: '#ef4444', fontSize: '0.8rem' }}>
@@ -1379,22 +1473,35 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               )}
             </button>
 
-            {/* Textarea */}
-            <textarea
-              value={message}
-              onChange={(e) => {
-                setMessage(e.target.value);
-                const textarea = e.target;
-                textarea.style.height = 'auto';
-                const maxHeight = 120;
-                textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${selectedModelData?.name || 'AI'}...`}
-              disabled={isQuotaExceeded || isLoading}
-              rows={1}
-              style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '0.75rem 1rem', color: '#fff', fontSize: '1rem', lineHeight: 1.4, resize: 'none', minHeight: '44px', maxHeight: '120px', outline: 'none', fontFamily: 'inherit' }}
-            />
+            {/* Textarea with token counter */}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <textarea
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  const textarea = e.target;
+                  textarea.style.height = 'auto';
+                  const maxHeight = 120;
+                  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={isQuotaExceeded ? 'Quota exceeded' : `Message ${selectedModelData?.name || 'AI'}...`}
+                disabled={isQuotaExceeded || isLoading}
+                rows={1}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '0.75rem 1rem', paddingRight: '5rem', color: '#fff', fontSize: '1rem', lineHeight: 1.4, resize: 'none', minHeight: '44px', maxHeight: '120px', outline: 'none', fontFamily: 'inherit' }}
+              />
+              {/* Live token counter */}
+              {(currentInputTokens > 0 || totalSystemPromptTokens > 0) && (
+                <div style={{ position: 'absolute', right: '0.75rem', bottom: '0.75rem', display: 'flex', gap: '0.25rem', fontSize: '0.65rem', pointerEvents: 'none' }}>
+                  {currentInputTokens > 0 && (
+                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>{currentInputTokens}</span>
+                  )}
+                  {totalSystemPromptTokens > 0 && (
+                    <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>+{totalSystemPromptTokens} 🎭</span>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Send button */}
             <button

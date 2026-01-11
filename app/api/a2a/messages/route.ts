@@ -24,6 +24,7 @@ interface SaveMessagesRequest {
   assistantMessage: string;
   inputTokens?: number;
   outputTokens?: number;
+  a2aContextId?: string; // External agent's context/task ID
 }
 
 export async function POST(request: NextRequest) {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: SaveMessagesRequest = await request.json();
-    const { conversationId, modelId, userMessage, assistantMessage, inputTokens, outputTokens } = body;
+    const { conversationId, modelId, userMessage, assistantMessage, inputTokens, outputTokens, a2aContextId } = body;
 
     let activeConversationId = conversationId;
 
@@ -49,13 +50,18 @@ export async function POST(request: NextRequest) {
         ? userMessage.substring(0, 47) + '...'
         : userMessage;
 
+      const insertData: Record<string, unknown> = {
+        user_id: userId,
+        title,
+        model_id: modelId,
+      };
+      if (a2aContextId) {
+        insertData.a2a_context_id = a2aContextId;
+      }
+
       const { data: newConv, error: convError } = await supabase
         .from('chat_conversations')
-        .insert({
-          user_id: userId,
-          title,
-          model_id: modelId,
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -65,6 +71,12 @@ export async function POST(request: NextRequest) {
       }
 
       activeConversationId = newConv?.id;
+    } else if (a2aContextId) {
+      // Update existing conversation with a2a_context_id if provided
+      await supabase
+        .from('chat_conversations')
+        .update({ a2a_context_id: a2aContextId })
+        .eq('id', activeConversationId);
     }
 
     if (!activeConversationId) {
