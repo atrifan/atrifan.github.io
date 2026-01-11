@@ -817,7 +817,7 @@ export interface GraphQLOperationWithTool extends GraphQLOperationRow {
 // ============ MCP Servers Table ============
 
 /** MCP Server auth types */
-export type MCPServerAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
+export type MCPServerAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
 
 /**
  * MCP Server record in Supabase
@@ -950,7 +950,7 @@ export interface MCPServerToolWithDetails extends MCPServerToolRow {
 // ============ A2A Agents Table ============
 
 /** A2A Agent authentication types */
-export type A2AAgentAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
+export type A2AAgentAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
 
 /**
  * A2A Agent record in Supabase

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
-import { AuthenticationCard } from '../components/AuthenticationCard';
+import { AuthenticationCard, AuthType, OAuth2Config, defaultOAuth2Config } from '../components/AuthenticationCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -235,11 +235,13 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
   const [urlApiKey, setUrlApiKey] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [basicCredentials, setBasicCredentials] = useState('');
-  const [authType, setAuthType] = useState<'none' | 'api_key' | 'bearer' | 'basic'>('none');
+  const [authType, setAuthType] = useState<AuthType>('none');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
   const [showBasicCredentials, setShowBasicCredentials] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string | null>(null);
+  const [oauth2Config, setOAuth2Config] = useState<OAuth2Config>(defaultOAuth2Config);
+  const [showClientSecret, setShowClientSecret] = useState(false);
 
   // Custom headers state
   const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
@@ -514,7 +516,7 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
       const headerObj = buildHeaders();
 
       // Determine auth type for storage
-      let storedAuthType: 'none' | 'api_key' | 'bearer' | 'basic' = 'none';
+      let storedAuthType: AuthType = 'none';
       if (urlApiKey.trim()) {
         storedAuthType = 'api_key';
       } else if (authToken.trim()) {
@@ -937,6 +939,10 @@ export function GraphQLImportPage({ isPro, isPlus }: GraphQLImportPageProps) {
               onShowBasicCredentialsToggle={() => setShowBasicCredentials(!showBasicCredentials)}
               authType={authType}
               onAuthTypeChange={setAuthType}
+              oauth2Config={oauth2Config}
+              onOAuth2ConfigChange={setOAuth2Config}
+              showClientSecret={showClientSecret}
+              onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
               description="If your GraphQL endpoint requires authentication, provide credentials below."
               inputStyle={inputStyle}
             />

@@ -2,6 +2,32 @@
 
 import { CSSProperties } from 'react';
 
+// Auth type union
+export type AuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+
+// OAuth2 configuration interface
+export interface OAuth2Config {
+  enabled: boolean;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  scopes: string;
+  useDcr: boolean;
+  clientId: string;
+  clientSecret: string;
+  registrationEndpoint: string;
+}
+
+export const defaultOAuth2Config: OAuth2Config = {
+  enabled: false,
+  authorizationEndpoint: '',
+  tokenEndpoint: '',
+  scopes: '',
+  useDcr: false,
+  clientId: '',
+  clientSecret: '',
+  registrationEndpoint: '',
+};
+
 export interface AuthenticationCardProps {
   // API Key
   apiKey: string;
@@ -10,23 +36,29 @@ export interface AuthenticationCardProps {
   onShowApiKeyToggle: () => void;
   userApiKey: string | null;
   onUseMyApiKey?: () => void;
-  
+
   // Bearer Token
   bearerToken: string;
   onBearerTokenChange: (value: string) => void;
   showBearerToken: boolean;
   onShowBearerTokenToggle: () => void;
-  
+
   // Basic Auth
   basicCredentials: string;
   onBasicCredentialsChange: (value: string) => void;
   showBasicCredentials: boolean;
   onShowBasicCredentialsToggle: () => void;
-  
+
   // Auth type (for highlighting active type)
-  authType: 'none' | 'api_key' | 'bearer' | 'basic';
-  onAuthTypeChange: (type: 'none' | 'api_key' | 'bearer' | 'basic') => void;
-  
+  authType: AuthType;
+  onAuthTypeChange: (type: AuthType) => void;
+
+  // OAuth2 (optional - for backwards compatibility)
+  oauth2Config?: OAuth2Config;
+  onOAuth2ConfigChange?: (config: OAuth2Config) => void;
+  showClientSecret?: boolean;
+  onShowClientSecretToggle?: () => void;
+
   // Customization
   description?: string;
   inputStyle: CSSProperties;
@@ -49,10 +81,36 @@ export function AuthenticationCard({
   onShowBasicCredentialsToggle,
   authType,
   onAuthTypeChange,
+  oauth2Config,
+  onOAuth2ConfigChange,
+  showClientSecret = false,
+  onShowClientSecretToggle,
   description = 'If your endpoint requires authentication, provide credentials below.',
   inputStyle,
 }: AuthenticationCardProps) {
-  
+
+  const isOAuth2Enabled = oauth2Config?.enabled ?? false;
+
+  const handleOAuth2Toggle = () => {
+    if (!onOAuth2ConfigChange) return;
+    const newEnabled = !isOAuth2Enabled;
+    onOAuth2ConfigChange({ ...(oauth2Config || defaultOAuth2Config), enabled: newEnabled });
+    if (newEnabled) {
+      onAuthTypeChange('oauth2');
+      // Clear other auth fields
+      onApiKeyChange('');
+      onBearerTokenChange('');
+      onBasicCredentialsChange('');
+    } else {
+      onAuthTypeChange('none');
+    }
+  };
+
+  const updateOAuth2Field = (field: keyof OAuth2Config, value: string | boolean) => {
+    if (!onOAuth2ConfigChange || !oauth2Config) return;
+    onOAuth2ConfigChange({ ...oauth2Config, [field]: value });
+  };
+
   const handleApiKeyChange = (value: string) => {
     onApiKeyChange(value);
     if (value.trim()) onAuthTypeChange('api_key');
@@ -95,6 +153,14 @@ export function AuthenticationCard({
     fontSize: '0.9rem',
   };
 
+  const disabledInputStyle: CSSProperties = {
+    ...inputStyle,
+    fontSize: '0.9rem',
+    paddingRight: '3rem',
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  };
+
   return (
     <div style={{
       background: 'rgba(251, 191, 36, 0.1)',
@@ -110,10 +176,138 @@ export function AuthenticationCard({
         {description}
       </p>
 
+      {/* OAuth2 Toggle - only show if OAuth2 props are provided */}
+      {onOAuth2ConfigChange && (
+        <div style={{ marginBottom: '1rem', padding: '0.75rem', background: isOAuth2Enabled ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', border: isOAuth2Enabled ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={isOAuth2Enabled}
+              onChange={handleOAuth2Toggle}
+              style={{ width: '18px', height: '18px', accentColor: '#8b5cf6', cursor: 'pointer' }}
+            />
+            <span style={{ color: isOAuth2Enabled ? '#a78bfa' : 'rgba(255,255,255,0.7)', fontSize: '0.85rem', fontWeight: 600 }}>
+              🔑 Use OAuth 2.0
+            </span>
+          </label>
+
+          {/* OAuth2 Configuration Fields */}
+          {isOAuth2Enabled && oauth2Config && (
+            <div style={{ marginTop: '1rem' }}>
+              {/* Authorization Endpoint */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                  Authorization Endpoint <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="url"
+                  value={oauth2Config.authorizationEndpoint}
+                  onChange={(e) => updateOAuth2Field('authorizationEndpoint', e.target.value)}
+                  placeholder="https://auth.example.com/authorize"
+                  style={{ ...inputStyle, fontSize: '0.85rem' }}
+                />
+              </div>
+
+              {/* Token Endpoint */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                  Token Endpoint <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="url"
+                  value={oauth2Config.tokenEndpoint}
+                  onChange={(e) => updateOAuth2Field('tokenEndpoint', e.target.value)}
+                  placeholder="https://auth.example.com/token"
+                  style={{ ...inputStyle, fontSize: '0.85rem' }}
+                />
+              </div>
+
+              {/* Scopes */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                  Scopes <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={oauth2Config.scopes}
+                  onChange={(e) => updateOAuth2Field('scopes', e.target.value)}
+                  placeholder="openid profile email (space-separated)"
+                  style={{ ...inputStyle, fontSize: '0.85rem' }}
+                />
+              </div>
+
+              {/* DCR Toggle */}
+              <div style={{ marginTop: '1rem', padding: '0.75rem', background: oauth2Config.useDcr ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)', borderRadius: '6px', border: oauth2Config.useDcr ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: oauth2Config.useDcr ? '0.75rem' : 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={oauth2Config.useDcr}
+                    onChange={(e) => updateOAuth2Field('useDcr', e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: oauth2Config.useDcr ? '#10b981' : 'rgba(255,255,255,0.6)', fontSize: '0.8rem', fontWeight: 500 }}>
+                    Use Dynamic Client Registration (DCR)
+                  </span>
+                </label>
+
+                {oauth2Config.useDcr ? (
+                  /* DCR Registration Endpoint */
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                      Registration Endpoint <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={oauth2Config.registrationEndpoint}
+                      onChange={(e) => updateOAuth2Field('registrationEndpoint', e.target.value)}
+                      placeholder="https://auth.example.com/register"
+                      style={{ ...inputStyle, fontSize: '0.85rem' }}
+                    />
+                  </div>
+                ) : (
+                  /* Manual Client Credentials */
+                  <>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                        Client ID
+                      </label>
+                      <input
+                        type="text"
+                        value={oauth2Config.clientId}
+                        onChange={(e) => updateOAuth2Field('clientId', e.target.value)}
+                        placeholder="your-client-id"
+                        style={{ ...inputStyle, fontSize: '0.85rem' }}
+                      />
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                        Client Secret
+                      </label>
+                      <input
+                        type={showClientSecret ? 'text' : 'password'}
+                        value={oauth2Config.clientSecret}
+                        onChange={(e) => updateOAuth2Field('clientSecret', e.target.value)}
+                        placeholder="your-client-secret"
+                        style={{ ...inputStyle, fontSize: '0.85rem', paddingRight: '3rem' }}
+                      />
+                      {onShowClientSecretToggle && (
+                        <button type="button" onClick={onShowClientSecretToggle} style={eyeButtonStyle}>
+                          {showClientSecret ? '🙈' : '👁️'}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* API Key */}
-      <div style={{ marginBottom: '0.75rem' }}>
+      <div style={{ marginBottom: '0.75rem', opacity: isOAuth2Enabled ? 0.5 : 1 }}>
         <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
-          API Key (x-api-key header) {userApiKey && <span style={{ color: '#10b981', fontSize: '0.7rem' }}>• Your API key available</span>}
+          API Key (x-api-key header) {userApiKey && !isOAuth2Enabled && <span style={{ color: '#10b981', fontSize: '0.7rem' }}>• Your API key available</span>}
         </label>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <div style={{ position: 'relative', flex: 1 }}>
@@ -122,13 +316,14 @@ export function AuthenticationCard({
               value={apiKey}
               onChange={(e) => handleApiKeyChange(e.target.value)}
               placeholder="Your API key (optional)"
-              style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
+              disabled={isOAuth2Enabled}
+              style={isOAuth2Enabled ? disabledInputStyle : { ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
             />
-            <button type="button" onClick={onShowApiKeyToggle} style={eyeButtonStyle}>
+            <button type="button" onClick={onShowApiKeyToggle} style={eyeButtonStyle} disabled={isOAuth2Enabled}>
               {showApiKey ? '🙈' : '👁️'}
             </button>
           </div>
-          {userApiKey && (
+          {userApiKey && !isOAuth2Enabled && (
             <button
               type="button"
               onClick={() => {
@@ -155,15 +350,15 @@ export function AuthenticationCard({
       </div>
 
       {/* Bearer Token / Basic Auth */}
-      <div style={{ marginBottom: '0.5rem' }}>
+      <div style={{ marginBottom: '0.5rem', opacity: isOAuth2Enabled ? 0.5 : 1 }}>
         <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.25rem' }}>
           Authorization Header
         </label>
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <button type="button" onClick={() => bearerToken.trim() && onAuthTypeChange('bearer')} style={toggleButtonStyle(authType === 'bearer' && !!bearerToken.trim())}>
+          <button type="button" onClick={() => !isOAuth2Enabled && bearerToken.trim() && onAuthTypeChange('bearer')} style={{ ...toggleButtonStyle(authType === 'bearer' && !!bearerToken.trim()), opacity: isOAuth2Enabled ? 0.5 : 1, cursor: isOAuth2Enabled ? 'not-allowed' : 'pointer' }} disabled={isOAuth2Enabled}>
             Bearer Token
           </button>
-          <button type="button" onClick={() => basicCredentials.trim() && onAuthTypeChange('basic')} style={toggleButtonStyle(authType === 'basic' && !!basicCredentials.trim())}>
+          <button type="button" onClick={() => !isOAuth2Enabled && basicCredentials.trim() && onAuthTypeChange('basic')} style={{ ...toggleButtonStyle(authType === 'basic' && !!basicCredentials.trim()), opacity: isOAuth2Enabled ? 0.5 : 1, cursor: isOAuth2Enabled ? 'not-allowed' : 'pointer' }} disabled={isOAuth2Enabled}>
             Basic Auth
           </button>
         </div>
@@ -173,9 +368,10 @@ export function AuthenticationCard({
             value={bearerToken}
             onChange={(e) => handleBearerTokenChange(e.target.value)}
             placeholder="Your bearer token (optional)"
-            style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
+            disabled={isOAuth2Enabled}
+            style={isOAuth2Enabled ? disabledInputStyle : { ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
           />
-          <button type="button" onClick={onShowBearerTokenToggle} style={eyeButtonStyle}>
+          <button type="button" onClick={onShowBearerTokenToggle} style={eyeButtonStyle} disabled={isOAuth2Enabled}>
             {showBearerToken ? '🙈' : '👁️'}
           </button>
         </div>
@@ -185,9 +381,10 @@ export function AuthenticationCard({
             value={basicCredentials}
             onChange={(e) => handleBasicCredentialsChange(e.target.value)}
             placeholder="username:password or base64 encoded (optional)"
-            style={{ ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
+            disabled={isOAuth2Enabled}
+            style={isOAuth2Enabled ? disabledInputStyle : { ...inputStyle, fontSize: '0.9rem', paddingRight: '3rem' }}
           />
-          <button type="button" onClick={onShowBasicCredentialsToggle} style={eyeButtonStyle}>
+          <button type="button" onClick={onShowBasicCredentialsToggle} style={eyeButtonStyle} disabled={isOAuth2Enabled}>
             {showBasicCredentials ? '🙈' : '👁️'}
           </button>
         </div>

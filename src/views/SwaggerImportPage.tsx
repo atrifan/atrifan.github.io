@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Footer } from '../components/Footer';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
-import { AuthenticationCard } from '../components/AuthenticationCard';
+import { AuthenticationCard, AuthType, OAuth2Config, defaultOAuth2Config } from '../components/AuthenticationCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -56,12 +56,14 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
   const [urlApiKey, setUrlApiKey] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [basicCredentials, setBasicCredentials] = useState('');
-  const [authType, setAuthType] = useState<'none' | 'api_key' | 'bearer' | 'basic'>('none');
+  const [authType, setAuthType] = useState<AuthType>('none');
   const [defaultHostFromUrl, setDefaultHostFromUrl] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAuthToken, setShowAuthToken] = useState(false);
   const [showBasicCredentials, setShowBasicCredentials] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string | null>(null);
+  const [oauth2Config, setOAuth2Config] = useState<OAuth2Config>(defaultOAuth2Config);
+  const [showClientSecret, setShowClientSecret] = useState(false);
 
   // Custom headers state
   const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
@@ -951,6 +953,10 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
             onShowBasicCredentialsToggle={() => setShowBasicCredentials(!showBasicCredentials)}
             authType={authType}
             onAuthTypeChange={setAuthType}
+            oauth2Config={oauth2Config}
+            onOAuth2ConfigChange={setOAuth2Config}
+            showClientSecret={showClientSecret}
+            onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
             description="If your Swagger endpoint requires authentication, provide credentials below."
             inputStyle={inputStyle}
           />
