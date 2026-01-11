@@ -303,9 +303,10 @@ export async function POST(request: NextRequest) {
 
     console.log('[A2A Proxy] Extracted content:', content || '(empty)');
 
-    // Estimate tokens - include system prompts in input calculation
+    // Estimate tokens - only count current message, not full history
     const systemPromptText = systemPrompts ? systemPrompts.join(' ') : '';
-    const inputText = systemPromptText + ' ' + messages.map(m => m.content).join(' ');
+    const currentMessage = messages[messages.length - 1]?.content || '';
+    const inputText = systemPromptText + ' ' + currentMessage;
     const inputTokens = Math.ceil(inputText.length / 4);
     const outputTokens = Math.ceil(content.length / 4);
 

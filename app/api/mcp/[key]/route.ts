@@ -160,7 +160,13 @@ async function forwardToMCP(request: NextRequest, user: ApiKeyUser) {
   const body = await request.text();
 
   // Get the base URL for internal request
-  const baseUrl = request.nextUrl.origin;
+  // Use localhost for internal requests - going through external URL (ngrok/proxy) causes SSL issues
+  const externalOrigin = request.nextUrl.origin;
+  const isLocalDev = process.env.NODE_ENV === 'development';
+  const port = process.env.PORT || '3000';
+  const baseUrl = isLocalDev ? `http://localhost:${port}` : externalOrigin;
+
+  console.log('[MCP Key Route] Forwarding to:', `${baseUrl}/api/mcp`, '(external origin was:', externalOrigin, ')');
 
   // Forward client info for connection logging
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
@@ -237,11 +243,12 @@ export async function POST(
 
   try {
     return await forwardToMCP(request, user);
-  } catch {
+  } catch (err) {
+    console.error('[MCP Key Route] Error forwarding to MCP:', err);
     return NextResponse.json({
       jsonrpc: '2.0',
       id: null,
-      error: { code: -32700, message: 'Parse error' }
+      error: { code: -32700, message: `Parse error: ${err instanceof Error ? err.message : 'Unknown error'}` }
     }, { status: 400 });
   }
 }
