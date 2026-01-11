@@ -757,19 +757,26 @@ button:active:not(:disabled),
   height: 100dvh;
 }
 
+/* Lock body scroll when chat is active */
+body.chat-page-active {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .chat-fullscreen-header {
   flex-shrink: 0;
-  padding: 0.75rem 1rem;
-  background: rgba(10, 10, 20, 0.95);
+  padding: 0.5rem 0.75rem;
+  background: rgba(10, 10, 20, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  /* Hide on mobile - settings overlay has all this info */
-  display: none;
+  /* Show on all devices */
+  display: block;
 }
 
 @media (min-width: 768px) {
   .chat-fullscreen-header {
-    display: block;
     padding: 1rem 2rem;
   }
 }
@@ -777,11 +784,15 @@ button:active:not(:disabled),
 .chat-fullscreen-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
   padding-bottom: 1rem;
   /* Hide scrollbar but keep scroll functionality */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
+  /* Prevent body scroll bleed-through */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-fullscreen-messages::-webkit-scrollbar {
@@ -794,6 +805,11 @@ button:active:not(:disabled),
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0.75rem 1rem;
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  /* Allow dropdowns to overflow upward */
+  overflow: visible;
+  /* Ensure input area is above messages for dropdown visibility */
+  position: relative;
+  z-index: 50;
 }
 
 /* Hide scrollbar on chat textarea */
@@ -806,16 +822,28 @@ button:active:not(:disabled),
   display: none; /* Chrome, Safari, Opera */
 }
 
-/* Mobile: add top padding to account for fixed header */
+/* Mobile: fixed header and input */
 @media (max-width: 767px) {
+  .chat-fullscreen {
+    /* Ensure full viewport coverage */
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+
   .chat-fullscreen-messages {
-    padding-top: 60px; /* Height of mobile header */
+    /* No extra padding needed - flex handles layout */
+    padding-top: 1rem;
+    /* Critical: allow flex shrinking */
+    min-height: 0;
+    flex: 1 1 0;
   }
 
   /* Mobile keyboard handling - works on iOS Safari, Chrome, Edge */
   .chat-fullscreen-input {
     /* Prevent zoom on input focus */
     touch-action: manipulation;
+    /* Stay at bottom */
+    flex-shrink: 0;
   }
 
   .chat-fullscreen-input textarea {
@@ -834,23 +862,5 @@ button:active:not(:disabled),
 
   .chat-fullscreen-input {
     padding: 1rem 2rem;
-  }
-}
-
-/* Mobile keyboard viewport fix - universal approach */
-@media (max-width: 767px) {
-  /* Use dvh for dynamic viewport that responds to keyboard */
-  .chat-fullscreen {
-    height: 100dvh;
-    /* Fallbacks for older browsers */
-    height: -webkit-fill-available;
-  }
-
-  /* When keyboard is open, ensure messages scroll properly */
-  .chat-fullscreen-messages {
-    /* Allow flex to handle the remaining space */
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
 }

@@ -1329,8 +1329,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               <span className="desktop-only">New</span>
             </button>
 
-            {/* History button */}
-            <button onClick={() => { setShowHistory(!showHistory); setShowConnectors(false); setShowPersonalities(false); }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
+            {/* History button - opens overlay on mobile, sidebar on desktop */}
+            <button onClick={() => {
+              if (isMobile) {
+                setShowMobileOverlay(true);
+                setMobileOverlayMode('main');
+              } else {
+                setShowHistory(!showHistory);
+                setShowConnectors(false);
+                setShowPersonalities(false);
+              }
+            }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
               📜
               {conversations.length > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#8b5cf6', color: '#fff', borderRadius: '8px', padding: '0 0.25rem', fontSize: '0.55rem', fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{conversations.length > 99 ? '99+' : conversations.length}</span>}
             </button>
@@ -1338,8 +1347,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         </div>
       </div>
 
-      {/* Messages Area - Scrollable */}
-      <div className="chat-fullscreen-messages" style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+      {/* Messages Area - Scrollable (full width for scroll, content centered) */}
+      <div className="chat-fullscreen-messages">
+        <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
         {/* Sidebar panels - slide in from left on desktop */}
         {(showHistory || showConnectors || showPersonalities) && (
           <div style={{ position: 'fixed', top: '60px', left: 0, bottom: '80px', width: '280px', background: 'rgba(10, 10, 20, 0.98)', borderRight: '1px solid rgba(255,255,255,0.1)', padding: '1rem', overflowY: 'auto', zIndex: 100 }} className="desktop-only">
@@ -1543,6 +1553,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             <div ref={messagesEndRef} />
           </div>
         )}
+        </div>
       </div>
 
       {/* Fixed Input Bar - Bottom */}
