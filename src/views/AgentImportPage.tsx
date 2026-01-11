@@ -7,6 +7,7 @@ import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { AuthenticationCard, OAuth2Config, defaultOAuth2Config } from '../components/AuthenticationCard';
+import { CustomHeadersCard, CustomHeader } from '../components/CustomHeadersCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -64,8 +65,7 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
   const [showClientSecret, setShowClientSecret] = useState(false);
 
   // Custom headers state
-  const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
-  const [showCustomHeaders, setShowCustomHeaders] = useState(false);
+  const [customHeaders, setCustomHeaders] = useState<CustomHeader[]>([]);
 
   // Agent card state
   const [agentCard, setAgentCard] = useState<AgentCard | null>(null);
@@ -776,57 +776,11 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
             />
 
             {/* Custom Headers */}
-            <div style={{ marginTop: '1rem' }}>
-              <button
-                onClick={() => setShowCustomHeaders(!showCustomHeaders)}
-                style={{ ...secondaryButtonStyle, padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-              >
-                {showCustomHeaders ? '▼' : '▶'} Custom Headers ({customHeaders.length})
-              </button>
-
-              {showCustomHeaders && (
-                <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-                  {customHeaders.map((header, index) => (
-                    <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <input
-                        type="text"
-                        value={header.key}
-                        onChange={(e) => {
-                          const newHeaders = [...customHeaders];
-                          newHeaders[index].key = e.target.value;
-                          setCustomHeaders(newHeaders);
-                        }}
-                        placeholder="Header name"
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
-                      <input
-                        type="text"
-                        value={header.value}
-                        onChange={(e) => {
-                          const newHeaders = [...customHeaders];
-                          newHeaders[index].value = e.target.value;
-                          setCustomHeaders(newHeaders);
-                        }}
-                        placeholder="Value"
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
-                      <button
-                        onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
-                        style={{ ...secondaryButtonStyle, padding: '0.5rem', color: '#ef4444' }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
-                    style={{ ...secondaryButtonStyle, padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                  >
-                    + Add Header
-                  </button>
-                </div>
-              )}
-            </div>
+            <CustomHeadersCard
+              headers={customHeaders}
+              onHeadersChange={setCustomHeaders}
+              inputStyle={inputStyle}
+            />
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={() => setCurrentStep('agent-name')} style={secondaryButtonStyle}>

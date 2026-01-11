@@ -7,6 +7,7 @@ import { Footer } from '../components/Footer';
 import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { AuthenticationCard, AuthType, OAuth2Config, defaultOAuth2Config } from '../components/AuthenticationCard';
+import { CustomHeadersCard, CustomHeader } from '../components/CustomHeadersCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -66,8 +67,7 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
   const [showClientSecret, setShowClientSecret] = useState(false);
 
   // Custom headers state
-  const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
-  const [showCustomHeaders, setShowCustomHeaders] = useState(false);
+  const [customHeaders, setCustomHeaders] = useState<CustomHeader[]>([]);
 
   // UI state
   const [isValidating, setIsValidating] = useState(false);
@@ -962,88 +962,11 @@ export function SwaggerImportPage({ isPro, isPlus }: SwaggerImportPageProps) {
           />
 
           {/* Custom Headers */}
-          <div style={{ marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={() => setShowCustomHeaders(!showCustomHeaders)}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: 'none',
-                color: 'rgba(255,255,255,0.8)',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-              }}
-            >
-              {showCustomHeaders ? '▼' : '▶'} Custom Headers {customHeaders.length > 0 && `(${customHeaders.length})`}
-            </button>
-
-            {showCustomHeaders && (
-              <div style={{ marginTop: '0.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                {customHeaders.map((header, index) => (
-                  <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <input
-                      type="text"
-                      value={header.key}
-                      onChange={(e) => {
-                        const newHeaders = [...customHeaders];
-                        newHeaders[index].key = e.target.value;
-                        setCustomHeaders(newHeaders);
-                      }}
-                      placeholder="Header name"
-                      style={{ ...inputStyle, fontSize: '0.85rem', flex: 1 }}
-                    />
-                    <input
-                      type="text"
-                      value={header.value}
-                      onChange={(e) => {
-                        const newHeaders = [...customHeaders];
-                        newHeaders[index].value = e.target.value;
-                        setCustomHeaders(newHeaders);
-                      }}
-                      placeholder="Header value"
-                      style={{ ...inputStyle, fontSize: '0.85rem', flex: 2 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        border: 'none',
-                        color: '#ef4444',
-                        borderRadius: '6px',
-                        padding: '0.5rem',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px dashed rgba(255,255,255,0.3)',
-                    color: 'rgba(255,255,255,0.7)',
-                    borderRadius: '6px',
-                    padding: '0.5rem 1rem',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    width: '100%',
-                  }}
-                >
-                  + Add Header
-                </button>
-              </div>
-            )}
-          </div>
+          <CustomHeadersCard
+            headers={customHeaders}
+            onHeadersChange={setCustomHeaders}
+            inputStyle={inputStyle}
+          />
 
           <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button onClick={handleBack} style={{ ...secondaryButtonStyle, flex: '1 1 auto', minWidth: '100px' }}>

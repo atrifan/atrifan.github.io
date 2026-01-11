@@ -7,6 +7,7 @@ import { SideAds } from '../components/SideAds';
 import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { AuthenticationCard, OAuth2Config, defaultOAuth2Config } from '../components/AuthenticationCard';
+import { CustomHeadersCard, CustomHeader } from '../components/CustomHeadersCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -81,8 +82,7 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
   const [showClientSecret, setShowClientSecret] = useState(false);
 
   // Custom headers state
-  const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
-  const [showCustomHeaders, setShowCustomHeaders] = useState(false);
+  const [customHeaders, setCustomHeaders] = useState<CustomHeader[]>([]);
 
   // Fetch result state
   const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
@@ -726,62 +726,12 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
               inputStyle={inputStyle}
             />
 
-            {/* Custom Headers Toggle */}
-            <div style={{ marginBottom: '1rem' }}>
-              <button
-                type="button"
-                onClick={() => setShowCustomHeaders(!showCustomHeaders)}
-                style={{ ...secondaryButtonStyle, padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-              >
-                {showCustomHeaders ? '▼' : '▶'} Custom Headers ({customHeaders.length})
-              </button>
-            </div>
-
             {/* Custom Headers */}
-            {showCustomHeaders && (
-              <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-                {customHeaders.map((header, index) => (
-                  <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      value={header.key}
-                      onChange={(e) => {
-                        const newHeaders = [...customHeaders];
-                        newHeaders[index].key = e.target.value;
-                        setCustomHeaders(newHeaders);
-                      }}
-                      placeholder="Header name"
-                      style={{ ...inputStyle, flex: 1, minWidth: '120px' }}
-                    />
-                    <input
-                      type="text"
-                      value={header.value}
-                      onChange={(e) => {
-                        const newHeaders = [...customHeaders];
-                        newHeaders[index].value = e.target.value;
-                        setCustomHeaders(newHeaders);
-                      }}
-                      placeholder="Header value"
-                      style={{ ...inputStyle, flex: 2, minWidth: '150px' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setCustomHeaders(customHeaders.filter((_, i) => i !== index))}
-                      style={{ ...secondaryButtonStyle, padding: '0.5rem 0.75rem', color: '#ef4444' }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setCustomHeaders([...customHeaders, { key: '', value: '' }])}
-                  style={{ ...secondaryButtonStyle, padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                >
-                  + Add Header
-                </button>
-              </div>
-            )}
+            <CustomHeadersCard
+              headers={customHeaders}
+              onHeadersChange={setCustomHeaders}
+              inputStyle={inputStyle}
+            />
 
             {/* Buttons */}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
