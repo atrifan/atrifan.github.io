@@ -1051,6 +1051,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             output: a2aResponse.outputTokens || 0
           });
         }
+
+        // Refresh budget data to update usage statistics display
+        fetchBudget();
       } else {
         // Handle regular AI model communication
         // Build system prompt from active personalities
