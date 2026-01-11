@@ -268,6 +268,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showChatConfig, setShowChatConfig] = useState(false);
   const chatConfigRef = useRef<HTMLDivElement>(null);
 
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'single' | 'all'; convId?: string } | null>(null);
+
   // Mobile overlay state
   const [showMobileOverlay, setShowMobileOverlay] = useState(false);
   const [mobileOverlayMode, setMobileOverlayMode] = useState<'main' | 'connectors' | 'personas' | 'add-connector' | 'add-persona'>('main');
@@ -436,6 +439,48 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       console.error('Failed to fetch conversations:', err);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  // Show delete confirmation modal for single conversation
+  const confirmDeleteConversation = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent loading the conversation
+    setDeleteConfirm({ type: 'single', convId });
+  };
+
+  // Show delete confirmation modal for all conversations
+  const confirmClearAllHistory = () => {
+    setDeleteConfirm({ type: 'all' });
+  };
+
+  // Execute the delete after confirmation
+  const executeDelete = async () => {
+    if (!deleteConfirm) return;
+
+    try {
+      if (deleteConfirm.type === 'single' && deleteConfirm.convId) {
+        const response = await fetch(`/api/ai/conversations/${deleteConfirm.convId}`, { method: 'DELETE' });
+        if (response.ok) {
+          setConversations(prev => prev.filter(c => c.id !== deleteConfirm.convId));
+          if (currentConversationId === deleteConfirm.convId) {
+            setCurrentConversationId(null);
+            setMessages([]);
+            setA2aContextId(null);
+          }
+        }
+      } else if (deleteConfirm.type === 'all') {
+        await Promise.all(conversations.map(conv =>
+          fetch(`/api/ai/conversations/${conv.id}`, { method: 'DELETE' })
+        ));
+        setConversations([]);
+        setCurrentConversationId(null);
+        setMessages([]);
+        setA2aContextId(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete:', err);
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -1123,14 +1168,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
             {showHistory && (
               <div>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 1rem' }}>📜 History</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: 0 }}>📜 History</h3>
+                  {conversations.length > 0 && (
+                    <button onClick={confirmClearAllHistory} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.25rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>
+                      🗑️ Clear All
+                    </button>
+                  )}
+                </div>
                 {conversations.length === 0 ? (
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
                 ) : (
                   conversations.map(conv => (
-                    <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowHistory(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
+                    <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowHistory(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`} style={{ position: 'relative' }}>
                       <div className="chat-history-title">{conv.title}</div>
-                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</span>
+                        <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.3rem' }} title="Delete">✕</button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -1587,14 +1642,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
                 {/* History Section */}
                 <div>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>📜 History</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📜 History</span>
+                    {conversations.length > 0 && (
+                      <button onClick={confirmClearAllHistory} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.2rem 0.4rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.65rem' }}>
+                        🗑️ Clear
+                      </button>
+                    )}
+                  </div>
                   {conversations.length === 0 ? (
                     <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
                   ) : (
                     <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                       {conversations.slice(0, 10).map(conv => (
                         <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowMobileOverlay(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
-                          <div className="chat-history-title">{conv.title}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="chat-history-title" style={{ flex: 1 }}>{conv.title}</div>
+                            <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
+                          </div>
                           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</div>
                         </div>
                       ))}
@@ -1690,6 +1755,33 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             ))}
             <button onClick={() => setConnectorInfoModal(null)} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setDeleteConfirm(null)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '320px', width: '100%', border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🗑️</div>
+              <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 0.5rem' }}>
+                {deleteConfirm.type === 'all' ? 'Clear All History?' : 'Delete Conversation?'}
+              </h3>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>
+                {deleteConfirm.type === 'all'
+                  ? 'This will permanently delete all your conversations. This action cannot be undone.'
+                  : 'This conversation will be permanently deleted.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                Cancel
+              </button>
+              <button onClick={executeDelete} style={{ flex: 1, padding: '0.75rem', background: 'linear-gradient(135deg, #ef4444, #dc2626)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

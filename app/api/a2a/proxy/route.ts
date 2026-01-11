@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,22 +40,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'messages are required' }, { status: 400 });
     }
 
-    // Build headers for the external request
+    // Build headers for the external request - only Content-Type, no auth for now
+    // Explicitly request non-streaming JSON response
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...customHeaders,
+      'Accept': 'application/json',
+      'Connection': 'keep-alive',
+      'User-Agent': 'ZipRunPlace-A2A-Client/1.0',
     };
 
-    // Add authentication headers based on auth type
-    if (authType === 'bearer' && authConfig?.token) {
-      headers['Authorization'] = `Bearer ${authConfig.token}`;
-    } else if (authType === 'api_key' && authConfig?.key) {
-      const headerName = authConfig.headerName || 'X-API-Key';
-      headers[headerName] = authConfig.key;
-    } else if (authType === 'basic' && authConfig?.username && authConfig?.password) {
-      const credentials = Buffer.from(`${authConfig.username}:${authConfig.password}`).toString('base64');
-      headers['Authorization'] = `Basic ${credentials}`;
+    // Add custom headers if provided (but filter out auth headers for now)
+    if (customHeaders) {
+      for (const [key, value] of Object.entries(customHeaders)) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey !== 'authorization' && !lowerKey.includes('bearer') && !lowerKey.includes('token')) {
+          headers[key] = value;
+        }
+      }
     }
+
+    // Skip auth headers for A2A chat for now
+    // TODO: Re-enable when auth is properly configured
+    // if (authType === 'bearer' && authConfig?.token) {
+    //   headers['Authorization'] = `Bearer ${authConfig.token}`;
+    // } else if (authType === 'api_key' && authConfig?.key) {
+    //   const headerName = authConfig.headerName || 'X-API-Key';
+    //   headers[headerName] = authConfig.key;
+    // } else if (authType === 'basic' && authConfig?.username && authConfig?.password) {
+    //   const credentials = Buffer.from(`${authConfig.username}:${authConfig.password}`).toString('base64');
+    //   headers['Authorization'] = `Basic ${credentials}`;
+    // }
+
+    console.log('[A2A Proxy] Request headers:', JSON.stringify(headers, null, 2));
 
     // Build message parts - include system prompts if provided
     const messageParts: Array<{ type: string; text: string }> = [];
@@ -74,25 +91,29 @@ export async function POST(request: NextRequest) {
 
     // A2A protocol request format
     // - id (JSON-RPC id): unique for each request
-    // - params.contextId: reused for conversation continuity
-    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // - params.message.messageId: unique UUID for each message
+    // - params.message.contextId: reused for conversation continuity
+    const jsonRpcId = uuidv4();
+    const messageId = uuidv4();
     const requestBody: {
       jsonrpc: string;
       method: string;
       id: string;
       params: {
-        contextId?: string;
         message: {
+          messageId: string;
           role: string;
           parts: Array<{ type: string; text: string }>;
+          contextId?: string;
         };
       };
     } = {
       jsonrpc: '2.0',
-      method: 'tasks/send',
-      id: messageId,
+      method: 'message/send',
+      id: jsonRpcId,
       params: {
         message: {
+          messageId,
           role: 'user',
           parts: messageParts,
         },
@@ -101,19 +122,28 @@ export async function POST(request: NextRequest) {
 
     // Add contextId if provided for conversation continuity
     if (contextId) {
-      requestBody.params.contextId = contextId;
+      requestBody.params.message.contextId = contextId;
     }
 
     // Log outgoing request
     console.log('[A2A Proxy] Sending request to:', agentUrl);
     console.log('[A2A Proxy] Request body:', JSON.stringify(requestBody, null, 2));
 
-    // Make the request to the external agent
-    const response = await fetch(agentUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-    });
+    // Make the request to the external agent with 3 minute timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+
+    let response: Response;
+    try {
+      response = await fetch(agentUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     console.log('[A2A Proxy] Response status:', response.status);
 

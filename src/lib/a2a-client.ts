@@ -37,6 +37,10 @@ export async function sendA2AMessage(
   config: A2AClientConfig,
   messages: A2AMessage[]
 ): Promise<A2AResponse> {
+  // 3 minute timeout for UI to proxy
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 180000);
+
   try {
     // Use server-side proxy to avoid CORS issues
     const response = await fetch('/api/a2a/proxy', {
@@ -53,7 +57,10 @@ export async function sendA2AMessage(
         headers: config.headers,
         contextId: config.contextId,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -66,6 +73,13 @@ export async function sendA2AMessage(
     const data = await response.json();
     return data;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Request timed out after 3 minutes',
+      };
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to communicate with agent',
