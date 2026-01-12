@@ -234,8 +234,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
   const [selectedModel, setSelectedModel] = useState(defaultModel);
   const [message, setMessage] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [showConnectors, setShowConnectors] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +263,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Personality state
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [activePersonalityIds, setActivePersonalityIds] = useState<string[]>([]);
-  const [showPersonalities, setShowPersonalities] = useState(false);
   const [showCreatePersonality, setShowCreatePersonality] = useState(false);
   const [newPersonality, setNewPersonality] = useState({ name: '', description: '', icon: '🤖', systemPrompt: '' });
   const [creatingPersonality, setCreatingPersonality] = useState(false);
@@ -278,15 +275,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'single' | 'all'; convId?: string } | null>(null);
 
-  // Mobile overlay state
-  const [showMobileOverlay, setShowMobileOverlay] = useState(false);
-  const [mobileOverlayMode, setMobileOverlayMode] = useState<'main' | 'connectors' | 'personas' | 'add-connector' | 'add-persona'>('main');
-  const [isMobile, setIsMobile] = useState(false);
+  // Settings panel state (overlay on mobile, sidebar on large screens)
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [settingsPanelMode, setSettingsPanelMode] = useState<'main' | 'connectors' | 'personas' | 'add-connector' | 'add-persona'>('main');
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
 
-  // Model statistics collapsed state (desktop)
+  // Model statistics collapsed state
   const [modelStatsExpanded, setModelStatsExpanded] = useState(false);
 
-  // Model selector dropdown state
+  // Model selector dropdown state (for sidebar/overlay)
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -294,12 +291,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showInputModelDropdown, setShowInputModelDropdown] = useState(false);
   const inputModelDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Detect mobile on mount and resize
+  // Detect screen size on mount and resize
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
   // Mobile keyboard handling removed - let CSS handle the layout
@@ -1181,13 +1178,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector, a2aContextId]);
 
-  // Close all sidebars
-  const closeSidebars = useCallback(() => {
-    setShowHistory(false);
-    setShowConnectors(false);
-    setShowPersonalities(false);
-  }, []);
-
   // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const adjustTextareaHeight = useCallback(() => {
@@ -1303,17 +1293,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               <span className="desktop-only">New</span>
             </button>
 
-            {/* History button - opens overlay on mobile, sidebar on desktop */}
+            {/* History button - opens settings panel */}
             <button onClick={() => {
-              if (isMobile) {
-                setShowMobileOverlay(true);
-                setMobileOverlayMode('main');
-              } else {
-                setShowHistory(!showHistory);
-                setShowConnectors(false);
-                setShowPersonalities(false);
-              }
-            }} style={{ background: showHistory ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
+              setShowSettingsPanel(true);
+              setSettingsPanelMode('main');
+            }} style={{ background: showSettingsPanel ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
               📜
               {conversations.length > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#8b5cf6', color: '#fff', borderRadius: '8px', padding: '0 0.25rem', fontSize: '0.55rem', fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{conversations.length > 99 ? '99+' : conversations.length}</span>}
             </button>
@@ -1321,98 +1305,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         </div>
       </div>
 
-      {/* Messages Area - Scrollable (full width for scroll, content centered) */}
-      <div className="chat-fullscreen-messages">
-        <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
-        {/* Sidebar panels - slide in from left on desktop */}
-        {(showHistory || showConnectors || showPersonalities) && (
-          <div style={{ position: 'fixed', top: '60px', left: 0, bottom: '80px', width: '280px', background: 'rgba(10, 10, 20, 0.98)', borderRight: '1px solid rgba(255,255,255,0.1)', padding: '1rem', overflowY: 'auto', zIndex: 100 }} className="desktop-only">
-            <button onClick={() => { setShowHistory(false); setShowConnectors(false); setShowPersonalities(false); }} style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1.25rem' }}>✕</button>
-
-            {showHistory && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: 0 }}>📜 History</h3>
-                  {conversations.length > 0 && (
-                    <button onClick={confirmClearAllHistory} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.25rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>
-                      🗑️ Clear All
-                    </button>
-                  )}
-                </div>
-                {conversations.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
-                ) : (
-                  conversations.map(conv => (
-                    <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowHistory(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`} style={{ position: 'relative' }}>
-                      <div className="chat-history-title">{conv.title}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</span>
-                        <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.3rem' }} title="Delete">✕</button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {showConnectors && (
-              <div>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 1rem' }}>🔌 Connectors</h3>
-                {connectors.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Active ({connectors.length})</div>
-                    {connectors.map(c => {
-                      const typeConfig = c.connector_type === 'external_agent'
-                        ? { bg: 'rgba(16, 185, 129, 0.1)', badge: 'Agent', badgeBg: '#10b981' }
-                        : c.connector_type === 'external_mcp'
-                        ? { bg: 'rgba(59, 130, 246, 0.1)', badge: 'Ext MCP', badgeBg: '#3b82f6' }
-                        : { bg: 'rgba(139, 92, 246, 0.1)', badge: 'Native', badgeBg: '#8b5cf6' };
-                      const fallbackUrl = c.external_url?.startsWith('http') ? c.external_url : undefined;
-                      return (
-                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: typeConfig.bg, borderRadius: '8px', marginBottom: '0.25rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
-                            <FaviconImage iconUrl={c.icon_url || undefined} baseUrl={fallbackUrl} size={18} fallbackEmoji={c.icon || (c.connector_type === 'external_agent' ? '🤖' : c.connector_type === 'external_mcp' ? '🌐' : '🔧')} />
-                            <span style={{ color: '#fff', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</span>
-                            <span style={{ background: typeConfig.badgeBg, color: '#fff', padding: '0.1rem 0.25rem', borderRadius: '3px', fontSize: '0.5rem', fontWeight: 600, flexShrink: 0 }}>{typeConfig.badge}</span>
-                          </div>
-                          <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0 }}>✕</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <button onClick={() => setShowMobileOverlay(true)} style={{ width: '100%', padding: '0.5rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>+ Add Connector</button>
-              </div>
-            )}
-
-            {showPersonalities && (
-              <div>
-                <h3 style={{ color: '#fff', fontSize: '0.9rem', margin: '0 0 1rem' }}>🎭 Personas</h3>
-                {activePersonalityIds.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Active ({activePersonalityIds.length})</div>
-                    {activePersonalityIds.map(id => {
-                      const p = personalities.find(p => p.id === id);
-                      return p ? (
-                        <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', marginBottom: '0.25rem' }}>
-                          <span style={{ color: '#fff', fontSize: '0.8rem' }}>{p.icon} {p.name}</span>
-                          <button onClick={() => togglePersonality(id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                )}
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Available</div>
-                {personalities.filter(p => !activePersonalityIds.includes(p.id)).map(p => (
-                  <div key={p.id} onClick={() => togglePersonality(p.id)} style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.25rem', cursor: 'pointer' }}>
-                    <span style={{ color: '#fff', fontSize: '0.8rem' }}>{p.icon} {p.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
+      {/* Main content area */}
+      <div className="chat-with-sidebar">
+        {/* Main Chat Area */}
+        <div className="chat-main-area">
+          {/* Messages Area - Scrollable */}
+          <div className="chat-fullscreen-messages">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
         {/* Messages */}
         {messages.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '50vh', padding: '2rem', textAlign: 'center' }}>
@@ -1554,9 +1453,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
           {/* Input row */}
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-            {/* Config button */}
+            {/* Config button - toggles settings panel (sidebar on large screens, overlay on mobile) */}
             <button
-              onClick={() => setShowMobileOverlay(true)}
+              onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('main'); }}
               style={{ width: '44px', height: '44px', borderRadius: '12px', background: (connectors.length > 0 || activePersonalityIds.length > 0) ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0, position: 'relative' }}
             >
               ⚙️
@@ -1653,7 +1552,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 <span style={{ transform: showInputModelDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', fontSize: '0.6rem', opacity: 0.6 }}>▼</span>
               </button>
 
-              {/* Dropdown menu - opens upward */}
+              {/* Dropdown menu - opens UPWARD (since it's at bottom of screen) */}
               {showInputModelDropdown && (
                 <div style={{
                   position: 'absolute',
@@ -1737,40 +1636,47 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           </div>
         </div>
       </div>
+        </div>{/* End chat-main-area */}
+      </div>{/* End chat-with-sidebar */}
 
-      {/* Settings Overlay - Full screen */}
-      {showMobileOverlay && (
-        <div className="chat-mobile-overlay">
-          <div className="chat-mobile-overlay-header">
-            {mobileOverlayMode === 'main' ? (
-              <h2 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Chat Settings</h2>
-            ) : (
-              <button onClick={() => setMobileOverlayMode('main')} style={{ background: 'none', border: 'none', color: '#8b5cf6', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>← Back</button>
-            )}
-            <h2 style={{ color: '#fff', margin: 0, fontSize: '1.1rem', fontWeight: 600, flex: 1, textAlign: mobileOverlayMode === 'main' ? 'left' : 'center' }}>
-              {mobileOverlayMode === 'connectors' && '🔌 Connectors'}
-              {mobileOverlayMode === 'personas' && '🎭 Personas'}
-              {mobileOverlayMode === 'add-connector' && 'Add Connector'}
-              {mobileOverlayMode === 'add-persona' && 'Add Persona'}
-            </h2>
-            <button onClick={() => { setShowMobileOverlay(false); setMobileOverlayMode('main'); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>✕</button>
-          </div>
-          <div className="chat-mobile-overlay-content">
-            {/* MAIN MODE */}
-            {mobileOverlayMode === 'main' && (
+      {/* Settings Panel - Sidebar on large screens, full overlay on mobile */}
+      {showSettingsPanel && (
+        <>
+          {/* Backdrop for large screens */}
+          {isLargeScreen && <div className="chat-sidebar-backdrop open" onClick={() => setShowSettingsPanel(false)} />}
+          <div className={isLargeScreen ? 'chat-sidebar-panel open' : 'chat-mobile-overlay'}>
+          <div className={isLargeScreen ? 'chat-sidebar-header' : 'chat-mobile-overlay-header'}>
+            {settingsPanelMode === 'main' ? (
               <>
-                {/* New Chat Button */}
+                {/* New Chat Button - sticky in header */}
                 <button
                   onClick={() => {
-                    setMessages([]);
-                    setCurrentConversationId(null);
-                    setA2aContextId(null);
-                    setShowMobileOverlay(false);
+                    startNewChat();
+                    setShowSettingsPanel(false);
                   }}
-                  style={{ width: '100%', padding: '0.75rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '12px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                  style={{ padding: '0.4rem 0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   ✨ New Chat
                 </button>
+                <h2 style={{ color: '#fff', margin: 0, fontSize: '1rem', fontWeight: 600, flex: 1, textAlign: 'center' }}>Chat Settings</h2>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setSettingsPanelMode('main')} style={{ background: 'none', border: 'none', color: '#8b5cf6', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>← Back</button>
+                <h2 style={{ color: '#fff', margin: 0, fontSize: '1rem', fontWeight: 600, flex: 1, textAlign: 'center' }}>
+                  {settingsPanelMode === 'connectors' && '🔌 Connectors'}
+                  {settingsPanelMode === 'personas' && '🎭 Personas'}
+                  {settingsPanelMode === 'add-connector' && 'Add Connector'}
+                  {settingsPanelMode === 'add-persona' && 'Add Persona'}
+                </h2>
+              </>
+            )}
+            <button onClick={() => { setShowSettingsPanel(false); setSettingsPanelMode('main'); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem' }}>✕</button>
+          </div>
+          <div className={isLargeScreen ? 'chat-sidebar-scrollable' : 'chat-mobile-overlay-content'}>
+            {/* MAIN MODE */}
+            {settingsPanelMode === 'main' && (
+              <>
 
                 {/* Budget Indicator */}
                 <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -1988,7 +1894,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       })}
                     </div>
                   )}
-                  <button onClick={() => setMobileOverlayMode('connectors')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Connector</button>
+                  <button onClick={() => setSettingsPanelMode('connectors')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Connector</button>
                 </div>
 
                 {/* Personas Section */}
@@ -2010,7 +1916,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       })}
                     </div>
                   )}
-                  <button onClick={() => setMobileOverlayMode('personas')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Persona</button>
+                  <button onClick={() => setSettingsPanelMode('personas')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Persona</button>
                 </div>
 
                 {/* History Section */}
@@ -2028,7 +1934,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   ) : (
                     <div>
                       {conversations.map(conv => (
-                        <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowMobileOverlay(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
+                        <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowSettingsPanel(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div className="chat-history-title" style={{ flex: 1 }}>{conv.title}</div>
                             <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
@@ -2043,7 +1949,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             )}
 
             {/* CONNECTORS MODE */}
-            {mobileOverlayMode === 'connectors' && (
+            {settingsPanelMode === 'connectors' && (
               <div>
                 {/* Internal MCP Servers */}
                 {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').length > 0 && (
@@ -2052,7 +1958,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').map(server => {
                       const isConnected = connectors.find(c => c.external_url === `api_key:${server.id}`);
                       return (
-                        <div key={server.id} onClick={() => { if (!isConnected) { addInternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: isConnected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: isConnected ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
+                        <div key={server.id} onClick={() => { if (!isConnected) { addInternalMcpConnector(server); } setSettingsPanelMode('main'); }} style={{ padding: '0.75rem', background: isConnected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: isConnected ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent' }}>
                           <div style={{ color: '#fff', fontSize: '0.85rem' }}>{server.display_name}</div>
                           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{server.toolCount} tools</div>
                         </div>
@@ -2066,7 +1972,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   <div style={{ marginBottom: '1.5rem' }}>
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🌐 External MCP Servers</div>
                     {availableMcpServers.filter(s => s.source_type === 'mcp_import').map(server => (
-                      <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addExternalMcpConnector(server); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent' }}>
+                      <div key={server.id} onClick={() => { if (!connectors.find(c => c.mcp_server_id === server.id)) { addExternalMcpConnector(server); } setSettingsPanelMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.mcp_server_id === server.id) ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.mcp_server_id === server.id) ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent' }}>
                         <FaviconImage baseUrl={server.source_url} size={28} fallbackEmoji="🌐" />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{server.display_name}</div>
@@ -2082,7 +1988,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🤖 External Agents</div>
                     {availableAgents.map(agent => (
-                      <div key={agent.id} onClick={() => { if (!connectors.find(c => c.external_url === agent.agent_url)) { addExternalAgentConnector(agent); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.external_url === agent.agent_url) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.external_url === agent.agent_url) ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent' }}>
+                      <div key={agent.id} onClick={() => { if (!connectors.find(c => c.external_url === agent.agent_url)) { addExternalAgentConnector(agent); } setSettingsPanelMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.external_url === agent.agent_url) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.external_url === agent.agent_url) ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent' }}>
                         <FaviconImage iconUrl={agent.icon_url || undefined} baseUrl={agent.agent_url} size={28} fallbackEmoji="🤖" />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{agent.display_name}</div>
@@ -2103,7 +2009,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             )}
 
             {/* PERSONAS MODE */}
-            {mobileOverlayMode === 'personas' && (
+            {settingsPanelMode === 'personas' && (
               <div>
                 {personalities.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'rgba(255,255,255,0.5)' }}>
@@ -2115,7 +2021,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   <>
                     {personalities.map(p => (
                       <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent' }}>
-                        <div onClick={() => { togglePersonality(p.id); setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, cursor: 'pointer' }}>
+                        <div onClick={() => { togglePersonality(p.id); setSettingsPanelMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, cursor: 'pointer' }}>
                           <span style={{ fontSize: '1.25rem' }}>{p.icon}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{p.name}</div>
@@ -2136,6 +2042,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Connector Info Modal */}

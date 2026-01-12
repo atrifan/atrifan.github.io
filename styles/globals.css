@@ -865,6 +865,94 @@ body.chat-page-active {
   }
 }
 
+/* Chat with sidebar layout for large screens */
+.chat-with-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.chat-sidebar-panel {
+  display: none; /* Hidden by default */
+}
+
+.chat-main-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Large screens: sidebar as overlay on left */
+@media (min-width: 1024px) {
+  .chat-sidebar-panel {
+    display: none; /* Hidden by default, shown when open */
+    flex-direction: column;
+    position: fixed;
+    top: 60px; /* Below header */
+    left: 0;
+    bottom: 0;
+    width: 320px;
+    background: rgba(10, 10, 20, 0.98);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 100;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .chat-sidebar-panel.open {
+    display: flex;
+  }
+
+  .chat-sidebar-header {
+    flex-shrink: 0;
+    padding: 0.75rem 1rem;
+    background: rgba(10, 10, 20, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .chat-sidebar-scrollable {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 1rem;
+  }
+
+  .chat-sidebar-scrollable::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chat-main-area {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Hide the old slide-in sidebar panels on large screens */
+  .hide-on-large {
+    display: none !important;
+  }
+
+  /* Backdrop for sidebar */
+  .chat-sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    top: 60px;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+  }
+
+  .chat-sidebar-backdrop.open {
+    display: block;
+  }
+}
+
 /* Automation Builder Fullscreen Layout */
 .automation-fullscreen {
   position: fixed;
