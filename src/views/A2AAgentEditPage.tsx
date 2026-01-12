@@ -9,6 +9,7 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { FaviconImage } from '../components/FaviconImage';
+import { AuthenticationSection } from '../components/AuthenticationSection';
 import { ADS_CONFIG } from '../config/ads.config';
 
 interface A2AAgent {
@@ -387,6 +388,17 @@ export function A2AAgentEditPage({ agentId, isPro, isPlus }: Props) {
           <div style={{ color: '#fff', fontWeight: 600 }}>{new Date(agent.updated_at).toLocaleDateString()}</div>
         </div>
       </div>
+
+      {/* Authentication */}
+      <AuthenticationSection
+        resourceId={agent.id}
+        resourceType="agent"
+        authType={agent.auth_type || 'none'}
+        authConfig={agent.auth_config || {}}
+        sourceUrl={agent.agent_url}
+        onUpdate={fetchAgent}
+        accentColor="#f59e0b"
+      />
 
       {/* Default Headers */}
       <DefaultHeadersEditor

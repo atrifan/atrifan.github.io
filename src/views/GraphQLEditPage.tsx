@@ -9,6 +9,7 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { FaviconImage } from '../components/FaviconImage';
+import { AuthenticationSection } from '../components/AuthenticationSection';
 import { ADS_CONFIG } from '../config/ads.config';
 
 interface GraphQLTool {
@@ -349,6 +350,17 @@ export function GraphQLEditPage({ specId, isPro, isPlus }: Props) {
         <StatCard icon="🌍" label="Environments" value={environments.length} />
         <StatCard icon="📅" label="Created" value={new Date(spec.created_at).toLocaleDateString()} />
       </div>
+
+      {/* Authentication */}
+      <AuthenticationSection
+        resourceId={spec.id}
+        resourceType="graphql"
+        authType={spec.auth_type || 'none'}
+        authConfig={spec.auth_config || {}}
+        sourceUrl={spec.source_url}
+        onUpdate={fetchSpec}
+        accentColor="#e91e63"
+      />
 
       {/* Default Headers */}
       <DefaultHeadersEditor

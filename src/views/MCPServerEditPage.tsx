@@ -273,6 +273,15 @@ export function MCPServerEditPage({ serverId, isPro, isPlus }: Props) {
         <StatCard icon="📅" label="Updated" value={new Date(server.updated_at).toLocaleDateString()} />
       </div>
 
+      {/* Authentication */}
+      <AuthenticationEditor
+        serverId={server.id}
+        authType={server.auth_type}
+        authConfig={server.auth_config || {}}
+        serverUrl={server.source_url}
+        onUpdate={fetchServer}
+      />
+
       {/* Default Headers */}
       <DefaultHeadersEditor
         serverId={server.id}
@@ -624,6 +633,286 @@ function ToolCard({ tool, serverId, onUpdate }: { tool: MCPServerTool; serverId:
                 <button onClick={() => setEditing(true)} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', cursor: 'pointer', fontSize: '0.8rem' }}>✏️ Edit</button>
                 <button onClick={handleDelete} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>🗑️ Delete</button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// AuthenticationEditor Component for MCP Servers
+function AuthenticationEditor({ serverId, authType, authConfig, serverUrl, onUpdate }: {
+  serverId: string;
+  authType: string;
+  authConfig: Record<string, unknown>;
+  serverUrl: string;
+  onUpdate: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [currentAuthType, setCurrentAuthType] = useState(authType);
+
+  // Auth values
+  const [apiKey, setApiKey] = useState((authConfig.api_key as string) || '');
+  const [bearerToken, setBearerToken] = useState((authConfig.bearer_token as string) || '');
+  const [basicCredentials, setBasicCredentials] = useState((authConfig.credentials as string) || '');
+
+  // OAuth2 values
+  const [authorizationEndpoint, setAuthorizationEndpoint] = useState((authConfig.authorization_endpoint as string) || '');
+  const [tokenEndpoint, setTokenEndpoint] = useState((authConfig.token_endpoint as string) || '');
+  const [scopes, setScopes] = useState((authConfig.scopes as string) || '');
+  const [useDcr, setUseDcr] = useState((authConfig.use_dcr as boolean) || false);
+  const [clientId, setClientId] = useState((authConfig.client_id as string) || '');
+  const [clientSecret, setClientSecret] = useState((authConfig.client_secret as string) || '');
+  const [registrationEndpoint, setRegistrationEndpoint] = useState((authConfig.registration_endpoint as string) || '');
+
+  // Visibility toggles
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showBearerToken, setShowBearerToken] = useState(false);
+  const [showBasicCredentials, setShowBasicCredentials] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
+
+  const maskValue = (value: string): string => {
+    if (!value) return '—';
+    if (value.length <= 4) return '••••••••';
+    return '••••••••' + value.slice(-4);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      let newAuthConfig: Record<string, unknown> = {};
+
+      if (currentAuthType === 'api_key') {
+        newAuthConfig = { api_key: apiKey };
+      } else if (currentAuthType === 'bearer') {
+        newAuthConfig = { bearer_token: bearerToken };
+      } else if (currentAuthType === 'basic') {
+        newAuthConfig = { credentials: basicCredentials };
+      } else if (currentAuthType === 'oauth2') {
+        newAuthConfig = {
+          authorization_endpoint: authorizationEndpoint,
+          token_endpoint: tokenEndpoint,
+          scopes,
+          use_dcr: useDcr,
+          client_id: clientId,
+          client_secret: clientSecret,
+          registration_endpoint: registrationEndpoint,
+        };
+      }
+
+      const response = await fetch(`/api/mcp-servers/${serverId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authType: currentAuthType, authConfig: newAuthConfig }),
+      });
+
+      if (response.ok) {
+        setEditing(false);
+        onUpdate();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setCurrentAuthType(authType);
+    setApiKey((authConfig.api_key as string) || '');
+    setBearerToken((authConfig.bearer_token as string) || '');
+    setBasicCredentials((authConfig.credentials as string) || '');
+    setAuthorizationEndpoint((authConfig.authorization_endpoint as string) || '');
+    setTokenEndpoint((authConfig.token_endpoint as string) || '');
+    setScopes((authConfig.scopes as string) || '');
+    setUseDcr((authConfig.use_dcr as boolean) || false);
+    setClientId((authConfig.client_id as string) || '');
+    setClientSecret((authConfig.client_secret as string) || '');
+    setRegistrationEndpoint((authConfig.registration_endpoint as string) || '');
+  };
+
+  const authTypeLabels: Record<string, string> = {
+    none: 'None',
+    api_key: 'API Key',
+    bearer: 'Bearer Token',
+    basic: 'Basic Auth',
+    oauth2: 'OAuth 2.0',
+  };
+
+  const inputStyle = { width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' };
+
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>🔐 Authentication</h3>
+        {!editing ? (
+          <button onClick={() => setEditing(true)} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', fontSize: '0.8rem', cursor: 'pointer' }}>
+            ✏️ Edit Auth
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={handleCancel} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
+      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
+        Authentication credentials for this MCP server.
+      </p>
+
+      {editing ? (
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {/* Auth Type Selector */}
+          <div>
+            <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Authentication Type</label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {['none', 'api_key', 'bearer', 'basic', 'oauth2'].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setCurrentAuthType(type)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    border: currentAuthType === type ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.2)',
+                    background: currentAuthType === type ? 'rgba(59, 130, 246, 0.2)' : 'rgba(0,0,0,0.2)',
+                    color: currentAuthType === type ? '#3b82f6' : 'rgba(255,255,255,0.7)',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {authTypeLabels[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* API Key */}
+          {currentAuthType === 'api_key' && (
+            <div>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>API Key</label>
+              <div style={{ position: 'relative' }}>
+                <input type={showApiKey ? 'text' : 'password'} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Enter API key" style={{ ...inputStyle, paddingRight: '2.5rem' }} />
+                <button type="button" onClick={() => setShowApiKey(!showApiKey)} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>{showApiKey ? '👁️' : '👁️‍🗨️'}</button>
+              </div>
+            </div>
+          )}
+
+          {/* Bearer Token */}
+          {currentAuthType === 'bearer' && (
+            <div>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Bearer Token</label>
+              <div style={{ position: 'relative' }}>
+                <input type={showBearerToken ? 'text' : 'password'} value={bearerToken} onChange={(e) => setBearerToken(e.target.value)} placeholder="Enter bearer token" style={{ ...inputStyle, paddingRight: '2.5rem' }} />
+                <button type="button" onClick={() => setShowBearerToken(!showBearerToken)} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>{showBearerToken ? '👁️' : '👁️‍🗨️'}</button>
+              </div>
+            </div>
+          )}
+
+          {/* Basic Auth */}
+          {currentAuthType === 'basic' && (
+            <div>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Credentials (base64 encoded username:password)</label>
+              <div style={{ position: 'relative' }}>
+                <input type={showBasicCredentials ? 'text' : 'password'} value={basicCredentials} onChange={(e) => setBasicCredentials(e.target.value)} placeholder="Enter base64 encoded credentials" style={{ ...inputStyle, paddingRight: '2.5rem' }} />
+                <button type="button" onClick={() => setShowBasicCredentials(!showBasicCredentials)} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>{showBasicCredentials ? '👁️' : '👁️‍🗨️'}</button>
+              </div>
+            </div>
+          )}
+
+          {/* OAuth2 */}
+          {currentAuthType === 'oauth2' && (
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              <div>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Authorization Endpoint</label>
+                <input type="text" value={authorizationEndpoint} onChange={(e) => setAuthorizationEndpoint(e.target.value)} placeholder="https://..." style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Token Endpoint</label>
+                <input type="text" value={tokenEndpoint} onChange={(e) => setTokenEndpoint(e.target.value)} placeholder="https://..." style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Scopes (space-separated)</label>
+                <input type="text" value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder="openid profile email" style={inputStyle} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" id="useDcrMcp" checked={useDcr} onChange={(e) => setUseDcr(e.target.checked)} />
+                <label htmlFor="useDcrMcp" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Use Dynamic Client Registration (DCR)</label>
+              </div>
+              {!useDcr && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Client ID</label>
+                    <input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Client Secret</label>
+                    <div style={{ position: 'relative' }}>
+                      <input type={showClientSecret ? 'text' : 'password'} value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="Client Secret" style={{ ...inputStyle, paddingRight: '2.5rem' }} />
+                      <button type="button" onClick={() => setShowClientSecret(!showClientSecret)} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>{showClientSecret ? '👁️' : '👁️‍🗨️'}</button>
+                    </div>
+                  </div>
+                </>
+              )}
+              {useDcr && (
+                <div>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Registration Endpoint</label>
+                  <input type="text" value={registrationEndpoint} onChange={(e) => setRegistrationEndpoint(e.target.value)} placeholder="https://..." style={inputStyle} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Type:</span>
+            <span style={{ background: authType === 'none' ? 'rgba(255,255,255,0.1)' : 'rgba(59, 130, 246, 0.2)', color: authType === 'none' ? 'rgba(255,255,255,0.5)' : '#3b82f6', padding: '0.25rem 0.75rem', borderRadius: '50px', fontSize: '0.8rem', fontWeight: 600 }}>
+              {authTypeLabels[authType] || authType}
+            </span>
+          </div>
+
+          {authType === 'api_key' && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>API Key:</span>
+              <span style={{ color: 'rgba(255,255,255,0.7)' }}>{showApiKey ? String(authConfig.api_key || '') : maskValue(String(authConfig.api_key || ''))}</span>
+              {Boolean(authConfig.api_key) && (
+                <button onClick={() => setShowApiKey(!showApiKey)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.85rem' }}>{showApiKey ? '👁️' : '👁️‍🗨️'}</button>
+              )}
+            </div>
+          )}
+
+          {authType === 'bearer' && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Token:</span>
+              <span style={{ color: 'rgba(255,255,255,0.7)' }}>{showBearerToken ? String(authConfig.bearer_token || '') : maskValue(String(authConfig.bearer_token || ''))}</span>
+              {Boolean(authConfig.bearer_token) && (
+                <button onClick={() => setShowBearerToken(!showBearerToken)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.85rem' }}>{showBearerToken ? '👁️' : '👁️‍🗨️'}</button>
+              )}
+            </div>
+          )}
+
+          {authType === 'basic' && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Credentials:</span>
+              <span style={{ color: 'rgba(255,255,255,0.7)' }}>{showBasicCredentials ? String(authConfig.credentials || '') : maskValue(String(authConfig.credentials || ''))}</span>
+              {Boolean(authConfig.credentials) && (
+                <button onClick={() => setShowBasicCredentials(!showBasicCredentials)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.85rem' }}>{showBasicCredentials ? '👁️' : '👁️‍🗨️'}</button>
+              )}
+            </div>
+          )}
+
+          {authType === 'oauth2' && (
+            <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <div><span style={{ color: 'rgba(255,255,255,0.6)' }}>Auth Endpoint:</span> <span style={{ color: 'rgba(255,255,255,0.7)' }}>{String(authConfig.authorization_endpoint || '') || '—'}</span></div>
+              <div><span style={{ color: 'rgba(255,255,255,0.6)' }}>Token Endpoint:</span> <span style={{ color: 'rgba(255,255,255,0.7)' }}>{String(authConfig.token_endpoint || '') || '—'}</span></div>
+              <div><span style={{ color: 'rgba(255,255,255,0.6)' }}>Scopes:</span> <span style={{ color: 'rgba(255,255,255,0.7)' }}>{String(authConfig.scopes || '') || '—'}</span></div>
+              <div><span style={{ color: 'rgba(255,255,255,0.6)' }}>DCR:</span> <span style={{ color: 'rgba(255,255,255,0.7)' }}>{authConfig.use_dcr ? 'Enabled' : 'Disabled'}</span></div>
             </div>
           )}
         </div>

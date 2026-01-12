@@ -10,6 +10,7 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { Footer } from '../components/Footer';
 import { FaviconImage } from '../components/FaviconImage';
+import { AuthenticationSection } from '../components/AuthenticationSection';
 import { ADS_CONFIG } from '../config/ads.config';
 
 // Types
@@ -493,6 +494,17 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
           <StatCard icon="📅" label="Created" value={new Date(spec.created_at).toLocaleDateString()} />
           <StatCard icon="🔄" label="Updated" value={new Date(spec.updated_at).toLocaleDateString()} />
         </div>
+
+        {/* Authentication */}
+        <AuthenticationSection
+          resourceId={spec.id}
+          resourceType="rest-api"
+          authType={spec.auth_type || 'none'}
+          authConfig={spec.auth_config || {}}
+          sourceUrl={spec.source_url || ''}
+          onUpdate={fetchSpec}
+          accentColor="#10b981"
+        />
 
         {/* Default Headers */}
         <DefaultHeadersEditor
