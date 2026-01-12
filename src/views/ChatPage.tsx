@@ -269,6 +269,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showCreatePersonality, setShowCreatePersonality] = useState(false);
   const [newPersonality, setNewPersonality] = useState({ name: '', description: '', icon: '🤖', systemPrompt: '' });
   const [creatingPersonality, setCreatingPersonality] = useState(false);
+  const [viewingPersona, setViewingPersona] = useState<Personality | null>(null);
 
   // Chat config popover state
   const [showChatConfig, setShowChatConfig] = useState(false);
@@ -2073,7 +2074,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
                 {/* External Agents */}
                 {availableAgents.length > 0 && (
-                  <div>
+                  <div style={{ marginBottom: '1rem' }}>
                     <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🤖 External Agents</div>
                     {availableAgents.map(agent => (
                       <div key={agent.id} onClick={() => { if (!connectors.find(c => c.external_url === agent.agent_url)) { addExternalAgentConnector(agent); } setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: connectors.find(c => c.external_url === agent.agent_url) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: connectors.find(c => c.external_url === agent.agent_url) ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent' }}>
@@ -2086,23 +2087,46 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     ))}
                   </div>
                 )}
+
+                {/* Manage in Dashboard Link */}
+                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+                  <Link href="/dashboard" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span>⚙️</span> Manage Connectors in Dashboard
+                  </Link>
+                </div>
               </div>
             )}
 
             {/* PERSONAS MODE */}
             {mobileOverlayMode === 'personas' && (
               <div>
-                {personalities.map(p => (
-                  <div key={p.id} onClick={() => { togglePersonality(p.id); setMobileOverlayMode('main'); }} style={{ padding: '0.75rem', background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', cursor: 'pointer', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '1.25rem' }}>{p.icon}</span>
-                      <div>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{p.name}</div>
-                        {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{p.description}</div>}
-                      </div>
-                    </div>
+                {personalities.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'rgba(255,255,255,0.5)' }}>
+                    <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.75rem' }}>🎭</span>
+                    <p style={{ margin: '0 0 1rem', fontSize: '0.9rem' }}>No personas yet</p>
+                    <Link href="/dashboard" style={{ color: '#a78bfa', textDecoration: 'underline', fontSize: '0.85rem' }}>Create in Dashboard →</Link>
                   </div>
-                ))}
+                ) : (
+                  <>
+                    {personalities.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent' }}>
+                        <div onClick={() => { togglePersonality(p.id); setMobileOverlayMode('main'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, cursor: 'pointer' }}>
+                          <span style={{ fontSize: '1.25rem' }}>{p.icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{p.name}</div>
+                            {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.description}</div>}
+                          </div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); setViewingPersona(p); }} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.4rem 0.5rem', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '0.75rem' }} title="View details">ℹ️</button>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+                      <Link href="/dashboard" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span>✏️</span> Manage Personas in Dashboard
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -2122,6 +2146,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               </div>
             ))}
             <button onClick={() => setConnectorInfoModal(null)} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Persona View Modal */}
+      {viewingPersona && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setViewingPersona(null)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '500px', width: '100%', maxHeight: '80vh', overflow: 'auto', border: '1px solid rgba(245, 158, 11, 0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '2rem' }}>{viewingPersona.icon}</span>
+              <div>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>{viewingPersona.name}</h3>
+                {viewingPersona.description && <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0.25rem 0 0', fontSize: '0.85rem' }}>{viewingPersona.description}</p>}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>System Prompt</div>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+                <pre style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', lineHeight: 1.5 }}>{viewingPersona.system_prompt}</pre>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{viewingPersona.prompt_token_count} tokens</span>
+              <Link href="/dashboard" onClick={() => setViewingPersona(null)} style={{ color: '#a78bfa', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span>✏️</span> Edit in Dashboard
+              </Link>
+            </div>
+
+            <button onClick={() => setViewingPersona(null)} style={{ width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
           </div>
         </div>
       )}

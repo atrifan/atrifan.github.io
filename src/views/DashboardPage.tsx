@@ -65,6 +65,17 @@ interface BudgetData {
   models: ModelBudgetInfo[];
 }
 
+// Persona type for AI chat personas
+interface Persona {
+  id: string;
+  name: string;
+  description?: string;
+  icon: string;
+  system_prompt: string;
+  prompt_token_count: number;
+  is_default: boolean;
+}
+
 // Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
 const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
 
@@ -259,6 +270,13 @@ export const DashboardPage: React.FC = () => {
   const [newBudget, setNewBudget] = useState<string>('5.00');
   const [savingBudget, setSavingBudget] = useState(false);
 
+  // Personas state
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [showCreatePersona, setShowCreatePersona] = useState(false);
+  const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
+  const [personaForm, setPersonaForm] = useState({ name: '', description: '', icon: '🤖', systemPrompt: '' });
+  const [savingPersona, setSavingPersona] = useState(false);
+
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
   const customServers = servers.filter(s => s.serverName !== 'default');
@@ -430,6 +448,82 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setSavingBudget(false);
     }
+  };
+
+  // Fetch personas
+  useEffect(() => {
+    const fetchPersonas = async () => {
+      if (!isPro || !user) return;
+      try {
+        const response = await fetch('/api/ai/personalities');
+        if (response.ok) {
+          const data = await response.json();
+          setPersonas(data.personalities || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch personas:', error);
+      }
+    };
+    fetchPersonas();
+  }, [isPro, user]);
+
+  // Create or update persona
+  const savePersona = async () => {
+    if (!personaForm.name || !personaForm.systemPrompt) return;
+    setSavingPersona(true);
+    try {
+      const isEditing = !!editingPersona;
+      const response = await fetch('/api/ai/personalities', {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(isEditing ? { id: editingPersona.id } : {}),
+          name: personaForm.name,
+          description: personaForm.description,
+          icon: personaForm.icon,
+          systemPrompt: personaForm.systemPrompt,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (isEditing) {
+          setPersonas(prev => prev.map(p => p.id === editingPersona.id ? data.personality : p));
+        } else {
+          setPersonas(prev => [...prev, data.personality]);
+        }
+        setShowCreatePersona(false);
+        setEditingPersona(null);
+        setPersonaForm({ name: '', description: '', icon: '🤖', systemPrompt: '' });
+      }
+    } catch (error) {
+      console.error('Failed to save persona:', error);
+    } finally {
+      setSavingPersona(false);
+    }
+  };
+
+  // Delete persona
+  const deletePersona = async (id: string) => {
+    try {
+      const response = await fetch(`/api/ai/personalities?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setPersonas(prev => prev.filter(p => p.id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to delete persona:', error);
+    }
+  };
+
+  // Open edit modal for persona
+  const openEditPersona = (persona: Persona) => {
+    setEditingPersona(persona);
+    setPersonaForm({
+      name: persona.name,
+      description: persona.description || '',
+      icon: persona.icon,
+      systemPrompt: persona.system_prompt,
+    });
+    setShowCreatePersona(true);
   };
 
   // Delete a custom MCP server
@@ -1788,6 +1882,117 @@ export const DashboardPage: React.FC = () => {
               <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.3)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>Soon</span>
             </button>
           </DashboardCard>
+        )}
+
+        {/* Personas Card */}
+        {isPro && (
+          <DashboardCard title="AI Personas" icon={
+            <span style={{ fontSize: '24px' }}>🎭</span>
+          }>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+              Create custom personas with system prompts to customize AI behavior in chat.
+            </p>
+
+            {/* Personas List */}
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Your Personas</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>{personas.length} total</span>
+              </div>
+              {personas.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                  <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>🎭</span>
+                  No personas created yet
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                  {personas.map(persona => (
+                    <div key={persona.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <span style={{ fontSize: '1.5rem' }}>{persona.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{persona.name}</div>
+                        {persona.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{persona.description}</div>}
+                        <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.25rem' }}>{persona.prompt_token_count} tokens</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <button onClick={() => openEditPersona(persona)} style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.7rem' }}>Edit</button>
+                        <button onClick={() => deletePersona(persona.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Create Persona Button */}
+            <button
+              onClick={() => { setEditingPersona(null); setPersonaForm({ name: '', description: '', icon: '🤖', systemPrompt: '' }); setShowCreatePersona(true); }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '10px',
+                border: '2px dashed rgba(139, 92, 246, 0.4)',
+                background: 'rgba(139, 92, 246, 0.1)',
+                color: '#a78bfa',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Create Persona
+            </button>
+          </DashboardCard>
+        )}
+
+        {/* Create/Edit Persona Modal */}
+        {showCreatePersona && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowCreatePersona(false)}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflow: 'auto', border: '1px solid rgba(139, 92, 246, 0.3)' }} onClick={e => e.stopPropagation()}>
+              <h3 style={{ color: '#fff', margin: '0 0 1.25rem', fontSize: '1.1rem' }}>{editingPersona ? 'Edit Persona' : 'Create Persona'}</h3>
+
+              {/* Icon Picker */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>Icon</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {['🤖', '🧠', '💡', '🎯', '🔮', '⚡', '🌟', '🎭', '👨‍💻', '👩‍🔬', '🦊', '🐱'].map(icon => (
+                    <button key={icon} onClick={() => setPersonaForm(prev => ({ ...prev, icon }))} style={{ width: '40px', height: '40px', borderRadius: '8px', border: personaForm.icon === icon ? '2px solid #a78bfa' : '1px solid rgba(255,255,255,0.2)', background: personaForm.icon === icon ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1.25rem' }}>{icon}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Name */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>Name *</label>
+                <input type="text" value={personaForm.name} onChange={e => setPersonaForm(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g., Code Reviewer" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '0.9rem' }} />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>Description (optional)</label>
+                <input type="text" value={personaForm.description} onChange={e => setPersonaForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Brief description of this persona" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '0.9rem' }} />
+              </div>
+
+              {/* System Prompt */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'block', marginBottom: '0.5rem' }}>System Prompt *</label>
+                <textarea value={personaForm.systemPrompt} onChange={e => setPersonaForm(prev => ({ ...prev, systemPrompt: e.target.value }))} placeholder="You are a helpful assistant that..." rows={6} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '0.9rem', resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={() => setShowCreatePersona(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.9rem' }}>Cancel</button>
+                <button onClick={savePersona} disabled={savingPersona || !personaForm.name || !personaForm.systemPrompt} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', cursor: savingPersona || !personaForm.name || !personaForm.systemPrompt ? 'not-allowed' : 'pointer', fontSize: '0.9rem', fontWeight: 500, opacity: savingPersona || !personaForm.name || !personaForm.systemPrompt ? 0.5 : 1 }}>{savingPersona ? 'Saving...' : (editingPersona ? 'Update' : 'Create')}</button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Account Actions */}
