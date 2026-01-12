@@ -14,12 +14,16 @@ function estimateTokens(text: string): number {
 }
 
 // GET - List user's personalities and active ones
-export async function GET() {
+// Query param: context=chat|automation (default: chat)
+export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const context = searchParams.get('context') || 'chat';
 
     // Get all personalities
     const { data: personalities, error: pError } = await db
@@ -33,11 +37,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch personalities' }, { status: 500 });
     }
 
-    // Get active personalities
+    // Get active personalities for the specified context
     const { data: active, error: aError } = await db
       .from('chat_active_personalities')
       .select('personality_id, priority')
       .eq('user_id', userId)
+      .eq('context', context)
       .order('priority', { ascending: true });
 
     if (aError) {

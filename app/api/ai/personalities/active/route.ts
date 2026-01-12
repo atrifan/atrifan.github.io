@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 const db = supabase as any;
 
 // POST - Link a personality (make it active)
+// Body: { personalityId, priority?, context?: 'chat' | 'automation' }
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { personalityId, priority } = body;
+    const { personalityId, priority, context = 'chat' } = body;
 
     if (!personalityId) {
       return NextResponse.json({ error: 'Personality ID required' }, { status: 400 });
@@ -34,11 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Personality not found' }, { status: 404 });
     }
 
-    // Get current max priority
+    // Get current max priority for this context
     const { data: existing } = await db
       .from('chat_active_personalities')
       .select('priority')
       .eq('user_id', userId)
+      .eq('context', context)
       .order('priority', { ascending: false })
       .limit(1);
 
@@ -51,7 +53,8 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         personality_id: personalityId,
         priority: newPriority,
-      }, { onConflict: 'user_id,personality_id' })
+        context,
+      }, { onConflict: 'user_id,personality_id,context' })
       .select()
       .single();
 
@@ -68,6 +71,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE - Unlink a personality (make it inactive)
+// Query params: personalityId, context=chat|automation (default: chat)
 export async function DELETE(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -77,6 +81,7 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const personalityId = searchParams.get('personalityId');
+    const context = searchParams.get('context') || 'chat';
 
     if (!personalityId) {
       return NextResponse.json({ error: 'Personality ID required' }, { status: 400 });
@@ -86,7 +91,8 @@ export async function DELETE(request: NextRequest) {
       .from('chat_active_personalities')
       .delete()
       .eq('user_id', userId)
-      .eq('personality_id', personalityId);
+      .eq('personality_id', personalityId)
+      .eq('context', context);
 
     if (error) {
       console.error('Error unlinking personality:', error);
@@ -101,6 +107,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // PUT - Reorder active personalities
+// Body: { orderedIds, context?: 'chat' | 'automation' }
 export async function PUT(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -109,19 +116,20 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { orderedIds } = body; // Array of personality IDs in order
+    const { orderedIds, context = 'chat' } = body; // Array of personality IDs in order
 
     if (!Array.isArray(orderedIds)) {
       return NextResponse.json({ error: 'orderedIds array required' }, { status: 400 });
     }
 
-    // Update priorities
+    // Update priorities for the specified context
     for (let i = 0; i < orderedIds.length; i++) {
       await db
         .from('chat_active_personalities')
         .update({ priority: i })
         .eq('user_id', userId)
-        .eq('personality_id', orderedIds[i]);
+        .eq('personality_id', orderedIds[i])
+        .eq('context', context);
     }
 
     return NextResponse.json({ success: true });

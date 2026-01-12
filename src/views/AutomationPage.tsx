@@ -316,24 +316,14 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   const fetchPersonalities = async () => {
     try {
-      const response = await fetch('/api/ai/personalities');
+      const response = await fetch('/api/ai/personalities?context=automation');
       if (response.ok) {
         const data = await response.json();
         setPersonalities(data.personalities || []);
-        // Load saved active personality IDs from localStorage for automation mode
+        // Load active personality IDs from DB for automation context
         // Only if we don't have a current automation loaded (which has its own personality_ids)
         if (!currentAutomation) {
-          const savedIds = localStorage.getItem('automation_active_personality_ids');
-          if (savedIds) {
-            try {
-              const parsed = JSON.parse(savedIds);
-              if (Array.isArray(parsed)) {
-                setActivePersonalityIds(parsed);
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
+          setActivePersonalityIds(data.activeIds || []);
         }
       }
     } catch (error) {
@@ -428,7 +418,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // Fetch connectors for automation
   const fetchConnectors = async () => {
     try {
-      const response = await fetch('/api/ai/connectors');
+      const response = await fetch('/api/ai/connectors?context=automation');
       if (response.ok) {
         const data = await response.json();
         // Filter out external agents for automation mode
@@ -467,6 +457,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           description: `${server.toolCount} tools`,
           icon: '🔧',
           externalUrl: `api_key:${server.id}`,
+          context: 'automation',
         }),
       });
       if (response.ok) {
@@ -491,6 +482,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           description: `${server.toolCount} tools`,
           icon: '🌐',
           externalUrl: server.source_url,
+          context: 'automation',
         }),
       });
       if (response.ok) {
@@ -513,16 +505,24 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   };
 
-  // Toggle personality - persist to localStorage for automation mode
-  const togglePersonality = (id: string) => {
-    setActivePersonalityIds(prev => {
-      const newIds = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
-      // Persist to localStorage (only when not editing a specific automation)
-      if (!currentAutomation) {
-        localStorage.setItem('automation_active_personality_ids', JSON.stringify(newIds));
+  // Toggle personality - persist to DB for automation context
+  const togglePersonality = async (id: string) => {
+    const isActive = activePersonalityIds.includes(id);
+    try {
+      if (isActive) {
+        await fetch(`/api/ai/personalities/active?personalityId=${id}&context=automation`, { method: 'DELETE' });
+        setActivePersonalityIds(prev => prev.filter(p => p !== id));
+      } else {
+        await fetch('/api/ai/personalities/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ personalityId: id, context: 'automation' }),
+        });
+        setActivePersonalityIds(prev => [...prev, id]);
       }
-      return newIds;
-    });
+    } catch (error) {
+      console.error('Failed to toggle personality:', error);
+    }
   };
 
   // Fetch prompt history for an automation

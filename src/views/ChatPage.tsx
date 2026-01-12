@@ -633,7 +633,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Fetch personalities
   const fetchPersonalities = async () => {
     try {
-      const response = await fetch('/api/ai/personalities');
+      const response = await fetch('/api/ai/personalities?context=chat');
       if (response.ok) {
         const data = await response.json();
         setPersonalities(data.personalities || []);
@@ -676,13 +676,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     const isActive = activePersonalityIds.includes(personalityId);
     try {
       if (isActive) {
-        await fetch(`/api/ai/personalities/active?personalityId=${personalityId}`, { method: 'DELETE' });
+        await fetch(`/api/ai/personalities/active?personalityId=${personalityId}&context=chat`, { method: 'DELETE' });
         setActivePersonalityIds(prev => prev.filter(id => id !== personalityId));
       } else {
         await fetch('/api/ai/personalities/active', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ personalityId }),
+          body: JSON.stringify({ personalityId, context: 'chat' }),
         });
         setActivePersonalityIds(prev => [...prev, personalityId]);
       }
@@ -706,7 +706,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const fetchConnectors = async () => {
     try {
       setLoadingConnectors(true);
-      const response = await fetch('/api/ai/connectors');
+      const response = await fetch('/api/ai/connectors?context=chat');
       if (response.ok) {
         const data = await response.json();
         setConnectors(data.connectors || []);
@@ -760,6 +760,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           icon: '🔧',
           // Store api_key_id in external_url for reference
           externalUrl: `api_key:${server.id}`,
+          context: 'chat',
         }),
       });
       if (response.ok) {
@@ -787,6 +788,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           description: `${server.toolCount} tools`,
           icon: '🌐',
           externalUrl: server.source_url,
+          context: 'chat',
         }),
       });
       if (response.ok) {
@@ -811,6 +813,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           icon: '🤖',
           iconUrl: agent.icon_url || null,
           externalUrl: agent.agent_url,
+          context: 'chat',
         }),
       });
       if (response.ok) {

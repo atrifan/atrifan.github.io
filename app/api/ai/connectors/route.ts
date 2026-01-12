@@ -8,15 +8,19 @@ export const dynamic = 'force-dynamic';
 const db = supabase as any;
 
 // GET - List user's chat connectors
-export async function GET() {
+// Query param: context=chat|automation (default: chat)
+export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all connectors for this user
-    // Try with icon_url first, fall back to without if column doesn't exist
+    const { searchParams } = new URL(request.url);
+    const context = searchParams.get('context') || 'chat';
+
+    // Get all connectors for this user and context
+    // Try with icon_url and context first, fall back if columns don't exist
     let connectors = null;
     let error = null;
 
@@ -33,13 +37,15 @@ export async function GET() {
         icon_url,
         is_enabled,
         last_connected_at,
-        created_at
+        created_at,
+        context
       `)
       .eq('user_id', userId)
+      .eq('context', context)
       .order('created_at', { ascending: false });
 
     if (result.error?.code === '42703') {
-      // Column doesn't exist, try without icon_url
+      // Column doesn't exist, try without icon_url/context (legacy)
       const fallbackResult = await db
         .from('chat_connectors')
         .select(`
@@ -57,7 +63,7 @@ export async function GET() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      connectors = (fallbackResult.data || []).map((c: Record<string, unknown>) => ({ ...c, icon_url: null }));
+      connectors = (fallbackResult.data || []).map((c: Record<string, unknown>) => ({ ...c, icon_url: null, context: 'chat' }));
       error = fallbackResult.error;
     } else {
       connectors = result.data;
@@ -95,7 +101,8 @@ export async function POST(request: NextRequest) {
       displayName,
       description,
       icon,
-      iconUrl
+      iconUrl,
+      context = 'chat'  // 'chat' or 'automation'
     } = body;
 
     // Validate connector type
@@ -147,6 +154,7 @@ export async function POST(request: NextRequest) {
       display_name: displayName,
       description,
       icon: icon || '🔌',
+      context,  // 'chat' or 'automation'
     };
 
     // Only add icon_url if provided (column may not exist yet)

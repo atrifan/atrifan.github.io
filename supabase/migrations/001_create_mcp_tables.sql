@@ -2,7 +2,7 @@
 -- Run this migration in Supabase SQL Editor
 
 -- ============ API Keys Table ============
--- Stores API keys linked to Clerk users
+-- Stores API keys linked to Clerk users this api_keys is also the internal_mcp_servers table
 
 CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
