@@ -2026,8 +2026,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   {conversations.length === 0 ? (
                     <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
                   ) : (
-                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                      {conversations.slice(0, 10).map(conv => (
+                    <div>
+                      {conversations.map(conv => (
                         <div key={conv.id} onClick={() => { loadConversation(conv.id); setShowMobileOverlay(false); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div className="chat-history-title" style={{ flex: 1 }}>{conv.title}</div>

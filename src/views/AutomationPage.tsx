@@ -9,6 +9,7 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { MermaidDiagram } from '../components/MermaidDiagram';
 import { AutomationIcon } from '../components/AutomationIcon';
 import { FaviconImage } from '../components/FaviconImage';
+import { ChatInputArea } from '../components/ChatInputArea';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
 
@@ -936,21 +937,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       {/* FULLSCREEN BUILDER VIEW */}
       {view === 'builder' && (
         <div className="automation-fullscreen">
-          {/* Header */}
-          <div className="automation-fullscreen-header">
-            <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-              {/* Left: Back + Title */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                <button onClick={() => setView('list')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '1.25rem', padding: 0 }}>←</button>
-                <h1 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentAutomation?.name || 'New Workflow'}
-                </h1>
-              </div>
-            </div>
-          </div>
-
-          {/* Content Area - Scrollable */}
-          <div className="automation-fullscreen-content">
+          {/* Content Area - Scrollable (between fixed input at bottom) */}
+          <div className="automation-fullscreen-content" style={{ paddingTop: '1rem' }}>
             <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               {/* Settings Panel - Collapsible on mobile */}
               <details style={{ marginBottom: '1rem' }}>
@@ -1107,11 +1095,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {/* Fixed Input Bar - Bottom */}
           <div className="automation-fullscreen-input">
             <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
-              {/* Token usage and explanation */}
+              {/* Last generation stats */}
               {(lastTokenUsage || lastExplanation) && (
                 <div style={{ marginBottom: '0.5rem' }}>
                   {lastTokenUsage && (
                     <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginBottom: lastExplanation ? '0.25rem' : 0 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Last generation:</span>
                       <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {lastTokenUsage.input}</span>
                       <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {lastTokenUsage.output}</span>
                       <span style={{ color: 'rgba(255,255,255,0.5)' }}>= {lastTokenUsage.input + lastTokenUsage.output} tokens</span>
@@ -1123,88 +1112,20 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 </div>
               )}
 
-              {/* Input area */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                <textarea
-                  value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (e.metaKey || e.ctrlKey) {
-                        e.preventDefault();
-                        const textarea = e.currentTarget;
-                        const start = textarea.selectionStart;
-                        const end = textarea.selectionEnd;
-                        const newValue = prompt.substring(0, start) + '\n' + prompt.substring(end);
-                        setPrompt(newValue);
-                        setTimeout(() => {
-                          textarea.selectionStart = textarea.selectionEnd = start + 1;
-                          textarea.style.height = 'auto';
-                          textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-                        }, 0);
-                      } else if (!e.shiftKey) {
-                        e.preventDefault();
-                        generateFlow();
-                      }
-                    }
-                  }}
-                  placeholder="Describe your workflow changes..."
-                  disabled={isGenerating}
-                  rows={1}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem 1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: '1rem',
-                    resize: 'none',
-                    minHeight: '48px',
-                    maxHeight: '120px',
-                    lineHeight: '1.4',
-                    fontFamily: 'inherit',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={generateFlow}
-                  disabled={isGenerating || !prompt.trim()}
-                  title={isGenerating ? 'Generating...' : 'Generate (Enter)'}
-                  style={{
-                    background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    width: '48px',
-                    height: '48px',
-                    color: '#fff',
-                    cursor: isGenerating || !prompt.trim() ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: isGenerating || !prompt.trim() ? 0.5 : 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  {isGenerating ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
-                      <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
-                      <path d="M12 2a10 10 0 0 1 10 10" />
-                    </svg>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', marginTop: '0.35rem', marginBottom: 0, textAlign: 'center' }}>
-                Enter to generate • ⌘+Enter for new line
-              </p>
+              {/* Reusable Chat Input Area */}
+              <ChatInputArea
+                message={prompt}
+                setMessage={setPrompt}
+                onSend={generateFlow}
+                isLoading={isGenerating}
+                placeholder="Describe your workflow..."
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                tier={tier}
+                remainingBudget={budgetData?.usage.remainingBudget || 0}
+                activePersonalities={personalities.filter(p => activePersonalityIds.includes(p.id))}
+                sendButtonLabel="⚡ Generate"
+              />
             </div>
           </div>
         </div>
