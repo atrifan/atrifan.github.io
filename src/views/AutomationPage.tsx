@@ -4,14 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
 import { Footer } from '../components/Footer';
-import { AdBanner } from '../components/AdBanner';
-import { SideAds } from '../components/SideAds';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { MermaidDiagram } from '../components/MermaidDiagram';
 import { AutomationIcon } from '../components/AutomationIcon';
 import { FaviconImage } from '../components/FaviconImage';
-import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
 
@@ -561,11 +558,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   return (
     <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
-      <SideAds leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop} leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle} leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom} rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop} rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle} rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom} />
-
       <View maxWidth="56rem" marginX="auto">
         <div style={{ marginBottom: '1.5rem' }}><BackToTools /></div>
-        <AdBanner slot={ADS_CONFIG.slots.automationTop} format="horizontal" />
 
         {/* Header */}
         <View UNSAFE_style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -636,248 +630,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           </div>
         )}
 
-        {/* BUILDER VIEW */}
+        {/* BUILDER VIEW - Placeholder, actual content rendered in fullscreen portal */}
         {view === 'builder' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Settings Panel - Grid on desktop, stack on mobile */}
-            <div className="automation-settings-grid">
-              {/* Model Selection */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🤖 Model</h3>
-                  {tier === 'pro' && (
-                    <Link href="/pricing" style={{ textDecoration: 'none' }}>
-                      <span style={{ color: '#f59e0b', fontSize: '0.6rem' }}>⬆️ Upgrade</span>
-                    </Link>
-                  )}
-                </div>
-                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}>
-                  {availableModels.map(m => (
-                    <option key={m.id} value={m.id}>{m.icon} {m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Personalities */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>🎭 Personalities</h3>
-                {personalities.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/chat" style={{ color: '#f59e0b' }}>Create</Link></p>
-                ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                    {personalities.map(p => (
-                      <button key={p.id} onClick={() => setActivePersonalityIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} style={{ background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent', borderRadius: '6px', padding: '0.3rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
-                        {p.icon} {p.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Schedule */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>⏰ Schedule</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                  {SCHEDULE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => !opt.comingSoon && setSelectedSchedule(opt.id)}
-                      disabled={opt.comingSoon}
-                      title={opt.comingSoon ? 'Coming soon!' : opt.label}
-                      style={{
-                        background: opt.comingSoon ? 'rgba(255,255,255,0.03)' : selectedSchedule === opt.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.08)',
-                        border: opt.comingSoon ? '1px dashed rgba(255,255,255,0.2)' : 'none',
-                        borderRadius: '6px',
-                        padding: '0.3rem 0.5rem',
-                        color: opt.comingSoon ? 'rgba(255,255,255,0.3)' : '#fff',
-                        cursor: opt.comingSoon ? 'not-allowed' : 'pointer',
-                        fontSize: '0.7rem',
-                        opacity: opt.comingSoon ? 0.6 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                      }}
-                    >
-                      {opt.icon}
-                      <span>{opt.label}</span>
-                      {opt.comingSoon && <span>🔜</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* MCP Tools - Grouped by Server with Selection */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🔧 Tools</h3>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>{activeTools.length}/{mcpTools.length}</span>
-                </div>
-                {mcpTools.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add</Link></p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '120px', overflowY: 'auto' }}>
-                    {Object.entries(toolsByServer).map(([server, tools]) => {
-                      const isSelected = selectedServers.has(server);
-                      const serverId = tools[0]?.serverId;
-                      const sourceType = tools[0]?.sourceType;
-                      const sourceUrl = tools[0]?.sourceUrl;
-                      // External MCP servers go to /dashboard/mcp-server/{id}, internal ones go to mcp-composer
-                      const editUrl = sourceType === 'mcp_import' && serverId
-                        ? `/dashboard/mcp-server/${serverId}`
-                        : serverId
-                          ? `/dashboard/mcp-composer?edit=${serverId}`
-                          : '/dashboard';
-                      return (
-                        <div key={server} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.4rem', background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent', borderRadius: '4px' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', flex: 1 }}>
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleServerSelect(server)} style={{ accentColor: '#a78bfa', cursor: 'pointer', width: '14px', height: '14px' }} />
-                            {sourceType === 'mcp_import' && sourceUrl && (
-                              <FaviconImage
-                                baseUrl={sourceUrl}
-                                alt={server}
-                                size={14}
-                                borderRadius={2}
-                                fallbackEmoji="🔌"
-                                fallbackBgColor="transparent"
-                              />
-                            )}
-                            <span style={{ color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1 }}>{server}</span>
-                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{tools.length}</span>
-                          </label>
-                          <Link href={editUrl} onClick={(e) => e.stopPropagation()} style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textDecoration: 'none', padding: '0.1rem 0.25rem' }} title={`Edit ${server}`}>✏️</Link>
-                          <button onClick={(e) => { e.stopPropagation(); setToolInfoModal({ server, tools }); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', padding: '0.1rem 0.25rem' }} title={`View ${server} tools info`}>ⓘ</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Builder Panel */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '60vh' }}>
-              {/* Mermaid Diagram - Now at the top */}
-              <div style={{ flex: 1, minHeight: '300px' }}>
-                <MermaidDiagram definition={mermaidDiagram} title={currentAutomation?.name || 'Workflow'} />
-              </div>
-
-              {/* Prompt Input - Now below the diagram */}
-              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '0.75rem', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ color: '#fff', fontSize: 'clamp(0.875rem, 2vw, 1rem)', margin: '0 0 0.75rem' }}>✨ Describe your workflow</h3>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => {
-                      setPrompt(e.target.value);
-                      // Auto-resize
-                      e.target.style.height = 'auto';
-                      e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        if (e.metaKey || e.ctrlKey) {
-                          // Cmd/Ctrl+Enter: insert new line manually
-                          e.preventDefault();
-                          const textarea = e.currentTarget;
-                          const start = textarea.selectionStart;
-                          const end = textarea.selectionEnd;
-                          const newValue = prompt.substring(0, start) + '\n' + prompt.substring(end);
-                          setPrompt(newValue);
-                          setTimeout(() => {
-                            textarea.selectionStart = textarea.selectionEnd = start + 1;
-                            textarea.style.height = 'auto';
-                            textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-                          }, 0);
-                        } else if (!e.shiftKey) {
-                          // Enter: generate
-                          e.preventDefault();
-                          generateFlow();
-                        }
-                      }
-                    }}
-                    placeholder="e.g., When I get a new email, extract the sender and save to a spreadsheet..."
-                    disabled={isGenerating}
-                    rows={3}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem 1rem',
-                      borderRadius: '0.5rem',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      background: 'rgba(0,0,0,0.3)',
-                      color: '#fff',
-                      fontSize: '1rem', // 16px minimum prevents iOS zoom
-                      resize: 'none',
-                      minHeight: '5rem', // ~3 lines
-                      maxHeight: '12.5rem',
-                      lineHeight: '1.5',
-                      fontFamily: 'inherit',
-                    }}
-                  />
-                  <button
-                    onClick={generateFlow}
-                    disabled={isGenerating || !prompt.trim()}
-                    title={isGenerating ? 'Generating...' : 'Generate workflow (Enter)'}
-                    style={{
-                      background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                      border: 'none',
-                      borderRadius: '0.5rem',
-                      width: '3rem',
-                      height: '3rem',
-                      color: '#fff',
-                      cursor: isGenerating || !prompt.trim() ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: isGenerating || !prompt.trim() ? 0.5 : 1,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {isGenerating ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
-                        <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
-                        <path d="M12 2a10 10 0 0 1 10 10" />
-                      </svg>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', marginTop: '0.5rem', marginBottom: 0 }}>
-                  Enter to generate • ⌘+Enter for new line
-                </p>
-                {lastTokenUsage && (
-                  <div style={{ marginTop: '0.35rem', fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
-                      ↑ {lastTokenUsage.input} input
-                    </span>
-                    <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>
-                      ↓ {lastTokenUsage.output} output
-                    </span>
-                    {activePersonalityIds.length > 0 && (
-                      <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#f59e0b' }}>
-                        🎭 ~{personalities.filter(p => activePersonalityIds.includes(p.id)).reduce((sum, p) => sum + p.prompt_token_count, 0)} persona
-                      </span>
-                    )}
-                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      = {lastTokenUsage.input + lastTokenUsage.output} total
-                    </span>
-                  </div>
-                )}
-                {lastExplanation && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '0.375rem', fontSize: 'clamp(0.8rem, 1.8vw, 0.9rem)', color: 'rgba(255,255,255,0.7)' }}>{lastExplanation}</div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowSaveModal(true)} style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>💾 Save</button>
-                {currentAutomation && (
-                  <button onClick={() => setShowExportModal(true)} style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>📤 Export to TypeScript</button>
-                )}
-              </div>
-            </div>
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.5)' }}>
+            <p>Loading builder...</p>
           </div>
         )}
 
@@ -1176,6 +932,283 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
         <Footer />
       </View>
+
+      {/* FULLSCREEN BUILDER VIEW */}
+      {view === 'builder' && (
+        <div className="automation-fullscreen">
+          {/* Header */}
+          <div className="automation-fullscreen-header">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              {/* Left: Back + Title */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                <button onClick={() => setView('list')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '1.25rem', padding: 0 }}>←</button>
+                <h1 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentAutomation?.name || 'New Workflow'}
+                </h1>
+              </div>
+            </div>
+          </div>
+
+          {/* Content Area - Scrollable */}
+          <div className="automation-fullscreen-content">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              {/* Settings Panel - Collapsible on mobile */}
+              <details style={{ marginBottom: '1rem' }}>
+                <summary style={{ cursor: 'pointer', color: '#fff', fontSize: '0.85rem', fontWeight: 500, padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>⚙️</span> Settings
+                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                    {selectedModelData?.name} • {activePersonalityIds.length} personas • {selectedSchedule}
+                  </span>
+                </summary>
+                <div className="automation-settings-grid" style={{ marginTop: '0.5rem' }}>
+                  {/* Model Selection */}
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🤖 Model</h3>
+                      {tier === 'pro' && (
+                        <Link href="/pricing" style={{ textDecoration: 'none' }}>
+                          <span style={{ color: '#f59e0b', fontSize: '0.6rem' }}>⬆️ Upgrade</span>
+                        </Link>
+                      )}
+                    </div>
+                    <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}>
+                      {availableModels.map(m => (
+                        <option key={m.id} value={m.id}>{m.icon} {m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Personalities */}
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>🎭 Personalities</h3>
+                    {personalities.length === 0 ? (
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/chat" style={{ color: '#f59e0b' }}>Create</Link></p>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                        {personalities.map(p => (
+                          <button key={p.id} onClick={() => setActivePersonalityIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} style={{ background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent', borderRadius: '6px', padding: '0.3rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
+                            {p.icon} {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Schedule */}
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>⏰ Schedule</h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                      {SCHEDULE_OPTIONS.map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => !opt.comingSoon && setSelectedSchedule(opt.id)}
+                          disabled={opt.comingSoon}
+                          title={opt.comingSoon ? 'Coming soon!' : opt.label}
+                          style={{
+                            background: opt.comingSoon ? 'rgba(255,255,255,0.03)' : selectedSchedule === opt.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.08)',
+                            border: opt.comingSoon ? '1px dashed rgba(255,255,255,0.2)' : 'none',
+                            borderRadius: '6px',
+                            padding: '0.3rem 0.5rem',
+                            color: opt.comingSoon ? 'rgba(255,255,255,0.3)' : '#fff',
+                            cursor: opt.comingSoon ? 'not-allowed' : 'pointer',
+                            fontSize: '0.7rem',
+                            opacity: opt.comingSoon ? 0.6 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          {opt.icon}
+                          <span>{opt.label}</span>
+                          {opt.comingSoon && <span>🔜</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* MCP Tools */}
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🔧 Tools</h3>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>{activeTools.length}/{mcpTools.length}</span>
+                    </div>
+                    {mcpTools.length === 0 ? (
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add</Link></p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '120px', overflowY: 'auto' }}>
+                        {Object.entries(toolsByServer).map(([server, tools]) => {
+                          const isSelected = selectedServers.has(server);
+                          const serverId = tools[0]?.serverId;
+                          const sourceType = tools[0]?.sourceType;
+                          const sourceUrl = tools[0]?.sourceUrl;
+                          const editUrl = sourceType === 'mcp_import' && serverId
+                            ? `/dashboard/mcp-server/${serverId}`
+                            : serverId
+                              ? `/dashboard/mcp-composer?edit=${serverId}`
+                              : '/dashboard';
+                          return (
+                            <div key={server} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.4rem', background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent', borderRadius: '4px' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', flex: 1 }}>
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleServerSelect(server)} style={{ accentColor: '#a78bfa', cursor: 'pointer', width: '14px', height: '14px' }} />
+                                {sourceType === 'mcp_import' && sourceUrl && (
+                                  <FaviconImage baseUrl={sourceUrl} alt={server} size={14} borderRadius={2} fallbackEmoji="🔌" fallbackBgColor="transparent" />
+                                )}
+                                <span style={{ color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1 }}>{server}</span>
+                                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{tools.length}</span>
+                              </label>
+                              <Link href={editUrl} onClick={(e) => e.stopPropagation()} style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textDecoration: 'none', padding: '0.1rem 0.25rem' }} title={`Edit ${server}`}>✏️</Link>
+                              <button onClick={(e) => { e.stopPropagation(); setToolInfoModal({ server, tools }); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', padding: '0.1rem 0.25rem' }} title={`View ${server} tools info`}>ⓘ</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </details>
+
+              {/* Mermaid Diagram - Fill available space */}
+              <div className="automation-fullscreen-diagram">
+                <MermaidDiagram
+                  definition={mermaidDiagram}
+                  title={currentAutomation?.name || 'Workflow'}
+                  editable={true}
+                  onDefinitionChange={setMermaidDiagram}
+                  minHeight="100%"
+                  maxHeight="none"
+                />
+              </div>
+
+              {/* Create Automation Button - Centered under diagram */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', marginBottom: '0.5rem' }}>
+                <button
+                  onClick={() => setShowSaveModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '0.75rem 2rem',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+                  }}
+                >
+                  ⚡ Create Automation
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Fixed Input Bar - Bottom */}
+          <div className="automation-fullscreen-input">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+              {/* Token usage and explanation */}
+              {(lastTokenUsage || lastExplanation) && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  {lastTokenUsage && (
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginBottom: lastExplanation ? '0.25rem' : 0 }}>
+                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {lastTokenUsage.input}</span>
+                      <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {lastTokenUsage.output}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>= {lastTokenUsage.input + lastTokenUsage.output} tokens</span>
+                    </div>
+                  )}
+                  {lastExplanation && (
+                    <div style={{ padding: '0.35rem 0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>{lastExplanation}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Input area */}
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => {
+                    setPrompt(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (e.metaKey || e.ctrlKey) {
+                        e.preventDefault();
+                        const textarea = e.currentTarget;
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        const newValue = prompt.substring(0, start) + '\n' + prompt.substring(end);
+                        setPrompt(newValue);
+                        setTimeout(() => {
+                          textarea.selectionStart = textarea.selectionEnd = start + 1;
+                          textarea.style.height = 'auto';
+                          textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+                        }, 0);
+                      } else if (!e.shiftKey) {
+                        e.preventDefault();
+                        generateFlow();
+                      }
+                    }
+                  }}
+                  placeholder="Describe your workflow changes..."
+                  disabled={isGenerating}
+                  rows={1}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1rem',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#fff',
+                    fontSize: '1rem',
+                    resize: 'none',
+                    minHeight: '48px',
+                    maxHeight: '120px',
+                    lineHeight: '1.4',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={generateFlow}
+                  disabled={isGenerating || !prompt.trim()}
+                  title={isGenerating ? 'Generating...' : 'Generate (Enter)'}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    width: '48px',
+                    height: '48px',
+                    color: '#fff',
+                    cursor: isGenerating || !prompt.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: isGenerating || !prompt.trim() ? 0.5 : 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  {isGenerating ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                      <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
+                      <path d="M12 2a10 10 0 0 1 10 10" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', marginTop: '0.35rem', marginBottom: 0, textAlign: 'center' }}>
+                Enter to generate • ⌘+Enter for new line
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </View>
   );
 };
