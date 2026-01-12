@@ -8,6 +8,7 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
 import type { MCPTool } from '../types/mcp-composer';
@@ -69,6 +70,15 @@ const categoryIcons: Record<string, string> = {
   'Utility': '🔧',
 };
 
+// Tool type colors (consistent with MCP Composer)
+const TOOL_TYPE_COLORS: Record<string, string> = {
+  NATIVE: '#9ca3af',
+  REST: '#10b981',
+  MCP: '#3b82f6',
+  GQL: '#ec4899',
+  A2A: '#fbbf24',
+};
+
 interface CustomMCPServerDocsPageProps {
   serverId: string;
   isPro: boolean;
@@ -82,6 +92,8 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
   const [allTools, setAllTools] = useState<ToolWithSchema[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('all');
 
   // Scroll to top on mount
   useEffect(() => {
@@ -159,6 +171,20 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
   // Filter tools to only those enabled in this server
   const enabledToolNames = server?.tools.filter(t => t.isEnabled).map(t => t.name) || [];
   const serverTools = allTools.filter(tool => enabledToolNames.includes(tool.name));
+
+  // Get unique tool types from server tools
+  const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'].filter(type =>
+    serverTools.some(t => (t.toolType || 'NATIVE') === type)
+  );
+
+  // Apply search and type filters
+  const filteredTools = serverTools.filter(tool => {
+    const matchesType = selectedType === 'all' || (tool.toolType || 'NATIVE') === selectedType;
+    const matchesSearch = searchQuery === '' ||
+      tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tool.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesType && matchesSearch;
+  });
 
   const formatToolName = (name: string) => {
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -362,9 +388,122 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
           </div>
         )}
 
+        {/* Search & Filter */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          marginBottom: '1.5rem',
+        }}>
+          {/* Search */}
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search tools..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: searchQuery ? '0.875rem 2.5rem 0.875rem 1rem' : '0.875rem 1rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                fontSize: '1rem',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Type Filter Pills */}
+          {toolTypes.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginRight: '0.25rem' }}>Type:</span>
+              <button
+                onClick={() => setSelectedType('all')}
+                style={{
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: selectedType === 'all'
+                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                    : 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                All
+              </button>
+              {toolTypes.map(type => {
+                const color = TOOL_TYPE_COLORS[type] || '#9ca3af';
+                const isActive = selectedType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedType(type)}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      borderRadius: '16px',
+                      border: 'none',
+                      background: isActive
+                        ? `${color}33`
+                        : 'rgba(255,255,255,0.08)',
+                      color: isActive ? color : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Results Count */}
+        <p style={{
+          color: 'rgba(255,255,255,0.5)',
+          fontSize: '0.85rem',
+          marginBottom: '1rem',
+        }}>
+          Showing {filteredTools.length} of {serverTools.length} tools
+        </p>
+
         {/* Tools List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {serverTools.map(tool => (
+          {filteredTools.map(tool => (
             <div
               key={tool.name}
               style={{
@@ -390,6 +529,29 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
                   textAlign: 'left',
                 }}
               >
+                {/* Tool Icon */}
+                {tool.sourceUrl && (
+                  <FaviconImage
+                    iconUrl={tool.iconUrl}
+                    baseUrl={tool.sourceUrl}
+                    alt={tool.name}
+                    size={28}
+                    borderRadius={6}
+                    fallbackEmoji={
+                      tool.toolType === 'REST' ? '☁️' :
+                      tool.toolType === 'MCP' ? '🔌' :
+                      tool.toolType === 'GQL' ? '◈' :
+                      tool.toolType === 'A2A' ? '🤖' : '📦'
+                    }
+                    fallbackBgColor={
+                      tool.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' :
+                      tool.toolType === 'MCP' ? 'rgba(59, 130, 246, 0.2)' :
+                      tool.toolType === 'GQL' ? 'rgba(236, 72, 153, 0.2)' :
+                      tool.toolType === 'A2A' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                    }
+                    style={{ flexShrink: 0, alignSelf: 'flex-start', marginTop: '0.1rem' }}
+                  />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                     <h3 style={{ color: '#fff', fontSize: 'clamp(1rem, 2.5vw, 1.15rem)', fontWeight: 700, margin: 0 }}>
@@ -409,7 +571,7 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
                   <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 'clamp(0.85rem, 2vw, 0.95rem)', margin: 0, lineHeight: 1.5 }}>
                     {tool.description}
                   </p>
-                  <div style={{ marginTop: '0.5rem' }}>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{
                       fontSize: '0.75rem',
                       background: 'rgba(167, 139, 250, 0.2)',
@@ -419,6 +581,21 @@ export const CustomMCPServerDocsPage: React.FC<CustomMCPServerDocsPageProps> = (
                     }}>
                       {categoryIcons[tool.category] || '📦'} {tool.category}
                     </span>
+                    {(() => {
+                      const type = tool.toolType || 'NATIVE';
+                      const color = TOOL_TYPE_COLORS[type] || '#9ca3af';
+                      return (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          background: `${color}22`,
+                          color: color,
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '6px',
+                        }}>
+                          {type}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
                 <svg

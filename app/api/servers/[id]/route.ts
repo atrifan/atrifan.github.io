@@ -18,6 +18,8 @@ interface RouteParams {
 /**
  * Get a specific server by ID
  * GET /api/servers/[id]
+ *
+ * Special case: id='default' returns the default server
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
@@ -30,7 +32,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get all servers for user and find the one with matching ID
     const apiKeys = await getApiKeysByUser(userId);
-    const apiKey = apiKeys.find(k => k.id === id);
+    // Handle special 'default' case - find by server_name instead of id
+    const apiKey = id === 'default'
+      ? apiKeys.find(k => k.server_name === 'default')
+      : apiKeys.find(k => k.id === id);
 
     if (!apiKey) {
       return NextResponse.json({ error: 'Server not found' }, { status: 404 });
@@ -65,8 +70,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 /**
  * Update a server's tools
  * PUT /api/servers/[id]
- * 
+ *
  * Body: { name?: string, tools?: string[], disabledTools?: string[] }
+ * Special case: id='default' updates the default server
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
@@ -78,7 +84,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const apiKeys = await getApiKeysByUser(userId);
-    const apiKey = apiKeys.find(k => k.id === id);
+    // Handle special 'default' case - find by server_name instead of id
+    const apiKey = id === 'default'
+      ? apiKeys.find(k => k.server_name === 'default')
+      : apiKeys.find(k => k.id === id);
 
     if (!apiKey) {
       return NextResponse.json({ error: 'Server not found' }, { status: 404 });
@@ -172,14 +181,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const apiKeys = await getApiKeysByUser(userId);
-    const apiKey = apiKeys.find(k => k.id === id);
+    // Handle special 'default' case - find by server_name instead of id
+    const apiKey = id === 'default'
+      ? apiKeys.find(k => k.server_name === 'default')
+      : apiKeys.find(k => k.id === id);
 
     if (!apiKey) {
       return NextResponse.json({ error: 'Server not found' }, { status: 404 });
     }
 
     // Don't allow deleting the default server
-    if (apiKey.server_name === 'default') {
+    if (apiKey.server_name === 'default' || id === 'default') {
       return NextResponse.json(
         { error: 'Cannot delete the default server' },
         { status: 400 }

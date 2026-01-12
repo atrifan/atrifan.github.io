@@ -524,9 +524,11 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
         }
       }
 
+      setShowModal(null);
       router.push('/dashboard');
     } catch (error) {
       console.error('Failed to save server configuration:', error);
+      setShowModal(null);
       setSaving(false);
     }
   };

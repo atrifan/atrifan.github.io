@@ -262,6 +262,7 @@ export const DashboardPage: React.FC = () => {
   const [storedPlan, setStoredPlan] = useState<string | null>(null);
   const [servers, setServers] = useState<ServerFromApi[]>([]);
   const [selectedServerView, setSelectedServerView] = useState<SelectedServerView>('default');
+  const [totalAvailableTools, setTotalAvailableTools] = useState<number>(TOTAL_TOOL_COUNT);
   const mcpConfigCardRef = useRef<HTMLDivElement>(null);
 
   // Budget state
@@ -400,6 +401,24 @@ export const DashboardPage: React.FC = () => {
     };
 
     fetchServers();
+  }, [user]);
+
+  // Fetch total available tools count
+  useEffect(() => {
+    const fetchToolsCount = async () => {
+      if (!user) return;
+      try {
+        const response = await fetch('/api/tools', { cache: 'no-store' });
+        if (response.ok) {
+          const data = await response.json();
+          setTotalAvailableTools(data.totalCount || TOTAL_TOOL_COUNT);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tools count:', error);
+      }
+    };
+
+    fetchToolsCount();
   }, [user]);
 
   // Fetch budget data
@@ -1203,7 +1222,7 @@ export const DashboardPage: React.FC = () => {
                 const isCustom = selectedServer && selectedServer.serverName !== 'default';
                 // Calculate tool count from enabled tools
                 const enabledTools = selectedServer?.tools.filter(t => t.isEnabled) || [];
-                const toolCount = enabledTools.length || TOTAL_TOOL_COUNT;
+                const toolCount = enabledTools.length || totalAvailableTools;
                 const hasDisabledTools = selectedServer && selectedServer.tools.some(t => !t.isEnabled);
                 return (
                   <div style={{
@@ -1227,8 +1246,8 @@ export const DashboardPage: React.FC = () => {
                           {isCustom
                             ? `${toolCount} tools selected`
                             : hasDisabledTools
-                              ? `${toolCount} of ${TOTAL_TOOL_COUNT} tools enabled`
-                              : `All tools (${TOTAL_TOOL_COUNT})`}
+                              ? `${toolCount} of ${totalAvailableTools} tools enabled`
+                              : `All tools (${totalAvailableTools})`}
                         </div>
                       </div>
                     </div>
@@ -1483,7 +1502,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
                 {(() => {
-                  const enabledCount = defaultServer?.tools.filter(t => t.isEnabled).length || TOTAL_TOOL_COUNT;
+                  const enabledCount = defaultServer?.tools.filter(t => t.isEnabled).length || totalAvailableTools;
                   const severity = getToolCountSeverity(enabledCount);
                   const color = getToolCountColor(severity);
                   return (

@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
+import { FaviconImage } from '../components/FaviconImage';
 import { ADS_CONFIG } from '../config/ads.config';
+import type { ToolType } from '../types/mcp-composer';
 
 interface SchemaProperty {
   type: string;
@@ -27,9 +29,12 @@ interface Tool {
   name: string;
   description: string;
   category: string;
+  toolType?: ToolType;
   hasWidget: boolean;
   inputSchema: ToolSchema;
   outputSchema: ToolSchema;
+  sourceUrl?: string;
+  iconUrl?: string;
 }
 
 interface ToolsResponse {
@@ -49,10 +54,20 @@ const categoryIcons: Record<string, string> = {
   'Utility': '🔧',
 };
 
+// Tool type colors (consistent with MCP Composer)
+const TOOL_TYPE_COLORS: Record<string, string> = {
+  NATIVE: '#9ca3af',
+  REST: '#10b981',
+  MCP: '#3b82f6',
+  GQL: '#ec4899',
+  A2A: '#fbbf24',
+};
+
 export default function ToolsDocumentation() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,7 +78,8 @@ export default function ToolsDocumentation() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/tools')
+    // Add cache-busting to ensure fresh data
+    fetch('/api/tools', { cache: 'no-store' })
       .then(res => res.json())
       .then((data: ToolsResponse) => {
         setTools(data.tools);
@@ -73,12 +89,18 @@ export default function ToolsDocumentation() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Get unique tool types from the data
+  const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'].filter(type =>
+    tools.some(t => (t.toolType || 'NATIVE') === type)
+  );
+
   const filteredTools = tools.filter(tool => {
     const matchesCategory = selectedCategory === 'all' || tool.category === selectedCategory;
+    const matchesType = selectedType === 'all' || (tool.toolType || 'NATIVE') === selectedType;
     const matchesSearch = searchQuery === '' ||
       tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesType && matchesSearch;
   });
 
   const formatToolName = (name: string) => {
@@ -363,6 +385,54 @@ export default function ToolsDocumentation() {
               </button>
             ))}
           </div>
+
+          {/* Tool Type Filter Pills */}
+          {toolTypes.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginRight: '0.25rem' }}>Type:</span>
+              <button
+                onClick={() => setSelectedType('all')}
+                style={{
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: selectedType === 'all'
+                    ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                    : 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                All
+              </button>
+              {toolTypes.map(type => {
+                const color = TOOL_TYPE_COLORS[type] || '#9ca3af';
+                const isActive = selectedType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedType(type)}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      borderRadius: '16px',
+                      border: 'none',
+                      background: isActive
+                        ? `${color}33`
+                        : 'rgba(255,255,255,0.08)',
+                      color: isActive ? color : 'rgba(255,255,255,0.7)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Results Count */}
@@ -402,6 +472,29 @@ export default function ToolsDocumentation() {
                   textAlign: 'left',
                 }}
               >
+                {/* Tool Icon for imported tools */}
+                {tool.sourceUrl && (
+                  <FaviconImage
+                    iconUrl={tool.iconUrl}
+                    baseUrl={tool.sourceUrl}
+                    alt={tool.name}
+                    size={28}
+                    borderRadius={6}
+                    fallbackEmoji={
+                      tool.toolType === 'REST' ? '☁️' :
+                      tool.toolType === 'MCP' ? '🔌' :
+                      tool.toolType === 'GQL' ? '◈' :
+                      tool.toolType === 'A2A' ? '🤖' : '📦'
+                    }
+                    fallbackBgColor={
+                      tool.toolType === 'REST' ? 'rgba(16, 185, 129, 0.2)' :
+                      tool.toolType === 'MCP' ? 'rgba(59, 130, 246, 0.2)' :
+                      tool.toolType === 'GQL' ? 'rgba(236, 72, 153, 0.2)' :
+                      tool.toolType === 'A2A' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                    }
+                    style={{ flexShrink: 0, alignSelf: 'flex-start', marginTop: '0.1rem' }}
+                  />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     display: 'flex',
@@ -437,7 +530,7 @@ export default function ToolsDocumentation() {
                   }}>
                     {tool.description}
                   </p>
-                  <div style={{ marginTop: '0.5rem' }}>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{
                       fontSize: '0.75rem',
                       background: 'rgba(167, 139, 250, 0.2)',
@@ -447,6 +540,21 @@ export default function ToolsDocumentation() {
                     }}>
                       {categoryIcons[tool.category] || '📦'} {tool.category}
                     </span>
+                    {(() => {
+                      const type = tool.toolType || 'NATIVE';
+                      const color = TOOL_TYPE_COLORS[type] || '#9ca3af';
+                      return (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          background: `${color}22`,
+                          color: color,
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '6px',
+                        }}>
+                          {type}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
                 <svg

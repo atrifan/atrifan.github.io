@@ -315,14 +315,17 @@ export async function getEnabledServerTools(
 }
 
 /**
- * Link a tool to a server
+ * Link a tool to a server (uses upsert to handle existing links)
  */
 export async function linkToolToServer(
   insert: ServerToolInsert
 ): Promise<ServerToolRow> {
   const { data, error } = await supabase
     .from('server_tools')
-    .insert(insert as never)
+    .upsert(insert as never, {
+      onConflict: 'api_key_id,tool_id',
+      ignoreDuplicates: false
+    })
     .select()
     .single();
 
