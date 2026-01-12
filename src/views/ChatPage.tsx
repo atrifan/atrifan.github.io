@@ -454,6 +454,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       // Only on mobile, and only for printable characters
       if (window.innerWidth >= 768) return;
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Don't steal focus if user is already typing in another input/textarea
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+          return;
+        }
         // Focus textarea and scroll to bottom
         if (textareaRef.current && document.activeElement !== textareaRef.current) {
           textareaRef.current.focus();
