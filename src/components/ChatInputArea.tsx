@@ -63,6 +63,10 @@ interface ChatInputAreaProps {
 
   // Optional: Custom label for send button
   sendButtonLabel?: string;
+
+  // Optional: Settings button
+  onSettingsClick?: () => void;
+  showSettingsButton?: boolean;
 }
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -90,6 +94,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   showConversationStats = false,
 
   sendButtonLabel,
+
+  onSettingsClick,
+  showSettingsButton = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -174,6 +181,32 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       {/* Input row */}
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+        {/* Settings button - left side */}
+        {showSettingsButton && onSettingsClick && (
+          <button
+            onClick={onSettingsClick}
+            title="Settings"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '12px',
+              width: '48px',
+              height: '48px',
+              color: 'rgba(255,255,255,0.7)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        )}
+
         {/* Textarea with token counter */}
         <div style={{ flex: 1, position: 'relative' }}>
           <textarea
@@ -249,7 +282,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               <path d="M12 2a10 10 0 0 1 10 10" />
             </svg>
           ) : sendButtonLabel ? (
-            <>{sendButtonLabel}</>
+            <span style={{ fontSize: '1.5rem' }}>{sendButtonLabel}</span>
           ) : (
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 2L11 13" />

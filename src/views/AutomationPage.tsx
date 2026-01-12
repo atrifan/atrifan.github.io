@@ -10,6 +10,7 @@ import { MermaidDiagram } from '../components/MermaidDiagram';
 import { AutomationIcon } from '../components/AutomationIcon';
 import { FaviconImage } from '../components/FaviconImage';
 import { ChatInputArea } from '../components/ChatInputArea';
+import { SettingsPanel, SettingsPanelMode } from '../components/SettingsPanel';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
 
@@ -71,8 +72,10 @@ interface Personality {
   id: string;
   name: string;
   icon: string;
+  description?: string;
   system_prompt: string;
   prompt_token_count: number;
+  is_default: boolean;
 }
 
 interface MCPTool {
@@ -89,7 +92,28 @@ interface MCPTool {
 
 interface BudgetData {
   budget: { monthlyBudgetUsd: number };
-  usage: { totalCost: number; budgetUsedPercent: number; remainingBudget: number; totalTokens: number };
+  usage: { totalCost: number; budgetUsedPercent: number; remainingBudget: number; totalTokens: number; byModel?: Record<string, { inputTokens: number; outputTokens: number }> };
+  models: Array<{ modelId: string; usedCost: number; requestCount: number; usagePercent: number }>;
+}
+
+interface Connector {
+  id: string;
+  display_name: string;
+  connector_type: 'native' | 'internal_mcp' | 'external_mcp' | 'internal_agent' | 'external_agent';
+  icon?: string;
+  icon_url?: string | null;
+  external_url?: string | null;
+  mcp_server_id?: string | null;
+}
+
+interface MCPServer {
+  id: string;
+  display_name: string;
+  server_name: string;
+  source_type?: 'native' | 'api_key' | 'mcp_import';
+  source_url: string;
+  toolCount: number;
+  category?: string;
 }
 
 // Schedule options
@@ -151,6 +175,22 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [lastTokenUsage, setLastTokenUsage] = useState<{ input: number; output: number } | null>(null);
   const [toolInfoModal, setToolInfoModal] = useState<{ server: string; tools: MCPTool[] } | null>(null);
 
+  // Settings panel state
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [settingsPanelMode, setSettingsPanelMode] = useState<SettingsPanelMode>('main');
+  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [availableMcpServers, setAvailableMcpServers] = useState<MCPServer[]>([]);
+  const [viewingPersona, setViewingPersona] = useState<Personality | null>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+
+  // Check screen size for responsive layout
+  useEffect(() => {
+    const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
   // Group tools by server
   const toolsByServer = useMemo(() => {
     const grouped: Record<string, MCPTool[]> = {};
@@ -168,6 +208,21 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     if (selectedServers.size === 0) return mcpTools; // All if none selected
     return mcpTools.filter(tool => selectedServers.has(tool.server));
   }, [mcpTools, selectedServers]);
+
+  // Group automations into folders by schedule type (or use a default folder)
+  const automationFolders = useMemo(() => {
+    const folders: Record<string, Automation[]> = {};
+    automations.forEach(auto => {
+      const folderName = auto.schedule_type === 'manual' ? '📁 Manual' :
+                         auto.schedule_type === 'daily' ? '📅 Daily' :
+                         auto.schedule_type === 'weekly' ? '📆 Weekly' :
+                         auto.schedule_type === 'monthly' ? '🗓️ Monthly' :
+                         auto.schedule_type === 'cron' ? '⚙️ Cron' : '📁 Other';
+      if (!folders[folderName]) folders[folderName] = [];
+      folders[folderName].push(auto);
+    });
+    return Object.entries(folders).map(([name, autos]) => ({ name, automations: autos }));
+  }, [automations]);
 
   const toggleServerExpand = (server: string) => {
     setExpandedServers(prev => {
@@ -230,6 +285,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       fetchBudget();
       fetchPersonalities();
       fetchMcpTools();
+      fetchConnectors();
+      fetchAvailableMcpServers();
     }
   }, [canAccessPro]);
 
@@ -263,6 +320,21 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       if (response.ok) {
         const data = await response.json();
         setPersonalities(data.personalities || []);
+        // Load saved active personality IDs from localStorage for automation mode
+        // Only if we don't have a current automation loaded (which has its own personality_ids)
+        if (!currentAutomation) {
+          const savedIds = localStorage.getItem('automation_active_personality_ids');
+          if (savedIds) {
+            try {
+              const parsed = JSON.parse(savedIds);
+              if (Array.isArray(parsed)) {
+                setActivePersonalityIds(parsed);
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to fetch personalities:', error);
@@ -351,6 +423,106 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     } catch (error) {
       console.error('Failed to fetch MCP tools:', error);
     }
+  };
+
+  // Fetch connectors for automation
+  const fetchConnectors = async () => {
+    try {
+      const response = await fetch('/api/ai/connectors');
+      if (response.ok) {
+        const data = await response.json();
+        // Filter out external agents for automation mode
+        const mcpConnectors = (data.connectors || []).filter((c: Connector) =>
+          c.connector_type !== 'external_agent' && c.connector_type !== 'internal_agent'
+        );
+        setConnectors(mcpConnectors);
+      }
+    } catch (error) {
+      console.error('Failed to fetch connectors:', error);
+    }
+  };
+
+  // Fetch available MCP servers
+  const fetchAvailableMcpServers = async () => {
+    try {
+      const response = await fetch('/api/mcp-servers/list');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableMcpServers(data.servers || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch MCP servers:', error);
+    }
+  };
+
+  // Add internal MCP connector
+  const addInternalMcpConnector = async (server: MCPServer) => {
+    try {
+      const response = await fetch('/api/ai/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectorType: 'internal_mcp',
+          displayName: server.display_name,
+          description: `${server.toolCount} tools`,
+          icon: '🔧',
+          externalUrl: `api_key:${server.id}`,
+        }),
+      });
+      if (response.ok) {
+        fetchConnectors();
+        fetchMcpTools();
+      }
+    } catch (error) {
+      console.error('Failed to add connector:', error);
+    }
+  };
+
+  // Add external MCP connector
+  const addExternalMcpConnector = async (server: MCPServer) => {
+    try {
+      const response = await fetch('/api/ai/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectorType: 'external_mcp',
+          mcpServerId: server.id,
+          displayName: server.display_name,
+          description: `${server.toolCount} tools`,
+          icon: '🌐',
+          externalUrl: server.source_url,
+        }),
+      });
+      if (response.ok) {
+        fetchConnectors();
+        fetchMcpTools();
+      }
+    } catch (error) {
+      console.error('Failed to add connector:', error);
+    }
+  };
+
+  // Remove connector
+  const removeConnector = async (id: string) => {
+    try {
+      await fetch(`/api/ai/connectors?id=${id}`, { method: 'DELETE' });
+      fetchConnectors();
+      fetchMcpTools();
+    } catch (error) {
+      console.error('Failed to remove connector:', error);
+    }
+  };
+
+  // Toggle personality - persist to localStorage for automation mode
+  const togglePersonality = (id: string) => {
+    setActivePersonalityIds(prev => {
+      const newIds = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      // Persist to localStorage (only when not editing a specific automation)
+      if (!currentAutomation) {
+        localStorage.setItem('automation_active_personality_ids', JSON.stringify(newIds));
+      }
+      return newIds;
+    });
   };
 
   // Fetch prompt history for an automation
@@ -940,121 +1112,6 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {/* Content Area - Scrollable (between fixed input at bottom) */}
           <div className="automation-fullscreen-content" style={{ paddingTop: '1rem' }}>
             <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-              {/* Settings Panel - Collapsible on mobile */}
-              <details style={{ marginBottom: '1rem' }}>
-                <summary style={{ cursor: 'pointer', color: '#fff', fontSize: '0.85rem', fontWeight: 500, padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>⚙️</span> Settings
-                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
-                    {selectedModelData?.name} • {activePersonalityIds.length} personas • {selectedSchedule}
-                  </span>
-                </summary>
-                <div className="automation-settings-grid" style={{ marginTop: '0.5rem' }}>
-                  {/* Model Selection */}
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🤖 Model</h3>
-                      {tier === 'pro' && (
-                        <Link href="/pricing" style={{ textDecoration: 'none' }}>
-                          <span style={{ color: '#f59e0b', fontSize: '0.6rem' }}>⬆️ Upgrade</span>
-                        </Link>
-                      )}
-                    </div>
-                    <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}>
-                      {availableModels.map(m => (
-                        <option key={m.id} value={m.id}>{m.icon} {m.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Personalities */}
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>🎭 Personalities</h3>
-                    {personalities.length === 0 ? (
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/chat" style={{ color: '#f59e0b' }}>Create</Link></p>
-                    ) : (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                        {personalities.map(p => (
-                          <button key={p.id} onClick={() => setActivePersonalityIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} style={{ background: activePersonalityIds.includes(p.id) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', border: activePersonalityIds.includes(p.id) ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent', borderRadius: '6px', padding: '0.3rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
-                            {p.icon} {p.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Schedule */}
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>⏰ Schedule</h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                      {SCHEDULE_OPTIONS.map(opt => (
-                        <button
-                          key={opt.id}
-                          onClick={() => !opt.comingSoon && setSelectedSchedule(opt.id)}
-                          disabled={opt.comingSoon}
-                          title={opt.comingSoon ? 'Coming soon!' : opt.label}
-                          style={{
-                            background: opt.comingSoon ? 'rgba(255,255,255,0.03)' : selectedSchedule === opt.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.08)',
-                            border: opt.comingSoon ? '1px dashed rgba(255,255,255,0.2)' : 'none',
-                            borderRadius: '6px',
-                            padding: '0.3rem 0.5rem',
-                            color: opt.comingSoon ? 'rgba(255,255,255,0.3)' : '#fff',
-                            cursor: opt.comingSoon ? 'not-allowed' : 'pointer',
-                            fontSize: '0.7rem',
-                            opacity: opt.comingSoon ? 0.6 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                          }}
-                        >
-                          {opt.icon}
-                          <span>{opt.label}</span>
-                          {opt.comingSoon && <span>🔜</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* MCP Tools */}
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <h3 style={{ color: '#fff', fontSize: '0.85rem', margin: 0 }}>🔧 Tools</h3>
-                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>{activeTools.length}/{mcpTools.length}</span>
-                    </div>
-                    {mcpTools.length === 0 ? (
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: 0 }}>None. <Link href="/dashboard" style={{ color: '#f59e0b' }}>Add</Link></p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '120px', overflowY: 'auto' }}>
-                        {Object.entries(toolsByServer).map(([server, tools]) => {
-                          const isSelected = selectedServers.has(server);
-                          const serverId = tools[0]?.serverId;
-                          const sourceType = tools[0]?.sourceType;
-                          const sourceUrl = tools[0]?.sourceUrl;
-                          const editUrl = sourceType === 'mcp_import' && serverId
-                            ? `/dashboard/mcp-server/${serverId}`
-                            : serverId
-                              ? `/dashboard/mcp-composer?edit=${serverId}`
-                              : '/dashboard';
-                          return (
-                            <div key={server} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.4rem', background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'transparent', borderRadius: '4px' }}>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', flex: 1 }}>
-                                <input type="checkbox" checked={isSelected} onChange={() => toggleServerSelect(server)} style={{ accentColor: '#a78bfa', cursor: 'pointer', width: '14px', height: '14px' }} />
-                                {sourceType === 'mcp_import' && sourceUrl && (
-                                  <FaviconImage baseUrl={sourceUrl} alt={server} size={14} borderRadius={2} fallbackEmoji="🔌" fallbackBgColor="transparent" />
-                                )}
-                                <span style={{ color: isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1 }}>{server}</span>
-                                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{tools.length}</span>
-                              </label>
-                              <Link href={editUrl} onClick={(e) => e.stopPropagation()} style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textDecoration: 'none', padding: '0.1rem 0.25rem' }} title={`Edit ${server}`}>✏️</Link>
-                              <button onClick={(e) => { e.stopPropagation(); setToolInfoModal({ server, tools }); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', padding: '0.1rem 0.25rem' }} title={`View ${server} tools info`}>ⓘ</button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </details>
-
               {/* Mermaid Diagram - Fill available space */}
               <div className="automation-fullscreen-diagram">
                 <MermaidDiagram
@@ -1124,9 +1181,76 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 tier={tier}
                 remainingBudget={budgetData?.usage.remainingBudget || 0}
                 activePersonalities={personalities.filter(p => activePersonalityIds.includes(p.id))}
-                sendButtonLabel="⚡ Generate"
+                sendButtonLabel="⚡"
+                showSettingsButton={true}
+                onSettingsClick={() => setShowSettingsPanel(true)}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Panel */}
+      <SettingsPanel
+        mode="automation"
+        isOpen={showSettingsPanel}
+        onClose={() => setShowSettingsPanel(false)}
+        isLargeScreen={isLargeScreen}
+        panelMode={settingsPanelMode}
+        setPanelMode={setSettingsPanelMode}
+        budgetData={budgetData}
+        tier={tier}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
+        availableModels={availableModels}
+        connectors={connectors}
+        removeConnector={removeConnector}
+        availableMcpServers={availableMcpServers}
+        addInternalMcpConnector={addInternalMcpConnector}
+        addExternalMcpConnector={addExternalMcpConnector}
+        totalToolsCount={mcpTools.length}
+        personalities={personalities}
+        activePersonalityIds={activePersonalityIds}
+        togglePersonality={togglePersonality}
+        setViewingPersona={setViewingPersona}
+        automationFolders={automationFolders}
+        currentAutomationId={currentAutomation?.id || null}
+        loadAutomation={loadAutomation}
+        deleteAutomation={deleteAutomation}
+        onNewItem={startNew}
+        newItemLabel="New Automation"
+        scheduleOptions={SCHEDULE_OPTIONS}
+        selectedSchedule={selectedSchedule}
+        setSelectedSchedule={setSelectedSchedule}
+      />
+
+      {/* Persona View Modal */}
+      {viewingPersona && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setViewingPersona(null)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '500px', width: '100%', maxHeight: '80vh', overflow: 'auto', border: '1px solid rgba(245, 158, 11, 0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '2rem' }}>{viewingPersona.icon}</span>
+              <div>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>{viewingPersona.name}</h3>
+                {viewingPersona.description && <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0.25rem 0 0', fontSize: '0.85rem' }}>{viewingPersona.description}</p>}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>System Prompt</div>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
+                <pre style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', lineHeight: 1.5 }}>{viewingPersona.system_prompt}</pre>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{viewingPersona.prompt_token_count} tokens</span>
+              <Link href="/dashboard" onClick={() => setViewingPersona(null)} style={{ color: '#f59e0b', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span>✏️</span> Edit in Dashboard
+              </Link>
+            </div>
+
+            <button onClick={() => setViewingPersona(null)} style={{ width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
           </div>
         </div>
       )}
