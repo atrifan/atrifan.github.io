@@ -1678,6 +1678,64 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               )}
             </div>
 
+            {/* Feature toggle buttons */}
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
+              {/* Reasoning toggle - only show when connectors exist and not using external agent */}
+              {connectors.length > 0 && !isExternalAgentSelected && (
+                <button
+                  onClick={() => setEnableReasoning(!enableReasoning)}
+                  title={enableReasoning ? 'Reasoning enabled (click to disable)' : 'Enable reasoning for tool orchestration'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    background: enableReasoning ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                    border: enableReasoning ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    padding: '0.25rem 0.4rem',
+                    color: enableReasoning ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  🧠
+                </button>
+              )}
+
+              {/* RAG toggle - show when RAGs exist */}
+              {rags.length > 0 && (
+                <button
+                  onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('rags'); }}
+                  title={activeRagIds.length > 0 ? `${activeRagIds.length} knowledge base${activeRagIds.length > 1 ? 's' : ''} active (click to manage)` : 'No knowledge bases active (click to add)'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    background: activeRagIds.length > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                    border: activeRagIds.length > 0 ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '6px',
+                    padding: '0.25rem 0.4rem',
+                    color: activeRagIds.length > 0 ? '#10b981' : 'rgba(255,255,255,0.5)',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    <path d="M8 7h8" />
+                    <path d="M8 11h8" />
+                    <path d="M8 15h4" />
+                  </svg>
+                  {activeRagIds.length > 0 && (
+                    <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeRagIds.length}</span>
+                  )}
+                </button>
+              )}
+            </div>
+
             {/* Token/budget info */}
             <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
               {isExternalAgentSelected ? (

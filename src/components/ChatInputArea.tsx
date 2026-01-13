@@ -67,6 +67,16 @@ interface ChatInputAreaProps {
   // Optional: Settings button
   onSettingsClick?: () => void;
   showSettingsButton?: boolean;
+
+  // Optional: Reasoning toggle
+  enableReasoning?: boolean;
+  onReasoningToggle?: () => void;
+  showReasoningToggle?: boolean;
+
+  // Optional: RAG toggle
+  activeRagCount?: number;
+  onRagClick?: () => void;
+  showRagToggle?: boolean;
 }
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -97,6 +107,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   onSettingsClick,
   showSettingsButton = false,
+
+  enableReasoning = false,
+  onReasoningToggle,
+  showReasoningToggle = false,
+
+  activeRagCount = 0,
+  onRagClick,
+  showRagToggle = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -292,8 +310,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         </button>
       </div>
 
-      {/* Model selector + Helper text */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+      {/* Model selector + Feature toggles + Helper text */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
         {/* Model selector button with dropdown */}
         <div ref={modelDropdownRef} style={{ position: 'relative' }}>
           <button
@@ -397,6 +415,66 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 </>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Feature toggle buttons */}
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
+          {/* Reasoning toggle/indicator */}
+          {showReasoningToggle && (
+            <button
+              onClick={onReasoningToggle}
+              disabled={!onReasoningToggle}
+              title={!onReasoningToggle ? 'Reasoning always enabled' : enableReasoning ? 'Reasoning enabled (click to disable)' : 'Enable reasoning for tool orchestration'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                background: enableReasoning ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                border: enableReasoning ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '6px',
+                padding: '0.25rem 0.4rem',
+                color: enableReasoning ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+                cursor: onReasoningToggle ? 'pointer' : 'default',
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                opacity: !onReasoningToggle ? 0.8 : 1,
+              }}
+            >
+              🧠
+            </button>
+          )}
+
+          {/* RAG toggle */}
+          {showRagToggle && onRagClick && (
+            <button
+              onClick={onRagClick}
+              title={activeRagCount > 0 ? `${activeRagCount} knowledge base${activeRagCount > 1 ? 's' : ''} active (click to manage)` : 'No knowledge bases active (click to add)'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                background: activeRagCount > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                border: activeRagCount > 0 ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '6px',
+                padding: '0.25rem 0.4rem',
+                color: activeRagCount > 0 ? '#10b981' : 'rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+                fontSize: '0.7rem',
+                transition: 'all 0.2s',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <path d="M8 7h8" />
+                <path d="M8 11h8" />
+                <path d="M8 15h4" />
+              </svg>
+              {activeRagCount > 0 && (
+                <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeRagCount}</span>
+              )}
+            </button>
           )}
         </div>
 

@@ -1233,6 +1233,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 sendButtonLabel="⚡"
                 showSettingsButton={true}
                 onSettingsClick={() => setShowSettingsPanel(true)}
+                showReasoningToggle={true}
+                enableReasoning={true}
+                showRagToggle={rags.length > 0}
+                activeRagCount={activeRagIds.length}
+                onRagClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('rags'); }}
               />
             </div>
           </div>
