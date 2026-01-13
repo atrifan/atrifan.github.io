@@ -1,6 +1,6 @@
 'use client';
 
-import { CSSProperties, useState, useEffect, useRef } from 'react';
+import { CSSProperties, useState, useEffect, useRef, useCallback } from 'react';
 import { discoverOpenIDConfig, getDefaultScopes, type OpenIDConfiguration } from '../lib/openid-discovery';
 
 // Auth type union
@@ -16,6 +16,16 @@ export interface OAuth2Config {
   clientId: string;
   clientSecret: string;
   registrationEndpoint: string;
+}
+
+// OAuth token response
+export interface OAuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+  id_token?: string;
 }
 
 export const defaultOAuth2Config: OAuth2Config = {
@@ -64,6 +74,10 @@ export interface AuthenticationCardProps {
   // When provided, attempts to discover OpenID configuration from this URL
   domainForCheck?: string;
 
+  // OAuth popup callback (optional)
+  // Called when OAuth authentication completes successfully
+  onOAuthToken?: (token: OAuthTokenResponse) => void;
+
   // Customization
   description?: string;
   inputStyle: CSSProperties;
@@ -91,6 +105,7 @@ export function AuthenticationCard({
   showClientSecret = false,
   onShowClientSecretToggle,
   domainForCheck,
+  onOAuthToken,
   description = 'If your endpoint requires authentication, provide credentials below.',
   inputStyle,
 }: AuthenticationCardProps) {
@@ -103,6 +118,18 @@ export function AuthenticationCard({
   const [discoveryUrl, setDiscoveryUrl] = useState<string>('');
   const lastCheckedDomain = useRef<string>('');
   const discoveryDismissed = useRef<boolean>(false);
+
+  // OAuth popup state
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [receivedToken, setReceivedToken] = useState<OAuthTokenResponse | null>(null);
+  const oauthStateRef = useRef<string>('');
+  const popupRef = useRef<Window | null>(null);
+  // DCR-obtained credentials (stored in ref to persist across renders during OAuth flow)
+  const dcrCredentialsRef = useRef<{ clientId: string; clientSecret: string } | null>(null);
+  // Guard to prevent duplicate message processing
+  const processingCodeRef = useRef<string | null>(null);
 
   // OpenID Discovery effect
   useEffect(() => {
@@ -124,6 +151,190 @@ export function AuthenticationCard({
 
     checkOpenID();
   }, [domainForCheck, onOAuth2ConfigChange, isOAuth2Enabled]);
+
+  // Check if OAuth2 config is complete for authentication
+  const isOAuth2ConfigComplete = useCallback(() => {
+    if (!oauth2Config?.enabled) return false;
+    if (!oauth2Config.authorizationEndpoint.trim()) return false;
+    if (!oauth2Config.tokenEndpoint.trim()) return false;
+    if (!oauth2Config.scopes.trim()) return false;
+
+    if (oauth2Config.useDcr) {
+      return !!oauth2Config.registrationEndpoint.trim();
+    } else {
+      return !!oauth2Config.clientId.trim() && !!oauth2Config.clientSecret.trim();
+    }
+  }, [oauth2Config]);
+
+  // Handle OAuth popup message
+  const handleOAuthMessage = useCallback(async (event: MessageEvent) => {
+    if (event.data?.type !== 'oauth-callback') return;
+
+    const { code, error, errorDescription, state } = event.data;
+
+    // Verify state matches
+    if (state && state !== oauthStateRef.current) {
+      console.warn('OAuth state mismatch');
+      return;
+    }
+
+    if (error) {
+      setOauthError(errorDescription || error);
+      setIsAuthenticating(false);
+      return;
+    }
+
+    // Guard against duplicate processing of the same code
+    if (code && processingCodeRef.current === code) {
+      return;
+    }
+
+    if (code && oauth2Config) {
+      // Mark this code as being processed
+      processingCodeRef.current = code;
+      try {
+        // Use DCR credentials if available, otherwise use configured credentials
+        const clientId = dcrCredentialsRef.current?.clientId || oauth2Config.clientId;
+        const clientSecret = dcrCredentialsRef.current?.clientSecret || oauth2Config.clientSecret;
+
+        // Exchange code for token
+        const redirectUri = `${window.location.origin}/oauth-callback`;
+        const response = await fetch('/api/oauth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            tokenEndpoint: oauth2Config.tokenEndpoint,
+            clientId,
+            clientSecret,
+            redirectUri,
+          }),
+        });
+
+        const tokenData = await response.json();
+
+        if (!response.ok) {
+          setOauthError(tokenData.error_description || tokenData.error || 'Token exchange failed');
+          setIsAuthenticating(false);
+          // Clear refs on failure
+          dcrCredentialsRef.current = null;
+          processingCodeRef.current = null;
+          return;
+        }
+
+        // Success! Show token modal
+        setReceivedToken(tokenData);
+        setShowTokenModal(true);
+        setIsAuthenticating(false);
+        setOauthError(null);
+        // Clear refs after successful use
+        dcrCredentialsRef.current = null;
+        processingCodeRef.current = null;
+
+        // Call the callback if provided
+        onOAuthToken?.(tokenData);
+      } catch (err) {
+        setOauthError(err instanceof Error ? err.message : 'Token exchange failed');
+        setIsAuthenticating(false);
+        // Clear refs on error
+        dcrCredentialsRef.current = null;
+        processingCodeRef.current = null;
+      }
+    }
+  }, [oauth2Config, onOAuthToken]);
+
+  // Listen for OAuth popup messages
+  useEffect(() => {
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, [handleOAuthMessage]);
+
+  // Start OAuth authentication flow
+  const startOAuthFlow = useCallback(async () => {
+    if (!oauth2Config || !isOAuth2ConfigComplete()) return;
+
+    setIsAuthenticating(true);
+    setOauthError(null);
+
+    const redirectUri = `${window.location.origin}/oauth-callback`;
+    let clientId = oauth2Config.clientId;
+
+    // If using DCR, register a client first
+    if (oauth2Config.useDcr && oauth2Config.registrationEndpoint) {
+      try {
+        const dcrResponse = await fetch(oauth2Config.registrationEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            redirect_uris: [redirectUri],
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+            token_endpoint_auth_method: 'client_secret_basic',
+            client_name: 'OAuth Test Client',
+          }),
+        });
+
+        if (!dcrResponse.ok) {
+          const errorData = await dcrResponse.json().catch(() => ({}));
+          setOauthError(errorData.error_description || errorData.error || 'Dynamic client registration failed');
+          setIsAuthenticating(false);
+          return;
+        }
+
+        const dcrData = await dcrResponse.json();
+        clientId = dcrData.client_id;
+        // Store DCR credentials for token exchange
+        dcrCredentialsRef.current = {
+          clientId: dcrData.client_id,
+          clientSecret: dcrData.client_secret || '',
+        };
+      } catch (err) {
+        setOauthError(err instanceof Error ? err.message : 'Dynamic client registration failed');
+        setIsAuthenticating(false);
+        return;
+      }
+    }
+
+    // Generate state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15);
+    oauthStateRef.current = state;
+
+    // Build authorization URL
+    const authUrl = new URL(oauth2Config.authorizationEndpoint);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', oauth2Config.scopes);
+    authUrl.searchParams.set('state', state);
+
+    // Open popup
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    popupRef.current = window.open(
+      authUrl.toString(),
+      'oauth-popup',
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`
+    );
+
+    // Check if popup was blocked
+    if (!popupRef.current) {
+      setOauthError('Popup was blocked. Please allow popups for this site.');
+      setIsAuthenticating(false);
+      dcrCredentialsRef.current = null;
+      return;
+    }
+
+    // Poll to check if popup was closed without completing
+    const pollTimer = setInterval(() => {
+      if (popupRef.current?.closed) {
+        clearInterval(pollTimer);
+        setIsAuthenticating(false);
+      }
+    }, 500);
+  }, [oauth2Config, isOAuth2ConfigComplete]);
 
   const handleApproveDiscovery = () => {
     if (!discoveredConfig || !onOAuth2ConfigChange) return;
@@ -435,6 +646,54 @@ export function AuthenticationCard({
                   </>
                 )}
               </div>
+
+              {/* Authenticate Now Button */}
+              <div style={{ marginTop: '1rem' }}>
+                {oauthError && (
+                  <div style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', color: '#ef4444', fontSize: '0.8rem' }}>
+                    ⚠️ {oauthError}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={startOAuthFlow}
+                  disabled={!isOAuth2ConfigComplete() || isAuthenticating}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: isOAuth2ConfigComplete() && !isAuthenticating
+                      ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                      : 'rgba(255,255,255,0.1)',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    cursor: isOAuth2ConfigComplete() && !isAuthenticating ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    opacity: isOAuth2ConfigComplete() ? 1 : 0.5,
+                  }}
+                >
+                  {isAuthenticating ? (
+                    <>
+                      <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+                      {oauth2Config.useDcr ? 'Registering & Authenticating...' : 'Authenticating...'}
+                    </>
+                  ) : (
+                    <>
+                      🔓 Authenticate Now {oauth2Config.useDcr && '(via DCR)'}
+                    </>
+                  )}
+                </button>
+                {!isOAuth2ConfigComplete() && (
+                  <p style={{ marginTop: '0.5rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', textAlign: 'center' }}>
+                    Complete all required fields above to authenticate
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -526,6 +785,64 @@ export function AuthenticationCard({
         </div>
       </div>
     </div>
+
+    {/* Token Result Modal (for testing) */}
+    {showTokenModal && receivedToken && (
+      <div style={modalOverlayStyle} onClick={() => setShowTokenModal(false)}>
+        <div style={{ ...modalStyle, maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            ✅ OAuth Token Received
+          </div>
+          <p style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+            Authentication successful! Here is your access token:
+          </p>
+          <div style={{ background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem', fontSize: '0.8rem', maxHeight: '300px', overflow: 'auto' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Access Token</div>
+              <div style={{ color: '#10b981', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: '0.75rem' }}>{receivedToken.access_token}</div>
+            </div>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Token Type</div>
+              <div style={{ color: '#fff' }}>{receivedToken.token_type}</div>
+            </div>
+            {receivedToken.expires_in && (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Expires In</div>
+                <div style={{ color: '#fff' }}>{receivedToken.expires_in} seconds</div>
+              </div>
+            )}
+            {receivedToken.refresh_token && (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Refresh Token</div>
+                <div style={{ color: '#f59e0b', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: '0.75rem' }}>{receivedToken.refresh_token}</div>
+              </div>
+            )}
+            {receivedToken.scope && (
+              <div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>Scope</div>
+                <div style={{ color: '#fff' }}>{receivedToken.scope}</div>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <button
+              style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#fff', padding: '0.75rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
+              onClick={() => {
+                navigator.clipboard.writeText(receivedToken.access_token);
+              }}
+            >
+              📋 Copy Token
+            </button>
+            <button
+              style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', color: '#fff', padding: '0.75rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
+              onClick={() => setShowTokenModal(false)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }
