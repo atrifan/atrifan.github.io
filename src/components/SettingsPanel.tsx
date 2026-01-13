@@ -26,6 +26,17 @@ interface Personality {
   is_default: boolean;
 }
 
+interface RAG {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  document_count: number;
+  total_tokens: number;
+  token_limit: number;
+  is_enabled: boolean;
+}
+
 interface Conversation {
   id: string;
   title: string;
@@ -84,7 +95,7 @@ const UsageDonut: React.FC<{ percent: number; size?: number; strokeWidth?: numbe
   );
 };
 
-export type SettingsPanelMode = 'main' | 'connectors' | 'personas' | 'run-settings';
+export type SettingsPanelMode = 'main' | 'connectors' | 'personas' | 'rags' | 'run-settings';
 
 export interface SettingsPanelProps {
   // Mode: 'chat' or 'automation'
@@ -129,7 +140,12 @@ export interface SettingsPanelProps {
   activePersonalityIds: string[];
   togglePersonality: (id: string) => void;
   setViewingPersona?: (p: Personality | null) => void;
-  
+
+  // RAGs (Knowledge Bases)
+  rags?: RAG[];
+  activeRagIds?: string[];
+  toggleRag?: (id: string) => void;
+
   // Reasoning toggle (chat only, always enabled for automation)
   enableReasoning?: boolean;
   setEnableReasoning?: (enabled: boolean) => void;
@@ -189,6 +205,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     activePersonalityIds,
     togglePersonality,
     setViewingPersona,
+    rags = [],
+    activeRagIds = [],
+    toggleRag,
     enableReasoning = false,
     setEnableReasoning,
     showReasoningToggle = false,
@@ -267,6 +286,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
               <h2 style={{ color: '#fff', margin: 0, fontSize: '1rem', fontWeight: 600, flex: 1, textAlign: 'center' }}>
                 {panelMode === 'connectors' && '🔌 Connectors'}
                 {panelMode === 'personas' && '🎭 Personas'}
+                {panelMode === 'rags' && '📚 Knowledge Bases'}
                 {panelMode === 'run-settings' && '⏰ Run Settings'}
               </h2>
             </>
@@ -503,6 +523,33 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                 <button onClick={() => setPanelMode('personas')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Persona</button>
               </div>
 
+              {/* Knowledge Bases (RAGs) Section */}
+              {rags.length > 0 || toggleRag ? (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📚 Knowledge Bases</span>
+                    {activeRagIds.length > 0 && <span style={{ background: mode === 'chat' ? '#8b5cf6' : '#f59e0b', color: '#fff', borderRadius: '10px', padding: '0.1rem 0.4rem', fontSize: '0.65rem', fontWeight: 600 }}>{activeRagIds.length}</span>}
+                  </div>
+                  {activeRagIds.length > 0 && (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      {rags.filter(r => activeRagIds.includes(r.id)).map(r => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.25rem' }}>
+                          <span style={{ fontSize: '1rem' }}>{r.icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: '#fff', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>{r.document_count} docs • {r.total_tokens.toLocaleString()} tokens</div>
+                          </div>
+                          {toggleRag && (
+                            <button onClick={() => toggleRag(r.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => setPanelMode('rags')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Add Knowledge Base</button>
+                </div>
+              ) : null}
+
               {/* Run Settings Button - Automation mode only */}
               {mode === 'automation' && scheduleOptions.length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>
@@ -680,6 +727,39 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                   <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
                     <Link href="/dashboard" style={{ color: mode === 'chat' ? '#a78bfa' : '#f59e0b', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                       <span>✏️</span> Manage Personas in Dashboard
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* RAGS MODE */}
+          {panelMode === 'rags' && (
+            <div>
+              {rags.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'rgba(255,255,255,0.5)' }}>
+                  <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.75rem' }}>📚</span>
+                  <p style={{ margin: '0 0 1rem', fontSize: '0.9rem' }}>No knowledge bases yet</p>
+                  <Link href="/dashboard/rag-import" style={{ color: mode === 'chat' ? '#a78bfa' : '#f59e0b', textDecoration: 'underline', fontSize: '0.85rem' }}>Create in Dashboard →</Link>
+                </div>
+              ) : (
+                <>
+                  {rags.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: activeRagIds.includes(r.id) ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', border: activeRagIds.includes(r.id) ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent', cursor: 'pointer' }}
+                      onClick={() => { toggleRag?.(r.id); setPanelMode('main'); }}
+                    >
+                      <span style={{ fontSize: '1.25rem' }}>{r.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{r.name}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{r.document_count} docs • {r.total_tokens.toLocaleString()} tokens</div>
+                      </div>
+                      {activeRagIds.includes(r.id) && <span style={{ color: mode === 'chat' ? '#8b5cf6' : '#f59e0b', fontSize: '1rem' }}>✓</span>}
+                    </div>
+                  ))}
+                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+                    <Link href="/dashboard/rag-import" style={{ color: mode === 'chat' ? '#a78bfa' : '#f59e0b', textDecoration: 'none', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span>➕</span> Create New Knowledge Base
                     </Link>
                   </div>
                 </>

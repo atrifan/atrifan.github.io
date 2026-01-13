@@ -76,6 +76,18 @@ interface Persona {
   is_default: boolean;
 }
 
+// RAG Knowledge Base type
+interface RAG {
+  id: string;
+  name: string;
+  description?: string;
+  icon: string;
+  document_count: number;
+  total_tokens: number;
+  token_limit: number;
+  created_at: string;
+}
+
 // Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
 const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
 
@@ -277,6 +289,9 @@ export const DashboardPage: React.FC = () => {
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
   const [personaForm, setPersonaForm] = useState({ name: '', description: '', icon: '🤖', systemPrompt: '' });
   const [savingPersona, setSavingPersona] = useState(false);
+
+  // RAG Knowledge Bases state
+  const [rags, setRags] = useState<RAG[]>([]);
 
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
@@ -485,6 +500,36 @@ export const DashboardPage: React.FC = () => {
     };
     fetchPersonas();
   }, [isPro, user]);
+
+  // Fetch RAG knowledge bases
+  useEffect(() => {
+    const fetchRags = async () => {
+      if (!isPro || !user) return;
+      try {
+        const response = await fetch('/api/ai/rags');
+        if (response.ok) {
+          const data = await response.json();
+          setRags(data.rags || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch RAGs:', error);
+      }
+    };
+    fetchRags();
+  }, [isPro, user]);
+
+  // Delete RAG
+  const deleteRag = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this knowledge base? All documents will be permanently deleted.')) return;
+    try {
+      const response = await fetch(`/api/ai/rags?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setRags(prev => prev.filter(r => r.id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to delete RAG:', error);
+    }
+  };
 
   // Create or update persona
   const savePersona = async () => {
@@ -1968,6 +2013,77 @@ export const DashboardPage: React.FC = () => {
               </svg>
               Create Persona
             </button>
+          </DashboardCard>
+        )}
+
+        {/* Knowledge Bases Card */}
+        {isPro && (
+          <DashboardCard title="Knowledge Bases" icon={
+            <span style={{ fontSize: '24px' }}>📚</span>
+          }>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+              Create knowledge bases to enhance AI with your custom documents and data.
+            </p>
+
+            {/* RAGs List */}
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Your Knowledge Bases</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>{rags.length} total</span>
+              </div>
+              {rags.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                  <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>📚</span>
+                  No knowledge bases created yet
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                  {rags.map(rag => (
+                    <div key={rag.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <span style={{ fontSize: '1.5rem' }}>{rag.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{rag.name}</div>
+                        {rag.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rag.description}</div>}
+                        <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.25rem' }}>
+                          {rag.document_count} docs • {formatTokenCount(rag.total_tokens)} tokens
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <Link href={`/dashboard/rag/${rag.id}`} style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.7rem', textDecoration: 'none' }}>View</Link>
+                        <button onClick={() => deleteRag(rag.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Create Knowledge Base Button */}
+            <Link
+              href="/dashboard/rag-import"
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '10px',
+                border: '2px dashed rgba(139, 92, 246, 0.4)',
+                background: 'rgba(139, 92, 246, 0.1)',
+                color: '#a78bfa',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                textDecoration: 'none',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Create Knowledge Base
+            </Link>
           </DashboardCard>
         )}
 

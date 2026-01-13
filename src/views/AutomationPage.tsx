@@ -155,6 +155,20 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [activePersonalityIds, setActivePersonalityIds] = useState<string[]>([]);
 
+  // RAG state
+  interface RAG {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string;
+    document_count: number;
+    total_tokens: number;
+    token_limit: number;
+    is_enabled: boolean;
+  }
+  const [rags, setRags] = useState<RAG[]>([]);
+  const [activeRagIds, setActiveRagIds] = useState<string[]>([]);
+
   // MCP tools
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
@@ -284,6 +298,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       fetchAutomations();
       fetchBudget();
       fetchPersonalities();
+      fetchRags();
       fetchMcpTools();
       fetchConnectors();
       fetchAvailableMcpServers();
@@ -522,6 +537,40 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       }
     } catch (error) {
       console.error('Failed to toggle personality:', error);
+    }
+  };
+
+  // Fetch RAGs
+  const fetchRags = async () => {
+    try {
+      const response = await fetch('/api/ai/rags?context=automation');
+      if (response.ok) {
+        const data = await response.json();
+        setRags(data.rags || []);
+        setActiveRagIds(data.activeIds || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch RAGs:', error);
+    }
+  };
+
+  // Toggle RAG
+  const toggleRag = async (ragId: string) => {
+    const isActive = activeRagIds.includes(ragId);
+    try {
+      if (isActive) {
+        await fetch(`/api/ai/rags/active?ragId=${ragId}&context=automation`, { method: 'DELETE' });
+        setActiveRagIds(prev => prev.filter(id => id !== ragId));
+      } else {
+        await fetch('/api/ai/rags/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ragId, context: 'automation' }),
+        });
+        setActiveRagIds(prev => [...prev, ragId]);
+      }
+    } catch (error) {
+      console.error('Failed to toggle RAG:', error);
     }
   };
 
@@ -1213,6 +1262,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         activePersonalityIds={activePersonalityIds}
         togglePersonality={togglePersonality}
         setViewingPersona={setViewingPersona}
+        rags={rags}
+        activeRagIds={activeRagIds}
+        toggleRag={toggleRag}
         automationFolders={automationFolders}
         currentAutomationId={currentAutomation?.id || null}
         loadAutomation={loadAutomation}

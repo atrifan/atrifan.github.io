@@ -269,6 +269,20 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [creatingPersonality, setCreatingPersonality] = useState(false);
   const [viewingPersona, setViewingPersona] = useState<Personality | null>(null);
 
+  // RAG state
+  interface RAG {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string;
+    document_count: number;
+    total_tokens: number;
+    token_limit: number;
+    is_enabled: boolean;
+  }
+  const [rags, setRags] = useState<RAG[]>([]);
+  const [activeRagIds, setActiveRagIds] = useState<string[]>([]);
+
   // Chat config popover state
   const [showChatConfig, setShowChatConfig] = useState(false);
   const chatConfigRef = useRef<HTMLDivElement>(null);
@@ -387,6 +401,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       fetchAgents();
       fetchBudget();
       fetchPersonalities();
+      fetchRags();
     }
   }, [canAccessPro]);
 
@@ -688,6 +703,40 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       }
     } catch (err) {
       console.error('Failed to toggle personality:', err);
+    }
+  };
+
+  // Fetch RAGs
+  const fetchRags = async () => {
+    try {
+      const response = await fetch('/api/ai/rags?context=chat');
+      if (response.ok) {
+        const data = await response.json();
+        setRags(data.rags || []);
+        setActiveRagIds(data.activeIds || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch RAGs:', err);
+    }
+  };
+
+  // Toggle RAG
+  const toggleRag = async (ragId: string) => {
+    const isActive = activeRagIds.includes(ragId);
+    try {
+      if (isActive) {
+        await fetch(`/api/ai/rags/active?ragId=${ragId}&context=chat`, { method: 'DELETE' });
+        setActiveRagIds(prev => prev.filter(id => id !== ragId));
+      } else {
+        await fetch('/api/ai/rags/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ragId, context: 'chat' }),
+        });
+        setActiveRagIds(prev => [...prev, ragId]);
+      }
+    } catch (err) {
+      console.error('Failed to toggle RAG:', err);
     }
   };
 
@@ -1669,6 +1718,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         activePersonalityIds={activePersonalityIds}
         togglePersonality={togglePersonality}
         setViewingPersona={setViewingPersona}
+        rags={rags}
+        activeRagIds={activeRagIds}
+        toggleRag={toggleRag}
         enableReasoning={enableReasoning}
         setEnableReasoning={setEnableReasoning}
         showReasoningToggle={true}
