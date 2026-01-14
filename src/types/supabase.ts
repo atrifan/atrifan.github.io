@@ -1063,3 +1063,90 @@ export interface A2AAgentUpdate {
   updated_at?: string;
 }
 
+// ============ OAuth Tokens Table ============
+
+/**
+ * OAuth Token record in Supabase
+ * Table: oauth_tokens
+ *
+ * Stores OAuth access and refresh tokens for server connections.
+ */
+export interface OAuthTokenRow {
+  /** UUID primary key */
+  id: string;
+  /** Clerk user ID (owner) */
+  user_id: string;
+
+  /** Reference to REST API spec (polymorphic - only one should be set) */
+  rest_api_spec_id: string | null;
+  /** Reference to GraphQL spec */
+  graphql_spec_id: string | null;
+  /** Reference to MCP server */
+  mcp_server_id: string | null;
+  /** Reference to A2A agent */
+  a2a_agent_id: string | null;
+  /** Reference to RAG */
+  rag_id: string | null;
+
+  /** Hash of OAuth provider (token_endpoint + client_id) for token sharing */
+  oauth_provider_hash: string | null;
+
+  /** The OAuth access token */
+  access_token: string;
+  /** The OAuth refresh token */
+  refresh_token: string | null;
+  /** Token type (usually 'Bearer') */
+  token_type: string;
+  /** OAuth scopes */
+  scope: string | null;
+
+  /** When the access token expires */
+  access_token_expires_at: string | null;
+  /** When the refresh token expires */
+  refresh_token_expires_at: string | null;
+
+  /** OpenID Connect ID token */
+  id_token: string | null;
+
+  /** When the token was created */
+  created_at: string;
+  /** When the token was last updated */
+  updated_at: string;
+}
+
+/**
+ * Insert DTO for oauth_tokens table
+ */
+export interface OAuthTokenInsert {
+  user_id: string;
+  rest_api_spec_id?: string | null;
+  graphql_spec_id?: string | null;
+  mcp_server_id?: string | null;
+  a2a_agent_id?: string | null;
+  rag_id?: string | null;
+  oauth_provider_hash?: string | null;
+  access_token: string;
+  refresh_token?: string | null;
+  token_type?: string;
+  scope?: string | null;
+  access_token_expires_at?: string | null;
+  refresh_token_expires_at?: string | null;
+  id_token?: string | null;
+}
+
+/**
+ * Update DTO for oauth_tokens table
+ */
+export interface OAuthTokenUpdate {
+  access_token?: string;
+  refresh_token?: string | null;
+  token_type?: string;
+  scope?: string | null;
+  access_token_expires_at?: string | null;
+  refresh_token_expires_at?: string | null;
+  id_token?: string | null;
+}
+
+/** Server type for OAuth token lookup */
+export type OAuthServerType = 'rest_api' | 'graphql' | 'mcp' | 'a2a' | 'rag';
+

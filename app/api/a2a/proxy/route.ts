@@ -10,8 +10,14 @@ import { auth } from '@clerk/nextjs/server';
 import { v4 as uuidv4 } from 'uuid';
 import * as https from 'https';
 import * as http from 'http';
+import { getValidOAuthToken } from '@/src/lib/oauth-token-manager';
+import { supabase } from '@/src/lib/supabase';
+import type { OAuth2AuthConfig } from '@/src/types/supabase';
 
 export const dynamic = 'force-dynamic';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 /**
  * Make HTTP/1.1 request using native Node.js http/https modules
@@ -74,9 +80,10 @@ function makeHttp1Request(
 
 interface A2AProxyRequest {
   agentUrl: string;
+  agentId?: string; // A2A agent ID for OAuth token lookup
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   systemPrompts?: string[]; // Personality system prompts
-  authType?: 'none' | 'api_key' | 'bearer' | 'basic';
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   authConfig?: Record<string, string>;
   headers?: Record<string, string>;
   contextId?: string; // A2A protocol context ID for conversation continuity
@@ -91,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: A2AProxyRequest = await request.json();
-    const { agentUrl, messages, systemPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
+    const { agentUrl, agentId, messages, systemPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
 
     if (!agentUrl) {
       return NextResponse.json({ error: 'agentUrl is required' }, { status: 400 });
@@ -111,27 +118,124 @@ export async function POST(request: NextRequest) {
       'User-Agent': 'ZipRunPlace-A2A-Client/1.0',
     };
 
-    // Add custom headers if provided (but filter out auth headers for now)
+    // Add custom headers if provided
     if (customHeaders) {
       for (const [key, value] of Object.entries(customHeaders)) {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey !== 'authorization' && !lowerKey.includes('bearer') && !lowerKey.includes('token')) {
-          headers[key] = value;
-        }
+        headers[key] = value;
       }
     }
 
-    // Skip auth headers for A2A chat for now
-    // TODO: Re-enable when auth is properly configured
-    // if (authType === 'bearer' && authConfig?.token) {
-    //   headers['Authorization'] = `Bearer ${authConfig.token}`;
-    // } else if (authType === 'api_key' && authConfig?.key) {
-    //   const headerName = authConfig.headerName || 'X-API-Key';
-    //   headers[headerName] = authConfig.key;
-    // } else if (authType === 'basic' && authConfig?.username && authConfig?.password) {
-    //   const credentials = Buffer.from(`${authConfig.username}:${authConfig.password}`).toString('base64');
-    //   headers['Authorization'] = `Basic ${credentials}`;
-    // }
+    // Handle authentication
+    if (authType === 'oauth2' && agentId) {
+      // agentId here is the connector ID - we need to get the a2a_agent_id and its auth_config
+      let authConfigData: Record<string, unknown> | null = null;
+      let actualAgentId: string | null = null;
+
+      // First, get the connector to find the a2a_agent_id and its external_auth_config
+      const { data: connector } = await db
+        .from('chat_connectors')
+        .select('a2a_agent_id, external_auth_config')
+        .eq('id', agentId)
+        .eq('user_id', userId)
+        .single();
+
+      console.log('[A2A Proxy] Connector lookup result:', connector);
+
+      if (connector?.external_auth_config && Object.keys(connector.external_auth_config).length > 0) {
+        // Use connector's auth config if it has one
+        authConfigData = connector.external_auth_config;
+        actualAgentId = connector.a2a_agent_id || agentId;
+        console.log('[A2A Proxy] Using connector auth config');
+      } else if (connector?.a2a_agent_id) {
+        // Get auth config from the linked a2a_agent
+        actualAgentId = connector.a2a_agent_id;
+        const { data: agent } = await db
+          .from('a2a_agents')
+          .select('auth_config')
+          .eq('id', connector.a2a_agent_id)
+          .eq('user_id', userId)
+          .single();
+
+        console.log('[A2A Proxy] Agent lookup result:', agent);
+
+        if (agent?.auth_config) {
+          authConfigData = agent.auth_config;
+          console.log('[A2A Proxy] Using agent auth config');
+        }
+      } else {
+        // Try direct lookup in a2a_agents (for MCP tool calls where agentId IS the agent ID)
+        const { data: agent } = await db
+          .from('a2a_agents')
+          .select('auth_config')
+          .eq('id', agentId)
+          .eq('user_id', userId)
+          .single();
+
+        if (agent?.auth_config) {
+          authConfigData = agent.auth_config;
+          actualAgentId = agentId;
+          console.log('[A2A Proxy] Using direct agent lookup auth config');
+        }
+      }
+
+      if (!authConfigData) {
+        console.error('[A2A Proxy] Failed to get OAuth config for agent:', agentId);
+        return NextResponse.json({
+          success: false,
+          error: 'OAuth configuration not found',
+        }, { status: 400 });
+      }
+
+      console.log('[A2A Proxy] Auth config data:', JSON.stringify(authConfigData, null, 2));
+
+      const oauthConfig: OAuth2AuthConfig = {
+        authorization_endpoint: (authConfigData.authorization_endpoint as string) || '',
+        token_endpoint: (authConfigData.token_endpoint as string) || '',
+        scopes: (authConfigData.scopes as string) || 'openid',
+        use_dcr: authConfigData.use_dcr === 'true' || authConfigData.use_dcr === true,
+        client_id: (authConfigData.client_id as string) || '',
+        client_secret: (authConfigData.client_secret as string) || '',
+        registration_endpoint: (authConfigData.registration_endpoint as string) || '',
+      };
+
+      // Use the actual agent ID for token storage (not the connector ID)
+      const tokenAgentId = actualAgentId || agentId;
+      console.log('[A2A Proxy] Using tokenAgentId:', tokenAgentId, 'for OAuth token lookup');
+
+      // Get OAuth token from database
+      const tokenResult = await getValidOAuthToken(userId, { type: 'a2a', id: tokenAgentId }, oauthConfig);
+      if (!tokenResult.success || !tokenResult.accessToken) {
+        // Need OAuth authentication - include config so client can show auth modal
+        console.log('[A2A Proxy] OAuth token not found, returning needsOAuth with config');
+        return NextResponse.json({
+          success: false,
+          error: tokenResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerId: tokenAgentId, // Use the actual agent ID for token storage
+          oauthServerType: 'a2a',
+          // Include OAuth config for client to use (without secrets)
+          oauthConfig: {
+            authorization_endpoint: oauthConfig.authorization_endpoint,
+            token_endpoint: oauthConfig.token_endpoint,
+            scopes: oauthConfig.scopes,
+            client_id: oauthConfig.client_id,
+            use_dcr: oauthConfig.use_dcr,
+            registration_endpoint: oauthConfig.registration_endpoint,
+            // Don't expose client_secret to client - it will be used server-side during token exchange
+          },
+        });
+      }
+      // Always use "Bearer" (capitalized) regardless of what's stored in DB
+      headers['Authorization'] = `Bearer ${tokenResult.accessToken}`;
+    } else if (authType === 'bearer' && authConfig?.token) {
+      headers['Authorization'] = `Bearer ${authConfig.token}`;
+    } else if (authType === 'api_key' && authConfig?.key) {
+      const headerName = authConfig.headerName || 'X-API-Key';
+      headers[headerName] = authConfig.key;
+    } else if (authType === 'basic' && authConfig?.username && authConfig?.password) {
+      const credentials = Buffer.from(`${authConfig.username}:${authConfig.password}`).toString('base64');
+      headers['Authorization'] = `Basic ${credentials}`;
+    }
 
     console.log('[A2A Proxy] Request headers:', JSON.stringify(headers, null, 2));
 
@@ -224,6 +328,17 @@ export async function POST(request: NextRequest) {
         console.error('[A2A Proxy] Error response JSON:', JSON.stringify(errorJson, null, 2));
       } catch {
         // Not JSON, already logged as text
+      }
+
+      // Check for auth failures - return needsOAuth if OAuth is configured
+      if ((httpResponse.status === 401 || httpResponse.status === 403) && authType === 'oauth2' && agentId) {
+        return NextResponse.json({
+          success: false,
+          error: `Authentication failed (${httpResponse.status})`,
+          needsOAuth: true,
+          oauthServerId: agentId,
+          oauthServerType: 'a2a',
+        });
       }
 
       return NextResponse.json({

@@ -76,7 +76,12 @@ export interface AuthenticationCardProps {
 
   // OAuth popup callback (optional)
   // Called when OAuth authentication completes successfully
-  onOAuthToken?: (token: OAuthTokenResponse) => void;
+  onOAuthToken?: (token: OAuthTokenResponse, clientId?: string) => void;
+
+  // Server info for storing OAuth tokens (optional)
+  // When provided, tokens are stored in the database for later use
+  serverType?: 'rest_api' | 'graphql' | 'mcp' | 'a2a' | 'rag';
+  serverId?: string;
 
   // Customization
   description?: string;
@@ -106,6 +111,8 @@ export function AuthenticationCard({
   onShowClientSecretToggle,
   domainForCheck,
   onOAuthToken,
+  serverType,
+  serverId,
   description = 'If your endpoint requires authentication, provide credentials below.',
   inputStyle,
 }: AuthenticationCardProps) {
@@ -199,16 +206,32 @@ export function AuthenticationCard({
 
         // Exchange code for token
         const redirectUri = `${window.location.origin}/oauth-callback`;
-        const response = await fetch('/api/oauth/exchange', {
+
+        // Use external exchange endpoint if serverType/serverId provided (stores token)
+        // Otherwise use simple exchange endpoint (just returns token for display)
+        const useExternalExchange = serverType && serverId;
+        const exchangeEndpoint = useExternalExchange ? '/api/oauth/exchange-external' : '/api/oauth/exchange';
+
+        const requestBody: Record<string, unknown> = {
+          code,
+          tokenEndpoint: oauth2Config.tokenEndpoint,
+          clientId,
+          clientSecret,
+          redirectUri,
+        };
+
+        // Add server info for external exchange (token storage)
+        if (useExternalExchange) {
+          requestBody.serverType = serverType;
+          requestBody.serverId = serverId;
+          requestBody.authorizationEndpoint = oauth2Config.authorizationEndpoint;
+          requestBody.scopes = oauth2Config.scopes;
+        }
+
+        const response = await fetch(exchangeEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code,
-            tokenEndpoint: oauth2Config.tokenEndpoint,
-            clientId,
-            clientSecret,
-            redirectUri,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const tokenData = await response.json();
@@ -223,16 +246,29 @@ export function AuthenticationCard({
         }
 
         // Success! Show token modal
-        setReceivedToken(tokenData);
+        // For external exchange, tokenData contains success/clientId, not the actual token
+        // But we still show a success modal
+        if (useExternalExchange) {
+          setReceivedToken({
+            access_token: '(stored securely)',
+            token_type: tokenData.tokenType || 'Bearer',
+            expires_in: tokenData.expiresIn,
+            scope: tokenData.scope,
+          });
+        } else {
+          setReceivedToken(tokenData);
+        }
         setShowTokenModal(true);
         setIsAuthenticating(false);
         setOauthError(null);
+
+        // Call the callback if provided, include the clientId used (for DCR)
+        const usedClientId = useExternalExchange ? tokenData.clientId : clientId;
+        onOAuthToken?.(useExternalExchange ? { ...tokenData, access_token: '(stored)' } : tokenData, usedClientId);
+
         // Clear refs after successful use
         dcrCredentialsRef.current = null;
         processingCodeRef.current = null;
-
-        // Call the callback if provided
-        onOAuthToken?.(tokenData);
       } catch (err) {
         setOauthError(err instanceof Error ? err.message : 'Token exchange failed');
         setIsAuthenticating(false);
@@ -241,7 +277,7 @@ export function AuthenticationCard({
         processingCodeRef.current = null;
       }
     }
-  }, [oauth2Config, onOAuthToken]);
+  }, [oauth2Config, onOAuthToken, serverType, serverId]);
 
   // Listen for OAuth popup messages
   useEffect(() => {

@@ -8,7 +8,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import type { MCPServerAuthType } from '../types/supabase';
+import type { MCPServerAuthType, OAuth2AuthConfig } from '../types/supabase';
+import { getValidOAuthToken, type ServerReference } from './oauth-token-manager';
 
 // Re-export types for compatibility
 export interface MCPToolDefinition {
@@ -47,6 +48,18 @@ export interface MCPClientConfig {
   authConfig?: Record<string, unknown>;
   headers?: Record<string, string>;
   timeout?: number;
+  // For OAuth token lookup
+  userId?: string;
+  serverId?: string;
+}
+
+export interface MCPCallResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  needsOAuth?: boolean;
+  oauthServerId?: string;
+  oauthServerType?: 'mcp';
 }
 
 /**
@@ -68,7 +81,7 @@ export class MCPClient {
   /**
    * Build headers for the request including auth
    */
-  private buildHeaders(): Record<string, string> {
+  private buildHeaders(oauthToken?: string): Record<string, string> {
     const headers: Record<string, string> = {
       ...this.config.headers,
     };
@@ -90,18 +103,63 @@ export class MCPClient {
           headers['Authorization'] = `Basic ${this.config.authConfig.credentials}`;
         }
         break;
+      case 'oauth2':
+        if (oauthToken) {
+          headers['Authorization'] = `Bearer ${oauthToken}`;
+        }
+        break;
     }
 
     return headers;
   }
 
   /**
+   * Get OAuth token if needed
+   */
+  private async getOAuthToken(): Promise<{ token?: string; needsAuth?: boolean; error?: string }> {
+    if (this.config.authType !== 'oauth2') {
+      return {};
+    }
+
+    if (!this.config.userId || !this.config.serverId) {
+      return { needsAuth: true, error: 'OAuth requires userId and serverId' };
+    }
+
+    const oauthConfig = this.config.authConfig as unknown as OAuth2AuthConfig;
+    if (!oauthConfig) {
+      return { needsAuth: true, error: 'OAuth config not found' };
+    }
+
+    const server: ServerReference = { type: 'mcp', id: this.config.serverId };
+    const tokenResult = await getValidOAuthToken(this.config.userId, server, oauthConfig);
+
+    if (!tokenResult.success) {
+      return { needsAuth: true, error: tokenResult.error };
+    }
+
+    return { token: tokenResult.accessToken };
+  }
+
+  /**
    * Initialize connection to the MCP server with backwards compatibility.
    * Tries Streamable HTTP transport first (2025-03-26), then falls back to SSE (2024-11-05).
+   * Returns MCPCallResult if OAuth is needed.
    */
-  async initialize(): Promise<MCPServerInfo> {
+  async initialize(): Promise<MCPServerInfo | MCPCallResult> {
+    // Get OAuth token if needed
+    const oauthResult = await this.getOAuthToken();
+    if (oauthResult.needsAuth) {
+      return {
+        success: false,
+        error: oauthResult.error || 'OAuth authentication required',
+        needsOAuth: true,
+        oauthServerId: this.config.serverId,
+        oauthServerType: 'mcp',
+      };
+    }
+
     const url = new URL(this.config.url);
-    const headers = this.buildHeaders();
+    const headers = this.buildHeaders(oauthResult.token);
 
     // Try Streamable HTTP transport first (modern protocol)
     try {
@@ -255,13 +313,17 @@ export function createMCPClient(
   url: string,
   authType: MCPServerAuthType = 'none',
   authConfig?: Record<string, unknown>,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
+  userId?: string,
+  serverId?: string
 ): MCPClient {
   return new MCPClient({
     url,
     authType,
     authConfig,
     headers,
+    userId,
+    serverId,
   });
 }
 

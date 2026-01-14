@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/src/lib/supabase';
-import { createMCPClient, detectWidgetSupport } from '@/src/lib/mcp-client';
+import { createMCPClient, detectWidgetSupport, type MCPServerInfo } from '@/src/lib/mcp-client';
 import type { MCPServerAuthType, ToolInsert, MCPServerToolInsert, ToolCategory } from '@/src/types/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -67,9 +67,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
 
     // Initialize connection
-    let serverInfo;
+    let serverInfo: MCPServerInfo;
     try {
-      serverInfo = await client.initialize();
+      const initResult = await client.initialize();
+
+      // Check if OAuth is needed
+      if ('needsOAuth' in initResult && initResult.needsOAuth) {
+        return NextResponse.json({
+          error: 'OAuth authentication required for this MCP server',
+          needsOAuth: true,
+        }, { status: 401 });
+      }
+
+      serverInfo = initResult as MCPServerInfo;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize';
       return NextResponse.json({ error: `Failed to connect: ${message}` }, { status: 400 });

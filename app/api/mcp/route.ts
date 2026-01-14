@@ -22,7 +22,7 @@ import {
 import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
 import { executeGraphQLCall } from '@/src/lib/graphql-handler';
-import { createMCPClient } from '@/src/lib/mcp-client';
+import { createMCPClient, type MCPCallResult } from '@/src/lib/mcp-client';
 import type { EnvironmentRow, MCPServerAuthType } from '@/src/types/supabase';
 
 // Auth types
@@ -556,6 +556,7 @@ interface ExtendedToolContext extends ToolExecutionContext {
   authToken?: string;
   environmentId?: string;
   mcpSessionId?: string; // MCP session ID for A2A context continuity
+  userId?: string; // User ID for OAuth token lookup
 }
 
 // Tool execution - looks up handler in registry (sync for NATIVE tools)
@@ -613,9 +614,26 @@ async function executeToolAsync(
       spec,
       environment: environment as EnvironmentRow,
       arguments: args,
-      authToken: context?.authToken,
-      apiKey: context?.apiKey,
+      userId: context?.userId,
     });
+
+    // Check if OAuth is needed
+    if (!restResult.success && restResult.needsOAuth) {
+      return {
+        result: {
+          error: restResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerId: restResult.oauthServerId,
+          oauthServerType: 'rest',
+        },
+        isRestTool: true,
+        toolInfo: {
+          hasWidget: false,
+          invokingMessage: dbTool.invoking_message,
+          invokedMessage: 'Authentication required',
+        },
+      };
+    }
 
     if (!restResult.success) {
       throw new Error(restResult.error || 'REST API call failed');
@@ -647,9 +665,26 @@ async function executeToolAsync(
       spec: spec as Parameters<typeof executeGraphQLCall>[0]['spec'],
       environment: environment as EnvironmentRow,
       variables: args,
-      authToken: context?.authToken,
-      apiKey: context?.apiKey,
+      userId: context?.userId,
     });
+
+    // Check if OAuth is needed
+    if (!gqlResult.success && gqlResult.needsOAuth) {
+      return {
+        result: {
+          error: gqlResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerId: gqlResult.oauthServerId,
+          oauthServerType: 'graphql',
+        },
+        isRestTool: true,
+        toolInfo: {
+          hasWidget: false,
+          invokingMessage: dbTool.invoking_message,
+          invokedMessage: 'Authentication required',
+        },
+      };
+    }
 
     if (!gqlResult.success) {
       throw new Error(gqlResult.error || 'GraphQL call failed');
@@ -684,12 +719,33 @@ async function executeToolAsync(
       server.source_url,
       server.auth_type as MCPServerAuthType,
       server.auth_config,
-      server.default_headers
+      server.default_headers,
+      context?.userId,
+      server.id
     );
 
     try {
       // Initialize connection first (required by official SDK)
-      await mcpClient.initialize();
+      const initResult = await mcpClient.initialize();
+
+      // Check if OAuth is needed
+      if ('needsOAuth' in initResult && initResult.needsOAuth) {
+        const oauthResult = initResult as MCPCallResult;
+        return {
+          result: {
+            error: oauthResult.error || 'OAuth authentication required',
+            needsOAuth: true,
+            oauthServerId: oauthResult.oauthServerId,
+            oauthServerType: 'mcp',
+          },
+          isRestTool: false,
+          toolInfo: {
+            hasWidget: false,
+            invokingMessage: dbTool.invoking_message || `Calling ${serverTool.original_name}...`,
+            invokedMessage: 'Authentication required',
+          },
+        };
+      }
 
       // Proxy the tool call to the external MCP server
       const result = await mcpClient.callTool(serverTool.original_name, args);
@@ -744,13 +800,32 @@ async function executeToolAsync(
       const response = await sendA2AMessage(
         {
           agentUrl: agent.agent_url,
-          authType: agent.auth_type as 'none' | 'api_key' | 'bearer' | 'basic',
+          agentId: agent.id, // Pass agent ID for OAuth token lookup
+          authType: agent.auth_type as 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2',
           authConfig,
           headers,
           contextId, // Pass contextId for conversation continuity
         },
         [{ role: 'user', content: query }]
       );
+
+      // Check if OAuth is needed
+      if (!response.success && response.needsOAuth) {
+        return {
+          result: {
+            error: response.error || 'OAuth authentication required',
+            needsOAuth: true,
+            oauthServerId: response.oauthServerId || agent.id,
+            oauthServerType: 'a2a',
+          },
+          isRestTool: false,
+          toolInfo: {
+            hasWidget: false,
+            invokingMessage: dbTool.invoking_message || `Calling ${agent.display_name}...`,
+            invokedMessage: dbTool.invoked_message || 'Agent response received',
+          },
+        };
+      }
 
       if (!response.success) {
         throw new Error(response.error || 'Agent returned an error');
@@ -1856,6 +1931,7 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           apiKey: context.apiKey,
           authToken: context.authToken,
           mcpSessionId: context.mcpSessionId, // Pass MCP session ID for A2A context
+          userId: context.userId, // Pass user ID for OAuth token lookup
         };
 
         const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);

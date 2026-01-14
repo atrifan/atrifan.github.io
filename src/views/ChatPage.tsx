@@ -13,7 +13,9 @@ import { ChatIcon } from '../components/ChatIcon';
 import { FaviconImage } from '../components/FaviconImage';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { SettingsPanel, SettingsPanelMode } from '../components/SettingsPanel';
+import { OAuthAuthenticationModal, OAuthSuccessData } from '../components/OAuthAuthenticationModal';
 import { ADS_CONFIG } from '../config/ads.config';
+import type { OAuth2AuthConfig, OAuthServerType } from '../types/supabase';
 import { applySEO } from '../utils/seo';
 import { sendA2AMessage } from '../lib/a2a-client';
 import {
@@ -109,7 +111,12 @@ interface ChatConnector {
   id: string;
   connector_type: ConnectorType;
   mcp_server_id?: string;
+  a2a_agent_id?: string;
+  api_key_id?: string;
   external_url?: string;
+  external_auth_type?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+  external_auth_config?: Record<string, string>;
+  external_headers?: Record<string, string>;
   display_name: string;
   description?: string;
   icon: string;
@@ -135,6 +142,8 @@ interface A2AAgent {
   agent_url: string;
   description?: string;
   icon_url?: string;
+  auth_type?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+  auth_config?: Record<string, string>;
 }
 
 // Personality types
@@ -238,6 +247,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // OAuth modal state
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthModalData, setOauthModalData] = useState<{
+    serverName: string;
+    serverType: OAuthServerType;
+    serverId: string;
+    oauthConfig: OAuth2AuthConfig;
+  } | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<ChatMessage | null>(null);
+  const pendingMessageRef = useRef<ChatMessage | null>(null);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -796,18 +817,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Add internal MCP connector
   const addInternalMcpConnector = async (server: MCPServer) => {
     try {
-      // For internal MCP, we store the api_key_id in external_url as a reference
+      // For internal MCP, pass the api_key_id directly
       // The server.id for api_key type is the api_key id
       const response = await fetch('/api/ai/connectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectorType: 'internal_mcp',
-          // Don't pass mcpServerId for internal_mcp - it's not an mcp_server
           displayName: server.display_name,
           description: `${server.toolCount} tools`,
           icon: '🔧',
-          // Store api_key_id in external_url for reference
+          // Pass api_key_id for proper foreign key reference
+          apiKeyId: server.id,
+          // Keep external_url for backwards compatibility
           externalUrl: `api_key:${server.id}`,
           context: 'chat',
         }),
@@ -861,7 +883,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           description: agent.description ? agent.description.slice(0, 50) : 'A2A Agent',
           icon: '🤖',
           iconUrl: agent.icon_url || null,
+          // Pass a2a_agent_id for proper foreign key reference
+          a2aAgentId: agent.id,
+          // Keep external_url for backwards compatibility
           externalUrl: agent.agent_url,
+          // Pass auth type and config from the agent
+          externalAuthType: agent.auth_type || 'none',
+          externalAuthConfig: agent.auth_config || {},
           context: 'chat',
         }),
       });
@@ -1012,6 +1040,93 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setError(null);
   };
 
+  /**
+   * NOTE TO SELF: OAuth Authentication and Retry Mechanism
+   *
+   * This is the common mechanism for handling OAuth authentication requirements
+   * and automatically retrying the pending operation after successful auth.
+   *
+   * Usage:
+   * 1. When a server/tool returns needsOAuth, call triggerOAuthAndRetry() with the message and config
+   * 2. This opens the OAuth modal and stores the pending message
+   * 3. On successful auth, handleOAuthSuccessRetry() is called automatically
+   * 4. The pending message is resent without user intervention
+   *
+   * This can be reused for:
+   * - A2A agents requiring OAuth
+   * - MCP servers/tools requiring OAuth
+   * - REST API connectors requiring OAuth
+   * - Any other connector type that needs OAuth authentication
+   */
+
+  // Trigger OAuth modal and store pending message for retry after auth
+  const triggerOAuthAndRetry = useCallback((
+    pendingMsg: ChatMessage,
+    oauthData: {
+      serverName: string;
+      serverType: OAuthServerType;
+      serverId: string;
+      oauthConfig: OAuth2AuthConfig;
+    }
+  ) => {
+    console.log('[OAuth] Triggering OAuth flow for:', oauthData.serverName);
+    setPendingMessage(pendingMsg);
+    pendingMessageRef.current = pendingMsg;
+    setOauthModalData(oauthData);
+    setOauthModalOpen(true);
+    setIsLoading(false);
+  }, []);
+
+  // Handle successful OAuth authentication - automatically retry pending message
+  const handleOAuthSuccessRetry = useCallback(async (data?: OAuthSuccessData) => {
+    const modalData = oauthModalData;
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+
+    // If DCR was used and we got a clientId, update the agent's auth_config
+    // This ensures future token lookups can find the token via provider hash
+    if (data?.clientId && modalData?.serverType === 'a2a' && modalData?.serverId) {
+      try {
+        console.log('[OAuth] Updating agent auth_config with DCR client_id:', data.clientId);
+        await fetch(`/api/agents/${modalData.serverId}/update-oauth-client`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: data.clientId }),
+        });
+      } catch (err) {
+        console.error('[OAuth] Failed to update agent auth_config:', err);
+        // Non-fatal - continue with retry
+      }
+    }
+
+    const msgToRetry = pendingMessageRef.current;
+    if (msgToRetry) {
+      console.log('[OAuth] Auth successful, retrying message:', msgToRetry.content.substring(0, 50));
+      // Remove the pending message from the list (it will be re-added by sendMessage)
+      setMessages(prev => prev.filter(m => m.id !== msgToRetry.id));
+      // Set the message content and trigger send
+      setMessage(msgToRetry.content);
+      setPendingMessage(null);
+      pendingMessageRef.current = null;
+      // Use setTimeout to ensure state is updated before sending
+      setTimeout(() => {
+        const sendBtn = document.querySelector('button[aria-label="Send message"]') as HTMLButtonElement;
+        if (sendBtn && !sendBtn.disabled) {
+          sendBtn.click();
+        }
+      }, 100);
+    }
+  }, [oauthModalData]);
+
+  // Handle OAuth cancellation
+  const handleOAuthCancel = useCallback(() => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+    setPendingMessage(null);
+    pendingMessageRef.current = null;
+    setError('Authentication cancelled');
+  }, []);
+
   // Send message handler
   const sendMessage = useCallback(async () => {
     if (!message.trim() || isLoading) return;
@@ -1050,11 +1165,60 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         const a2aResponse = await sendA2AMessage(
           {
             agentUrl: selectedAgentConnector.external_url || '',
+            agentId: selectedAgentConnector.id,
+            authType: selectedAgentConnector.external_auth_type,
+            authConfig: selectedAgentConnector.external_auth_config,
+            headers: selectedAgentConnector.external_headers,
             systemPrompts: activeSystemPrompts.length > 0 ? activeSystemPrompts : undefined,
             contextId: a2aContextId || undefined, // Pass existing context ID for conversation continuity
           },
           a2aMessages
         );
+
+        // Check if OAuth authentication is needed
+        if (!a2aResponse.success && a2aResponse.needsOAuth && a2aResponse.oauthServerId) {
+          console.log('[A2A] OAuth authentication required, serverId:', a2aResponse.oauthServerId);
+
+          // Use OAuth config from response (server fetches it from DB) or fall back to connector config
+          const serverOAuthConfig = a2aResponse.oauthConfig;
+          const connectorAuthConfig = selectedAgentConnector.external_auth_config;
+
+          // Prefer server-provided config as it's fetched from the authoritative source
+          const authEndpoint = serverOAuthConfig?.authorization_endpoint || connectorAuthConfig?.authorization_endpoint;
+          const tokenEndpoint = serverOAuthConfig?.token_endpoint || connectorAuthConfig?.token_endpoint;
+          const clientId = serverOAuthConfig?.client_id || connectorAuthConfig?.client_id;
+          const scopes = serverOAuthConfig?.scopes || connectorAuthConfig?.scopes || 'openid';
+          const useDcr = serverOAuthConfig?.use_dcr || connectorAuthConfig?.use_dcr === 'true' || connectorAuthConfig?.use_dcr === true;
+          const registrationEndpoint = serverOAuthConfig?.registration_endpoint || connectorAuthConfig?.registration_endpoint;
+
+          console.log('[A2A] OAuth config - auth:', authEndpoint, 'token:', tokenEndpoint, 'client:', clientId, 'useDcr:', useDcr, 'regEndpoint:', registrationEndpoint);
+
+          // Can proceed if we have endpoints AND either a client_id OR DCR is enabled with registration endpoint
+          const canAuthenticate = authEndpoint && tokenEndpoint && (clientId || (useDcr && registrationEndpoint));
+
+          if (canAuthenticate) {
+            // Use common OAuth trigger and retry mechanism
+            triggerOAuthAndRetry(userMessage, {
+              serverName: selectedAgentConnector.display_name,
+              serverType: 'a2a',
+              serverId: a2aResponse.oauthServerId,
+              oauthConfig: {
+                authorization_endpoint: authEndpoint,
+                token_endpoint: tokenEndpoint,
+                scopes: scopes,
+                use_dcr: useDcr,
+                client_id: clientId || '', // May be empty if using DCR
+                client_secret: connectorAuthConfig?.client_secret || '',
+                registration_endpoint: registrationEndpoint || '',
+              },
+            });
+            return;
+          } else {
+            // OAuth required but config is incomplete - show helpful error
+            console.error('[A2A] OAuth required but config incomplete. Server config:', serverOAuthConfig, 'Connector config:', connectorAuthConfig);
+            throw new Error('OAuth authentication required but configuration is incomplete. Please check the agent settings.');
+          }
+        }
 
         if (!a2aResponse.success) {
           throw new Error(a2aResponse.error || 'Failed to communicate with agent');
@@ -1556,6 +1720,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             <button
               onClick={sendMessage}
               disabled={!message.trim() || isLoading || isQuotaExceeded}
+              aria-label="Send message"
               style={{ width: '44px', height: '44px', borderRadius: '12px', background: (!message.trim() || isLoading || isQuotaExceeded) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', color: '#fff', cursor: (!message.trim() || isLoading || isQuotaExceeded) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: (!message.trim() || isLoading || isQuotaExceeded) ? 0.5 : 1 }}
             >
               {isLoading ? (
@@ -1902,6 +2067,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             </div>
           </div>
         </div>
+      )}
+
+      {/* OAuth Authentication Modal - uses common retry mechanism defined above */}
+      {oauthModalData && (
+        <OAuthAuthenticationModal
+          isOpen={oauthModalOpen}
+          serverName={oauthModalData.serverName}
+          serverType={oauthModalData.serverType}
+          serverId={oauthModalData.serverId}
+          oauthConfig={oauthModalData.oauthConfig}
+          onSuccess={handleOAuthSuccessRetry}
+          onCancel={handleOAuthCancel}
+        />
       )}
     </div>
   );

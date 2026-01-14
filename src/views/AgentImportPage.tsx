@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
@@ -10,9 +10,10 @@ import { AuthenticationCard, OAuth2Config, defaultOAuth2Config } from '../compon
 import { CustomHeadersCard, CustomHeader } from '../components/CustomHeadersCard';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
+import { OAuthAuthenticationModal, OAuthSuccessData } from '../components/OAuthAuthenticationModal';
 import { ADS_CONFIG } from '../config/ads.config';
 import { isMcpComposerEnabled } from '../config/mcp-composer.config';
-import type { A2AAgentAuthType } from '../types/supabase';
+import type { A2AAgentAuthType, OAuth2AuthConfig } from '../types/supabase';
 
 interface AgentCard {
   name?: string;
@@ -85,6 +86,18 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
   // Modal state for manual paste
   const [showManualPasteModal, setShowManualPasteModal] = useState(false);
   const [manualAgentCardText, setManualAgentCardText] = useState('');
+
+  // OAuth modal state for import
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthModalData, setOauthModalData] = useState<{
+    serverName: string;
+    serverId: string;
+    oauthConfig: OAuth2AuthConfig;
+  } | null>(null);
+  // Store the temp server ID used during import for token linking
+  const tempServerIdRef = useRef<string | null>(null);
+  // Store the DCR client_id obtained during OAuth
+  const dcrClientIdRef = useRef<string | null>(null);
 
   // UI state
   const [isFetching, setIsFetching] = useState(false);
@@ -184,6 +197,17 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
           return { credentials: btoa(creds) };
         }
         return { credentials: creds };
+      case 'oauth2':
+        // Store OAuth2 configuration with snake_case keys for database consistency
+        return {
+          authorization_endpoint: oauth2Config.authorizationEndpoint,
+          token_endpoint: oauth2Config.tokenEndpoint,
+          scopes: oauth2Config.scopes,
+          use_dcr: oauth2Config.useDcr,
+          client_id: oauth2Config.clientId,
+          client_secret: oauth2Config.clientSecret,
+          registration_endpoint: oauth2Config.registrationEndpoint,
+        };
       default:
         return {};
     }
@@ -214,6 +238,38 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
     setCurrentStep('connect');
   };
 
+  // Generate temp server ID for OAuth token storage during import
+  const getTempServerId = useCallback(() => {
+    if (!tempServerIdRef.current) {
+      tempServerIdRef.current = `temp_${Buffer.from(url.trim()).toString('base64').slice(0, 32)}`;
+    }
+    return tempServerIdRef.current;
+  }, [url]);
+
+  // Build OAuth2 config for API calls
+  const buildOAuth2ConfigForApi = useCallback((): OAuth2AuthConfig => {
+    return {
+      authorization_endpoint: oauth2Config.authorizationEndpoint,
+      token_endpoint: oauth2Config.tokenEndpoint,
+      scopes: oauth2Config.scopes,
+      use_dcr: oauth2Config.useDcr,
+      client_id: dcrClientIdRef.current || oauth2Config.clientId,
+      client_secret: oauth2Config.clientSecret,
+      registration_endpoint: oauth2Config.registrationEndpoint,
+    };
+  }, [oauth2Config]);
+
+  // Build custom headers for API calls
+  const buildCustomHeadersForApi = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    customHeaders.forEach(h => {
+      if (h.key.trim() && h.value.trim()) {
+        headers[h.key.trim()] = h.value.trim();
+      }
+    });
+    return headers;
+  }, [customHeaders]);
+
   // Step 2: Connect and fetch agent card
   const handleConnect = async () => {
     if (!url.trim()) {
@@ -225,8 +281,59 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
     setError(null);
 
     try {
-      const response = await fetch(`/api/agents/fetch?url=${encodeURIComponent(url.trim())}`);
-      const data = await response.json();
+      let response;
+      let data;
+
+      // Use POST for any auth type (including none with custom headers)
+      const needsPost = authType !== 'none' || customHeaders.some(h => h.key.trim() && h.value.trim());
+
+      if (needsPost) {
+        const requestBody: Record<string, unknown> = {
+          url: url.trim(),
+          authType,
+          headers: buildCustomHeadersForApi(),
+        };
+
+        // Add auth-specific fields
+        if (authType === 'api_key' && apiKey) {
+          requestBody.apiKey = apiKey;
+        } else if (authType === 'bearer' && bearerToken) {
+          requestBody.bearerToken = bearerToken;
+        } else if (authType === 'basic' && basicCredentials) {
+          // basicCredentials should already be base64 encoded or we encode it
+          requestBody.basicCredentials = basicCredentials.includes(':')
+            ? Buffer.from(basicCredentials).toString('base64')
+            : basicCredentials;
+        } else if (authType === 'oauth2') {
+          const oauthConfigForApi = buildOAuth2ConfigForApi();
+          requestBody.oauth2Config = oauthConfigForApi;
+          requestBody.agentId = getTempServerId();
+        }
+
+        response = await fetch('/api/agents/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        data = await response.json();
+
+        // If OAuth is needed, show the OAuth modal
+        if (data.needsOAuth && authType === 'oauth2') {
+          const oauthConfigForApi = buildOAuth2ConfigForApi();
+          setOauthModalData({
+            serverName: displayName || agentName || 'A2A Agent',
+            serverId: getTempServerId(),
+            oauthConfig: oauthConfigForApi,
+          });
+          setOauthModalOpen(true);
+          setIsFetching(false);
+          return;
+        }
+      } else {
+        // Simple GET for no auth
+        response = await fetch(`/api/agents/fetch?url=${encodeURIComponent(url.trim())}`);
+        data = await response.json();
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch agent card');
@@ -248,6 +355,43 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
       setIsFetching(false);
     }
   };
+
+  // Flag to trigger retry after OAuth success
+  const [retryConnectAfterOAuth, setRetryConnectAfterOAuth] = useState(false);
+
+  // Handle OAuth success during import
+  const handleOAuthSuccess = useCallback((data?: OAuthSuccessData) => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+
+    // Store DCR client_id if provided
+    if (data?.clientId) {
+      dcrClientIdRef.current = data.clientId;
+      console.log('[Import OAuth] Stored DCR client_id:', data.clientId);
+    }
+
+    // Trigger retry via state change
+    setRetryConnectAfterOAuth(true);
+  }, []);
+
+  // Effect to retry connect after OAuth success
+  useEffect(() => {
+    if (retryConnectAfterOAuth) {
+      setRetryConnectAfterOAuth(false);
+      // Call handleConnect - it's defined above so this is safe
+      const doRetry = async () => {
+        await handleConnect();
+      };
+      doRetry();
+    }
+  }, [retryConnectAfterOAuth]);
+
+  // Handle OAuth cancel during import
+  const handleOAuthCancel = useCallback(() => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+    setError('OAuth authentication cancelled');
+  }, []);
 
   // Process agent card data
   const processAgentCard = (card: AgentCard, fallbackIconUrl?: string | null) => {
@@ -400,6 +544,34 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to import agent');
+      }
+
+      // If OAuth was used during import, link the token to the real agent ID
+      if (authType === 'oauth2' && tempServerIdRef.current && data.agentId) {
+        try {
+          console.log('[Import] Linking OAuth token from temp ID to real agent ID:', data.agentId);
+          await fetch('/api/oauth/link-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tempServerId: tempServerIdRef.current,
+              realAgentId: data.agentId,
+              serverType: 'a2a',
+            }),
+          });
+
+          // Also update the agent's auth_config with DCR client_id if available
+          if (dcrClientIdRef.current) {
+            await fetch(`/api/agents/${data.agentId}/update-oauth-client`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clientId: dcrClientIdRef.current }),
+            });
+          }
+        } catch (err) {
+          console.error('[Import] Failed to link OAuth token:', err);
+          // Non-fatal - user can re-auth in chat
+        }
       }
 
       setSuccessMessage(`Successfully imported agent "${displayName || agentName}"!`);
@@ -774,6 +946,15 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
               onShowClientSecretToggle={() => setShowClientSecret(!showClientSecret)}
               domainForCheck={url}
               inputStyle={inputStyle}
+              serverType="a2a"
+              serverId={getTempServerId()}
+              onOAuthToken={(_token, clientId) => {
+                // Store DCR client_id if provided
+                if (clientId) {
+                  dcrClientIdRef.current = clientId;
+                  console.log('[Import] OAuth token stored with client_id:', clientId);
+                }
+              }}
             />
 
             {/* Custom Headers */}
@@ -1146,6 +1327,19 @@ export function AgentImportPage({ isPro, isPlus }: AgentImportPageProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* OAuth Authentication Modal for Import */}
+      {oauthModalData && (
+        <OAuthAuthenticationModal
+          isOpen={oauthModalOpen}
+          serverName={oauthModalData.serverName}
+          serverType="a2a"
+          serverId={oauthModalData.serverId}
+          oauthConfig={oauthModalData.oauthConfig}
+          onSuccess={handleOAuthSuccess}
+          onCancel={handleOAuthCancel}
+        />
       )}
 
       <Footer />

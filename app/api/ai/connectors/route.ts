@@ -30,7 +30,12 @@ export async function GET(request: NextRequest) {
         id,
         connector_type,
         mcp_server_id,
+        a2a_agent_id,
+        api_key_id,
         external_url,
+        external_auth_type,
+        external_auth_config,
+        external_headers,
         display_name,
         description,
         icon,
@@ -94,6 +99,8 @@ export async function POST(request: NextRequest) {
     const {
       connectorType,
       mcpServerId,
+      a2aAgentId,
+      apiKeyId,
       externalUrl,
       externalAuthType,
       externalAuthConfig,
@@ -124,14 +131,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // For external_agent, verify the A2A agent exists and belongs to user
+    if (connectorType === 'external_agent' && a2aAgentId) {
+      const { data: agent } = await db
+        .from('a2a_agents')
+        .select('id, display_name')
+        .eq('id', a2aAgentId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!agent) {
+        return NextResponse.json({ error: 'A2A agent not found' }, { status: 404 });
+      }
+    }
+
     // For internal_mcp (api_key servers), verify the api_key exists and belongs to user
-    // The api_key_id is stored in externalUrl as "api_key:<id>"
-    if (connectorType === 'internal_mcp' && externalUrl?.startsWith('api_key:')) {
-      const apiKeyId = externalUrl.replace('api_key:', '');
+    const effectiveApiKeyId = apiKeyId || (externalUrl?.startsWith('api_key:') ? externalUrl.replace('api_key:', '') : null);
+    if (connectorType === 'internal_mcp' && effectiveApiKeyId) {
       const { data: apiKey } = await db
         .from('api_keys')
         .select('id, server_name')
-        .eq('id', apiKeyId)
+        .eq('id', effectiveApiKeyId)
         .eq('user_id', userId)
         .single();
 
@@ -140,13 +160,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Note: mcp_server_id only works for external_mcp (references mcp_servers table)
-    // For internal_mcp, we store the api_key_id in external_url as a reference
-    // Try with icon_url first, fall back to without if column doesn't exist
+    // Build insert data with proper foreign key references
     const insertData: Record<string, unknown> = {
       user_id: userId,
       connector_type: connectorType,
       mcp_server_id: connectorType === 'external_mcp' ? mcpServerId : null,
+      a2a_agent_id: connectorType === 'external_agent' ? a2aAgentId : null,
+      api_key_id: connectorType === 'internal_mcp' ? effectiveApiKeyId : null,
       external_url: externalUrl || null,
       external_auth_type: externalAuthType || 'none',
       external_auth_config: externalAuthConfig || {},

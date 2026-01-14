@@ -192,6 +192,17 @@ export function MCPServerImportPage({ isPro, isPlus }: MCPServerImportPageProps)
           return { credentials: btoa(creds) };
         }
         return { credentials: creds };
+      case 'oauth2':
+        // Store OAuth2 configuration with snake_case keys for database consistency
+        return {
+          authorization_endpoint: oauth2Config.authorizationEndpoint,
+          token_endpoint: oauth2Config.tokenEndpoint,
+          scopes: oauth2Config.scopes,
+          use_dcr: oauth2Config.useDcr,
+          client_id: oauth2Config.clientId,
+          client_secret: oauth2Config.clientSecret,
+          registration_endpoint: oauth2Config.registrationEndpoint,
+        };
       default:
         return {};
     }

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createMCPClient, detectWidgetSupport } from '@/src/lib/mcp-client';
+import { createMCPClient, detectWidgetSupport, type MCPServerInfo } from '@/src/lib/mcp-client';
 import type { MCPServerAuthType } from '@/src/types/supabase';
 
 interface FetchRequest {
@@ -15,18 +15,19 @@ interface FetchRequest {
   authType?: MCPServerAuthType;
   authConfig?: Record<string, unknown>;
   headers?: Record<string, string>;
+  serverId?: string; // For OAuth token lookup
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body: FetchRequest = await request.json();
-    const { url, authType = 'none', authConfig, headers } = body;
+    const { url, authType = 'none', authConfig, headers, serverId } = body;
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -39,13 +40,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
     }
 
-    // Create MCP client
-    const client = createMCPClient(url, authType, authConfig, headers);
+    // For OAuth, use serverId if provided, otherwise generate a temporary ID
+    const effectiveServerId = serverId || (authType === 'oauth2' ? `temp_${Buffer.from(url).toString('base64').slice(0, 32)}` : undefined);
+
+    // Create MCP client with userId and serverId for OAuth support
+    const client = createMCPClient(url, authType, authConfig, headers, userId, effectiveServerId);
 
     // Initialize connection
-    let serverInfo;
+    let serverInfo: MCPServerInfo;
     try {
-      serverInfo = await client.initialize();
+      const initResult = await client.initialize();
+
+      // Check if OAuth is needed (shouldn't happen during fetch, but handle it)
+      if ('needsOAuth' in initResult && initResult.needsOAuth) {
+        return NextResponse.json({
+          error: 'OAuth authentication required for this MCP server',
+          needsOAuth: true,
+        }, { status: 401 });
+      }
+
+      serverInfo = initResult as MCPServerInfo;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize MCP server';
       console.error('MCP server initialization failed:', { url, error: message });

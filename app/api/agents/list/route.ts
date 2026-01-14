@@ -24,6 +24,7 @@ interface A2AAgent {
   tags: string[];
   category: string;
   auth_type: string;
+  auth_config: Record<string, unknown>;
   has_widget: boolean;
   created_at: string;
   updated_at: string;

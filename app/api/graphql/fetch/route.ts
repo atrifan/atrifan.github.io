@@ -1,32 +1,38 @@
 /**
  * GraphQL Schema Fetch API
- * 
+ *
  * POST /api/graphql/fetch
  * Fetch and introspect a GraphQL schema from a URL
+ * Supports OAuth2 authentication for protected APIs.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { fetchGraphQLSchema } from '@/src/lib/graphql-handler';
 import { parseGraphQLSchema } from '@/src/lib/graphql-parser';
+import { getValidOAuthToken } from '@/src/lib/oauth-token-manager';
+import type { OAuth2AuthConfig } from '@/src/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
 interface FetchRequest {
   url: string;
   headers?: Record<string, string>;
+  authType?: 'none' | 'api_key' | 'bearer' | 'oauth2';
+  oauth2Config?: OAuth2AuthConfig;
+  specId?: string; // For OAuth token lookup
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const body: FetchRequest = await request.json();
-    const { url, headers } = body;
+    const { url, headers: customHeaders, authType, oauth2Config, specId } = body;
 
     if (!url) {
       return NextResponse.json({ error: 'Missing required field: url' }, { status: 400 });
@@ -37,6 +43,25 @@ export async function POST(request: NextRequest) {
       new URL(url);
     } catch {
       return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
+    }
+
+    // Build headers
+    const headers: Record<string, string> = { ...customHeaders };
+
+    // Handle OAuth2 authentication
+    if (authType === 'oauth2' && oauth2Config) {
+      const serverId = specId || `temp_${Buffer.from(url).toString('base64').slice(0, 32)}`;
+      const tokenResult = await getValidOAuthToken(userId, { type: 'graphql', id: serverId }, oauth2Config);
+
+      if (!tokenResult.success || !tokenResult.accessToken) {
+        return NextResponse.json({
+          success: false,
+          error: tokenResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerType: 'graphql',
+        });
+      }
+      headers['Authorization'] = `${tokenResult.tokenType || 'Bearer'} ${tokenResult.accessToken}`;
     }
 
     // Fetch the schema via introspection

@@ -18,11 +18,25 @@ export interface A2AResponse {
   outputTokens?: number;
   contextId?: string; // A2A protocol task ID for conversation continuity
   taskState?: string; // A2A task state (e.g., 'input_required', 'completed')
+  // OAuth authentication required
+  needsOAuth?: boolean;
+  oauthServerId?: string;
+  oauthServerType?: string;
+  // OAuth config returned from server when auth is needed
+  oauthConfig?: {
+    authorization_endpoint: string;
+    token_endpoint: string;
+    scopes: string;
+    client_id: string;
+    use_dcr?: boolean;
+    registration_endpoint?: string;
+  };
 }
 
 export interface A2AClientConfig {
   agentUrl: string;
-  authType?: 'none' | 'api_key' | 'bearer' | 'basic';
+  agentId?: string; // A2A agent ID for OAuth token lookup
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   authConfig?: Record<string, string>;
   headers?: Record<string, string>;
   systemPrompts?: string[]; // Personality system prompts
@@ -50,6 +64,7 @@ export async function sendA2AMessage(
       },
       body: JSON.stringify({
         agentUrl: config.agentUrl,
+        agentId: config.agentId,
         messages,
         systemPrompts: config.systemPrompts,
         authType: config.authType,

@@ -1,23 +1,36 @@
 /**
  * Swagger Fetch API
- * 
+ *
  * Fetches OpenAPI/Swagger spec from a URL with optional auth headers.
+ * Supports OAuth2 authentication for protected APIs.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { getValidOAuthToken } from '@/src/lib/oauth-token-manager';
+import type { OAuth2AuthConfig } from '@/src/types/supabase';
+
+interface FetchRequest {
+  url: string;
+  apiKey?: string;
+  bearerToken?: string;
+  headers?: Record<string, string>;
+  authType?: 'none' | 'api_key' | 'bearer' | 'oauth2';
+  oauth2Config?: OAuth2AuthConfig;
+  specId?: string; // For OAuth token lookup
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    const body = await request.json();
+
+    const body: FetchRequest = await request.json();
     // Support both old format (apiKey, bearerToken) and new format (headers object)
-    const { url, apiKey, bearerToken, headers: customHeaders } = body;
+    const { url, apiKey, bearerToken, headers: customHeaders, authType, oauth2Config, specId } = body;
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -42,12 +55,25 @@ export async function POST(request: NextRequest) {
       Object.assign(headers, customHeaders);
     }
 
-    // Legacy support: add apiKey and bearerToken if provided directly
-    if (apiKey) {
-      headers['x-api-key'] = apiKey;
-    }
+    // Handle OAuth2 authentication
+    if (authType === 'oauth2' && oauth2Config) {
+      // Use specId if provided, otherwise generate a temporary ID based on URL
+      const serverId = specId || `temp_${Buffer.from(url).toString('base64').slice(0, 32)}`;
+      const tokenResult = await getValidOAuthToken(userId, { type: 'rest_api', id: serverId }, oauth2Config);
 
-    if (bearerToken) {
+      if (!tokenResult.success || !tokenResult.accessToken) {
+        return NextResponse.json({
+          success: false,
+          error: tokenResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerType: 'rest_api',
+        });
+      }
+      headers['Authorization'] = `${tokenResult.tokenType || 'Bearer'} ${tokenResult.accessToken}`;
+    } else if (apiKey) {
+      // Legacy support: add apiKey if provided directly
+      headers['x-api-key'] = apiKey;
+    } else if (bearerToken) {
       headers['Authorization'] = `Bearer ${bearerToken}`;
     }
     

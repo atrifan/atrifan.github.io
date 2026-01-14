@@ -5,7 +5,8 @@
  */
 
 import { GraphQLClient, gql } from 'graphql-request';
-import type { GraphQLOperationRow, GraphQLSpecRow, EnvironmentRow } from '@/src/types/supabase';
+import type { GraphQLOperationRow, GraphQLSpecRow, EnvironmentRow, OAuth2AuthConfig } from '@/src/types/supabase';
+import { getValidOAuthToken, type ServerReference } from './oauth-token-manager';
 
 export interface GraphQLCallParams {
   operation: GraphQLOperationRow;
@@ -14,6 +15,7 @@ export interface GraphQLCallParams {
   variables: Record<string, unknown>;
   authToken?: string;
   apiKey?: string;
+  userId?: string; // For OAuth token lookup
 }
 
 export interface GraphQLCallResult {
@@ -21,6 +23,18 @@ export interface GraphQLCallResult {
   data?: unknown;
   errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }>; path?: string[] }>;
   error?: string;
+  // OAuth-specific fields
+  needsOAuth?: boolean;
+  oauthServerId?: string;
+  oauthServerType?: 'graphql';
+}
+
+interface AuthInfo {
+  type: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
+  token?: string;
+  apiKey?: string;
+  basicUsername?: string;
+  basicPassword?: string;
 }
 
 /**
@@ -28,8 +42,7 @@ export interface GraphQLCallResult {
  */
 function buildHeaders(
   spec: GraphQLSpecRow,
-  authToken?: string,
-  apiKey?: string
+  auth?: AuthInfo
 ): Record<string, string> {
   const headers: Record<string, string> = {};
 
@@ -38,15 +51,28 @@ function buildHeaders(
     Object.assign(headers, spec.default_headers);
   }
 
-  // Add authorization based on auth_type
-  if (spec.auth_type === 'bearer' && authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
-  } else if (spec.auth_type === 'api_key' && apiKey) {
-    // Check auth_config for header name
-    const headerName = (spec.auth_config?.header_name as string) || 'x-api-key';
-    headers[headerName] = apiKey;
-  } else if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
+  // Add authentication based on type
+  if (auth) {
+    switch (auth.type) {
+      case 'bearer':
+      case 'oauth2':
+        if (auth.token) {
+          headers['Authorization'] = `Bearer ${auth.token}`;
+        }
+        break;
+      case 'basic':
+        if (auth.basicUsername && auth.basicPassword) {
+          const credentials = Buffer.from(`${auth.basicUsername}:${auth.basicPassword}`).toString('base64');
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+        break;
+      case 'api_key':
+        if (auth.apiKey) {
+          const headerName = (spec.auth_config?.header_name as string) || 'x-api-key';
+          headers[headerName] = auth.apiKey;
+        }
+        break;
+    }
   }
 
   return headers;
@@ -68,14 +94,48 @@ export function createGraphQLClient(
  * Execute a GraphQL operation using graphql-request client
  */
 export async function executeGraphQLCall(params: GraphQLCallParams): Promise<GraphQLCallResult> {
-  const { operation, spec, environment, variables, authToken, apiKey } = params;
+  const { operation, spec, environment, variables, userId } = params;
 
   try {
     // Build the GraphQL endpoint URL
     const url = environment.host;
 
-    // Build headers
-    const headers = buildHeaders(spec, authToken, apiKey);
+    // Determine auth type and get credentials
+    const authType = spec.auth_type || 'none';
+    const authConfig = spec.auth_config as Record<string, unknown> | undefined;
+    let auth: AuthInfo | undefined;
+
+    if (authType === 'oauth2' && userId && authConfig) {
+      // Get OAuth token from storage
+      const oauthConfig = authConfig as unknown as OAuth2AuthConfig;
+      const server: ServerReference = { type: 'graphql', id: spec.id };
+      const tokenResult = await getValidOAuthToken(userId, server, oauthConfig);
+
+      if (!tokenResult.success) {
+        return {
+          success: false,
+          error: tokenResult.error || 'OAuth authentication required',
+          needsOAuth: true,
+          oauthServerId: spec.id,
+          oauthServerType: 'graphql',
+        };
+      }
+
+      auth = { type: 'oauth2', token: tokenResult.accessToken };
+    } else if (authType === 'bearer' && authConfig) {
+      auth = { type: 'bearer', token: authConfig.token as string };
+    } else if (authType === 'basic' && authConfig) {
+      auth = {
+        type: 'basic',
+        basicUsername: authConfig.username as string,
+        basicPassword: authConfig.password as string,
+      };
+    } else if (authType === 'api_key' && authConfig) {
+      auth = { type: 'api_key', apiKey: authConfig.api_key as string };
+    }
+
+    // Build headers with auth
+    const headers = buildHeaders(spec, auth);
 
     // Create GraphQL client
     const client = createGraphQLClient(url, headers);
@@ -99,6 +159,21 @@ export async function executeGraphQLCall(params: GraphQLCallParams): Promise<Gra
         status?: number;
       }
     };
+
+    // Check for auth failures
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      const authType = spec.auth_type || 'none';
+      if (authType === 'oauth2') {
+        return {
+          success: false,
+          error: `Authentication failed (${err.response.status})`,
+          errors: err.response.errors,
+          needsOAuth: true,
+          oauthServerId: spec.id,
+          oauthServerType: 'graphql',
+        };
+      }
+    }
 
     if (err.response?.errors) {
       return {

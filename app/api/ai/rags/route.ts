@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       sourceType,
       authType,
       authConfig,
+      oauth2Config,
       customHeaders,
       hasEmbeddings,
       embeddingModel,
@@ -90,6 +91,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
+    // Build final auth config - merge OAuth2 config if provided
+    let finalAuthConfig = authConfig || {};
+    if (authType === 'oauth2' && oauth2Config) {
+      finalAuthConfig = {
+        authorization_endpoint: oauth2Config.authorizationEndpoint,
+        token_endpoint: oauth2Config.tokenEndpoint,
+        scopes: oauth2Config.scopes,
+        use_dcr: oauth2Config.useDcr,
+        client_id: oauth2Config.clientId,
+        client_secret: oauth2Config.clientSecret,
+        registration_endpoint: oauth2Config.registrationEndpoint,
+      };
+    }
+
     const { data, error } = await db
       .from('user_rags')
       .insert({
@@ -99,7 +114,7 @@ export async function POST(request: NextRequest) {
         source_url: sourceUrl || null,
         source_type: sourceType || 'csv',
         auth_type: authType || 'none',
-        auth_config: authConfig || {},
+        auth_config: finalAuthConfig,
         custom_headers: customHeaders || {},
         has_embeddings: hasEmbeddings || false,
         embedding_model: embeddingModel || null,

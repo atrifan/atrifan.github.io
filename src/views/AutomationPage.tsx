@@ -104,6 +104,8 @@ interface Connector {
   icon_url?: string | null;
   external_url?: string | null;
   mcp_server_id?: string | null;
+  a2a_agent_id?: string | null;
+  api_key_id?: string | null;
 }
 
 interface MCPServer {
