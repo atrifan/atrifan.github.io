@@ -57,8 +57,8 @@ export async function POST(
     };
 
     const { error: updateError } = await supabase
-      .from('a2a_agents')
-      .update({ auth_config: updatedConfig })
+      .from('a2a_agents' as never)
+      .update({ auth_config: updatedConfig } as never)
       .eq('id', agentId);
 
     if (updateError) {

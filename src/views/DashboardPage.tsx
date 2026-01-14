@@ -293,6 +293,43 @@ export const DashboardPage: React.FC = () => {
   // RAG Knowledge Bases state
   const [rags, setRags] = useState<RAG[]>([]);
 
+  // Imports state - for the Import APIs card
+  const [imports, setImports] = useState<{
+    restApis: { id: string; name: string; title: string; endpointCount: number; sourceUrl?: string }[];
+    graphql: { id: string; name: string; title: string; operationCount: number; sourceUrl?: string }[];
+    mcpServers: { id: string; name: string; displayName: string; toolCount: number; sourceUrl: string }[];
+    a2aAgents: { id: string; name: string; displayName: string; description?: string; iconUrl?: string; agentUrl: string }[];
+  }>({
+    restApis: [],
+    graphql: [],
+    mcpServers: [],
+    a2aAgents: [],
+  });
+  const [importsLoading, setImportsLoading] = useState(true);
+
+  // OAuth Connections state
+  interface OAuthConnectionData {
+    id: string;
+    providerHash: string;
+    oauthConfig: {
+      authorization_endpoint: string;
+      token_endpoint: string;
+      scopes: string;
+      use_dcr: boolean;
+      client_id: string;
+      client_secret: string;
+      registration_endpoint: string;
+    };
+    hasRefreshToken: boolean;
+    accessTokenExpiresAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    linkedImports: { type: string; id: string; name: string }[];
+  }
+  const [oauthConnections, setOauthConnections] = useState<OAuthConnectionData[]>([]);
+  const [oauthConnectionsLoading, setOauthConnectionsLoading] = useState(true);
+  const [expandedOAuthConnection, setExpandedOAuthConnection] = useState<string | null>(null);
+
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
   const customServers = servers.filter(s => s.serverName !== 'default');
@@ -517,6 +554,126 @@ export const DashboardPage: React.FC = () => {
     };
     fetchRags();
   }, [isPro, user]);
+
+  // Fetch imports (REST APIs, GraphQL, MCP servers, A2A agents)
+  useEffect(() => {
+    const fetchImports = async () => {
+      if (!isPro || !user) {
+        setImportsLoading(false);
+        return;
+      }
+      setImportsLoading(true);
+      try {
+        // Fetch all import types in parallel
+        const [restRes, graphqlRes, mcpRes, agentsRes] = await Promise.all([
+          fetch('/api/swagger/list'),
+          fetch('/api/graphql/list'),
+          fetch('/api/mcp-servers/list'),
+          fetch('/api/agents/list'),
+        ]);
+
+        if (restRes.ok) {
+          const data = await restRes.json();
+          setImports(prev => ({
+            ...prev,
+            restApis: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; endpoints?: unknown[]; source_url?: string }) => ({
+              id: s.id,
+              name: s.server_name,
+              title: s.api_title,
+              endpointCount: s.endpoints?.length || 0,
+              sourceUrl: s.source_url,
+            })),
+          }));
+        }
+
+        if (graphqlRes.ok) {
+          const data = await graphqlRes.json();
+          setImports(prev => ({
+            ...prev,
+            graphql: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; operations?: unknown[]; source_url?: string }) => ({
+              id: s.id,
+              name: s.server_name,
+              title: s.api_title,
+              operationCount: s.operations?.length || 0,
+              sourceUrl: s.source_url,
+            })),
+          }));
+        }
+
+        if (mcpRes.ok) {
+          const data = await mcpRes.json();
+          // Filter to only show imported MCP servers (not native/api_key servers)
+          const importedServers = (data.servers || []).filter((s: { source_type: string }) => s.source_type === 'mcp_import');
+          setImports(prev => ({
+            ...prev,
+            mcpServers: importedServers.map((s: { id: string; server_name: string; display_name: string; toolCount: number; source_url: string }) => ({
+              id: s.id,
+              name: s.server_name,
+              displayName: s.display_name,
+              toolCount: s.toolCount,
+              sourceUrl: s.source_url,
+            })),
+          }));
+        }
+
+        if (agentsRes.ok) {
+          const data = await agentsRes.json();
+          setImports(prev => ({
+            ...prev,
+            a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
+              id: a.id,
+              name: a.agent_name,
+              displayName: a.display_name,
+              description: a.description,
+              iconUrl: a.icon_url,
+              agentUrl: a.agent_url,
+            })),
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch imports:', error);
+      } finally {
+        setImportsLoading(false);
+      }
+    };
+    fetchImports();
+  }, [isPro, user]);
+
+  // Fetch OAuth connections
+  useEffect(() => {
+    const fetchOAuthConnections = async () => {
+      if (!isPro || !user) {
+        setOauthConnectionsLoading(false);
+        return;
+      }
+      setOauthConnectionsLoading(true);
+      try {
+        const response = await fetch('/api/oauth/connections');
+        if (response.ok) {
+          const data = await response.json();
+          setOauthConnections(data.connections || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch OAuth connections:', error);
+      } finally {
+        setOauthConnectionsLoading(false);
+      }
+    };
+    fetchOAuthConnections();
+  }, [isPro, user]);
+
+  // Revoke OAuth connection
+  const revokeOAuthConnection = async (id: string) => {
+    if (!confirm('Are you sure you want to revoke this OAuth connection? You will need to re-authenticate to use the linked imports.')) return;
+    try {
+      const response = await fetch(`/api/oauth/connections?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setOauthConnections(prev => prev.filter(c => c.id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to revoke OAuth connection:', error);
+    }
+  };
 
   // Delete RAG
   const deleteRag = async (id: string) => {
@@ -1759,6 +1916,258 @@ export const DashboardPage: React.FC = () => {
               </svg>
               Create Custom MCP Server
             </Link>
+          </DashboardCard>
+        )}
+
+        {/* Imports Card */}
+        {isPro && isMcpComposerEnabled() && (
+          <DashboardCard title="Imports" icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          }>
+            {/* Loading indicator */}
+            {importsLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', color: 'rgba(255,255,255,0.6)' }}>
+                <span style={{ marginRight: '0.5rem', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+                Loading imports...
+              </div>
+            )}
+            {/* Summary counts */}
+            {!importsLoading && (
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                {imports.restApis.length > 0 && (
+                  <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                    📄 {imports.restApis.length} REST API{imports.restApis.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {imports.graphql.length > 0 && (
+                  <span style={{ background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                    ◈ {imports.graphql.length} GraphQL
+                  </span>
+                )}
+                {imports.mcpServers.length > 0 && (
+                  <span style={{ background: 'rgba(251, 146, 60, 0.2)', color: '#fb923c', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                    🔌 {imports.mcpServers.length} MCP Server{imports.mcpServers.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {imports.a2aAgents.length > 0 && (
+                  <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                    🤖 {imports.a2aAgents.length} A2A Agent{imports.a2aAgents.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {rags.length > 0 && (
+                  <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#8b5cf6', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                    📚 {rags.length} RAG{rags.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Imported items list */}
+            {!importsLoading && (imports.restApis.length > 0 || imports.graphql.length > 0 || imports.mcpServers.length > 0 || imports.a2aAgents.length > 0) && (
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.75rem', marginBottom: '1rem', maxHeight: '300px', overflowY: 'auto' }}>
+                {/* REST APIs */}
+                {imports.restApis.map(api => (
+                  <Link key={api.id} href={`/dashboard/rest-api/${api.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: '1rem' }}>📄</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{api.title || api.name}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{api.endpointCount} endpoints</div>
+                      </div>
+                      <span style={{ color: '#10b981', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>REST</span>
+                    </div>
+                  </Link>
+                ))}
+                {/* GraphQL */}
+                {imports.graphql.map(gql => (
+                  <Link key={gql.id} href={`/dashboard/graphql/${gql.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: '1rem' }}>◈</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{gql.title || gql.name}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{gql.operationCount} operations</div>
+                      </div>
+                      <span style={{ color: '#667eea', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(102, 126, 234, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>GraphQL</span>
+                    </div>
+                  </Link>
+                ))}
+                {/* MCP Servers */}
+                {imports.mcpServers.map(mcp => (
+                  <Link key={mcp.id} href={`/dashboard/mcp-server/${mcp.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: '1rem' }}>🔌</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mcp.displayName || mcp.name}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{mcp.toolCount} tools</div>
+                      </div>
+                      <span style={{ color: '#fb923c', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(251, 146, 60, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>MCP</span>
+                    </div>
+                  </Link>
+                ))}
+                {/* A2A Agents */}
+                {imports.a2aAgents.map(agent => (
+                  <Link key={agent.id} href={`/dashboard/a2a-agent/${agent.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: '1rem' }}>{agent.iconUrl ? <img src={agent.iconUrl} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} /> : '🤖'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.displayName || agent.name}</div>
+                        {agent.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.description}</div>}
+                      </div>
+                      <span style={{ color: '#f59e0b', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(245, 158, 11, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>A2A</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!importsLoading && imports.restApis.length === 0 && imports.graphql.length === 0 && imports.mcpServers.length === 0 && imports.a2aAgents.length === 0 && rags.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>📥</span>
+                No APIs or agents imported yet
+              </div>
+            )}
+
+            {/* Import buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem' }}>
+              <Link href="/dashboard/swagger-import" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  <span>+</span> REST API
+                </button>
+              </Link>
+              <Link href="/dashboard/graphql-import" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(102, 126, 234, 0.4)', background: 'rgba(102, 126, 234, 0.1)', color: '#667eea', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  <span>+</span> GraphQL
+                </button>
+              </Link>
+              <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(251, 146, 60, 0.4)', background: 'rgba(251, 146, 60, 0.1)', color: '#fb923c', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  <span>+</span> MCP Server
+                </button>
+              </Link>
+              <Link href="/dashboard/agent-import" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  <span>+</span> A2A Agent
+                </button>
+              </Link>
+              <Link href="/dashboard/rag-import" style={{ textDecoration: 'none' }}>
+                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  <span>+</span> RAG
+                </button>
+              </Link>
+            </div>
+          </DashboardCard>
+        )}
+
+        {/* OAuth Connections Card */}
+        {isPro && isMcpComposerEnabled() && (
+          <DashboardCard title="OAuth Connections" icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          }>
+            {/* Loading indicator */}
+            {oauthConnectionsLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', color: 'rgba(255,255,255,0.6)' }}>
+                <span style={{ marginRight: '0.5rem', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+                Loading connections...
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!oauthConnectionsLoading && oauthConnections.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+                <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>🔐</span>
+                No OAuth connections yet. Import an API or agent with OAuth2 authentication to see connections here.
+              </div>
+            )}
+
+            {/* Connections list */}
+            {!oauthConnectionsLoading && oauthConnections.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {oauthConnections.map(conn => {
+                  const isExpanded = expandedOAuthConnection === conn.id;
+                  const isExpired = conn.accessTokenExpiresAt && new Date(conn.accessTokenExpiresAt) < new Date();
+                  const expiresIn = conn.accessTokenExpiresAt ? Math.max(0, Math.floor((new Date(conn.accessTokenExpiresAt).getTime() - Date.now()) / 1000 / 60)) : null;
+
+                  return (
+                    <div key={conn.id} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.75rem', border: isExpired ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(139, 92, 246, 0.2)' }}>
+                      {/* Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={() => setExpandedOAuthConnection(isExpanded ? null : conn.id)}>
+                        <span style={{ fontSize: '1.25rem' }}>🔑</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {new URL(conn.oauthConfig.token_endpoint).hostname}
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                            {conn.linkedImports.length} linked import{conn.linkedImports.length !== 1 ? 's' : ''}
+                            {isExpired ? (
+                              <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>• Token expired</span>
+                            ) : expiresIn !== null ? (
+                              <span style={{ color: expiresIn < 5 ? '#f59e0b' : '#10b981', marginLeft: '0.5rem' }}>• Expires in {expiresIn}m</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                      </div>
+
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          {/* Linked imports */}
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Linked Imports</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                              {conn.linkedImports.map(imp => (
+                                <Link key={`${imp.type}-${imp.id}`} href={`/dashboard/${imp.type === 'rest_api' ? 'rest-api' : imp.type === 'a2a' ? 'a2a-agent' : imp.type === 'mcp' ? 'mcp-server' : imp.type}/${imp.id}`} style={{ textDecoration: 'none' }}>
+                                  <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 500 }}>
+                                    {imp.type === 'rest_api' ? '📄' : imp.type === 'graphql' ? '◈' : imp.type === 'mcp' ? '🔌' : imp.type === 'a2a' ? '🤖' : '📚'} {imp.name}
+                                  </span>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* OAuth config */}
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Configuration</div>
+                            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '0.5rem', fontSize: '0.75rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Token Endpoint</div>
+                              <div style={{ color: '#fff', wordBreak: 'break-all', marginBottom: '0.5rem' }}>{conn.oauthConfig.token_endpoint}</div>
+                              <div style={{ color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Scopes</div>
+                              <div style={{ color: '#fff' }}>{conn.oauthConfig.scopes || 'None'}</div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => revokeOAuthConnection(conn.id)}
+                              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                            >
+                              🗑️ Revoke Token
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </DashboardCard>
         )}
 
