@@ -308,8 +308,18 @@ export const DashboardPage: React.FC = () => {
   const [importsLoading, setImportsLoading] = useState(true);
 
   // OAuth Connections state
-  interface OAuthConnectionData {
+  interface OAuthTokenData {
     id: string;
+    isShared: boolean;
+    linkedServerId?: string;
+    linkedServerType?: string;
+    hasRefreshToken: boolean;
+    accessTokenExpiresAt: string | null;
+    isExpired: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }
+  interface OAuthConnectionData {
     providerHash: string;
     oauthConfig: {
       authorization_endpoint: string;
@@ -320,15 +330,13 @@ export const DashboardPage: React.FC = () => {
       client_secret: string;
       registration_endpoint: string;
     };
-    hasRefreshToken: boolean;
-    accessTokenExpiresAt: string | null;
-    createdAt: string;
-    updatedAt: string;
+    tokens: OAuthTokenData[];
     linkedImports: { type: string; id: string; name: string }[];
   }
   const [oauthConnections, setOauthConnections] = useState<OAuthConnectionData[]>([]);
   const [oauthConnectionsLoading, setOauthConnectionsLoading] = useState(true);
   const [expandedOAuthConnection, setExpandedOAuthConnection] = useState<string | null>(null);
+  const [reauthenticatingConnection, setReauthenticatingConnection] = useState<string | null>(null);
 
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
@@ -662,17 +670,73 @@ export const DashboardPage: React.FC = () => {
     fetchOAuthConnections();
   }, [isPro, user]);
 
-  // Revoke OAuth connection
-  const revokeOAuthConnection = async (id: string) => {
-    if (!confirm('Are you sure you want to revoke this OAuth connection? You will need to re-authenticate to use the linked imports.')) return;
+  // Revoke single OAuth token
+  const revokeOAuthToken = async (tokenId: string, providerHash: string) => {
+    if (!confirm('Are you sure you want to revoke this token?')) return;
     try {
-      const response = await fetch(`/api/oauth/connections?id=${id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/oauth/connections?id=${tokenId}`, { method: 'DELETE' });
       if (response.ok) {
-        setOauthConnections(prev => prev.filter(c => c.id !== id));
+        setOauthConnections(prev => prev.map(c => {
+          if (c.providerHash !== providerHash) return c;
+          const newTokens = c.tokens.filter(t => t.id !== tokenId);
+          return { ...c, tokens: newTokens };
+        }).filter(c => c.tokens.length > 0));
       }
     } catch (error) {
-      console.error('Failed to revoke OAuth connection:', error);
+      console.error('Failed to revoke OAuth token:', error);
     }
+  };
+
+  // Revoke all OAuth tokens for a connection
+  const revokeAllOAuthTokens = async (providerHash: string) => {
+    if (!confirm('Are you sure you want to revoke ALL tokens for this connection? You will need to re-authenticate to use the linked imports.')) return;
+    try {
+      const response = await fetch(`/api/oauth/connections?providerHash=${encodeURIComponent(providerHash)}&deleteAll=true`, { method: 'DELETE' });
+      if (response.ok) {
+        setOauthConnections(prev => prev.filter(c => c.providerHash !== providerHash));
+      }
+    } catch (error) {
+      console.error('Failed to revoke OAuth tokens:', error);
+    }
+  };
+
+  // Re-authenticate OAuth connection
+  const reauthenticateOAuthConnection = async (conn: OAuthConnectionData) => {
+    if (!conn.oauthConfig.authorization_endpoint) {
+      alert('No authorization endpoint configured for this connection.');
+      return;
+    }
+
+    setReauthenticatingConnection(conn.providerHash);
+
+    // Build OAuth authorization URL
+    const authUrl = new URL(conn.oauthConfig.authorization_endpoint);
+    const redirectUri = `${window.location.origin}/api/oauth/callback`;
+    const state = btoa(JSON.stringify({ providerHash: conn.providerHash, returnUrl: window.location.href }));
+
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('client_id', conn.oauthConfig.client_id);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('state', state);
+    if (conn.oauthConfig.scopes) {
+      authUrl.searchParams.set('scope', conn.oauthConfig.scopes);
+    }
+
+    // Open OAuth popup
+    const popup = window.open(authUrl.toString(), 'oauth', 'width=600,height=700,popup=1');
+
+    // Listen for popup close
+    const checkClosed = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(checkClosed);
+        setReauthenticatingConnection(null);
+        // Refresh connections
+        fetch('/api/oauth/connections')
+          .then(res => res.json())
+          .then(data => setOauthConnections(data.connections || []))
+          .catch(console.error);
+      }
+    }, 500);
   };
 
   // Delete RAG
@@ -2099,26 +2163,30 @@ export const DashboardPage: React.FC = () => {
             {!oauthConnectionsLoading && oauthConnections.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {oauthConnections.map(conn => {
-                  const isExpanded = expandedOAuthConnection === conn.id;
-                  const isExpired = conn.accessTokenExpiresAt && new Date(conn.accessTokenExpiresAt) < new Date();
-                  const expiresIn = conn.accessTokenExpiresAt ? Math.max(0, Math.floor((new Date(conn.accessTokenExpiresAt).getTime() - Date.now()) / 1000 / 60)) : null;
+                  const isExpanded = expandedOAuthConnection === conn.providerHash;
+                  // Get the most recent token (first in array since sorted by updated_at desc)
+                  const mostRecentToken = conn.tokens[0];
+                  const hasExpiredTokens = conn.tokens.some(t => t.isExpired);
+                  const allExpired = conn.tokens.every(t => t.isExpired);
 
                   return (
-                    <div key={conn.id} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.75rem', border: isExpired ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(139, 92, 246, 0.2)' }}>
+                    <div key={conn.providerHash} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.75rem', border: allExpired ? '1px solid rgba(239, 68, 68, 0.3)' : hasExpiredTokens ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(139, 92, 246, 0.2)' }}>
                       {/* Header */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={() => setExpandedOAuthConnection(isExpanded ? null : conn.id)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={() => setExpandedOAuthConnection(isExpanded ? null : conn.providerHash)}>
                         <span style={{ fontSize: '1.25rem' }}>🔑</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {new URL(conn.oauthConfig.token_endpoint).hostname}
                           </div>
                           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-                            {conn.linkedImports.length} linked import{conn.linkedImports.length !== 1 ? 's' : ''}
-                            {isExpired ? (
-                              <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>• Token expired</span>
-                            ) : expiresIn !== null ? (
-                              <span style={{ color: expiresIn < 5 ? '#f59e0b' : '#10b981', marginLeft: '0.5rem' }}>• Expires in {expiresIn}m</span>
-                            ) : null}
+                            {conn.tokens.length} token{conn.tokens.length !== 1 ? 's' : ''} • {conn.linkedImports.length} import{conn.linkedImports.length !== 1 ? 's' : ''}
+                            {allExpired ? (
+                              <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>• All expired</span>
+                            ) : hasExpiredTokens ? (
+                              <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>• Some expired</span>
+                            ) : (
+                              <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>• Active</span>
+                            )}
                           </div>
                         </div>
                         <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
@@ -2127,6 +2195,61 @@ export const DashboardPage: React.FC = () => {
                       {/* Expanded content */}
                       {isExpanded && (
                         <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          {/* Connection-level actions */}
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                            <button
+                              onClick={() => reauthenticateOAuthConnection(conn)}
+                              disabled={reauthenticatingConnection === conn.providerHash}
+                              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.75rem', fontWeight: 600, cursor: reauthenticatingConnection === conn.providerHash ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', opacity: reauthenticatingConnection === conn.providerHash ? 0.6 : 1 }}
+                            >
+                              🔄 {reauthenticatingConnection === conn.providerHash ? 'Authenticating...' : 'Re-authenticate'}
+                            </button>
+                            <button
+                              onClick={() => revokeAllOAuthTokens(conn.providerHash)}
+                              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                            >
+                              🗑️ Revoke All Tokens
+                            </button>
+                          </div>
+
+                          {/* Tokens list */}
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tokens ({conn.tokens.length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {conn.tokens.map((token, idx) => {
+                                const expiresIn = token.accessTokenExpiresAt ? Math.max(0, Math.floor((new Date(token.accessTokenExpiresAt).getTime() - Date.now()) / 1000 / 60)) : null;
+                                return (
+                                  <div key={token.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '0.4rem 0.6rem', border: token.isExpired ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(255,255,255,0.05)' }}>
+                                    <span style={{ fontSize: '0.8rem' }}>{token.isShared ? '🌐' : '📌'}</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ color: '#fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        {token.isShared ? 'Shared Token' : `Server-specific`}
+                                        {idx === 0 && <span style={{ background: 'rgba(139, 92, 246, 0.3)', color: '#a78bfa', padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.6rem', fontWeight: 600 }}>ACTIVE</span>}
+                                      </div>
+                                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
+                                        {token.isExpired ? (
+                                          <span style={{ color: '#ef4444' }}>Expired</span>
+                                        ) : expiresIn !== null ? (
+                                          <span style={{ color: expiresIn < 5 ? '#f59e0b' : '#10b981' }}>Expires in {expiresIn}m</span>
+                                        ) : (
+                                          <span style={{ color: '#10b981' }}>No expiry</span>
+                                        )}
+                                        {token.hasRefreshToken && <span style={{ marginLeft: '0.5rem' }}>• Has refresh token</span>}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); revokeOAuthToken(token.id, conn.providerHash); }}
+                                      style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'transparent', color: '#ef4444', fontSize: '0.65rem', cursor: 'pointer' }}
+                                      title="Revoke this token"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
                           {/* Linked imports */}
                           <div style={{ marginBottom: '0.75rem' }}>
                             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Linked Imports</div>
@@ -2142,7 +2265,7 @@ export const DashboardPage: React.FC = () => {
                           </div>
 
                           {/* OAuth config */}
-                          <div style={{ marginBottom: '0.75rem' }}>
+                          <div>
                             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Configuration</div>
                             <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '0.5rem', fontSize: '0.75rem' }}>
                               <div style={{ color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Token Endpoint</div>
@@ -2150,16 +2273,6 @@ export const DashboardPage: React.FC = () => {
                               <div style={{ color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Scopes</div>
                               <div style={{ color: '#fff' }}>{conn.oauthConfig.scopes || 'None'}</div>
                             </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <button
-                              onClick={() => revokeOAuthConnection(conn.id)}
-                              style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                            >
-                              🗑️ Revoke Token
-                            </button>
                           </div>
                         </div>
                       )}

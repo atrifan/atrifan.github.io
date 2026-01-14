@@ -1188,7 +1188,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           const tokenEndpoint = serverOAuthConfig?.token_endpoint || connectorAuthConfig?.token_endpoint;
           const clientId = serverOAuthConfig?.client_id || connectorAuthConfig?.client_id;
           const scopes = serverOAuthConfig?.scopes || connectorAuthConfig?.scopes || 'openid';
-          const useDcr = serverOAuthConfig?.use_dcr || connectorAuthConfig?.use_dcr === 'true' || connectorAuthConfig?.use_dcr === true;
+          const useDcr = serverOAuthConfig?.use_dcr || (connectorAuthConfig?.use_dcr as unknown) === true || (connectorAuthConfig?.use_dcr as unknown) === 'true';
           const registrationEndpoint = serverOAuthConfig?.registration_endpoint || connectorAuthConfig?.registration_endpoint;
 
           console.log('[A2A] OAuth config - auth:', authEndpoint, 'token:', tokenEndpoint, 'client:', clientId, 'useDcr:', useDcr, 'regEndpoint:', registrationEndpoint);

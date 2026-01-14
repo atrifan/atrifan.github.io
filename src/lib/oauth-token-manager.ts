@@ -217,24 +217,35 @@ export async function refreshOAuthToken(
  * This is the main entry point for tool execution
  *
  * Token lookup order:
- * 1. Check for token specific to this server
- * 2. Check for shared token by OAuth provider hash (token_endpoint + client_id)
+ * 1. Check for both server-specific and shared tokens
+ * 2. Use the most recently updated token (prefers fresh tokens from re-authentication)
  */
 export async function getValidOAuthToken(
   userId: string,
   server: ServerReference,
   oauthConfig: OAuth2AuthConfig
 ): Promise<OAuthTokenResult> {
-  // First, try to get token specific to this server
-  let token = await getOAuthToken(userId, server);
+  // Get both server-specific and shared tokens
+  const serverToken = await getOAuthToken(userId, server);
+  let sharedToken: OAuthTokenRow | null = null;
 
-  // If no server-specific token, try to find a shared token by provider hash
-  if (!token && oauthConfig.token_endpoint && oauthConfig.client_id) {
+  if (oauthConfig.token_endpoint && oauthConfig.client_id) {
     const providerHash = generateOAuthProviderHash(oauthConfig);
-    token = await getOAuthTokenByProvider(userId, providerHash);
+    sharedToken = await getOAuthTokenByProvider(userId, providerHash);
+  }
 
+  // Choose the most recently updated token
+  let token: OAuthTokenRow | null = null;
+  if (serverToken && sharedToken) {
+    // Both exist - use the most recently updated one
+    const serverUpdated = new Date(serverToken.updated_at).getTime();
+    const sharedUpdated = new Date(sharedToken.updated_at).getTime();
+    token = sharedUpdated >= serverUpdated ? sharedToken : serverToken;
+    console.log(`[OAuth] Using ${token === sharedToken ? 'shared' : 'server-specific'} token (most recent)`);
+  } else {
+    token = sharedToken || serverToken;
     if (token) {
-      console.log(`[OAuth] Found shared token for provider ${providerHash}`);
+      console.log(`[OAuth] Using ${sharedToken ? 'shared' : 'server-specific'} token`);
     }
   }
 

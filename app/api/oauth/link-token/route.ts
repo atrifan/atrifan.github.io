@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
 
     // Update the token to use the real agent ID
     const { error: updateError } = await supabase
-      .from('oauth_tokens')
-      .update({ [column]: realAgentId })
+      .from('oauth_tokens' as 'rest_api_specs')
+      .update({ [column]: realAgentId } as never)
       .eq('id', (existingToken as { id: string }).id);
 
     if (updateError) {
