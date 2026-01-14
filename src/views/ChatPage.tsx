@@ -247,6 +247,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedMessageId, setFailedMessageId] = useState<string | null>(null);
 
   // OAuth modal state
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
@@ -1148,6 +1149,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setMessage('');
     setIsLoading(true);
     setError(null);
+    setFailedMessageId(null); // Clear any previous failed message
 
     try {
       // Handle external agent communication
@@ -1390,10 +1392,33 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      setFailedMessageId(userMessage.id); // Track the failed message for retry
     } finally {
       setIsLoading(false);
     }
   }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector, a2aContextId]);
+
+  // Retry failed message - resends the last failed user message
+  const retryFailedMessage = useCallback(async () => {
+    if (!failedMessageId || isLoading) return;
+
+    // Find the failed message
+    const failedMessage = messages.find(m => m.id === failedMessageId);
+    if (!failedMessage || failedMessage.role !== 'user') return;
+
+    // Set the message content and trigger send
+    setMessage(failedMessage.content);
+    // Remove the failed message from the list (it will be re-added by sendMessage)
+    setMessages(prev => prev.filter(m => m.id !== failedMessageId));
+    setFailedMessageId(null);
+    setError(null);
+
+    // Use setTimeout to ensure state updates before sending
+    setTimeout(() => {
+      const sendBtn = document.querySelector('[data-send-button]') as HTMLButtonElement;
+      if (sendBtn) sendBtn.click();
+    }, 50);
+  }, [failedMessageId, messages, isLoading]);
 
   // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1574,16 +1599,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1rem' }}>
-            {messages.map(msg => {
+            {messages.map((msg, index) => {
               // Check if this message is from an external agent
               const isAgentMessage = msg.model?.startsWith('agent:');
               const agentConnectorId = isAgentMessage ? msg.model?.replace('agent:', '') : null;
               const agentConnector = agentConnectorId ? connectors.find(c => c.id === agentConnectorId) : null;
               // Look up the model data for this specific message
               const msgModelData = msg.model ? AI_MODELS.find(m => m.id === msg.model) : null;
+              // Check if this is the last message and it failed
+              const isLastMessage = index === messages.length - 1;
+              const showRetry = isLastMessage && msg.role === 'user' && msg.id === failedMessageId && !isLoading;
 
               return (
-                <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{ maxWidth: '80%', padding: '0.875rem 1rem', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : isAgentMessage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)', color: '#fff' }}>
                     {msg.role === 'assistant' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
@@ -1626,6 +1654,38 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       </div>
                     )}
                   </div>
+                  {/* Retry button for failed messages */}
+                  {showRetry && (
+                    <button
+                      onClick={retryFailedMessage}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        marginTop: '0.5rem',
+                        padding: '0.35rem 0.65rem',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '8px',
+                        color: '#ef4444',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                      }}
+                      title="Retry sending this message"
+                    >
+                      <span style={{ fontSize: '0.85rem' }}>↻</span>
+                      <span>Retry</span>
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -1721,6 +1781,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               onClick={sendMessage}
               disabled={!message.trim() || isLoading || isQuotaExceeded}
               aria-label="Send message"
+              data-send-button
               style={{ width: '44px', height: '44px', borderRadius: '12px', background: (!message.trim() || isLoading || isQuotaExceeded) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', color: '#fff', cursor: (!message.trim() || isLoading || isQuotaExceeded) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: (!message.trim() || isLoading || isQuotaExceeded) ? 0.5 : 1 }}
             >
               {isLoading ? (
