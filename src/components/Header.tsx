@@ -63,9 +63,10 @@ export const Header: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchFocusScrollYRef = useRef<number | null>(null);
 
-  // Handle logo click - toggle planetary nav
+  // Handle logo click - toggle planetary nav and close mobile menu
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    setMobileMenuOpen(false);
     setShowPlanetaryNav(!showPlanetaryNav);
   };
 
@@ -127,7 +128,7 @@ export const Header: React.FC = () => {
     <header style={{
       position: 'sticky',
       top: 0,
-      zIndex: 1000,
+      zIndex: 9998,
       background: 'rgba(15, 23, 42, 0.95)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
@@ -185,6 +186,7 @@ export const Header: React.FC = () => {
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#667eea';
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                setMobileMenuOpen(false);
                 if (typeof window !== 'undefined') {
                   const currentY = window.scrollY || window.pageYOffset || 0;
                   searchFocusScrollYRef.current = currentY;
@@ -368,121 +370,6 @@ export const Header: React.FC = () => {
         </button>
       </div>
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="mobile-menu" style={{
-          background: 'rgba(15, 23, 42, 0.98)',
-          padding: '1rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-        }}>
-          <Link
-            href="/"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              color: '#fff',
-              textDecoration: 'none',
-              padding: '0.75rem 0',
-              fontSize: '1.1rem',
-            }}
-          >
-            <HomeIcon />
-            <span>Home</span>
-          </Link>
-          <button
-            onClick={() => { setAboutOpen(true); setMobileMenuOpen(false); }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              background: 'transparent',
-              border: 'none',
-              color: '#fff',
-              padding: '0.75rem 0',
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-            }}
-          >
-            <AboutIcon />
-            <span>About</span>
-          </button>
-          {isBillingEnabled() && (
-            <Link
-              href="/pricing"
-              onClick={() => setMobileMenuOpen(false)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                color: '#fff',
-                textDecoration: 'none',
-                padding: '0.75rem 0',
-                fontSize: '1.1rem',
-              }}
-            >
-              <PricingIcon />
-              <span>Pricing</span>
-            </Link>
-          )}
-          <SignedIn>
-            <Link
-              href="/dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                color: '#fff',
-                textDecoration: 'none',
-                padding: '0.75rem 0',
-                fontSize: '1.1rem',
-              }}
-            >
-              <DashboardIcon />
-              <span>Dashboard</span>
-            </Link>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              padding: '0.75rem 0',
-              borderTop: '1px solid rgba(255,255,255,0.1)',
-              marginTop: '0.25rem',
-            }}>
-              <UserButton afterSignOutUrl="/" />
-              {user?.firstName && (
-                <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 500 }}>
-                  {user.firstName}{user.lastName ? ` ${user.lastName}` : ''}
-                </span>
-              )}
-            </div>
-          </SignedIn>
-          <SignedOut>
-            <SignInButton mode="modal" forceRedirectUrl="/">
-              <button style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '0.85rem 1.5rem',
-                color: '#fff',
-                fontWeight: 600,
-                fontSize: '1.1rem',
-                cursor: 'pointer',
-                width: '100%',
-                marginTop: '0.5rem',
-              }}>
-                Sign In
-              </button>
-            </SignInButton>
-          </SignedOut>
-        </div>
-      )}
-
       {/* About Modal */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
 
@@ -494,9 +381,151 @@ export const Header: React.FC = () => {
         }
         @media (min-width: 769px) {
           .mobile-menu { display: none !important; }
+          .mobile-menu-backdrop { display: none !important; }
         }
       `}</style>
     </header>
+
+    {/* Mobile menu backdrop - outside header, starts below header */}
+    {mobileMenuOpen && (
+      <div
+        className="mobile-menu-backdrop"
+        onClick={() => setMobileMenuOpen(false)}
+        style={{
+          position: 'fixed',
+          top: '56px', // Start below the header
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 9997,
+        }}
+      />
+    )}
+
+    {/* Mobile Menu - Fixed position overlay */}
+    {mobileMenuOpen && (
+      <div className="mobile-menu" style={{
+        position: 'fixed',
+        top: '56px', // Below header
+        left: 0,
+        right: 0,
+        background: 'rgba(15, 23, 42, 0.98)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        padding: '1rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        zIndex: 9998,
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+        maxHeight: 'calc(100vh - 56px)',
+        overflowY: 'auto',
+      }}>
+        <Link
+          href="/"
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            color: '#fff',
+            textDecoration: 'none',
+            padding: '0.75rem 0',
+            fontSize: '1.1rem',
+          }}
+        >
+          <HomeIcon />
+          <span>Home</span>
+        </Link>
+        <button
+          onClick={() => { setAboutOpen(true); setMobileMenuOpen(false); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            padding: '0.75rem 0',
+            fontSize: '1.1rem',
+            cursor: 'pointer',
+          }}
+        >
+          <AboutIcon />
+          <span>About</span>
+        </button>
+        {isBillingEnabled() && (
+          <Link
+            href="/pricing"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              color: '#fff',
+              textDecoration: 'none',
+              padding: '0.75rem 0',
+              fontSize: '1.1rem',
+            }}
+          >
+            <PricingIcon />
+            <span>Pricing</span>
+          </Link>
+        )}
+        <SignedIn>
+          <Link
+            href="/dashboard"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              color: '#fff',
+              textDecoration: 'none',
+              padding: '0.75rem 0',
+              fontSize: '1.1rem',
+            }}
+          >
+            <DashboardIcon />
+            <span>Dashboard</span>
+          </Link>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.75rem 0',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            marginTop: '0.25rem',
+          }}>
+            <UserButton afterSignOutUrl="/" />
+            {user?.firstName && (
+              <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 500 }}>
+                {user.firstName}{user.lastName ? ` ${user.lastName}` : ''}
+              </span>
+            )}
+          </div>
+        </SignedIn>
+        <SignedOut>
+          <SignInButton mode="modal" forceRedirectUrl="/">
+            <button style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0.85rem 1.5rem',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              width: '100%',
+              marginTop: '0.5rem',
+            }}>
+              Sign In
+            </button>
+          </SignInButton>
+        </SignedOut>
+      </div>
+    )}
 
     {/* Planetary Navigation - Outside header to avoid stacking context issues */}
     <PlanetaryNav
