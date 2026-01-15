@@ -338,6 +338,10 @@ export const DashboardPage: React.FC = () => {
   const [expandedOAuthConnection, setExpandedOAuthConnection] = useState<string | null>(null);
   const [reauthenticatingConnection, setReauthenticatingConnection] = useState<string | null>(null);
 
+  // Confirmation modals for OAuth token revocation
+  const [confirmRevokeToken, setConfirmRevokeToken] = useState<{ tokenId: string; providerHash: string } | null>(null);
+  const [confirmRevokeAllTokens, setConfirmRevokeAllTokens] = useState<{ providerHash: string; providerName: string } | null>(null);
+
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
   const customServers = servers.filter(s => s.serverName !== 'default');
@@ -672,7 +676,6 @@ export const DashboardPage: React.FC = () => {
 
   // Revoke single OAuth token
   const revokeOAuthToken = async (tokenId: string, providerHash: string) => {
-    if (!confirm('Are you sure you want to revoke this token?')) return;
     try {
       const response = await fetch(`/api/oauth/connections?id=${tokenId}`, { method: 'DELETE' });
       if (response.ok) {
@@ -685,11 +688,11 @@ export const DashboardPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to revoke OAuth token:', error);
     }
+    setConfirmRevokeToken(null);
   };
 
   // Revoke all OAuth tokens for a connection
   const revokeAllOAuthTokens = async (providerHash: string) => {
-    if (!confirm('Are you sure you want to revoke ALL tokens for this connection? You will need to re-authenticate to use the linked imports.')) return;
     try {
       const response = await fetch(`/api/oauth/connections?providerHash=${encodeURIComponent(providerHash)}&deleteAll=true`, { method: 'DELETE' });
       if (response.ok) {
@@ -698,6 +701,7 @@ export const DashboardPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to revoke OAuth tokens:', error);
     }
+    setConfirmRevokeAllTokens(null);
   };
 
   // Re-authenticate OAuth connection
@@ -2205,7 +2209,7 @@ export const DashboardPage: React.FC = () => {
                               🔄 {reauthenticatingConnection === conn.providerHash ? 'Authenticating...' : 'Re-authenticate'}
                             </button>
                             <button
-                              onClick={() => revokeAllOAuthTokens(conn.providerHash)}
+                              onClick={() => setConfirmRevokeAllTokens({ providerHash: conn.providerHash, providerName: new URL(conn.oauthConfig.token_endpoint).hostname })}
                               style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                             >
                               🗑️ Revoke All Tokens
@@ -2238,7 +2242,7 @@ export const DashboardPage: React.FC = () => {
                                       </div>
                                     </div>
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); revokeOAuthToken(token.id, conn.providerHash); }}
+                                      onClick={(e) => { e.stopPropagation(); setConfirmRevokeToken({ tokenId: token.id, providerHash: conn.providerHash }); }}
                                       style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'transparent', color: '#ef4444', fontSize: '0.65rem', cursor: 'pointer' }}
                                       title="Revoke this token"
                                     >
@@ -2676,6 +2680,37 @@ export const DashboardPage: React.FC = () => {
       </main>
 
       <Footer />
+
+      {/* OAuth Token Revocation Confirmation Modals */}
+      {confirmRevokeToken && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setConfirmRevokeToken(null)}>
+          <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '1.5rem', maxWidth: '400px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Revoke Token</h3>
+            <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 1.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              Are you sure you want to revoke this token?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmRevokeToken(null)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#fff', fontSize: '0.85rem', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => revokeOAuthToken(confirmRevokeToken.tokenId, confirmRevokeToken.providerHash)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRevokeAllTokens && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setConfirmRevokeAllTokens(null)}>
+          <div style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '1.5rem', maxWidth: '400px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>Revoke All Tokens</h3>
+            <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 1.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              Are you sure you want to revoke ALL tokens for <strong style={{ color: '#fff' }}>{confirmRevokeAllTokens.providerName}</strong>? You will need to re-authenticate to use the linked imports.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmRevokeAllTokens(null)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#fff', fontSize: '0.85rem', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => revokeAllOAuthTokens(confirmRevokeAllTokens.providerHash)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Revoke All</button>
+            </div>
+          </div>
+        </div>
+      )}
     </View>
   );
 };
