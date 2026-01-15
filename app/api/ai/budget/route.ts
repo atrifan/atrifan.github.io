@@ -63,7 +63,8 @@ function getSupabaseClient(): SupabaseClient | null {
 }
 
 // GET - Get user's budget settings and usage
-export async function GET() {
+// Query params: ?year=2025&month=1 for historical data (Pro+ only)
+export async function GET(request: NextRequest) {
   try {
     const { userId, has } = await auth();
     if (!userId) {
@@ -74,6 +75,38 @@ export async function GET() {
     const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
     const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
     const planBudget = getPlanBudget(isPlus, isPro);
+
+    // Parse optional year/month query params for historical data
+    const { searchParams } = new URL(request.url);
+    const yearParam = searchParams.get('year');
+    const monthParam = searchParams.get('month');
+
+    // Determine if this is a historical query
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-indexed
+
+    let queryYear = currentYear;
+    let queryMonth = currentMonth;
+    let isHistorical = false;
+
+    if (yearParam && monthParam) {
+      // Historical queries require Pro+ tier
+      if (!isPro) {
+        return NextResponse.json({ error: 'Historical budget data requires Pro or Plus subscription' }, { status: 403 });
+      }
+
+      queryYear = parseInt(yearParam, 10);
+      queryMonth = parseInt(monthParam, 10);
+
+      // Validate year/month
+      if (isNaN(queryYear) || isNaN(queryMonth) || queryMonth < 1 || queryMonth > 12) {
+        return NextResponse.json({ error: 'Invalid year or month parameter' }, { status: 400 });
+      }
+
+      // Check if it's a historical query (not current month)
+      isHistorical = queryYear !== currentYear || queryMonth !== currentMonth;
+    }
 
     const supabase = getSupabaseClient();
 
@@ -151,10 +184,9 @@ export async function GET() {
     const extraBudget = settings?.extra_budget_usd || 0;
     const monthlyBudget = planBudget + extraBudget;
 
-    // Get current month usage per model
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    // Calculate date range for the query (either current month or historical)
+    const startOfMonth = new Date(queryYear, queryMonth - 1, 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(queryYear, queryMonth, 0, 23, 59, 59, 999); // Last day of month
 
     // Aggregate usage per model
     const usageByModel: Record<string, { inputTokens: number; outputTokens: number; cost: number; count: number }> = {};
@@ -166,7 +198,8 @@ export async function GET() {
         .from('ai_token_usage')
         .select('model_id, input_tokens, output_tokens, cost_usd')
         .eq('user_id', userId)
-        .gte('created_at', startOfMonth.toISOString());
+        .gte('created_at', startOfMonth.toISOString())
+        .lte('created_at', endOfMonth.toISOString());
 
       (usage || []).forEach((u: { model_id: string; input_tokens: number; output_tokens: number; cost_usd: number }) => {
         if (!usageByModel[u.model_id]) {
@@ -184,6 +217,14 @@ export async function GET() {
     }
 
     // Build chat model info with usage
+    // Calculate total input/output tokens for summary
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    Object.values(usageByModel).forEach(u => {
+      totalInputTokens += u.inputTokens;
+      totalOutputTokens += u.outputTokens;
+    });
+
     const modelsWithUsage = AI_MODELS.map(model => {
       const modelUsage = usageByModel[model.id] || { inputTokens: 0, outputTokens: 0, cost: 0, count: 0 };
       const safeTokens = calculateSafeTokensForBudget(model.id, monthlyBudget);
@@ -198,6 +239,8 @@ export async function GET() {
         outputCostPer1M: model.outputCostPer1M,
         safeTokensForBudget: safeTokens,
         usedTokens,
+        inputTokens: modelUsage.inputTokens,
+        outputTokens: modelUsage.outputTokens,
         usedCost: modelUsage.cost,
         requestCount: modelUsage.count,
         usagePercent: safeTokens > 0 ? Math.min(100, (usedTokens / safeTokens) * 100) : 0,
@@ -237,6 +280,14 @@ export async function GET() {
     });
 
     return NextResponse.json({
+      // Period information for the query
+      period: {
+        year: queryYear,
+        month: queryMonth,
+        isHistorical,
+        startDate: startOfMonth.toISOString(),
+        endDate: endOfMonth.toISOString(),
+      },
       budget: {
         planBudgetUsd: planBudget,
         extraBudgetUsd: extraBudget,
@@ -249,8 +300,10 @@ export async function GET() {
       usage: {
         totalCost,
         totalTokens,
+        totalInputTokens,
+        totalOutputTokens,
         budgetUsedPercent: monthlyBudget > 0 ? Math.min(100, (totalCost / monthlyBudget) * 100) : 0,
-        remainingBudget: Math.max(0, monthlyBudget - totalCost),
+        remainingBudget: isHistorical ? 0 : Math.max(0, monthlyBudget - totalCost), // No remaining for historical
         byModel: usageByModel,
         // Embedding-specific usage
         embeddingCost: embeddingTotalCost,

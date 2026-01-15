@@ -33,6 +33,7 @@ import { TOTAL_TOOL_COUNT } from '../config/tools-definitions';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
 import { AI_MODELS, TOKEN_QUOTAS, formatTokenCount, formatCurrency, DEFAULT_MONTHLY_BUDGET, calculateSafeTokensForBudget } from '../config/ai-tokens.config';
+import { BudgetHistoryViewer } from '../components/BudgetHistoryViewer';
 
 // Budget types
 interface ModelBudgetInfo {
@@ -1231,6 +1232,44 @@ export const DashboardPage: React.FC = () => {
                 </button>
               </Link>
             </div>
+          </div>
+        </DashboardCard>
+
+        {/* Budget History Card - Pro+ only */}
+        <DashboardCard
+          title="Budget History"
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>}
+        >
+          {/* Pro-only blur overlay */}
+          {!isPro && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</span>
+              <span style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>Pro Feature</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center' }}>View your historical AI usage month by month</span>
+              {isBillingEnabled() && (
+                <Link href="/pricing" style={{ marginTop: '0.75rem', textDecoration: 'none' }}>
+                  <button style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    Upgrade to Pro
+                  </button>
+                </Link>
+              )}
+            </div>
+          )}
+          <div style={{ position: 'relative', minHeight: '200px' }}>
+            {isPro ? (
+              <BudgetHistoryViewer />
+            ) : (
+              <div style={{ filter: 'blur(4px)', pointerEvents: 'none' }}>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    {['Jan', 'Feb', 'Mar'].map(m => (
+                      <div key={m} style={{ padding: '0.35rem 0.6rem', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{m}</div>
+                    ))}
+                  </div>
+                  <div style={{ height: '80px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }} />
+                </div>
+              </div>
+            )}
           </div>
         </DashboardCard>
 
