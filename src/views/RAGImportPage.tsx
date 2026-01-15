@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
@@ -11,6 +11,12 @@ import { CustomHeadersCard, CustomHeader } from '../components/CustomHeadersCard
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { ADS_CONFIG } from '../config/ads.config';
+import {
+  EMBEDDING_MODELS,
+  getEmbeddingModelsForTier,
+  formatCurrency,
+  LOCAL_EMBEDDING_MODEL,
+} from '../config/ai-tokens.config';
 
 interface RAGImportPageProps {
   isPro: boolean;
@@ -20,16 +26,18 @@ interface RAGImportPageProps {
 type Step = 'name' | 'source' | 'config' | 'saving';
 type SourceType = 'csv' | 'url';
 
-const EMBEDDING_MODELS = [
-  { id: 'text-embedding-3-small', name: 'text-embedding-3-small (OpenAI)', dimensions: 1536 },
-  { id: 'text-embedding-3-large', name: 'text-embedding-3-large (OpenAI)', dimensions: 3072 },
-  { id: 'text-embedding-ada-002', name: 'text-embedding-ada-002 (OpenAI)', dimensions: 1536 },
-];
-
 export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const router = useRouter();
   const canAccessPro = isPro || isPlus;
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get user's tier
+  const userTier = isPlus ? 'plus' : isPro ? 'pro' : 'free';
+
+  // Get available embedding models for user's tier
+  const availableEmbeddingModels = useMemo(() => {
+    return getEmbeddingModelsForTier(userTier);
+  }, [userTier]);
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<Step>('name');
@@ -66,11 +74,12 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const [oauth2Config, setOAuth2Config] = useState<OAuth2Config>(defaultOAuth2Config);
   const [showClientSecret, setShowClientSecret] = useState(false);
 
-  // Embedding config
-  const [embeddingModel, setEmbeddingModel] = useState('text-embedding-3-small');
+  // Embedding config - default to local model (available to all tiers)
+  const [embeddingModel, setEmbeddingModel] = useState(LOCAL_EMBEDDING_MODEL.id);
   const [tokenLimit, setTokenLimit] = useState(8000);
   const [chunkSize, setChunkSize] = useState(500);
   const [chunkOverlap, setChunkOverlap] = useState(50);
+  const [topN, setTopN] = useState(5); // Number of top results to retrieve
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -286,6 +295,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
         tokenLimit,
         chunkSize,
         chunkOverlap,
+        topN, // Number of top results to retrieve
       };
 
       // Add OAuth2 config if applicable
@@ -634,10 +644,10 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
                 onChange={(e) => setUrlNeedsEmbeddings(e.target.checked)}
                 style={{ width: '18px', height: '18px' }}
               />
-              Generate embeddings for semantic search
+              Generate embeddings for query searches
             </label>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem', marginLeft: '26px' }}>
-              Enable this to use AI-powered semantic search on your documents
+              Enable this to generate embeddings and send to RAG server for semantic search
             </p>
           </div>
         </div>
@@ -645,69 +655,109 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
     </div>
   );
 
-  const renderConfigStep = () => (
-    <div style={cardStyle}>
-      <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>⚙️ Configuration</h2>
-      <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-        Configure embedding and context settings.
-      </p>
+  const renderConfigStep = () => {
+    // Determine if embeddings will be generated
+    const needsEmbeddings = (sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings);
 
-      {/* Embedding Model - show if we need to generate embeddings */}
-      {((sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings)) && (
-        <div style={{ marginBottom: '1.5rem' }}>
+    return (
+      <div style={cardStyle}>
+        <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>⚙️ Configuration</h2>
+        <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Configure embedding and retrieval settings.
+        </p>
+
+        {/* Embedding Model - always show, but disabled when not needed */}
+        <div style={{ marginBottom: '1.5rem', opacity: needsEmbeddings ? 1 : 0.5 }}>
           <label style={labelStyle}>Embedding Model</label>
-          <select value={embeddingModel} onChange={(e) => setEmbeddingModel(e.target.value)} style={inputStyle}>
-            {EMBEDDING_MODELS.map(model => (
-              <option key={model.id} value={model.id}>{model.name} ({model.dimensions} dims)</option>
+          <select
+            value={embeddingModel}
+            onChange={(e) => setEmbeddingModel(e.target.value)}
+            style={inputStyle}
+            disabled={!needsEmbeddings}
+          >
+            {availableEmbeddingModels.map(model => (
+              <option key={model.id} value={model.id}>
+                {model.icon} {model.name} ({model.dimensions}d) {model.isLocal ? '• Free' : `• ${formatCurrency(model.costPer1M)}/M`}
+              </option>
             ))}
           </select>
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-            Used to convert text into vectors for semantic search
+            {!needsEmbeddings
+              ? '⚠️ Embeddings not needed - source already has embeddings'
+              : availableEmbeddingModels.find(m => m.id === embeddingModel)?.isLocal
+                ? '💻 Runs locally - no API costs, works offline'
+                : '☁️ Remote API - higher quality, uses your budget'}
           </p>
+          {needsEmbeddings && userTier === 'free' && (
+            <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+              💡 Upgrade to Pro or Plus for access to more embedding models
+            </p>
+          )}
+          {needsEmbeddings && userTier === 'pro' && availableEmbeddingModels.length < EMBEDDING_MODELS.length && (
+            <p style={{ color: '#a78bfa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+              ✨ Upgrade to Plus for access to all {EMBEDDING_MODELS.length} embedding models
+            </p>
+          )}
         </div>
-      )}
 
-      {/* Chunking settings */}
-      {((sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings)) && (
+        {/* Chunking settings - only show when embeddings are needed */}
+        {needsEmbeddings && (
+          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginBottom: '1.5rem' }}>
+            <div>
+              <label style={labelStyle}>Chunk Size</label>
+              <input
+                type="number"
+                value={chunkSize}
+                onChange={(e) => setChunkSize(parseInt(e.target.value) || 500)}
+                style={inputStyle}
+              />
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Characters per chunk</p>
+            </div>
+            <div>
+              <label style={labelStyle}>Chunk Overlap</label>
+              <input
+                type="number"
+                value={chunkOverlap}
+                onChange={(e) => setChunkOverlap(parseInt(e.target.value) || 50)}
+                style={inputStyle}
+              />
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Overlap between chunks</p>
+            </div>
+          </div>
+        )}
+
+        {/* Retrieval settings */}
         <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginBottom: '1.5rem' }}>
           <div>
-            <label style={labelStyle}>Chunk Size</label>
+            <label style={labelStyle}>Top N Results</label>
             <input
               type="number"
-              value={chunkSize}
-              onChange={(e) => setChunkSize(parseInt(e.target.value) || 500)}
-              style={inputStyle}
+              value={topN}
+              onChange={(e) => setTopN(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+              min={1}
+              max={20}
+              style={{ ...inputStyle, maxWidth: '120px' }}
             />
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Characters per chunk</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+              Number of chunks to retrieve (1-20)
+            </p>
           </div>
           <div>
-            <label style={labelStyle}>Chunk Overlap</label>
+            <label style={labelStyle}>Context Token Limit</label>
             <input
               type="number"
-              value={chunkOverlap}
-              onChange={(e) => setChunkOverlap(parseInt(e.target.value) || 50)}
-              style={inputStyle}
+              value={tokenLimit}
+              onChange={(e) => setTokenLimit(parseInt(e.target.value) || 8000)}
+              style={{ ...inputStyle, maxWidth: '150px' }}
             />
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Overlap between chunks</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+              Max tokens in AI context
+            </p>
           </div>
         </div>
-      )}
-
-      {/* Token limit */}
-      <div>
-        <label style={labelStyle}>Context Token Limit</label>
-        <input
-          type="number"
-          value={tokenLimit}
-          onChange={(e) => setTokenLimit(parseInt(e.target.value) || 8000)}
-          style={{ ...inputStyle, maxWidth: '200px' }}
-        />
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-          Maximum tokens from this knowledge base to include in AI context
-        </p>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderSavingStep = () => (
     <div style={{ ...cardStyle, textAlign: 'center', padding: '3rem' }}>

@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       tokenLimit,
       chunkSize,
       chunkOverlap,
+      topN,
       icon,
       iconUrl,
     } = body;
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
         token_limit: tokenLimit || 8000,
         chunk_size: chunkSize || 500,
         chunk_overlap: chunkOverlap || 50,
+        top_n: topN || 5,
         icon: icon || '📚',
         icon_url: iconUrl || null,
       })
@@ -165,6 +167,7 @@ export async function PUT(request: NextRequest) {
       tokenLimit,
       chunkSize,
       chunkOverlap,
+      topN,
       icon,
       iconUrl,
       isEnabled,
@@ -187,6 +190,7 @@ export async function PUT(request: NextRequest) {
     if (tokenLimit !== undefined) updates.token_limit = tokenLimit;
     if (chunkSize !== undefined) updates.chunk_size = chunkSize;
     if (chunkOverlap !== undefined) updates.chunk_overlap = chunkOverlap;
+    if (topN !== undefined) updates.top_n = topN;
     if (icon) updates.icon = icon;
     if (iconUrl !== undefined) updates.icon_url = iconUrl;
     if (isEnabled !== undefined) updates.is_enabled = isEnabled;

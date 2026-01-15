@@ -93,18 +93,189 @@ export const AI_MODELS: AIModel[] = [
   },
 ];
 
-// Embedding model for MCP tools, search, filters (Pro tier)
+// Embedding model interface
+export interface EmbeddingModel {
+  id: string;
+  name: string;
+  provider: string;
+  icon: string;
+  tier: 'free' | 'pro' | 'plus';
+  costPer1M: number; // $ per 1M tokens (0 for local)
+  dimensions: number;
+  isLocal: boolean; // true = runs locally via transformers.js
+  description: string;
+}
+
+// Local embedding model (available to all tiers, runs in browser/server via transformers.js)
+export const LOCAL_EMBEDDING_MODEL: EmbeddingModel = {
+  id: 'local/all-MiniLM-L6-v2',
+  name: 'MiniLM L6 v2 (Local)',
+  provider: 'Local',
+  icon: '💻',
+  tier: 'free',
+  costPer1M: 0, // Free - runs locally
+  dimensions: 384,
+  isLocal: true,
+  description: 'Fast local embeddings, no API costs',
+};
+
+// Remote embedding models (via Vercel AI Gateway / OpenRouter)
+// Sorted by cost (cheapest first)
+export const REMOTE_EMBEDDING_MODELS: EmbeddingModel[] = [
+  // Pro tier - cheapest remote model
+  {
+    id: 'alibaba/qwen3-embedding-0.6b',
+    name: 'Qwen3 Embedding 0.6B',
+    provider: 'Alibaba',
+    icon: '🔷',
+    tier: 'pro',
+    costPer1M: 0.01,
+    dimensions: 1024,
+    isLocal: false,
+    description: 'Ultra-cheap, good quality embeddings',
+  },
+  // Plus tier - all other models
+  {
+    id: 'openai/text-embedding-3-small',
+    name: 'Text Embedding 3 Small',
+    provider: 'OpenAI',
+    icon: '🤖',
+    tier: 'plus',
+    costPer1M: 0.02,
+    dimensions: 1536,
+    isLocal: false,
+    description: 'OpenAI standard embedding model',
+  },
+  {
+    id: 'alibaba/qwen3-embedding-4b',
+    name: 'Qwen3 Embedding 4B',
+    provider: 'Alibaba',
+    icon: '🔷',
+    tier: 'plus',
+    costPer1M: 0.02,
+    dimensions: 2048,
+    isLocal: false,
+    description: 'Higher quality Qwen embeddings',
+  },
+  {
+    id: 'amazon/titan-embed-text-v2',
+    name: 'Titan Embed Text v2',
+    provider: 'Amazon',
+    icon: '📦',
+    tier: 'plus',
+    costPer1M: 0.02,
+    dimensions: 1024,
+    isLocal: false,
+    description: 'AWS Titan embedding model',
+  },
+  {
+    id: 'google/text-embedding-005',
+    name: 'Text Embedding 005',
+    provider: 'Google',
+    icon: '🔍',
+    tier: 'plus',
+    costPer1M: 0.03,
+    dimensions: 768,
+    isLocal: false,
+    description: 'Google text embedding model',
+  },
+  {
+    id: 'google/text-multilingual-embedding-002',
+    name: 'Multilingual Embedding 002',
+    provider: 'Google',
+    icon: '🌍',
+    tier: 'plus',
+    costPer1M: 0.03,
+    dimensions: 768,
+    isLocal: false,
+    description: 'Google multilingual embeddings',
+  },
+  {
+    id: 'alibaba/qwen3-embedding-8b',
+    name: 'Qwen3 Embedding 8B',
+    provider: 'Alibaba',
+    icon: '🔷',
+    tier: 'plus',
+    costPer1M: 0.02,
+    dimensions: 4096,
+    isLocal: false,
+    description: 'Largest Qwen embedding model',
+  },
+  {
+    id: 'openai/text-embedding-ada-002',
+    name: 'Text Embedding Ada 002',
+    provider: 'OpenAI',
+    icon: '🤖',
+    tier: 'plus',
+    costPer1M: 0.10,
+    dimensions: 1536,
+    isLocal: false,
+    description: 'Legacy OpenAI embedding model',
+  },
+  {
+    id: 'openai/text-embedding-3-large',
+    name: 'Text Embedding 3 Large',
+    provider: 'OpenAI',
+    icon: '🤖',
+    tier: 'plus',
+    costPer1M: 0.13,
+    dimensions: 3072,
+    isLocal: false,
+    description: 'Highest quality OpenAI embeddings',
+  },
+  {
+    id: 'google/gemini-embedding-001',
+    name: 'Gemini Embedding 001',
+    provider: 'Google',
+    icon: '💎',
+    tier: 'plus',
+    costPer1M: 0.05,
+    dimensions: 768,
+    isLocal: false,
+    description: 'Gemini embedding model',
+  },
+];
+
+// All embedding models (local + remote)
+export const EMBEDDING_MODELS: EmbeddingModel[] = [
+  LOCAL_EMBEDDING_MODEL,
+  ...REMOTE_EMBEDDING_MODELS,
+];
+
+// Legacy single embedding model export (for backwards compatibility)
 export const EMBEDDING_MODEL = {
   id: 'openai/text-embedding-3-small',
   name: 'Text Embedding 3 Small',
   provider: 'OpenAI',
-  costPer1M: 0.02, // Very cheap
+  costPer1M: 0.02,
 };
+
+// Get embedding models available for a tier
+export function getEmbeddingModelsForTier(tier: 'free' | 'pro' | 'plus'): EmbeddingModel[] {
+  if (tier === 'free') {
+    // Free tier: only local embedding
+    return [LOCAL_EMBEDDING_MODEL];
+  }
+  if (tier === 'pro') {
+    // Pro tier: local + cheapest remote (qwen3-0.6b)
+    return [LOCAL_EMBEDDING_MODEL, ...REMOTE_EMBEDDING_MODELS.filter(m => m.tier === 'pro')];
+  }
+  // Plus tier: all models
+  return EMBEDDING_MODELS;
+}
+
+// Calculate embedding cost
+export function calculateEmbeddingCost(modelId: string, inputTokens: number): number {
+  const model = EMBEDDING_MODELS.find(m => m.id === modelId);
+  if (!model || model.isLocal) return 0; // Local models are free
+  return (inputTokens / 1_000_000) * model.costPer1M;
+}
 
 // Token quotas per tier - budget-based (no static monthlyTokens)
 export interface TokenQuota {
   tier: 'free' | 'pro' | 'plus';
-  models: string[]; // model IDs allowed
+  models: string[]; // chat model IDs allowed
+  embeddingModels: string[]; // embedding model IDs allowed
   features: string[];
   price: number;
   aiCostBudget: number; // $ budget for AI usage
@@ -114,6 +285,7 @@ export const TOKEN_QUOTAS: Record<string, TokenQuota> = {
   free: {
     tier: 'free',
     models: [],
+    embeddingModels: [LOCAL_EMBEDDING_MODEL.id], // Only local embedding
     features: ['basic-tools', 'ads'],
     price: 0,
     aiCostBudget: 0,
@@ -121,13 +293,18 @@ export const TOKEN_QUOTAS: Record<string, TokenQuota> = {
   pro: {
     tier: 'pro',
     models: ['mistral/ministral-3b'],
+    embeddingModels: [
+      LOCAL_EMBEDDING_MODEL.id,
+      'alibaba/qwen3-embedding-0.6b', // Cheapest remote
+    ],
     features: ['ai-chat', 'mcp-server', 'embeddings', 'ads'],
     price: 7,
     aiCostBudget: 5, // $5 budget
   },
   plus: {
     tier: 'plus',
-    models: AI_MODELS.map(m => m.id), // All models
+    models: AI_MODELS.map(m => m.id), // All chat models
+    embeddingModels: EMBEDDING_MODELS.map(m => m.id), // All embedding models
     features: ['ai-chat', 'mcp-server', 'embeddings', 'agents', 'priority-support', 'ads'],
     price: 14,
     aiCostBudget: 5, // $5 budget

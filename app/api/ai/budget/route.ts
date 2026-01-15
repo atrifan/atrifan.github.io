@@ -23,6 +23,21 @@ const AI_MODELS = [
   { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', icon: '🌊', provider: 'DeepSeek', inputCostPer1M: 0.14, outputCostPer1M: 0.28 },
 ];
 
+// Embedding Models (server-side copy for budget calculations)
+const EMBEDDING_MODELS = [
+  { id: 'local/all-MiniLM-L6-v2', name: 'MiniLM L6 v2 (Local)', icon: '💻', provider: 'Local', costPer1M: 0, dimensions: 384, isLocal: true },
+  { id: 'alibaba/qwen3-embedding-0.6b', name: 'Qwen3 Embedding 0.6B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.01, dimensions: 1024, isLocal: false },
+  { id: 'openai/text-embedding-3-small', name: 'Text Embedding 3 Small', icon: '🤖', provider: 'OpenAI', costPer1M: 0.02, dimensions: 1536, isLocal: false },
+  { id: 'alibaba/qwen3-embedding-4b', name: 'Qwen3 Embedding 4B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.02, dimensions: 2048, isLocal: false },
+  { id: 'amazon/titan-embed-text-v2', name: 'Titan Embed Text v2', icon: '📦', provider: 'Amazon', costPer1M: 0.02, dimensions: 1024, isLocal: false },
+  { id: 'google/text-embedding-005', name: 'Text Embedding 005', icon: '🔍', provider: 'Google', costPer1M: 0.03, dimensions: 768, isLocal: false },
+  { id: 'google/text-multilingual-embedding-002', name: 'Multilingual Embedding 002', icon: '🌍', provider: 'Google', costPer1M: 0.03, dimensions: 768, isLocal: false },
+  { id: 'alibaba/qwen3-embedding-8b', name: 'Qwen3 Embedding 8B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.02, dimensions: 4096, isLocal: false },
+  { id: 'openai/text-embedding-ada-002', name: 'Text Embedding Ada 002', icon: '🤖', provider: 'OpenAI', costPer1M: 0.10, dimensions: 1536, isLocal: false },
+  { id: 'openai/text-embedding-3-large', name: 'Text Embedding 3 Large', icon: '🤖', provider: 'OpenAI', costPer1M: 0.13, dimensions: 3072, isLocal: false },
+  { id: 'google/gemini-embedding-001', name: 'Gemini Embedding 001', icon: '💎', provider: 'Google', costPer1M: 0.05, dimensions: 768, isLocal: false },
+];
+
 // Get plan-based budget for user
 function getPlanBudget(isPlus: boolean, isPro: boolean): number {
   if (isPlus) return PLAN_BUDGETS.plus;
@@ -80,6 +95,20 @@ export async function GET() {
         remainingTokens: calculateSafeTokensForBudget(model.id, totalBudget),
       }));
 
+      const defaultEmbeddingModels = EMBEDDING_MODELS.map(model => ({
+        modelId: model.id,
+        modelName: model.name,
+        icon: model.icon,
+        provider: model.provider,
+        costPer1M: model.costPer1M,
+        dimensions: model.dimensions,
+        isLocal: model.isLocal,
+        usedTokens: 0,
+        usedCost: 0,
+        requestCount: 0,
+        usagePercent: 0,
+      }));
+
       return NextResponse.json({
         budget: {
           planBudgetUsd: planBudget,
@@ -96,8 +125,11 @@ export async function GET() {
           budgetUsedPercent: 0,
           remainingBudget: totalBudget,
           byModel: {},
+          embeddingCost: 0,
+          embeddingTokens: 0,
         },
         models: defaultModels,
+        embeddingModels: defaultEmbeddingModels,
         _note: 'Database not configured - showing defaults',
       });
     }
@@ -151,12 +183,12 @@ export async function GET() {
       // Table might not exist yet - continue with empty usage
     }
 
-    // Build model info with usage
+    // Build chat model info with usage
     const modelsWithUsage = AI_MODELS.map(model => {
       const modelUsage = usageByModel[model.id] || { inputTokens: 0, outputTokens: 0, cost: 0, count: 0 };
       const safeTokens = calculateSafeTokensForBudget(model.id, monthlyBudget);
       const usedTokens = modelUsage.inputTokens + modelUsage.outputTokens;
-      
+
       return {
         modelId: model.id,
         modelName: model.name,
@@ -170,6 +202,37 @@ export async function GET() {
         requestCount: modelUsage.count,
         usagePercent: safeTokens > 0 ? Math.min(100, (usedTokens / safeTokens) * 100) : 0,
         remainingTokens: Math.max(0, safeTokens - usedTokens),
+      };
+    });
+
+    // Build embedding model info with usage
+    // Embedding usage is tracked in the same ai_token_usage table with embedding model IDs
+    let embeddingTotalCost = 0;
+    let embeddingTotalTokens = 0;
+    const embeddingModelsWithUsage = EMBEDDING_MODELS.map(model => {
+      const modelUsage = usageByModel[model.id] || { inputTokens: 0, outputTokens: 0, cost: 0, count: 0 };
+      const usedTokens = modelUsage.inputTokens; // Embeddings only have input tokens
+      const usedCost = modelUsage.cost;
+      embeddingTotalCost += usedCost;
+      embeddingTotalTokens += usedTokens;
+
+      // Calculate safe tokens for embedding budget (embeddings share the same budget)
+      const safeTokens = model.costPer1M > 0
+        ? Math.floor((monthlyBudget / model.costPer1M) * 1_000_000)
+        : 100_000_000; // Local model = unlimited
+
+      return {
+        modelId: model.id,
+        modelName: model.name,
+        icon: model.icon,
+        provider: model.provider,
+        costPer1M: model.costPer1M,
+        dimensions: model.dimensions,
+        isLocal: model.isLocal,
+        usedTokens,
+        usedCost,
+        requestCount: modelUsage.count,
+        usagePercent: safeTokens > 0 ? Math.min(100, (usedTokens / safeTokens) * 100) : 0,
       };
     });
 
@@ -189,8 +252,12 @@ export async function GET() {
         budgetUsedPercent: monthlyBudget > 0 ? Math.min(100, (totalCost / monthlyBudget) * 100) : 0,
         remainingBudget: Math.max(0, monthlyBudget - totalCost),
         byModel: usageByModel,
+        // Embedding-specific usage
+        embeddingCost: embeddingTotalCost,
+        embeddingTokens: embeddingTotalTokens,
       },
       models: modelsWithUsage,
+      embeddingModels: embeddingModelsWithUsage,
     });
   } catch (error) {
     console.error('Error in budget GET:', error);
