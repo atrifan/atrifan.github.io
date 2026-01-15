@@ -192,6 +192,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [lastTokenUsage, setLastTokenUsage] = useState<{ input: number; output: number } | null>(null);
   const [toolInfoModal, setToolInfoModal] = useState<{ server: string; tools: MCPTool[] } | null>(null);
 
+  // No connectors error modal state
+  const [showNoConnectorsModal, setShowNoConnectorsModal] = useState(false);
+
   // Settings panel state
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<SettingsPanelMode>('main');
@@ -614,6 +617,13 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // Generate flow from prompt
   const generateFlow = useCallback(async () => {
     if (!prompt.trim() || isGenerating) return;
+
+    // Check if at least one connector is added and enabled
+    if (connectors.length === 0) {
+      setShowNoConnectorsModal(true);
+      return;
+    }
+
     setIsGenerating(true);
     setLastTokenUsage(null);
 
@@ -663,7 +673,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
-  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory, connectors]);
 
   // Stop/cancel the current request
   const stopRequest = useCallback(() => {
@@ -1106,6 +1116,44 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowExportModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={exportToTypeScript} disabled={isExporting} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', cursor: 'pointer' }}>{isExporting ? 'Generating...' : 'Generate Code'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* No Connectors Error Modal */}
+        {showNoConnectorsModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowNoConnectorsModal(false)}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '400px', width: '100%', border: '1px solid rgba(239, 68, 68, 0.3)' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔌</div>
+                <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 0.5rem' }}>No Connectors Added</h3>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', lineHeight: 1.6, textAlign: 'center', marginBottom: '1.25rem' }}>
+                You need to add at least one connector before creating an automation. Connectors provide the tools and capabilities your automation can use.
+              </p>
+              <div style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '10px', padding: '0.75rem', marginBottom: '1.25rem' }}>
+                <p style={{ color: '#a78bfa', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>
+                  💡 Click the ⚙️ button to open settings and add connectors
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  onClick={() => setShowNoConnectorsModal(false)}
+                  style={{ flex: 1, padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNoConnectorsModal(false);
+                    setShowSettingsPanel(true);
+                    setSettingsPanelMode('connectors');
+                  }}
+                  style={{ flex: 1, padding: '0.75rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}
+                >
+                  Add Connectors
+                </button>
               </div>
             </div>
           </div>

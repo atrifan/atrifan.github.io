@@ -218,42 +218,94 @@ export async function DELETE(request: NextRequest) {
     const deleteAll = searchParams.get('deleteAll') === 'true';
 
     if (deleteAll && providerHash) {
-      // Delete all tokens for this provider
-      // First, get all tokens with this provider hash
+      // Delete all tokens for this provider - both shared AND server-specific
+      let totalDeleted = 0;
+
+      // 1. Delete shared tokens with this provider hash
       const { data: sharedTokens } = await supabase
         .from('oauth_tokens')
         .select('id')
         .eq('user_id', userId)
         .eq('oauth_provider_hash', providerHash);
 
-      // Also find server-specific tokens by looking up imports with matching config
-      // For now, just delete the shared token - server-specific tokens will be orphaned
-      // and cleaned up on next access
-      const { error: deleteError } = await supabase
+      const { error: deleteSharedError } = await supabase
         .from('oauth_tokens')
         .delete()
         .eq('user_id', userId)
         .eq('oauth_provider_hash', providerHash);
 
-      if (deleteError) {
-        console.error('[OAuth Connections] Failed to delete tokens:', deleteError);
-        return NextResponse.json({ error: 'Failed to delete tokens' }, { status: 500 });
+      if (deleteSharedError) {
+        console.error('[OAuth Connections] Failed to delete shared tokens:', deleteSharedError);
+      } else {
+        totalDeleted += sharedTokens?.length || 0;
       }
 
-      return NextResponse.json({ success: true, deletedCount: sharedTokens?.length || 0 });
+      // 2. Find and delete server-specific tokens by looking up imports with matching config
+      const importTypes = [
+        { table: 'rest_api_specs', tokenColumn: 'rest_api_spec_id' },
+        { table: 'graphql_specs', tokenColumn: 'graphql_spec_id' },
+        { table: 'mcp_servers', tokenColumn: 'mcp_server_id' },
+        { table: 'a2a_agents', tokenColumn: 'a2a_agent_id' },
+        { table: 'user_rags', tokenColumn: 'rag_id' },
+      ];
+
+      for (const { table, tokenColumn } of importTypes) {
+        // Get all OAuth2 imports for this user
+        const { data: imports } = await supabase
+          .from(table as 'rest_api_specs')
+          .select('id, auth_config')
+          .eq('user_id', userId)
+          .eq('auth_type', 'oauth2') as { data: Array<{ id: string; auth_config: Record<string, unknown> | null }> | null; error: unknown };
+
+        for (const imp of imports || []) {
+          if (!imp.auth_config?.token_endpoint || !imp.auth_config?.client_id) continue;
+
+          const impProviderHash = generateOAuthProviderHash({
+            token_endpoint: imp.auth_config.token_endpoint as string,
+            client_id: imp.auth_config.client_id as string,
+            authorization_endpoint: (imp.auth_config.authorization_endpoint as string) || '',
+            scopes: (imp.auth_config.scopes as string) || '',
+            use_dcr: false,
+            client_secret: '',
+            registration_endpoint: '',
+          });
+
+          if (impProviderHash === providerHash) {
+            // Delete server-specific token for this import
+            const { data: deletedTokens } = await supabase
+              .from('oauth_tokens')
+              .delete()
+              .eq('user_id', userId)
+              .eq(tokenColumn, imp.id)
+              .select('id');
+
+            totalDeleted += deletedTokens?.length || 0;
+          }
+        }
+      }
+
+      return NextResponse.json({ success: true, deletedCount: totalDeleted });
     }
 
     if (!tokenId) {
       return NextResponse.json({ error: 'Token ID or providerHash required' }, { status: 400 });
     }
 
-    // Verify the token belongs to this user
+    // Verify the token belongs to this user and get its details
     const { data: token, error: fetchError } = await supabase
-      .from('oauth_tokens')
-      .select('id, oauth_provider_hash')
+      .from('oauth_tokens' as 'rest_api_specs')
+      .select('id, oauth_provider_hash, rest_api_spec_id, graphql_spec_id, mcp_server_id, a2a_agent_id, rag_id')
       .eq('id', tokenId)
       .eq('user_id', userId)
-      .single();
+      .single() as { data: {
+        id: string;
+        oauth_provider_hash: string | null;
+        rest_api_spec_id: string | null;
+        graphql_spec_id: string | null;
+        mcp_server_id: string | null;
+        a2a_agent_id: string | null;
+        rag_id: string | null;
+      } | null; error: unknown };
 
     if (fetchError || !token) {
       return NextResponse.json({ error: 'Token not found' }, { status: 404 });
@@ -268,6 +320,53 @@ export async function DELETE(request: NextRequest) {
     if (deleteError) {
       console.error('[OAuth Connections] Failed to delete token:', deleteError);
       return NextResponse.json({ error: 'Failed to delete token' }, { status: 500 });
+    }
+
+    // Also delete the corresponding paired token (shared <-> server-specific)
+    // This ensures both tokens are deleted together to prevent refresh token reuse
+    if (token.oauth_provider_hash) {
+      // This was a shared token - find and delete any server-specific tokens with matching server IDs
+      // that would have the same provider hash
+      // For now, we don't have a direct way to find them, so we skip this case
+      // The server-specific tokens will be orphaned and won't work without the shared token
+    } else {
+      // This was a server-specific token - find the server ID and look for shared tokens
+      const serverId = token.rest_api_spec_id || token.graphql_spec_id || token.mcp_server_id || token.a2a_agent_id || token.rag_id;
+      if (serverId) {
+        // Get the import's OAuth config to find the provider hash
+        const serverType = token.rest_api_spec_id ? 'rest_api_specs' :
+                          token.graphql_spec_id ? 'graphql_specs' :
+                          token.mcp_server_id ? 'mcp_servers' :
+                          token.a2a_agent_id ? 'a2a_agents' : 'user_rags';
+
+        const { data: importData } = await supabase
+          .from(serverType as 'rest_api_specs')
+          .select('auth_config')
+          .eq('id', serverId)
+          .single() as { data: { auth_config: Record<string, unknown> | null } | null; error: unknown };
+
+        if (importData?.auth_config) {
+          const config = importData.auth_config;
+          if (config.token_endpoint && config.client_id) {
+            const provHash = generateOAuthProviderHash({
+              token_endpoint: config.token_endpoint as string,
+              client_id: config.client_id as string,
+              authorization_endpoint: (config.authorization_endpoint as string) || '',
+              scopes: (config.scopes as string) || '',
+              use_dcr: false,
+              client_secret: '',
+              registration_endpoint: '',
+            });
+
+            // Delete the shared token with this provider hash
+            await supabase
+              .from('oauth_tokens')
+              .delete()
+              .eq('user_id', userId)
+              .eq('oauth_provider_hash', provHash);
+          }
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

@@ -133,7 +133,7 @@ const components: Components = {
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
-    <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.95rem' }}>
+    <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.875rem' }}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

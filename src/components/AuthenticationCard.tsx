@@ -364,10 +364,17 @@ export function AuthenticationCard({
     }
 
     // Poll to check if popup was closed without completing
+    // Note: We check processingCodeRef to avoid resetting state if we're already processing the code
     const pollTimer = setInterval(() => {
       if (popupRef.current?.closed) {
         clearInterval(pollTimer);
-        setIsAuthenticating(false);
+        // Only reset if we haven't started processing a code
+        // The message event might arrive slightly after popup closes
+        setTimeout(() => {
+          if (!processingCodeRef.current) {
+            setIsAuthenticating(false);
+          }
+        }, 500); // Give message event time to arrive
       }
     }, 500);
   }, [oauth2Config, isOAuth2ConfigComplete]);

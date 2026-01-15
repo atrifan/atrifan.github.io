@@ -42,6 +42,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
   onCancel,
 }) => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isProcessingToken, setIsProcessingToken] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const oauthStateRef = useRef<string>('');
@@ -51,8 +52,8 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
 
   // Handle ESC key
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape' && !isAuthenticating) onCancel();
-  }, [onCancel, isAuthenticating]);
+    if (e.key === 'Escape' && !isAuthenticating && !isProcessingToken) onCancel();
+  }, [onCancel, isAuthenticating, isProcessingToken]);
 
   useEffect(() => {
     if (isOpen) {
@@ -87,7 +88,8 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
 
     if (code) {
       try {
-        setStatusMessage('Exchanging authorization code...');
+        setIsProcessingToken(true);
+        setStatusMessage('Working on your authentication...');
 
         // Use DCR credentials if available, otherwise use configured credentials
         const clientId = dcrCredentialsRef.current?.clientId || oauthConfig.client_id;
@@ -133,6 +135,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
         // Token stored by API, notify success with clientId (important for DCR)
         setStatusMessage('');
         setIsAuthenticating(false);
+        setIsProcessingToken(false);
         dcrCredentialsRef.current = null;
         onSuccess({ clientId: result.clientId });
       } catch (err) {
@@ -140,6 +143,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
         setError(err instanceof Error ? err.message : 'Authentication failed');
         setStatusMessage('');
         setIsAuthenticating(false);
+        setIsProcessingToken(false);
       } finally {
         processingCodeRef.current = null;
       }
@@ -245,11 +249,18 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
     setStatusMessage('Waiting for authorization...');
 
     // Poll to check if popup was closed without completing
+    // Note: We check processingCodeRef to avoid resetting state if we're already processing the code
     const pollTimer = setInterval(() => {
       if (popupRef.current?.closed) {
         clearInterval(pollTimer);
-        setStatusMessage('');
-        setIsAuthenticating(false);
+        // Only reset if we haven't started processing a code
+        // The message event might arrive slightly after popup closes
+        setTimeout(() => {
+          if (!processingCodeRef.current) {
+            setStatusMessage('');
+            setIsAuthenticating(false);
+          }
+        }, 500); // Give message event time to arrive
       }
     }, 500);
   }, [oauthConfig, serverName]);
@@ -290,11 +301,13 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
     rag: 'Knowledge Base',
   }[serverType] || 'Server';
 
+  const isBusy = isAuthenticating || isProcessingToken;
+
   const modalContent = (
-    <div style={overlayStyle} onClick={isAuthenticating ? undefined : onCancel}>
+    <div style={overlayStyle} onClick={isBusy ? undefined : onCancel}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '1rem' }}>
-          🔐
+          {isProcessingToken ? '⏳' : '🔐'}
         </div>
         <h2 style={{
           color: '#fff',
@@ -303,7 +316,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
           textAlign: 'center',
           margin: '0 0 0.5rem',
         }}>
-          Authentication Required
+          {isProcessingToken ? 'Processing Authentication' : 'Authentication Required'}
         </h2>
         <p style={{
           color: 'rgba(255, 255, 255, 0.7)',
@@ -312,7 +325,11 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
           margin: '0 0 1.5rem',
           lineHeight: 1.5,
         }}>
-          <strong style={{ color: '#fff' }}>{serverName}</strong> ({serverTypeLabel}) requires OAuth authentication to continue.
+          {isProcessingToken ? (
+            <>Working on your authentication for <strong style={{ color: '#fff' }}>{serverName}</strong>...</>
+          ) : (
+            <><strong style={{ color: '#fff' }}>{serverName}</strong> ({serverTypeLabel}) requires OAuth authentication to continue.</>
+          )}
         </p>
 
         {error && (
@@ -331,15 +348,30 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
 
         {statusMessage && !error && (
           <div style={{
-            background: 'rgba(139, 92, 246, 0.2)',
-            border: '1px solid rgba(139, 92, 246, 0.5)',
+            background: isProcessingToken ? 'rgba(16, 185, 129, 0.2)' : 'rgba(139, 92, 246, 0.2)',
+            border: isProcessingToken ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(139, 92, 246, 0.5)',
             borderRadius: '8px',
             padding: '0.75rem 1rem',
             marginBottom: '1rem',
-            color: '#c4b5fd',
+            color: isProcessingToken ? '#6ee7b7' : '#c4b5fd',
             fontSize: '0.85rem',
             textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
           }}>
+            {isProcessingToken && (
+              <span style={{
+                display: 'inline-block',
+                width: '14px',
+                height: '14px',
+                border: '2px solid rgba(110, 231, 183, 0.3)',
+                borderTopColor: '#6ee7b7',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }} />
+            )}
             {statusMessage}
           </div>
         )}
@@ -347,7 +379,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
           <button
             onClick={onCancel}
-            disabled={isAuthenticating}
+            disabled={isBusy}
             style={{
               padding: '0.75rem 1.5rem',
               borderRadius: '8px',
@@ -356,32 +388,32 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
               color: 'rgba(255, 255, 255, 0.8)',
               fontSize: '0.9rem',
               fontWeight: 500,
-              cursor: isAuthenticating ? 'not-allowed' : 'pointer',
-              opacity: isAuthenticating ? 0.5 : 1,
+              cursor: isBusy ? 'not-allowed' : 'pointer',
+              opacity: isBusy ? 0.5 : 1,
             }}
           >
             Cancel
           </button>
           <button
             onClick={handleAuthenticate}
-            disabled={isAuthenticating}
+            disabled={isBusy}
             style={{
               padding: '0.75rem 1.5rem',
               borderRadius: '8px',
               border: 'none',
-              background: isAuthenticating
+              background: isBusy
                 ? 'rgba(139, 92, 246, 0.5)'
                 : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: '#fff',
               fontSize: '0.9rem',
               fontWeight: 600,
-              cursor: isAuthenticating ? 'not-allowed' : 'pointer',
+              cursor: isBusy ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
             }}
           >
-            {isAuthenticating ? (
+            {isBusy ? (
               <>
                 <span style={{
                   display: 'inline-block',
@@ -392,7 +424,7 @@ export const OAuthAuthenticationModal: React.FC<OAuthAuthenticationModalProps> =
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite',
                 }} />
-                Authenticating...
+                {isProcessingToken ? 'Processing...' : 'Authenticating...'}
               </>
             ) : (
               'Authenticate'

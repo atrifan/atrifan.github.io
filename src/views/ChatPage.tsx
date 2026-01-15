@@ -352,6 +352,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // External agent usage stats (from /api/ai/usage byModel)
   const [externalAgentUsage, setExternalAgentUsage] = useState<Record<string, { input: number; output: number; cost: number; count: number }>>({});
 
+  // Track which user messages are expanded (for collapsible long messages)
+  const [expandedUserMessages, setExpandedUserMessages] = useState<Set<string>>(new Set());
+
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
 
@@ -1639,11 +1642,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               const isLastMessage = index === messages.length - 1;
               const showRetry = isLastMessage && msg.role === 'user' && msg.id === failedMessageId && !isLoading;
 
+              // Check if user message is long (more than ~4 lines worth of characters)
+              const isUserMessageLong = msg.role === 'user' && msg.content.length > 200;
+              const isUserMessageExpanded = expandedUserMessages.has(msg.id);
+
               return (
                 <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ maxWidth: '80%', padding: '0.875rem 1rem', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : isAgentMessage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)', color: '#fff' }}>
+                  <div
+                    style={{
+                      maxWidth: '80%',
+                      padding: '0.875rem 1rem',
+                      borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : isAgentMessage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      cursor: msg.role === 'user' && isUserMessageLong ? 'pointer' : 'default',
+                    }}
+                    onClick={() => {
+                      if (msg.role === 'user' && isUserMessageLong) {
+                        setExpandedUserMessages(prev => {
+                          const newSet = new Set(prev);
+                          if (newSet.has(msg.id)) {
+                            newSet.delete(msg.id);
+                          } else {
+                            newSet.add(msg.id);
+                          }
+                          return newSet;
+                        });
+                      }
+                    }}
+                  >
                     {msg.role === 'assistant' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
                         {isAgentMessage && agentConnector ? (
                           <>
                             <FaviconImage
@@ -1662,13 +1691,37 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                         )}
                       </div>
                     )}
-                    {msg.role === 'assistant' ? (
+                    <div style={{
+                      fontSize: '0.875rem',
+                      maxHeight: msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded ? '5.25rem' : 'none',
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}>
                       <MarkdownContent content={msg.content} />
-                    ) : (
-                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.5, fontSize: '0.95rem' }}>{formatMessageContent(msg.content)}</div>
+                      {msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          height: '2.5rem',
+                          background: 'linear-gradient(transparent 0%, rgba(99, 102, 241, 0.9) 50%, rgba(99, 102, 241, 1) 100%)',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                          paddingBottom: '0.35rem',
+                        }}>
+                          <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>▼ Click to expand</span>
+                        </div>
+                      )}
+                    </div>
+                    {isUserMessageLong && isUserMessageExpanded && (
+                      <div style={{ marginTop: '0.75rem', textAlign: 'center', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500 }}>▲ Click to collapse</span>
+                      </div>
                     )}
                     {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0) && (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {msg.role === 'user' && msg.tokens.input > 0 && (
                           <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input} prompt</span>
                         )}
@@ -1683,6 +1736,69 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       </div>
                     )}
                   </div>
+                  {/* Like/Dislike buttons for assistant messages */}
+                  {msg.role === 'assistant' && (
+                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem' }}>
+                      <button
+                        onClick={() => {/* TODO: implement like functionality */}}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                          e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                          e.currentTarget.style.color = '#10b981';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                        }}
+                        title="Good response"
+                      >
+                        👍
+                      </button>
+                      <button
+                        onClick={() => {/* TODO: implement dislike functionality */}}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                          e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                          e.currentTarget.style.color = '#ef4444';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                        }}
+                        title="Bad response"
+                      >
+                        👎
+                      </button>
+                    </div>
+                  )}
                   {/* Retry button for failed messages */}
                   {showRetry && (
                     <button
