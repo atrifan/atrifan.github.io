@@ -358,6 +358,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
 
+  // For free tier: check if user has external agents (allows chat access)
+  const [freeUserAgentsLoaded, setFreeUserAgentsLoaded] = useState(false);
+  const [freeUserHasAgents, setFreeUserHasAgents] = useState(false);
+
   // Check if selected model is actually an external agent (prefixed with 'agent:')
   const isExternalAgentSelected = selectedModel.startsWith('agent:');
   const selectedAgentConnector = isExternalAgentSelected
@@ -417,19 +421,53 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Estimate tokens for current input
   const currentInputTokens = estimateTokens(message);
 
+  // For free tier: check if user has external agents (allows chat access)
+  useEffect(() => {
+    if (!canAccessPro && isLoggedIn && !freeUserAgentsLoaded) {
+      const checkFreeUserAgents = async () => {
+        try {
+          const response = await fetch('/api/agents/list');
+          if (response.ok) {
+            const data = await response.json();
+            const agents = data.agents || [];
+            setAvailableAgents(agents);
+            setFreeUserHasAgents(agents.length > 0);
+          }
+        } catch (err) {
+          console.error('Failed to check agents for free user:', err);
+        } finally {
+          setFreeUserAgentsLoaded(true);
+        }
+      };
+      checkFreeUserAgents();
+    }
+  }, [canAccessPro, isLoggedIn, freeUserAgentsLoaded]);
+
   // Fetch conversations and connectors on mount
   useEffect(() => {
-    if (canAccessPro) {
+    if (canAccessPro || freeUserHasAgents) {
       fetchConversations();
       fetchCostUsage();
       fetchConnectors();
       fetchMcpServers();
-      fetchAgents();
+      if (canAccessPro) {
+        fetchAgents(); // Already fetched for free users above
+      }
       fetchBudget();
       fetchPersonalities();
       fetchRags();
     }
-  }, [canAccessPro]);
+  }, [canAccessPro, freeUserHasAgents]);
+
+  // For free tier: set default model to first external agent when connectors load
+  useEffect(() => {
+    if (!canAccessPro && freeUserHasAgents && externalAgentConnectors.length > 0) {
+      // If current model is not an external agent, switch to first available agent
+      if (!selectedModel.startsWith('agent:')) {
+        setSelectedModel(`agent:${externalAgentConnectors[0].id}`);
+      }
+    }
+  }, [canAccessPro, freeUserHasAgents, externalAgentConnectors, selectedModel]);
 
   // Load conversation and A2A context from URL on mount only
   const initialLoadDone = useRef(false);
@@ -439,7 +477,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     const convId = searchParams.get('c');
     const ctxId = searchParams.get('ctx');
 
-    if (canAccessPro) {
+    if (canAccessPro || freeUserHasAgents) {
       initialLoadDone.current = true;
       if (convId) {
         loadConversation(convId);
@@ -448,7 +486,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         setA2aContextId(ctxId);
       }
     }
-  }, [searchParams, canAccessPro]);
+  }, [searchParams, canAccessPro, freeUserHasAgents]);
 
   // Sync URL when conversation or contextId changes
   // Only include ctx param when there's a conversation ID (ctx is meaningless without a saved conversation)
@@ -1486,15 +1524,29 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   }, [sendMessage, message, setMessage, adjustTextareaHeight]);
 
-  // Show upgrade modal for non-Pro users
-  if (!canAccessPro) {
+  // Show upgrade modal for non-Pro users without external agents
+  // Free users with external agents can access chat
+  if (!canAccessPro && !freeUserHasAgents) {
+    // Still loading agents for free user
+    if (!freeUserAgentsLoaded && isLoggedIn) {
+      return (
+        <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
+          <View maxWidth="56rem" marginX="auto" UNSAFE_style={{ textAlign: 'center', paddingTop: '4rem' }}>
+            <span style={{ fontSize: '2rem', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+            <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '1rem' }}>Loading...</p>
+          </View>
+        </View>
+      );
+    }
     return (
       <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
         <UpgradeModal
           isOpen={true}
           title="AI Chat - Pro Feature"
           featureName="AI Chat with multiple models"
+          message="AI Chat with built-in models is available for Pro and Plus subscribers. However, free users can access chat by importing external A2A agents from the dashboard. Import an external agent to start chatting!"
           showCloseButton={false}
+          showDashboardLink={true}
         />
         <View maxWidth="56rem" marginX="auto" UNSAFE_style={{ filter: 'blur(8px)', pointerEvents: 'none' }}>
           <div style={{ marginBottom: '2rem' }}>
@@ -2000,34 +2052,38 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   minWidth: '180px',
                   boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
                 }}>
-                  {/* AI Models Section */}
-                  <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
-                  {availableModels.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => { setSelectedModel(m.id); setShowInputModelDropdown(false); }}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        background: selectedModel === m.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                        border: 'none',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        fontSize: '0.8rem',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span>{m.icon}</span>
-                      <span>{m.name}</span>
-                    </button>
-                  ))}
+                  {/* AI Models Section - only show for Pro/Plus users */}
+                  {canAccessPro && availableModels.length > 0 && (
+                    <>
+                      <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
+                      {availableModels.map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => { setSelectedModel(m.id); setShowInputModelDropdown(false); }}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem 0.75rem',
+                            background: selectedModel === m.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            fontSize: '0.8rem',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span>{m.icon}</span>
+                          <span>{m.name}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
                   {/* External Agents Section */}
                   {externalAgentConnectors.length > 0 && (
                     <>
-                      <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
+                      <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderTop: canAccessPro && availableModels.length > 0 ? '1px solid rgba(255,255,255,0.1)' : 'none', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
                       {externalAgentConnectors.map(agent => (
                         <button
                           key={agent.id}

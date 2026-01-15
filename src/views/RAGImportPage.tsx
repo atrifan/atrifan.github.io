@@ -378,21 +378,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
     );
   };
 
-  if (!canAccessPro) {
-    return (
-      <div style={{ ...containerStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>📚</span>
-          <h1 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>Pro Feature</h1>
-          <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '1.5rem' }}>Knowledge bases are available on Pro and Plus plans.</p>
-          <button onClick={() => setShowUpgradeModal(true)} style={{ ...buttonStyle, background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff' }}>
-            Upgrade Now
-          </button>
-        </div>
-        {showUpgradeModal && <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />}
-      </div>
-    );
-  }
+  // RAG import is now available for all tiers (free users can use it with external agents)
 
   // Render steps
   const renderNameStep = () => (

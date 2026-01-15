@@ -10,6 +10,7 @@ interface UpgradeModalProps {
   featureName?: string;
   onClose?: () => void;
   showCloseButton?: boolean;
+  showDashboardLink?: boolean; // Show "Go to Dashboard" button for free users
 }
 
 /**
@@ -23,6 +24,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   featureName = 'this feature',
   onClose,
   showCloseButton = true,
+  showDashboardLink = false,
 }) => {
   if (!isOpen) return null;
 
@@ -141,6 +143,27 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               🚀 Upgrade to Pro
             </button>
           </Link>
+          {showDashboardLink && (
+            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+              <button style={{
+                width: '100%',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                background: 'rgba(245, 158, 11, 0.1)',
+                color: '#f59e0b',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+              }}>
+                🤖 Import External Agent
+              </button>
+            </Link>
+          )}
           {showCloseButton && onClose ? (
             <button
               onClick={onClose}

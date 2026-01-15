@@ -644,8 +644,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
           {/* CONNECTORS MODE */}
           {panelMode === 'connectors' && (
             <div>
-              {/* Internal MCP Servers */}
-              {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').length > 0 && (
+              {/* Internal MCP Servers - Pro/Plus only */}
+              {tier !== 'free' && availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>Internal MCP Servers</div>
                   {availableMcpServers.filter(s => s.source_type === 'native' || s.source_type === 'api_key').map(server => {
@@ -660,8 +660,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                 </div>
               )}
 
-              {/* External MCP Servers */}
-              {availableMcpServers.filter(s => s.source_type === 'mcp_import').length > 0 && (
+              {/* External MCP Servers - Pro/Plus only */}
+              {tier !== 'free' && availableMcpServers.filter(s => s.source_type === 'mcp_import').length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.5rem' }}>🌐 External MCP Servers</div>
                   {availableMcpServers.filter(s => s.source_type === 'mcp_import').map(server => (
@@ -673,6 +673,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Free tier notice for MCP servers */}
+              {tier === 'free' && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px', border: '1px solid rgba(102, 126, 234, 0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem' }}>🔌</span>
+                    <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>MCP Connectors</span>
+                    <span style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 600 }}>PRO</span>
+                  </div>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', margin: 0 }}>
+                    MCP server connectors are available for Pro and Plus subscribers. Free users can use external A2A agents.
+                  </p>
                 </div>
               )}
 

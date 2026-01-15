@@ -533,10 +533,10 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  // Fetch personas
+  // Fetch personas (available for all tiers)
   useEffect(() => {
     const fetchPersonas = async () => {
-      if (!isPro || !user) return;
+      if (!user) return;
       try {
         const response = await fetch('/api/ai/personalities');
         if (response.ok) {
@@ -548,12 +548,12 @@ export const DashboardPage: React.FC = () => {
       }
     };
     fetchPersonas();
-  }, [isPro, user]);
+  }, [user]);
 
-  // Fetch RAG knowledge bases
+  // Fetch RAG knowledge bases (available for all tiers)
   useEffect(() => {
     const fetchRags = async () => {
-      if (!isPro || !user) return;
+      if (!user) return;
       try {
         const response = await fetch('/api/ai/rags');
         if (response.ok) {
@@ -565,82 +565,107 @@ export const DashboardPage: React.FC = () => {
       }
     };
     fetchRags();
-  }, [isPro, user]);
+  }, [user]);
 
-  // Fetch imports (REST APIs, GraphQL, MCP servers, A2A agents)
+  // Fetch imports (REST APIs, GraphQL, MCP servers, A2A agents) - available for all tiers
   useEffect(() => {
     const fetchImports = async () => {
-      if (!isPro || !user) {
+      if (!user) {
         setImportsLoading(false);
         return;
       }
       setImportsLoading(true);
       try {
-        // Fetch all import types in parallel
-        const [restRes, graphqlRes, mcpRes, agentsRes] = await Promise.all([
-          fetch('/api/swagger/list'),
-          fetch('/api/graphql/list'),
-          fetch('/api/mcp-servers/list'),
-          fetch('/api/agents/list'),
-        ]);
-
-        if (restRes.ok) {
-          const data = await restRes.json();
-          setImports(prev => ({
-            ...prev,
-            restApis: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; endpoints?: unknown[]; source_url?: string }) => ({
-              id: s.id,
-              name: s.server_name,
-              title: s.api_title,
-              endpointCount: s.endpoints?.length || 0,
-              sourceUrl: s.source_url,
-            })),
-          }));
+        // For free tier, only fetch A2A agents; for Pro/Plus, fetch all
+        const fetchPromises: Promise<Response>[] = [fetch('/api/agents/list')];
+        if (isPro) {
+          fetchPromises.unshift(
+            fetch('/api/swagger/list'),
+            fetch('/api/graphql/list'),
+            fetch('/api/mcp-servers/list')
+          );
         }
+        const responses = await Promise.all(fetchPromises);
 
-        if (graphqlRes.ok) {
-          const data = await graphqlRes.json();
-          setImports(prev => ({
-            ...prev,
-            graphql: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; operations?: unknown[]; source_url?: string }) => ({
-              id: s.id,
-              name: s.server_name,
-              title: s.api_title,
-              operationCount: s.operations?.length || 0,
-              sourceUrl: s.source_url,
-            })),
-          }));
-        }
+        // Parse responses based on tier
+        if (isPro) {
+          const [restRes, graphqlRes, mcpRes, agentsRes] = responses;
 
-        if (mcpRes.ok) {
-          const data = await mcpRes.json();
-          // Filter to only show imported MCP servers (not native/api_key servers)
-          const importedServers = (data.servers || []).filter((s: { source_type: string }) => s.source_type === 'mcp_import');
-          setImports(prev => ({
-            ...prev,
-            mcpServers: importedServers.map((s: { id: string; server_name: string; display_name: string; toolCount: number; source_url: string }) => ({
-              id: s.id,
-              name: s.server_name,
-              displayName: s.display_name,
-              toolCount: s.toolCount,
-              sourceUrl: s.source_url,
-            })),
-          }));
-        }
+          if (restRes.ok) {
+            const data = await restRes.json();
+            setImports(prev => ({
+              ...prev,
+              restApis: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; endpoints?: unknown[]; source_url?: string }) => ({
+                id: s.id,
+                name: s.server_name,
+                title: s.api_title,
+                endpointCount: s.endpoints?.length || 0,
+                sourceUrl: s.source_url,
+              })),
+            }));
+          }
 
-        if (agentsRes.ok) {
-          const data = await agentsRes.json();
-          setImports(prev => ({
-            ...prev,
-            a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
-              id: a.id,
-              name: a.agent_name,
-              displayName: a.display_name,
-              description: a.description,
-              iconUrl: a.icon_url,
-              agentUrl: a.agent_url,
-            })),
-          }));
+          if (graphqlRes.ok) {
+            const data = await graphqlRes.json();
+            setImports(prev => ({
+              ...prev,
+              graphql: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; operations?: unknown[]; source_url?: string }) => ({
+                id: s.id,
+                name: s.server_name,
+                title: s.api_title,
+                operationCount: s.operations?.length || 0,
+                sourceUrl: s.source_url,
+              })),
+            }));
+          }
+
+          if (mcpRes.ok) {
+            const data = await mcpRes.json();
+            // Filter to only show imported MCP servers (not native/api_key servers)
+            const importedServers = (data.servers || []).filter((s: { source_type: string }) => s.source_type === 'mcp_import');
+            setImports(prev => ({
+              ...prev,
+              mcpServers: importedServers.map((s: { id: string; server_name: string; display_name: string; toolCount: number; source_url: string }) => ({
+                id: s.id,
+                name: s.server_name,
+                displayName: s.display_name,
+                toolCount: s.toolCount,
+                sourceUrl: s.source_url,
+              })),
+            }));
+          }
+
+          if (agentsRes.ok) {
+            const data = await agentsRes.json();
+            setImports(prev => ({
+              ...prev,
+              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
+                id: a.id,
+                name: a.agent_name,
+                displayName: a.display_name,
+                description: a.description,
+                iconUrl: a.icon_url,
+                agentUrl: a.agent_url,
+              })),
+            }));
+          }
+        } else {
+          // Free tier: only fetch A2A agents
+          const [agentsRes] = responses;
+          if (agentsRes.ok) {
+            const data = await agentsRes.json();
+            setImports(prev => ({
+              ...prev,
+              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
+                id: a.id,
+                name: a.agent_name,
+                displayName: a.display_name,
+                description: a.description,
+                iconUrl: a.icon_url,
+                agentUrl: a.agent_url,
+              })),
+            }));
+          }
         }
       } catch (error) {
         console.error('Failed to fetch imports:', error);
@@ -651,10 +676,10 @@ export const DashboardPage: React.FC = () => {
     fetchImports();
   }, [isPro, user]);
 
-  // Fetch OAuth connections
+  // Fetch OAuth connections (available for all tiers)
   useEffect(() => {
     const fetchOAuthConnections = async () => {
-      if (!isPro || !user) {
+      if (!user) {
         setOauthConnectionsLoading(false);
         return;
       }
@@ -672,7 +697,7 @@ export const DashboardPage: React.FC = () => {
       }
     };
     fetchOAuthConnections();
-  }, [isPro, user]);
+  }, [user]);
 
   // Revoke single OAuth token
   const revokeOAuthToken = async (tokenId: string, providerHash: string) => {
@@ -1987,8 +2012,8 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
-        {/* Imports Card */}
-        {isPro && isMcpComposerEnabled() && (
+        {/* Imports Card - Available for all tiers (with restrictions for free) */}
+        {isMcpComposerEnabled() && (
           <DashboardCard title="Imports" icon={
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -2110,26 +2135,58 @@ export const DashboardPage: React.FC = () => {
 
             {/* Import buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem' }}>
-              <Link href="/dashboard/swagger-import" style={{ textDecoration: 'none' }}>
-                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  <span>+</span> REST API
-                </button>
-              </Link>
-              <Link href="/dashboard/graphql-import" style={{ textDecoration: 'none' }}>
-                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(102, 126, 234, 0.4)', background: 'rgba(102, 126, 234, 0.1)', color: '#667eea', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  <span>+</span> GraphQL
-                </button>
-              </Link>
-              <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
-                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(251, 146, 60, 0.4)', background: 'rgba(251, 146, 60, 0.1)', color: '#fb923c', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  <span>+</span> MCP Server
-                </button>
-              </Link>
+              {/* REST API - Pro only */}
+              {isPro ? (
+                <Link href="/dashboard/swagger-import" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> REST API
+                  </button>
+                </Link>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <button disabled style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(16, 185, 129, 0.2)', background: 'rgba(16, 185, 129, 0.05)', color: 'rgba(16, 185, 129, 0.4)', fontSize: '0.75rem', fontWeight: 600, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> REST API
+                  </button>
+                  <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontSize: '0.55rem', fontWeight: 700, padding: '0.15rem 0.35rem', borderRadius: '4px' }}>PRO</span>
+                </div>
+              )}
+              {/* GraphQL - Pro only */}
+              {isPro ? (
+                <Link href="/dashboard/graphql-import" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(102, 126, 234, 0.4)', background: 'rgba(102, 126, 234, 0.1)', color: '#667eea', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> GraphQL
+                  </button>
+                </Link>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <button disabled style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(102, 126, 234, 0.2)', background: 'rgba(102, 126, 234, 0.05)', color: 'rgba(102, 126, 234, 0.4)', fontSize: '0.75rem', fontWeight: 600, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> GraphQL
+                  </button>
+                  <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontSize: '0.55rem', fontWeight: 700, padding: '0.15rem 0.35rem', borderRadius: '4px' }}>PRO</span>
+                </div>
+              )}
+              {/* MCP Server - Pro only */}
+              {isPro ? (
+                <Link href="/dashboard/mcp-import" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(251, 146, 60, 0.4)', background: 'rgba(251, 146, 60, 0.1)', color: '#fb923c', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> MCP Server
+                  </button>
+                </Link>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <button disabled style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(251, 146, 60, 0.2)', background: 'rgba(251, 146, 60, 0.05)', color: 'rgba(251, 146, 60, 0.4)', fontSize: '0.75rem', fontWeight: 600, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> MCP Server
+                  </button>
+                  <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', fontSize: '0.55rem', fontWeight: 700, padding: '0.15rem 0.35rem', borderRadius: '4px' }}>PRO</span>
+                </div>
+              )}
+              {/* A2A Agent - Available for all tiers */}
               <Link href="/dashboard/agent-import" style={{ textDecoration: 'none' }}>
                 <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                   <span>+</span> A2A Agent
                 </button>
               </Link>
+              {/* RAG - Available for all tiers */}
               <Link href="/dashboard/rag-import" style={{ textDecoration: 'none' }}>
                 <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                   <span>+</span> RAG
@@ -2139,8 +2196,8 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
-        {/* OAuth Connections Card */}
-        {isPro && isMcpComposerEnabled() && (
+        {/* OAuth Connections Card - Available for all tiers */}
+        {isMcpComposerEnabled() && (
           <DashboardCard title="OAuth Connections" icon={
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -2474,8 +2531,8 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
-        {/* Personas Card */}
-        {isPro && (
+        {/* Personas Card - Available for all tiers */}
+        {(
           <DashboardCard title="AI Personas" icon={
             <span style={{ fontSize: '24px' }}>🎭</span>
           }>
@@ -2542,8 +2599,8 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
-        {/* Knowledge Bases Card */}
-        {isPro && (
+        {/* Knowledge Bases Card - Available for all tiers */}
+        {(
           <DashboardCard title="Knowledge Bases" icon={
             <span style={{ fontSize: '24px' }}>📚</span>
           }>
