@@ -41,19 +41,41 @@ export interface A2AClientConfig {
   headers?: Record<string, string>;
   systemPrompts?: string[]; // Personality system prompts
   contextId?: string; // A2A protocol context ID for conversation continuity
+  signal?: AbortSignal; // External abort signal for cancellation
 }
 
 /**
  * Send a message to an A2A agent and get a response.
  * Uses a server-side proxy to avoid CORS issues.
+ *
+ * @param config - Configuration including agent URL and optional abort signal
+ * @param messages - Array of messages to send
+ * @throws {Error} Throws AbortError if the request is cancelled via the signal
  */
 export async function sendA2AMessage(
   config: A2AClientConfig,
   messages: A2AMessage[]
 ): Promise<A2AResponse> {
   // 3 minute timeout for UI to proxy
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 180000);
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), 180000);
+
+  // If an external signal is provided, listen for its abort and propagate it
+  let externalAborted = false;
+  const onExternalAbort = () => {
+    externalAborted = true;
+    timeoutController.abort();
+  };
+  if (config.signal) {
+    if (config.signal.aborted) {
+      // Already aborted before we started
+      clearTimeout(timeoutId);
+      const error = new Error('Request was cancelled');
+      error.name = 'AbortError';
+      throw error;
+    }
+    config.signal.addEventListener('abort', onExternalAbort);
+  }
 
   try {
     // Use server-side proxy to avoid CORS issues
@@ -72,7 +94,7 @@ export async function sendA2AMessage(
         headers: config.headers,
         contextId: config.contextId,
       }),
-      signal: controller.signal,
+      signal: timeoutController.signal,
     });
 
     clearTimeout(timeoutId);
@@ -90,6 +112,13 @@ export async function sendA2AMessage(
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === 'AbortError') {
+      // If this was triggered by external signal, re-throw as AbortError
+      if (externalAborted) {
+        const abortError = new Error('Request was cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      // Otherwise it was a timeout
       return {
         success: false,
         error: 'Request timed out after 3 minutes',
@@ -99,6 +128,11 @@ export async function sendA2AMessage(
       success: false,
       error: error instanceof Error ? error.message : 'Failed to communicate with agent',
     };
+  } finally {
+    // Clean up the external abort listener
+    if (config.signal) {
+      config.signal.removeEventListener('abort', onExternalAbort);
+    }
   }
 }
 

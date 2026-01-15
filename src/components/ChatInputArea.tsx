@@ -77,6 +77,9 @@ interface ChatInputAreaProps {
   activeRagCount?: number;
   onRagClick?: () => void;
   showRagToggle?: boolean;
+
+  // Optional: Stop button callback (when loading)
+  onStop?: () => void;
 }
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -115,6 +118,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   activeRagCount = 0,
   onRagClick,
   showRagToggle = false,
+
+  onStop,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -270,44 +275,69 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           )}
         </div>
 
-        {/* Send button */}
-        <button
-          onClick={onSend}
-          disabled={isDisabled || isLoading || !message.trim()}
-          title={isLoading ? 'Sending...' : 'Send (Enter)'}
-          style={{
-            background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-            border: 'none',
-            borderRadius: '12px',
-            width: sendButtonLabel ? 'auto' : '48px',
-            height: '48px',
-            padding: sendButtonLabel ? '0 1rem' : 0,
-            color: '#fff',
-            cursor: isDisabled || isLoading || !message.trim() ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            opacity: isDisabled || isLoading || !message.trim() ? 0.5 : 1,
-            flexShrink: 0,
-            fontWeight: 600,
-            fontSize: '0.9rem',
-          }}
-        >
-          {isLoading ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
-              <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
-              <path d="M12 2a10 10 0 0 1 10 10" />
+        {/* Send/Stop button */}
+        {isLoading && onStop ? (
+          <button
+            onClick={onStop}
+            title="Stop (cancel request)"
+            style={{
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              border: 'none',
+              borderRadius: '12px',
+              width: '48px',
+              height: '48px',
+              padding: 0,
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
-          ) : sendButtonLabel ? (
-            <span style={{ fontSize: '1.5rem' }}>{sendButtonLabel}</span>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2L11 13" />
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-            </svg>
-          )}
-        </button>
+          </button>
+        ) : (
+          <button
+            onClick={onSend}
+            disabled={isDisabled || isLoading || !message.trim()}
+            title={isLoading ? 'Sending...' : 'Send (Enter)'}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+              border: 'none',
+              borderRadius: '12px',
+              width: sendButtonLabel ? 'auto' : '48px',
+              height: '48px',
+              padding: sendButtonLabel ? '0 1rem' : 0,
+              color: '#fff',
+              cursor: isDisabled || isLoading || !message.trim() ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              opacity: isDisabled || isLoading || !message.trim() ? 0.5 : 1,
+              flexShrink: 0,
+              fontWeight: 600,
+              fontSize: '0.9rem',
+            }}
+          >
+            {isLoading ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.3" />
+                <path d="M12 2a10 10 0 0 1 10 10" />
+              </svg>
+            ) : sendButtonLabel ? (
+              <span style={{ fontSize: '1.5rem' }}>{sendButtonLabel}</span>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Model selector + Feature toggles + Helper text */}

@@ -248,6 +248,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedMessageId, setFailedMessageId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // OAuth modal state
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
@@ -1151,6 +1152,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setError(null);
     setFailedMessageId(null); // Clear any previous failed message
 
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       // Handle external agent communication
       if (isExternalAgentSelected && selectedAgentConnector) {
@@ -1173,6 +1178,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             headers: selectedAgentConnector.external_headers,
             systemPrompts: activeSystemPrompts.length > 0 ? activeSystemPrompts : undefined,
             contextId: a2aContextId || undefined, // Pass existing context ID for conversation continuity
+            signal: abortController.signal, // Pass abort signal for cancellation
           },
           a2aMessages
         );
@@ -1327,6 +1333,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             conversationId: currentConversationId,
             systemPrompt: combinedSystemPrompt || undefined,
           }),
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -1391,12 +1398,34 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setFailedMessageId(userMessage.id); // Track the failed message for retry
+      // Check if this was a user-initiated cancellation
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Add a canceled message as assistant response
+        const canceledMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'User canceled the request.',
+          timestamp: new Date(),
+          model: isExternalAgentSelected && selectedAgentConnector ? `agent:${selectedAgentConnector.id}` : selectedModel,
+        };
+        setMessages(prev => [...prev, canceledMessage]);
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setFailedMessageId(userMessage.id); // Track the failed message for retry
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [message, messages, selectedModel, tier, isLoading, isQuotaExceeded, currentConversationId, activePersonalities, isExternalAgentSelected, selectedAgentConnector, a2aContextId]);
+
+  // Stop/cancel the current request
+  const stopRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   // Retry failed message - resends the last failed user message
   const retryFailedMessage = useCallback(async () => {
@@ -1776,20 +1805,27 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               )}
             </div>
 
-            {/* Send button */}
-            <button
-              onClick={sendMessage}
-              disabled={!message.trim() || isLoading || isQuotaExceeded}
-              aria-label="Send message"
-              data-send-button
-              style={{ width: '44px', height: '44px', borderRadius: '12px', background: (!message.trim() || isLoading || isQuotaExceeded) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', color: '#fff', cursor: (!message.trim() || isLoading || isQuotaExceeded) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: (!message.trim() || isLoading || isQuotaExceeded) ? 0.5 : 1 }}
-            >
-              {isLoading ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}><circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" /></svg>
-              ) : (
+            {/* Send/Stop button */}
+            {isLoading ? (
+              <button
+                onClick={stopRequest}
+                aria-label="Stop request"
+                title="Stop (cancel request)"
+                style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              </button>
+            ) : (
+              <button
+                onClick={sendMessage}
+                disabled={!message.trim() || isQuotaExceeded}
+                aria-label="Send message"
+                data-send-button
+                style={{ width: '44px', height: '44px', borderRadius: '12px', background: (!message.trim() || isQuotaExceeded) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', color: '#fff', cursor: (!message.trim() || isQuotaExceeded) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: (!message.trim() || isQuotaExceeded) ? 0.5 : 1 }}
+              >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
 
           {/* Model selector + Helper text */}

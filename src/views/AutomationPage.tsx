@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
 import { Footer } from '../components/Footer';
@@ -151,6 +151,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [mermaidDiagram, setMermaidDiagram] = useState('flowchart TD\n  start([Start]) --> end_node([End])');
   const [isGenerating, setIsGenerating] = useState(false);
   const [lastExplanation, setLastExplanation] = useState('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Model & personality - default will be set based on tier in useEffect
   const [selectedModel, setSelectedModel] = useState('');
@@ -616,6 +617,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     setIsGenerating(true);
     setLastTokenUsage(null);
 
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     // Build combined system prompt from active personalities
     const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
     const personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
@@ -632,6 +637,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           availableTools: activeTools,
           personaSystemPrompt: personaSystemPrompt || undefined,
         }),
+        signal: abortController.signal,
       });
 
       if (response.ok) {
@@ -647,11 +653,24 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         }
       }
     } catch (error) {
-      console.error('Failed to generate flow:', error);
+      // Check if this was a user-initiated cancellation
+      if (error instanceof Error && error.name === 'AbortError') {
+        setLastExplanation('User canceled the request.');
+      } else {
+        console.error('Failed to generate flow:', error);
+      }
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory]);
+
+  // Stop/cancel the current request
+  const stopRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   // Save automation
   const saveAutomation = async () => {
@@ -1225,6 +1244,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 message={prompt}
                 setMessage={setPrompt}
                 onSend={generateFlow}
+                onStop={stopRequest}
                 isLoading={isGenerating}
                 placeholder="Describe your workflow..."
                 selectedModel={selectedModel}
