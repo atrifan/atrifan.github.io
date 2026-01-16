@@ -71,7 +71,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       name,
+      ragName,
       description,
+      serverDescription,
       sourceUrl,
       sourceType,
       authType,
@@ -88,11 +90,19 @@ export async function POST(request: NextRequest) {
       topN,
       icon,
       iconUrl,
+      // URL RAG request configuration
+      httpMethod,
+      paramsLocation,
+      requestContentType,
+      fieldMapping,
     } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
+
+    // Generate normalized rag_name if not provided
+    const normalizedRagName = ragName || name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
     // Build final auth config - merge OAuth2 config if provided
     let finalAuthConfig = authConfig || {};
@@ -113,7 +123,9 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userId,
         name: name.trim(),
+        rag_name: normalizedRagName,
         description: description?.trim() || null,
+        server_description: serverDescription?.trim() || null,
         source_url: sourceUrl || null,
         source_type: sourceType || 'csv',
         auth_type: authType || 'none',
@@ -129,6 +141,11 @@ export async function POST(request: NextRequest) {
         top_n: topN || 5,
         icon: icon || '📚',
         icon_url: iconUrl || null,
+        // URL RAG request configuration
+        http_method: httpMethod || 'POST',
+        params_location: paramsLocation || 'body',
+        request_content_type: requestContentType || 'application/json',
+        field_mapping: fieldMapping || { query: 'query', embedding: 'embedding', top_n: 'top_n', dimensions: 'dimensions', model: 'model' },
       })
       .select()
       .single();

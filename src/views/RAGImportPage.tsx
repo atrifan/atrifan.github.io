@@ -26,6 +26,14 @@ interface RAGImportPageProps {
 type Step = 'name' | 'source' | 'config' | 'saving';
 type SourceType = 'csv' | 'url';
 
+// Normalize name helper (consistent with other imports)
+const normalizeName = (name: string): string => {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+};
+
+// Host URL for generating collection URLs
+const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
+
 export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const router = useRouter();
   const canAccessPro = isPro || isPlus;
@@ -74,6 +82,33 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const [oauth2Config, setOAuth2Config] = useState<OAuth2Config>(defaultOAuth2Config);
   const [showClientSecret, setShowClientSecret] = useState(false);
 
+  // URL RAG request configuration
+  const [urlHttpMethod, setUrlHttpMethod] = useState<'GET' | 'POST'>('POST');
+  const [urlParamsLocation, setUrlParamsLocation] = useState<'query' | 'body'>('body');
+  const [urlContentType, setUrlContentType] = useState<'application/json' | 'application/x-www-form-urlencoded'>('application/json');
+
+  // Field mapping for URL RAG (empty = use default field name)
+  const [fieldMapping, setFieldMapping] = useState<{
+    query: string;
+    embedding: string;
+    top_n: string;
+    chunk_count: string;
+    dimensions: string;
+    model: string;
+  }>({
+    query: '',
+    embedding: '',
+    top_n: '',
+    chunk_count: '',
+    dimensions: '',
+    model: '',
+  });
+
+  // Test state
+  const [testQuery, setTestQuery] = useState('');
+  const [testResult, setTestResult] = useState<{ success: boolean; data?: unknown; error?: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
   // Embedding config - default to local model (available to all tiers)
   const [embeddingModel, setEmbeddingModel] = useState(LOCAL_EMBEDDING_MODEL.id);
   const [tokenLimit, setTokenLimit] = useState(8000);
@@ -81,6 +116,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const [chunkOverlap, setChunkOverlap] = useState(50);
   const [topN, setTopN] = useState(5); // Number of top results to retrieve
   const [contentType, setContentType] = useState<'text' | 'code' | 'mixed'>('text');
+  const [serverDescription, setServerDescription] = useState(''); // Description shown to API consumers
 
   // Get current model's dimensions
   const currentModelDimensions = useMemo(() => {
@@ -134,6 +170,17 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
     background: 'rgba(0,0,0,0.3)',
     color: '#fff',
     fontSize: '0.9rem',
+  };
+
+  // Select style with proper arrow positioning
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' fill-opacity='0.6' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 0.75rem center',
+    paddingRight: '2.5rem',
+    cursor: 'pointer',
   };
 
   const labelStyle: React.CSSProperties = {
@@ -286,28 +333,48 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
         }
       }
 
-      // Determine if embeddings will be generated
-      const needsEmbeddings = (sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings);
+      // Determine if embeddings will be generated (only for URL source)
+      const needsEmbeddings = sourceType === 'url' && urlNeedsEmbeddings;
 
       // Build request body
+      // For CSV: Upstash generates embeddings, so has_embeddings=false, model=upstash model, auth=none
+      // For URL: User configures embedding model and auth
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const requestBody: Record<string, any> = {
         name: name.trim(),
+        ragName: normalizeName(name.trim()), // Normalized internal name for API endpoint
         description: description.trim() || null,
         icon,
         sourceUrl: sourceType === 'url' ? remoteUrl : null,
         sourceType,
-        authType: storedAuthType,
+        // CSV uses path-based auth (api_key in URL), URL uses configured auth
+        authType: sourceType === 'csv' ? 'none' : storedAuthType,
         authConfig: sourceType === 'url' ? authConfig : {},
         customHeaders: sourceType === 'url' ? headersObj : {},
-        hasEmbeddings: sourceType === 'csv' ? csvHasEmbeddings : !urlNeedsEmbeddings,
-        embeddingModel: needsEmbeddings ? embeddingModel : null,
-        embeddingDimensions: needsEmbeddings ? currentModelDimensions : null,
+        // CSV: Upstash generates embeddings, so has_embeddings=false
+        hasEmbeddings: sourceType === 'csv' ? false : !urlNeedsEmbeddings,
+        // CSV: Use Upstash model name for consistency
+        embeddingModel: sourceType === 'csv' ? 'upstash-bge-base-en-v1.5' : (needsEmbeddings ? embeddingModel : null),
+        embeddingDimensions: sourceType === 'csv' ? 768 : (needsEmbeddings ? currentModelDimensions : null),
         contentType,
         tokenLimit,
         chunkSize,
         chunkOverlap,
         topN,
+        serverDescription: sourceType === 'csv' ? serverDescription.trim() || null : null,
+        // URL RAG request configuration
+        ...(sourceType === 'url' ? {
+          httpMethod: urlHttpMethod,
+          paramsLocation: urlParamsLocation,
+          requestContentType: urlContentType,
+          fieldMapping: {
+            query: fieldMapping.query || 'query',
+            embedding: fieldMapping.embedding || 'embedding',
+            top_n: fieldMapping.top_n || 'top_n',
+            dimensions: fieldMapping.dimensions || 'dimensions',
+            model: fieldMapping.model || 'model',
+          },
+        } : {}),
       };
 
       // Add OAuth2 config if applicable
@@ -403,49 +470,105 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   // RAG import is now available for all tiers (free users can use it with external agents)
 
   // Render steps
-  const renderNameStep = () => (
-    <div style={cardStyle}>
-      <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>📝 Knowledge Base Name</h2>
-      <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-        Give your knowledge base a name and description.
-      </p>
+  const renderNameStep = () => {
+    const normalizedName = normalizeName(name);
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+    return (
+      <div style={cardStyle}>
+        <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>📝 Knowledge Base Name</h2>
+        <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Give your knowledge base a name and description.
+        </p>
+
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+          <div>
+            <label style={labelStyle}>Icon</label>
+            <input
+              type="text"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              style={{ ...inputStyle, width: '60px', textAlign: 'center', fontSize: '1.5rem', padding: '0.5rem' }}
+              maxLength={2}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <label style={labelStyle}>Display Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My Knowledge Base"
+              style={inputStyle}
+              onKeyDown={(e) => e.key === 'Enter' && handleNext()}
+            />
+          </div>
+        </div>
+
+        {/* Normalized name display */}
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+          Internal name: <code style={{ color: '#10b981' }}>{normalizedName || '...'}</code>
+        </p>
+
+        {/* Collection URL preview */}
+        {normalizedName && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '8px',
+            padding: '0.75rem',
+            marginBottom: '1rem',
+          }}>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', margin: '0 0 0.35rem' }}>
+              📡 Collection API Endpoint (after import):
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <code style={{
+                color: '#10b981',
+                fontSize: '0.75rem',
+                wordBreak: 'break-all',
+                flex: 1,
+              }}>
+                {HOST_URL}/api/collection/{userApiKey || '{your_api_key}'}/{normalizedName}
+              </code>
+              {userApiKey && (
+                <button
+                  onClick={() => navigator.clipboard.writeText(`${HOST_URL}/api/collection/${userApiKey}/${normalizedName}`)}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '0.25rem 0.5rem',
+                    color: '#10b981',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  📋 Copy
+                </button>
+              )}
+            </div>
+            {!userApiKey && (
+              <p style={{ color: '#f59e0b', fontSize: '0.7rem', margin: '0.5rem 0 0' }}>
+                ⚠️ Generate an API key in the dashboard to use this endpoint.
+              </p>
+            )}
+          </div>
+        )}
+
         <div>
-          <label style={labelStyle}>Icon</label>
-          <input
-            type="text"
-            value={icon}
-            onChange={(e) => setIcon(e.target.value)}
-            style={{ ...inputStyle, width: '60px', textAlign: 'center', fontSize: '1.5rem', padding: '0.5rem' }}
-            maxLength={2}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: '200px' }}>
-          <label style={labelStyle}>Name *</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="My Knowledge Base"
-            style={inputStyle}
-            onKeyDown={(e) => e.key === 'Enter' && handleNext()}
+          <label style={labelStyle}>Description (optional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe what this knowledge base contains..."
+            rows={3}
+            style={{ ...inputStyle, resize: 'vertical' }}
           />
         </div>
       </div>
-
-      <div>
-        <label style={labelStyle}>Description (optional)</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe what this knowledge base contains..."
-          rows={3}
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderSourceStep = () => (
     <div style={cardStyle}>
@@ -499,6 +622,21 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
       {/* CSV Import */}
       {sourceType === 'csv' && (
         <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem' }}>
+          {/* Upstash Vector Storage Info */}
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.1)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '8px',
+            padding: '0.75rem',
+            marginBottom: '1rem',
+          }}>
+            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', margin: 0 }}>
+              <span style={{ color: '#60a5fa', fontWeight: 600 }}>💾 Upstash Vector Storage:</span>{' '}
+              Embeddings will be stored with your <code style={{ color: '#10b981' }}>api_key</code> and{' '}
+              <code style={{ color: '#10b981' }}>rag_name</code> ({normalizeName(name) || '...'}) for isolated collection search.
+            </p>
+          </div>
+
           <input
             ref={fileInputRef}
             type="file"
@@ -556,14 +694,14 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
               <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 <div>
                   <label style={labelStyle}>Content Column *</label>
-                  <select value={csvContentColumn} onChange={(e) => setCsvContentColumn(e.target.value)} style={inputStyle}>
+                  <select value={csvContentColumn} onChange={(e) => setCsvContentColumn(e.target.value)} style={selectStyle}>
                     <option value="">Select column...</option>
                     {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={labelStyle}>Title Column (optional)</label>
-                  <select value={csvTitleColumn} onChange={(e) => setCsvTitleColumn(e.target.value)} style={inputStyle}>
+                  <select value={csvTitleColumn} onChange={(e) => setCsvTitleColumn(e.target.value)} style={selectStyle}>
                     <option value="">None</option>
                     {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
                   </select>
@@ -584,7 +722,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
                 {csvHasEmbeddings && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <label style={labelStyle}>Embedding Column</label>
-                    <select value={csvEmbeddingColumn} onChange={(e) => setCsvEmbeddingColumn(e.target.value)} style={inputStyle}>
+                    <select value={csvEmbeddingColumn} onChange={(e) => setCsvEmbeddingColumn(e.target.value)} style={selectStyle}>
                       <option value="">Select column...</option>
                       {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
                     </select>
@@ -661,6 +799,228 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem', marginLeft: '26px' }}>
               Enable this to generate embeddings and send to RAG server for semantic search
             </p>
+          </div>
+
+          {/* Request Configuration */}
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px' }}>
+            <h4 style={{ color: '#60a5fa', fontSize: '0.9rem', margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🔧 Request Configuration
+            </h4>
+
+            {/* HTTP Method & Params Location */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={labelStyle}>HTTP Method</label>
+                <select value={urlHttpMethod} onChange={(e) => setUrlHttpMethod(e.target.value as 'GET' | 'POST')} style={selectStyle}>
+                  <option value="POST">POST</option>
+                  <option value="GET">GET</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Parameters In</label>
+                <select value={urlParamsLocation} onChange={(e) => setUrlParamsLocation(e.target.value as 'query' | 'body')} style={selectStyle}>
+                  <option value="body">Request Body</option>
+                  <option value="query">Query String</option>
+                </select>
+              </div>
+              {urlParamsLocation === 'body' && (
+                <div>
+                  <label style={labelStyle}>Content-Type</label>
+                  <select value={urlContentType} onChange={(e) => setUrlContentType(e.target.value as 'application/json' | 'application/x-www-form-urlencoded')} style={selectStyle}>
+                    <option value="application/json">application/json</option>
+                    <option value="application/x-www-form-urlencoded">form-urlencoded</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Field Mapping */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ ...labelStyle, marginBottom: '0.5rem', display: 'block' }}>
+                📝 Field Mapping <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>(leave empty for defaults)</span>
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', width: '80px' }}>query →</span>
+                  <input
+                    type="text"
+                    value={fieldMapping.query}
+                    onChange={(e) => setFieldMapping({ ...fieldMapping, query: e.target.value })}
+                    placeholder="query"
+                    style={{ ...inputStyle, flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                  />
+                </div>
+                {urlNeedsEmbeddings && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', width: '80px' }}>embedding →</span>
+                    <input
+                      type="text"
+                      value={fieldMapping.embedding}
+                      onChange={(e) => setFieldMapping({ ...fieldMapping, embedding: e.target.value })}
+                      placeholder="embedding"
+                      style={{ ...inputStyle, flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', width: '80px' }}>top_n →</span>
+                  <input
+                    type="text"
+                    value={fieldMapping.top_n}
+                    onChange={(e) => setFieldMapping({ ...fieldMapping, top_n: e.target.value })}
+                    placeholder="top_n"
+                    style={{ ...inputStyle, flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                  />
+                </div>
+                {urlNeedsEmbeddings && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', width: '80px' }}>dimensions →</span>
+                    <input
+                      type="text"
+                      value={fieldMapping.dimensions}
+                      onChange={(e) => setFieldMapping({ ...fieldMapping, dimensions: e.target.value })}
+                      placeholder="dimensions"
+                      style={{ ...inputStyle, flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                )}
+                {urlNeedsEmbeddings && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', width: '80px' }}>model →</span>
+                    <input
+                      type="text"
+                      value={fieldMapping.model}
+                      onChange={(e) => setFieldMapping({ ...fieldMapping, model: e.target.value })}
+                      placeholder="model"
+                      style={{ ...inputStyle, flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Preview what will be sent */}
+            <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '0.75rem' }}>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', margin: '0 0 0.5rem' }}>Preview (what will be sent):</p>
+              <pre style={{ color: '#10b981', fontSize: '0.7rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{urlHttpMethod} {remoteUrl || 'https://api.example.com/search'}{urlParamsLocation === 'query' ? '?' + new URLSearchParams({
+  [fieldMapping.query || 'query']: '{user_query}',
+  [fieldMapping.top_n || 'top_n']: String(topN),
+  ...(urlNeedsEmbeddings ? { [fieldMapping.embedding || 'embedding']: '[...]' } : {}),
+}).toString() : ''}
+{urlParamsLocation === 'body' ? `
+Content-Type: ${urlContentType}
+
+${urlContentType === 'application/json' ? JSON.stringify({
+  [fieldMapping.query || 'query']: '{user_query}',
+  [fieldMapping.top_n || 'top_n']: topN,
+  ...(urlNeedsEmbeddings ? {
+    [fieldMapping.embedding || 'embedding']: '[...]',
+    [fieldMapping.dimensions || 'dimensions']: currentModelDimensions,
+    [fieldMapping.model || 'model']: embeddingModel,
+  } : {}),
+}, null, 2) : new URLSearchParams({
+  [fieldMapping.query || 'query']: '{user_query}',
+  [fieldMapping.top_n || 'top_n']: String(topN),
+}).toString()}` : ''}
+              </pre>
+            </div>
+
+            {/* Test Section */}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(59, 130, 246, 0.3)', paddingTop: '1rem' }}>
+              <h4 style={{ color: '#f59e0b', fontSize: '0.85rem', margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                🧪 Test Connection
+              </h4>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={testQuery}
+                  onChange={(e) => setTestQuery(e.target.value)}
+                  placeholder="Enter a test query..."
+                  style={{ ...inputStyle, flex: 1, minWidth: '200px' }}
+                />
+                <button
+                  onClick={async () => {
+                    if (!testQuery.trim() || !remoteUrl.trim()) return;
+                    setIsTesting(true);
+                    setTestResult(null);
+                    try {
+                      const response = await fetch('/api/ai/rags/proxy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          url: remoteUrl,
+                          method: urlHttpMethod,
+                          paramsLocation: urlParamsLocation,
+                          contentType: urlContentType,
+                          authType,
+                          authConfig: {
+                            apiKey,
+                            bearerToken,
+                            basicCredentials,
+                          },
+                          oauth2Config: authType === 'oauth2' ? oauth2Config : null,
+                          customHeaders: customHeaders.reduce((acc, h) => {
+                            if (h.key.trim() && h.value.trim()) acc[h.key] = h.value;
+                            return acc;
+                          }, {} as Record<string, string>),
+                          fieldMapping,
+                          query: testQuery,
+                          topN,
+                          generateEmbedding: urlNeedsEmbeddings,
+                          embeddingModel: urlNeedsEmbeddings ? embeddingModel : null,
+                          dimensions: urlNeedsEmbeddings ? currentModelDimensions : null,
+                        }),
+                      });
+                      const data = await response.json();
+                      setTestResult(response.ok ? { success: true, data } : { success: false, error: data.error || 'Request failed' });
+                    } catch (err) {
+                      setTestResult({ success: false, error: err instanceof Error ? err.message : 'Test failed' });
+                    } finally {
+                      setIsTesting(false);
+                    }
+                  }}
+                  disabled={isTesting || !testQuery.trim() || !remoteUrl.trim()}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: isTesting ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.2)',
+                    color: '#f59e0b',
+                    cursor: isTesting || !testQuery.trim() || !remoteUrl.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    opacity: isTesting || !testQuery.trim() || !remoteUrl.trim() ? 0.6 : 1,
+                  }}
+                >
+                  {isTesting ? '⏳ Testing...' : '🚀 Test'}
+                </button>
+              </div>
+              {testResult && (
+                <div style={{
+                  marginTop: '0.75rem',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  background: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${testResult.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                }}>
+                  <p style={{ color: testResult.success ? '#10b981' : '#ef4444', fontSize: '0.8rem', margin: '0 0 0.5rem', fontWeight: 600 }}>
+                    {testResult.success ? '✅ Success' : '❌ Error'}
+                  </p>
+                  <pre style={{
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '0.7rem',
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                  }}>
+                    {testResult.success ? JSON.stringify(testResult.data, null, 2) : testResult.error}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -761,6 +1121,21 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
                 ✨ Embeddings are generated automatically by Upstash Vector for optimal search performance.
               </p>
             </div>
+
+            {/* Server Description for API consumers */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={labelStyle}>📡 Server Description (shown to API consumers)</label>
+              <textarea
+                value={serverDescription}
+                onChange={(e) => setServerDescription(e.target.value)}
+                placeholder="Describe this collection for API consumers. E.g., 'Product documentation for XYZ API. Returns relevant docs for product queries.'"
+                rows={3}
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                This description will be shown when users access your collection endpoint.
+              </p>
+            </div>
           </div>
         )}
 
@@ -773,7 +1148,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
                 <select
                   value={embeddingModel}
                   onChange={(e) => setEmbeddingModel(e.target.value)}
-                  style={inputStyle}
+                  style={selectStyle}
                   disabled={!needsEmbeddings}
                 >
                   {availableEmbeddingModels.map(model => (

@@ -36,6 +36,11 @@ export default async function RAGImportPageRoute() {
   const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
   const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
+  // RAG import requires Pro+ (needs API key)
+  if (!isPro) {
+    redirect('/dashboard?upgrade=rag');
+  }
+
   return <RAGImportPage isPro={isPro} isPlus={isPlus} />;
 }
 

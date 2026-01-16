@@ -81,7 +81,9 @@ interface Persona {
 interface RAG {
   id: string;
   name: string;
+  rag_name?: string; // Normalized name for API endpoint
   description?: string;
+  server_description?: string; // Description shown to API consumers
   icon: string;
   document_count: number;
   total_tokens: number;
@@ -295,6 +297,7 @@ export const DashboardPage: React.FC = () => {
 
   // RAG Knowledge Bases state
   const [rags, setRags] = useState<RAG[]>([]);
+  const [ragInfoModal, setRagInfoModal] = useState<RAG | null>(null); // Modal for showing RAG server description
 
   // Imports state - for the Import APIs card
   const [imports, setImports] = useState<{
@@ -2227,12 +2230,21 @@ export const DashboardPage: React.FC = () => {
                   <span>+</span> A2A Agent
                 </button>
               </Link>
-              {/* RAG - Available for all tiers */}
-              <Link href="/dashboard/rag-import" style={{ textDecoration: 'none' }}>
-                <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  <span>+</span> RAG
-                </button>
-              </Link>
+              {/* RAG - Pro+ only */}
+              {isPro ? (
+                <Link href="/dashboard/rag-import" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <span>+</span> RAG
+                  </button>
+                </Link>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <button style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px dashed rgba(139, 92, 246, 0.2)', background: 'rgba(139, 92, 246, 0.05)', color: 'rgba(139, 92, 246, 0.4)', fontSize: '0.75rem', fontWeight: 600, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', filter: 'blur(0.5px)' }} disabled>
+                    <span>+</span> RAG
+                  </button>
+                  <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', fontSize: '0.55rem', fontWeight: 700, padding: '2px 5px', borderRadius: '4px' }}>PRO</div>
+                </div>
+              )}
             </div>
           </DashboardCard>
         )}
@@ -2640,11 +2652,30 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
-        {/* Knowledge Bases Card - Available for all tiers */}
+        {/* Knowledge Bases Card - Pro+ only */}
         {(
           <DashboardCard title="Knowledge Bases" icon={
             <span style={{ fontSize: '24px' }}>📚</span>
           }>
+            {!isPro ? (
+              <div style={{ position: 'relative' }}>
+                <div style={{ filter: 'blur(2px)', opacity: 0.5, pointerEvents: 'none' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+                    Create knowledge bases to enhance AI with your custom documents and data.
+                  </p>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '2rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '2rem' }}>📚</span>
+                  </div>
+                </div>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: '6px', marginBottom: '0.5rem' }}>PRO+</div>
+                  <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>
+                    Upgrade to Pro to create knowledge bases
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
               Create knowledge bases to enhance AI with your custom documents and data.
             </p>
@@ -2664,7 +2695,9 @@ export const DashboardPage: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
                   {rags.map(rag => {
                     const isCSV = rag.source_type === 'csv';
-                    const collectionUrl = isCSV && apiKey ? `${HOST_URL}/api/collection/${apiKey}` : null;
+                    // Use rag_name if available, otherwise fallback to normalized name
+                    const ragName = rag.rag_name || rag.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                    const collectionUrl = isCSV && apiKey ? `${HOST_URL}/api/collection/${apiKey}/${ragName}` : null;
                     const displayUrl = isCSV ? collectionUrl : rag.source_url;
 
                     return (
@@ -2723,9 +2756,30 @@ export const DashboardPage: React.FC = () => {
                                   cursor: 'pointer',
                                   fontSize: '0.6rem',
                                 }}
+                                title="Copy URL"
                               >
                                 📋
                               </button>
+                              {isCSV && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRagInfoModal(rag);
+                                  }}
+                                  style={{
+                                    background: 'rgba(59, 130, 246, 0.2)',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    padding: '0.2rem 0.35rem',
+                                    color: '#60a5fa',
+                                    cursor: 'pointer',
+                                    fontSize: '0.6rem',
+                                  }}
+                                  title="View API Info"
+                                >
+                                  ℹ️
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2766,6 +2820,8 @@ export const DashboardPage: React.FC = () => {
               </svg>
               Create Knowledge Base
             </Link>
+              </>
+            )}
           </DashboardCard>
         )}
 
@@ -2864,6 +2920,159 @@ export const DashboardPage: React.FC = () => {
               <button onClick={() => setConfirmRevokeAllTokens(null)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#fff', fontSize: '0.85rem', cursor: 'pointer' }}>Cancel</button>
               <button onClick={() => revokeAllOAuthTokens(confirmRevokeAllTokens.providerHash)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: '#ef4444', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Revoke All</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAG Info Modal - Mobile Friendly */}
+      {ragInfoModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+          onClick={() => setRagInfoModal(null)}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '500px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '2rem' }}>{ragInfoModal.icon}</span>
+              <div>
+                <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>{ragInfoModal.name}</h3>
+                <code style={{ color: '#10b981', fontSize: '0.75rem' }}>{ragInfoModal.rag_name}</code>
+              </div>
+            </div>
+
+            {/* Collection URL */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                📡 Collection API Endpoint
+              </label>
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '6px',
+                padding: '0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                flexWrap: 'wrap',
+              }}>
+                <code style={{
+                  color: '#10b981',
+                  fontSize: '0.7rem',
+                  flex: 1,
+                  wordBreak: 'break-all',
+                  minWidth: '200px',
+                }}>
+                  {HOST_URL}/api/collection/{apiKey || '{api_key}'}/{ragInfoModal.rag_name}
+                </code>
+                <button
+                  onClick={() => {
+                    const url = `${HOST_URL}/api/collection/${apiKey || '{api_key}'}/${ragInfoModal.rag_name}`;
+                    navigator.clipboard.writeText(url);
+                  }}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '0.35rem 0.5rem',
+                    color: '#10b981',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+
+            {/* Server Description */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                📝 Server Description
+              </label>
+              <div style={{
+                background: 'rgba(0,0,0,0.2)',
+                borderRadius: '6px',
+                padding: '0.75rem',
+                color: 'rgba(255,255,255,0.8)',
+                fontSize: '0.85rem',
+                lineHeight: 1.5,
+              }}>
+                {ragInfoModal.server_description || ragInfoModal.description || 'No description provided.'}
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+              gap: '0.5rem',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
+                <div style={{ color: '#a78bfa', fontWeight: 600, fontSize: '1rem' }}>{ragInfoModal.document_count}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>Documents</div>
+              </div>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
+                <div style={{ color: '#10b981', fontWeight: 600, fontSize: '1rem' }}>{formatTokenCount(ragInfoModal.total_tokens)}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>Tokens</div>
+              </div>
+            </div>
+
+            {/* Usage Example */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
+                💡 Usage Example
+              </label>
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '6px',
+                padding: '0.75rem',
+                fontFamily: 'monospace',
+                fontSize: '0.7rem',
+                color: '#60a5fa',
+                overflowX: 'auto',
+              }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)' }}># Search the collection</div>
+                <div>curl &quot;{HOST_URL}/api/collection/{apiKey || '{api_key}'}/{ragInfoModal.rag_name}?q=your+query&quot;</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setRagInfoModal(null)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'rgba(139, 92, 246, 0.3)',
+                color: '#a78bfa',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

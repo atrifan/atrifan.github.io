@@ -25,6 +25,11 @@ export default async function RAGDetailPageRoute({ params }: PageProps) {
   const isPlus = has?.({ plan: 'plus' }) || has?.({ feature: 'plus_access' }) || false;
   const isPro = isPlus || has?.({ plan: 'pro' }) || has?.({ feature: 'pro_access' }) || false;
 
+  // RAG requires Pro+ (needs API key)
+  if (!isPro) {
+    redirect('/dashboard?upgrade=rag');
+  }
+
   return <RAGDetailPage ragId={id} isPro={isPro} isPlus={isPlus} />;
 }
 

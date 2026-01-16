@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/src/lib/supabase';
+import { upsertVectors, isUpstashConfigured, VectorMetadata } from '@/src/lib/upstash-vector';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,10 +68,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Content column required' }, { status: 400 });
     }
 
-    // Verify RAG belongs to user
+    // Verify RAG belongs to user and get rag_name
     const { data: rag } = await db
       .from('user_rags')
-      .select('id, chunk_size, chunk_overlap')
+      .select('id, chunk_size, chunk_overlap, rag_name, name')
       .eq('id', ragId)
       .eq('user_id', userId)
       .single();
@@ -78,6 +79,21 @@ export async function POST(request: NextRequest) {
     if (!rag) {
       return NextResponse.json({ error: 'RAG not found' }, { status: 404 });
     }
+
+    // Get user's API key for Upstash metadata
+    const { data: userApiKeyData } = await db
+      .from('user_api_keys')
+      .select('api_key')
+      .eq('user_id', userId)
+      .single();
+
+    if (!userApiKeyData?.api_key) {
+      return NextResponse.json({ error: 'API key not found. Please generate an API key first.' }, { status: 400 });
+    }
+
+    const userApiKey = userApiKeyData.api_key;
+    // Use rag_name if available, otherwise normalize the name
+    const ragName = rag.rag_name || rag.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
     // Parse CSV
     const text = await file.text();
@@ -170,10 +186,42 @@ export async function POST(request: NextRequest) {
       totalTokens += batch.reduce((sum, d) => sum + d.token_count, 0);
     }
 
+    // Upload to Upstash Vector if configured
+    let vectorCount = 0;
+    if (isUpstashConfigured()) {
+      try {
+        // Prepare vectors for Upstash (using text data for hybrid search)
+        const vectors = documents.map((doc, idx) => ({
+          id: `${ragId}-${idx}`,
+          data: doc.content, // Upstash will generate embeddings
+          metadata: {
+            api_key: userApiKey,
+            rag_name: ragName,
+            rag_id: ragId,
+            title: doc.title || undefined,
+            content: doc.content,
+            chunk_index: idx,
+            source: doc.source_identifier,
+          } as VectorMetadata,
+        }));
+
+        // Upsert in batches of 100
+        for (let i = 0; i < vectors.length; i += batchSize) {
+          const batch = vectors.slice(i, i + batchSize);
+          await upsertVectors(batch);
+          vectorCount += batch.length;
+        }
+        console.log(`Uploaded ${vectorCount} vectors to Upstash for RAG ${ragName}`);
+      } catch (upstashError) {
+        console.error('Error uploading to Upstash Vector:', upstashError);
+        // Don't fail the request, just log the error
+      }
+    }
+
     // Update RAG stats
     const { data: currentRag } = await db
       .from('user_rags')
-      .select('document_count, total_tokens')
+      .select('document_count, total_tokens, chunk_count')
       .eq('id', ragId)
       .single();
 
@@ -182,14 +230,16 @@ export async function POST(request: NextRequest) {
       .update({
         document_count: (currentRag?.document_count || 0) + insertedCount,
         total_tokens: (currentRag?.total_tokens || 0) + totalTokens,
+        chunk_count: (currentRag?.chunk_count || 0) + vectorCount,
         updated_at: new Date().toISOString(),
       })
       .eq('id', ragId);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       count: insertedCount,
       totalTokens,
+      vectorCount,
     });
   } catch (error) {
     console.error('Error in documents upload:', error);
