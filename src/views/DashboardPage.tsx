@@ -11,6 +11,7 @@ import { ADS_CONFIG } from '../config/ads.config';
 import { isBillingEnabled } from '../config/billing.config';
 import { isMcpComposerEnabled, getToolCountSeverity, getToolCountColor } from '../config/mcp-composer.config';
 import { LockedSection } from '../components/LockedSection';
+import { FaviconImage } from '../components/FaviconImage';
 // Server data from API
 interface ServerFromApi {
   id: string;
@@ -301,17 +302,20 @@ export const DashboardPage: React.FC = () => {
 
   // Imports state - for the Import APIs card
   const [imports, setImports] = useState<{
-    restApis: { id: string; name: string; title: string; endpointCount: number; sourceUrl?: string }[];
-    graphql: { id: string; name: string; title: string; operationCount: number; sourceUrl?: string }[];
-    mcpServers: { id: string; name: string; displayName: string; toolCount: number; sourceUrl: string }[];
-    a2aAgents: { id: string; name: string; displayName: string; description?: string; iconUrl?: string; agentUrl: string }[];
+    restApis: { id: string; name: string; title: string; endpointCount: number; sourceUrl?: string; authType?: string }[];
+    graphql: { id: string; name: string; title: string; operationCount: number; sourceUrl?: string; authType?: string }[];
+    mcpServers: { id: string; name: string; displayName: string; toolCount: number; sourceUrl: string; authType?: string }[];
+    a2aAgents: { id: string; name: string; displayName: string; iconUrl?: string; agentUrl: string; authType?: string }[];
+    rags: { id: string; name: string; ragName: string; sourceUrl?: string; sourceType: string; authType?: string; toolCount: number; icon?: string }[];
   }>({
     restApis: [],
     graphql: [],
     mcpServers: [],
     a2aAgents: [],
+    rags: [],
   });
   const [importsLoading, setImportsLoading] = useState(true);
+  const [importsFilter, setImportsFilter] = useState<'all' | 'rest' | 'graphql' | 'mcp' | 'a2a' | 'rag'>('all');
 
   // OAuth Connections state
   interface OAuthTokenData {
@@ -573,7 +577,7 @@ export const DashboardPage: React.FC = () => {
     fetchRags();
   }, [user]);
 
-  // Fetch imports (REST APIs, GraphQL, MCP servers, A2A agents) - available for all tiers
+  // Fetch imports (REST APIs, GraphQL, MCP servers, A2A agents, RAGs) - available for all tiers
   useEffect(() => {
     const fetchImports = async () => {
       if (!user) {
@@ -582,31 +586,33 @@ export const DashboardPage: React.FC = () => {
       }
       setImportsLoading(true);
       try {
-        // For free tier, only fetch A2A agents; for Pro/Plus, fetch all
+        // For free tier, only fetch A2A agents; for Pro/Plus, fetch all including RAGs
         const fetchPromises: Promise<Response>[] = [fetch('/api/agents/list')];
         if (isPro) {
           fetchPromises.unshift(
             fetch('/api/swagger/list'),
             fetch('/api/graphql/list'),
-            fetch('/api/mcp-servers/list')
+            fetch('/api/mcp-servers/list'),
+            fetch('/api/ai/rags')
           );
         }
         const responses = await Promise.all(fetchPromises);
 
         // Parse responses based on tier
         if (isPro) {
-          const [restRes, graphqlRes, mcpRes, agentsRes] = responses;
+          const [restRes, graphqlRes, mcpRes, ragsRes, agentsRes] = responses;
 
           if (restRes.ok) {
             const data = await restRes.json();
             setImports(prev => ({
               ...prev,
-              restApis: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; endpoints?: unknown[]; source_url?: string }) => ({
+              restApis: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; endpoints?: unknown[]; source_url?: string; auth_type?: string }) => ({
                 id: s.id,
                 name: s.server_name,
                 title: s.api_title,
                 endpointCount: s.endpoints?.length || 0,
                 sourceUrl: s.source_url,
+                authType: s.auth_type,
               })),
             }));
           }
@@ -615,12 +621,13 @@ export const DashboardPage: React.FC = () => {
             const data = await graphqlRes.json();
             setImports(prev => ({
               ...prev,
-              graphql: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; operations?: unknown[]; source_url?: string }) => ({
+              graphql: (data.specs || []).map((s: { id: string; server_name: string; api_title: string; operations?: unknown[]; source_url?: string; auth_type?: string }) => ({
                 id: s.id,
                 name: s.server_name,
                 title: s.api_title,
                 operationCount: s.operations?.length || 0,
                 sourceUrl: s.source_url,
+                authType: s.auth_type,
               })),
             }));
           }
@@ -631,12 +638,30 @@ export const DashboardPage: React.FC = () => {
             const importedServers = (data.servers || []).filter((s: { source_type: string }) => s.source_type === 'mcp_import');
             setImports(prev => ({
               ...prev,
-              mcpServers: importedServers.map((s: { id: string; server_name: string; display_name: string; toolCount: number; source_url: string }) => ({
+              mcpServers: importedServers.map((s: { id: string; server_name: string; display_name: string; toolCount: number; source_url: string; auth_type?: string }) => ({
                 id: s.id,
                 name: s.server_name,
                 displayName: s.display_name,
                 toolCount: s.toolCount,
                 sourceUrl: s.source_url,
+                authType: s.auth_type,
+              })),
+            }));
+          }
+
+          if (ragsRes.ok) {
+            const data = await ragsRes.json();
+            setImports(prev => ({
+              ...prev,
+              rags: (data.rags || []).map((r: { id: string; name: string; rag_name?: string; source_url?: string; source_type: string; auth_type?: string; icon?: string }) => ({
+                id: r.id,
+                name: r.name,
+                ragName: r.rag_name || r.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''),
+                sourceUrl: r.source_url,
+                sourceType: r.source_type,
+                authType: r.auth_type,
+                toolCount: 1, // Each RAG generates 1 tool
+                icon: r.icon,
               })),
             }));
           }
@@ -645,13 +670,13 @@ export const DashboardPage: React.FC = () => {
             const data = await agentsRes.json();
             setImports(prev => ({
               ...prev,
-              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
+              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; icon_url?: string; agent_url: string; auth_type?: string }) => ({
                 id: a.id,
                 name: a.agent_name,
                 displayName: a.display_name,
-                description: a.description,
                 iconUrl: a.icon_url,
                 agentUrl: a.agent_url,
+                authType: a.auth_type,
               })),
             }));
           }
@@ -662,13 +687,13 @@ export const DashboardPage: React.FC = () => {
             const data = await agentsRes.json();
             setImports(prev => ({
               ...prev,
-              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; description?: string; icon_url?: string; agent_url: string }) => ({
+              a2aAgents: (data.agents || []).map((a: { id: string; agent_name: string; display_name: string; icon_url?: string; agent_url: string; auth_type?: string }) => ({
                 id: a.id,
                 name: a.agent_name,
                 displayName: a.display_name,
-                description: a.description,
                 iconUrl: a.icon_url,
                 agentUrl: a.agent_url,
+                authType: a.auth_type,
               })),
             }));
           }
@@ -2072,97 +2097,235 @@ export const DashboardPage: React.FC = () => {
                 Loading imports...
               </div>
             )}
-            {/* Summary counts */}
+            {/* Summary counts - clickable filter pills */}
             {!importsLoading && (
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                {/* All filter */}
+                <button
+                  onClick={() => setImportsFilter('all')}
+                  style={{
+                    background: importsFilter === 'all' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: importsFilter === 'all' ? '#fff' : 'rgba(255,255,255,0.6)',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    border: importsFilter === 'all' ? '1px solid rgba(255,255,255,0.3)' : '1px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  All
+                </button>
                 {imports.restApis.length > 0 && (
-                  <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                    📄 {imports.restApis.length} REST API{imports.restApis.length !== 1 ? 's' : ''}
-                  </span>
+                  <button
+                    onClick={() => setImportsFilter(importsFilter === 'rest' ? 'all' : 'rest')}
+                    style={{
+                      background: importsFilter === 'rest' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.2)',
+                      color: '#10b981',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      border: importsFilter === 'rest' ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    ☁️ {imports.restApis.length} REST API{imports.restApis.length !== 1 ? 's' : ''}
+                  </button>
                 )}
                 {imports.graphql.length > 0 && (
-                  <span style={{ background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  <button
+                    onClick={() => setImportsFilter(importsFilter === 'graphql' ? 'all' : 'graphql')}
+                    style={{
+                      background: importsFilter === 'graphql' ? 'rgba(102, 126, 234, 0.4)' : 'rgba(102, 126, 234, 0.2)',
+                      color: '#667eea',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      border: importsFilter === 'graphql' ? '1px solid rgba(102, 126, 234, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
                     ◈ {imports.graphql.length} GraphQL
-                  </span>
+                  </button>
                 )}
                 {imports.mcpServers.length > 0 && (
-                  <span style={{ background: 'rgba(251, 146, 60, 0.2)', color: '#fb923c', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  <button
+                    onClick={() => setImportsFilter(importsFilter === 'mcp' ? 'all' : 'mcp')}
+                    style={{
+                      background: importsFilter === 'mcp' ? 'rgba(251, 146, 60, 0.4)' : 'rgba(251, 146, 60, 0.2)',
+                      color: '#fb923c',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      border: importsFilter === 'mcp' ? '1px solid rgba(251, 146, 60, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
                     🔌 {imports.mcpServers.length} MCP Server{imports.mcpServers.length !== 1 ? 's' : ''}
-                  </span>
+                  </button>
                 )}
                 {imports.a2aAgents.length > 0 && (
-                  <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  <button
+                    onClick={() => setImportsFilter(importsFilter === 'a2a' ? 'all' : 'a2a')}
+                    style={{
+                      background: importsFilter === 'a2a' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(245, 158, 11, 0.2)',
+                      color: '#f59e0b',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      border: importsFilter === 'a2a' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
                     🤖 {imports.a2aAgents.length} A2A Agent{imports.a2aAgents.length !== 1 ? 's' : ''}
-                  </span>
+                  </button>
                 )}
-                {rags.length > 0 && (
-                  <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#8b5cf6', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                    📚 {rags.length} RAG{rags.length !== 1 ? 's' : ''}
-                  </span>
+                {imports.rags.length > 0 && (
+                  <button
+                    onClick={() => setImportsFilter(importsFilter === 'rag' ? 'all' : 'rag')}
+                    style={{
+                      background: importsFilter === 'rag' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.2)',
+                      color: '#8b5cf6',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      border: importsFilter === 'rag' ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    📚 {imports.rags.length} RAG{imports.rags.length !== 1 ? 's' : ''}
+                  </button>
                 )}
               </div>
             )}
 
             {/* Imported items list */}
-            {!importsLoading && (imports.restApis.length > 0 || imports.graphql.length > 0 || imports.mcpServers.length > 0 || imports.a2aAgents.length > 0) && (
+            {!importsLoading && (imports.restApis.length > 0 || imports.graphql.length > 0 || imports.mcpServers.length > 0 || imports.a2aAgents.length > 0 || imports.rags.length > 0) && (
               <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.75rem', marginBottom: '1rem', maxHeight: '300px', overflowY: 'auto' }}>
                 {/* REST APIs */}
-                {imports.restApis.map(api => (
+                {(importsFilter === 'all' || importsFilter === 'rest') && imports.restApis.map(api => (
                   <Link key={api.id} href={`/dashboard/rest-api/${api.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: '1rem' }}>📄</span>
+                      <FaviconImage baseUrl={api.sourceUrl} alt={api.title || api.name} size={20} borderRadius={4} fallbackEmoji="☁️" fallbackBgColor="rgba(16, 185, 129, 0.2)" />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{api.title || api.name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{api.endpointCount} endpoints</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{api.title || api.name}</span>
+                          <span style={{ color: '#10b981', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>REST</span>
+                          {api.authType && api.authType !== 'none' && (
+                            <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{api.authType.toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
+                          {api.sourceUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{api.sourceUrl}</span>}
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• {api.endpointCount} tools</span>
+                        </div>
                       </div>
-                      <span style={{ color: '#10b981', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>REST</span>
                     </div>
                   </Link>
                 ))}
                 {/* GraphQL */}
-                {imports.graphql.map(gql => (
+                {(importsFilter === 'all' || importsFilter === 'graphql') && imports.graphql.map(gql => (
                   <Link key={gql.id} href={`/dashboard/graphql/${gql.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: '1rem' }}>◈</span>
+                      <FaviconImage baseUrl={gql.sourceUrl} alt={gql.title || gql.name} size={20} borderRadius={4} fallbackEmoji="◈" fallbackBgColor="rgba(102, 126, 234, 0.2)" />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{gql.title || gql.name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{gql.operationCount} operations</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{gql.title || gql.name}</span>
+                          <span style={{ color: '#667eea', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(102, 126, 234, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>GraphQL</span>
+                          {gql.authType && gql.authType !== 'none' && (
+                            <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{gql.authType.toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
+                          {gql.sourceUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{gql.sourceUrl}</span>}
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• {gql.operationCount} tools</span>
+                        </div>
                       </div>
-                      <span style={{ color: '#667eea', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(102, 126, 234, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>GraphQL</span>
                     </div>
                   </Link>
                 ))}
                 {/* MCP Servers */}
-                {imports.mcpServers.map(mcp => (
+                {(importsFilter === 'all' || importsFilter === 'mcp') && imports.mcpServers.map(mcp => (
                   <Link key={mcp.id} href={`/dashboard/mcp-server/${mcp.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: '1rem' }}>🔌</span>
+                      <FaviconImage baseUrl={mcp.sourceUrl} alt={mcp.displayName || mcp.name} size={20} borderRadius={4} fallbackEmoji="🔌" fallbackBgColor="rgba(251, 146, 60, 0.2)" />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mcp.displayName || mcp.name}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{mcp.toolCount} tools</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mcp.displayName || mcp.name}</span>
+                          <span style={{ color: '#fb923c', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(251, 146, 60, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>MCP</span>
+                          {mcp.authType && mcp.authType !== 'none' && (
+                            <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{mcp.authType.toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
+                          {mcp.sourceUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{mcp.sourceUrl}</span>}
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• {mcp.toolCount} tools</span>
+                        </div>
                       </div>
-                      <span style={{ color: '#fb923c', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(251, 146, 60, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>MCP</span>
                     </div>
                   </Link>
                 ))}
                 {/* A2A Agents */}
-                {imports.a2aAgents.map(agent => (
+                {(importsFilter === 'all' || importsFilter === 'a2a') && imports.a2aAgents.map(agent => (
                   <Link key={agent.id} href={`/dashboard/a2a-agent/${agent.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: '1rem' }}>{agent.iconUrl ? <img src={agent.iconUrl} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} /> : '🤖'}</span>
+                      <FaviconImage iconUrl={agent.iconUrl} baseUrl={agent.agentUrl} alt={agent.displayName || agent.name} size={20} borderRadius={4} fallbackEmoji="🤖" fallbackBgColor="rgba(245, 158, 11, 0.2)" />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.displayName || agent.name}</div>
-                        {agent.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.description}</div>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{agent.displayName || agent.name}</span>
+                          <span style={{ color: '#f59e0b', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(245, 158, 11, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>A2A</span>
+                          {agent.authType && agent.authType !== 'none' && (
+                            <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{agent.authType.toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{agent.agentUrl}</span>
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• 1 tool</span>
+                        </div>
                       </div>
-                      <span style={{ color: '#f59e0b', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(245, 158, 11, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>A2A</span>
+                    </div>
+                  </Link>
+                ))}
+                {/* RAGs */}
+                {(importsFilter === 'all' || importsFilter === 'rag') && imports.rags.map(rag => (
+                  <Link key={rag.id} href={`/dashboard/rag/${rag.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ width: 20, height: 20, borderRadius: 4, background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>{rag.icon || '📚'}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rag.name}</span>
+                          <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>RAG</span>
+                          <span style={{ color: rag.sourceType === 'csv' ? '#10b981' : '#3b82f6', fontSize: '0.55rem', fontWeight: 600, background: rag.sourceType === 'csv' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{rag.sourceType === 'csv' ? 'CSV' : 'URL'}</span>
+                          {rag.authType && rag.authType !== 'none' && (
+                            <span style={{ color: '#8b5cf6', fontSize: '0.55rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.2)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{rag.authType.toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
+                          {rag.sourceUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{rag.sourceUrl}</span>}
+                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• {rag.toolCount} tool{rag.toolCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
                     </div>
                   </Link>
                 ))}
@@ -2170,7 +2333,7 @@ export const DashboardPage: React.FC = () => {
             )}
 
             {/* Empty state */}
-            {!importsLoading && imports.restApis.length === 0 && imports.graphql.length === 0 && imports.mcpServers.length === 0 && imports.a2aAgents.length === 0 && rags.length === 0 && (
+            {!importsLoading && imports.restApis.length === 0 && imports.graphql.length === 0 && imports.mcpServers.length === 0 && imports.a2aAgents.length === 0 && imports.rags.length === 0 && (
               <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px', marginBottom: '1rem' }}>
                 <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>📥</span>
                 No APIs or agents imported yet
@@ -2649,179 +2812,6 @@ export const DashboardPage: React.FC = () => {
               </svg>
               Create Persona
             </button>
-          </DashboardCard>
-        )}
-
-        {/* Knowledge Bases Card - Pro+ only */}
-        {(
-          <DashboardCard title="Knowledge Bases" icon={
-            <span style={{ fontSize: '24px' }}>📚</span>
-          }>
-            {!isPro ? (
-              <div style={{ position: 'relative' }}>
-                <div style={{ filter: 'blur(2px)', opacity: 0.5, pointerEvents: 'none' }}>
-                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-                    Create knowledge bases to enhance AI with your custom documents and data.
-                  </p>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '2rem', textAlign: 'center' }}>
-                    <span style={{ fontSize: '2rem' }}>📚</span>
-                  </div>
-                </div>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: '6px', marginBottom: '0.5rem' }}>PRO+</div>
-                  <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>
-                    Upgrade to Pro to create knowledge bases
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-              Create knowledge bases to enhance AI with your custom documents and data.
-            </p>
-
-            {/* RAGs List */}
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Your Knowledge Bases</span>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>{rags.length} total</span>
-              </div>
-              {rags.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-                  <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>📚</span>
-                  No knowledge bases created yet
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                  {rags.map(rag => {
-                    const isCSV = rag.source_type === 'csv';
-                    // Use rag_name if available, otherwise fallback to normalized name
-                    const ragName = rag.rag_name || rag.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                    const collectionUrl = isCSV && apiKey ? `${HOST_URL}/api/collection/${apiKey}/${ragName}` : null;
-                    const displayUrl = isCSV ? collectionUrl : rag.source_url;
-
-                    return (
-                      <div key={rag.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <span style={{ fontSize: '1.5rem' }}>{rag.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{rag.name}</span>
-                            <span style={{
-                              fontSize: '0.6rem',
-                              fontWeight: 600,
-                              padding: '0.15rem 0.4rem',
-                              borderRadius: '4px',
-                              background: isCSV ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                              color: isCSV ? '#10b981' : '#3b82f6',
-                              border: `1px solid ${isCSV ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                            }}>
-                              {isCSV ? '📄 CSV' : '🌐 URL'}
-                            </span>
-                          </div>
-                          {rag.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rag.description}</div>}
-                          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                            {rag.document_count} docs • {formatTokenCount(rag.total_tokens)} tokens
-                          </div>
-                          {displayUrl && (
-                            <div style={{
-                              marginTop: '0.35rem',
-                              padding: '0.35rem 0.5rem',
-                              background: 'rgba(0,0,0,0.3)',
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                            }}>
-                              <code style={{
-                                color: isCSV ? '#10b981' : '#60a5fa',
-                                fontSize: '0.6rem',
-                                flex: 1,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                {displayUrl}
-                              </code>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(displayUrl);
-                                }}
-                                style={{
-                                  background: 'rgba(255,255,255,0.1)',
-                                  border: 'none',
-                                  borderRadius: '3px',
-                                  padding: '0.2rem 0.35rem',
-                                  color: 'rgba(255,255,255,0.6)',
-                                  cursor: 'pointer',
-                                  fontSize: '0.6rem',
-                                }}
-                                title="Copy URL"
-                              >
-                                📋
-                              </button>
-                              {isCSV && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRagInfoModal(rag);
-                                  }}
-                                  style={{
-                                    background: 'rgba(59, 130, 246, 0.2)',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    padding: '0.2rem 0.35rem',
-                                    color: '#60a5fa',
-                                    cursor: 'pointer',
-                                    fontSize: '0.6rem',
-                                  }}
-                                  title="View API Info"
-                                >
-                                  ℹ️
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          <Link href={`/dashboard/rag/${rag.id}`} style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.7rem', textDecoration: 'none' }}>View</Link>
-                          <button onClick={() => deleteRag(rag.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Create Knowledge Base Button */}
-            <Link
-              href="/dashboard/rag-import"
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                padding: '0.75rem 1rem',
-                borderRadius: '10px',
-                border: '2px dashed rgba(139, 92, 246, 0.4)',
-                background: 'rgba(139, 92, 246, 0.1)',
-                color: '#a78bfa',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                textDecoration: 'none',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Create Knowledge Base
-            </Link>
-              </>
-            )}
           </DashboardCard>
         )}
 

@@ -403,6 +403,21 @@ export const TOOLS: ToolConfig[] = [
     available: true,
     isPro: true,
   },
+  {
+    id: 'rag-explorer',
+    name: 'EXPLORER',
+    descriptiveName: 'RAG Explorer',
+    shortDescription: 'Explore your knowledge bases with AI-powered semantic search.',
+    seoTitle: 'RAG Explorer – AI Knowledge Base Search | Tulzo',
+    seoDescription: 'Explore your knowledge bases using AI-powered semantic search. Navigate through documents and find relevant content instantly.',
+    icon: '🔮',
+    path: '/rag-explorer',
+    color: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)',
+    category: 'ai',
+    available: true,
+    isPro: true,
+  },
 ];
 
 export const getToolByPath = (path: string): ToolConfig | undefined => {

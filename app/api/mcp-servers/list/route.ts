@@ -27,6 +27,7 @@ export async function GET() {
       display_name: string;
       source_url: string;
       source_type: 'native' | 'api_key' | 'mcp_import';
+      auth_type?: string;
       toolCount: number;
       category?: string;
       environment_name?: string;
@@ -62,6 +63,7 @@ export async function GET() {
         server_name,
         display_name,
         source_url,
+        auth_type,
         category,
         environment_name,
         created_at
@@ -73,7 +75,7 @@ export async function GET() {
       console.error('Error fetching MCP servers:', error);
     } else if (mcpServers) {
       // Get tool counts for each MCP server
-      for (const server of mcpServers as Array<{ id: string; server_name: string; display_name: string; source_url: string; category?: string; environment_name?: string; created_at: string }>) {
+      for (const server of mcpServers as Array<{ id: string; server_name: string; display_name: string; source_url: string; auth_type?: string; category?: string; environment_name?: string; created_at: string }>) {
         const { count } = await supabase
           .from('mcp_server_tools')
           .select('*', { count: 'exact', head: true })
@@ -85,6 +87,7 @@ export async function GET() {
           display_name: server.display_name,
           source_url: server.source_url,
           source_type: 'mcp_import',
+          auth_type: server.auth_type,
           toolCount: count || 0,
           category: server.category,
           environment_name: server.environment_name,

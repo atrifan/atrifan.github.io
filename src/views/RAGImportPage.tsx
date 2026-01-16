@@ -17,6 +17,7 @@ import {
   formatCurrency,
   LOCAL_EMBEDDING_MODEL,
 } from '../config/ai-tokens.config';
+import { generateRAGSwagger } from '../lib/rag-swagger-generator';
 
 interface RAGImportPageProps {
   isPro: boolean;
@@ -117,6 +118,11 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const [topN, setTopN] = useState(5); // Number of top results to retrieve
   const [contentType, setContentType] = useState<'text' | 'code' | 'mixed'>('text');
   const [serverDescription, setServerDescription] = useState(''); // Description shown to API consumers
+  const [environmentName, setEnvironmentName] = useState('default'); // Environment for tool naming
+
+  // Swagger preview state
+  const [showSwaggerPreview, setShowSwaggerPreview] = useState(false);
+  const [generatedSwagger, setGeneratedSwagger] = useState<object | null>(null);
 
   // Get current model's dimensions
   const currentModelDimensions = useMemo(() => {
@@ -361,7 +367,8 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
         chunkSize,
         chunkOverlap,
         topN,
-        serverDescription: sourceType === 'csv' ? serverDescription.trim() || null : null,
+        serverDescription: serverDescription.trim() || null,
+        environmentName: environmentName.trim() || 'default',
         // URL RAG request configuration
         ...(sourceType === 'url' ? {
           httpMethod: urlHttpMethod,
@@ -375,6 +382,23 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
             model: fieldMapping.model || 'model',
           },
         } : {}),
+        // Generate swagger spec
+        swaggerSpec: generateRAGSwagger({
+          ragName: normalizeName(name.trim()),
+          displayName: name.trim(),
+          description: description.trim(),
+          serverDescription: serverDescription.trim(),
+          sourceType,
+          embeddingModel: sourceType === 'csv' ? 'upstash-bge-base-en-v1.5' : (needsEmbeddings ? embeddingModel : undefined),
+          embeddingDimensions: sourceType === 'csv' ? 768 : (needsEmbeddings ? currentModelDimensions : undefined),
+          topN,
+          sourceUrl: sourceType === 'url' ? remoteUrl : undefined,
+          httpMethod: urlHttpMethod,
+          paramsLocation: urlParamsLocation,
+          requestContentType: urlContentType,
+          fieldMapping,
+          hostUrl: HOST_URL,
+        }),
       };
 
       // Add OAuth2 config if applicable
@@ -565,6 +589,21 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
             rows={3}
             style={{ ...inputStyle, resize: 'vertical' }}
           />
+        </div>
+
+        {/* Environment Name */}
+        <div style={{ marginTop: '1rem' }}>
+          <label style={labelStyle}>Environment Name</label>
+          <input
+            type="text"
+            value={environmentName}
+            onChange={(e) => setEnvironmentName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'))}
+            placeholder="default"
+            style={inputStyle}
+          />
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+            Tool name pattern: <code style={{ color: '#10b981' }}>rag_{environmentName || 'default'}-{normalizedName || 'name'}-search</code>
+          </p>
         </div>
       </div>
     );
@@ -1260,6 +1299,46 @@ ${urlContentType === 'application/json' ? JSON.stringify({
             </p>
           </div>
         </div>
+
+        {/* Swagger Preview Button */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <button
+            onClick={() => {
+              const swagger = generateRAGSwagger({
+                ragName: normalizeName(name),
+                displayName: name,
+                description,
+                serverDescription,
+                sourceType,
+                embeddingModel,
+                embeddingDimensions: currentModelDimensions,
+                topN,
+                sourceUrl: remoteUrl,
+                httpMethod: urlHttpMethod,
+                paramsLocation: urlParamsLocation,
+                requestContentType: urlContentType,
+                fieldMapping,
+                hostUrl: HOST_URL,
+              });
+              setGeneratedSwagger(swagger);
+              setShowSwaggerPreview(true);
+            }}
+            style={{
+              ...buttonStyle,
+              background: 'rgba(16, 185, 129, 0.2)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              color: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            📄 Preview Swagger Spec
+          </button>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.5rem' }}>
+            View the OpenAPI specification that will be generated for this knowledge base
+          </p>
+        </div>
       </div>
     );
   };
@@ -1342,6 +1421,78 @@ ${urlContentType === 'application/json' ? JSON.stringify({
         <AdBanner slot={ADS_CONFIG.slots.homeTop} style={{ marginTop: '2rem' }} />
         <Footer />
       </div>
+
+      {/* Swagger Preview Modal */}
+      {showSwaggerPreview && generatedSwagger && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => setShowSwaggerPreview(false)}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              maxWidth: '800px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>📄 OpenAPI Specification Preview</h3>
+              <button
+                onClick={() => setShowSwaggerPreview(false)}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '1.5rem' }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <button
+                onClick={() => navigator.clipboard.writeText(JSON.stringify(generatedSwagger, null, 2))}
+                style={{
+                  ...buttonStyle,
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#10b981',
+                  fontSize: '0.8rem',
+                  padding: '0.5rem 1rem',
+                }}
+              >
+                📋 Copy JSON
+              </button>
+            </div>
+            <pre
+              style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '8px',
+                padding: '1rem',
+                overflow: 'auto',
+                maxHeight: '60vh',
+                fontSize: '0.75rem',
+                color: '#10b981',
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {JSON.stringify(generatedSwagger, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

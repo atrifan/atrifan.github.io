@@ -46,6 +46,7 @@ interface RestApiSpec {
   updated_at: string;
   source_url?: string;
   import_method?: 'paste' | 'url';
+  auth_type?: string;
   endpoint_count?: number;
   endpoints?: RestApiEndpoint[];
   environments?: RestApiEnvironment[];
@@ -62,7 +63,7 @@ export async function GET() {
     // Fetch all specs for this user
     const { data: specs, error } = await supabase
       .from('rest_api_specs')
-      .select('id, server_name, api_title, api_description, api_version, openapi_version, created_at, updated_at, source_url, import_method')
+      .select('id, server_name, api_title, api_description, api_version, openapi_version, created_at, updated_at, source_url, import_method, auth_type')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 

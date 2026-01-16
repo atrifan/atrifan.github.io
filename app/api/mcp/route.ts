@@ -18,6 +18,7 @@ import {
   getToolByName,
   getMCPServerToolDetails,
   getA2AAgentByToolName,
+  getRAGByToolName,
 } from '@/src/lib/supabase-services';
 import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
@@ -848,6 +849,101 @@ async function executeToolAsync(
     } catch (error) {
       console.error('A2A agent call failed:', error);
       throw new Error(`A2A agent call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Handle RAG tools
+  if (dbTool.tool_type === 'RAG') {
+    const rag = await getRAGByToolName(name);
+    if (!rag) {
+      throw new Error(`RAG not found for tool: ${name}`);
+    }
+
+    try {
+      const query = (args.query as string) || '';
+      const topN = (args.top_n as number) || rag.top_n || 5;
+
+      if (rag.source_type === 'csv') {
+        // For CSV RAGs, call our collection API directly
+        // We need the user's API key to call the collection endpoint
+        const apiKey = context?.apiKey;
+        if (!apiKey) {
+          throw new Error('API key required for RAG search');
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'https://tulzo.com'}/api/collection/${apiKey}/${rag.rag_name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, top_n: topN }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error((errData as { error?: string }).error || `RAG search failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return {
+          result: data,
+          isRestTool: false,
+          toolInfo: {
+            hasWidget: false,
+            invokingMessage: dbTool.invoking_message || `Searching ${rag.name}...`,
+            invokedMessage: dbTool.invoked_message || 'Search complete',
+          },
+        };
+      } else {
+        // For URL RAGs, we need to:
+        // 1. Generate embeddings if the remote endpoint expects them
+        // 2. Call the remote endpoint with the query/embeddings
+
+        // Build request based on field mapping
+        const fieldMapping = rag.field_mapping || { query: 'query', top_n: 'top_n' };
+        const requestBody: Record<string, unknown> = {
+          [fieldMapping.query || 'query']: query,
+          [fieldMapping.top_n || 'top_n']: topN,
+        };
+
+        // If embedding model is specified, we need to generate embeddings first
+        if (rag.embedding_model && fieldMapping.embedding) {
+          // TODO: Call embedding API to generate embeddings
+          // For now, we'll pass the query and let the remote handle it
+          // This would be enhanced to call the embedding model first
+        }
+
+        // Make the request to the remote URL
+        const method = rag.http_method || 'POST';
+        const contentType = rag.request_content_type || 'application/json';
+
+        const fetchOptions: RequestInit = {
+          method,
+          headers: { 'Content-Type': contentType },
+        };
+
+        if (method !== 'GET') {
+          fetchOptions.body = JSON.stringify(requestBody);
+        }
+
+        const response = await fetch(rag.remote_url!, fetchOptions);
+
+        if (!response.ok) {
+          throw new Error(`Remote RAG search failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return {
+          result: data,
+          isRestTool: false,
+          toolInfo: {
+            hasWidget: false,
+            invokingMessage: dbTool.invoking_message || `Searching ${rag.name}...`,
+            invokedMessage: dbTool.invoked_message || 'Search complete',
+          },
+        };
+      }
+    } catch (error) {
+      console.error('RAG search failed:', error);
+      throw new Error(`RAG search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

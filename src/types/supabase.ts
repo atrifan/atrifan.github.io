@@ -172,7 +172,7 @@ export interface McpConnectionUpdate {
 export type ToolCategory = 'Health & Fitness' | 'Finance' | 'Date & Time' | 'Fun & Games' | 'Utilities' | 'Astronomy';
 
 /** Tool types - matches TOOL_TYPES in tools-definitions.ts */
-export type ToolType = 'NATIVE' | 'MCP' | 'REST' | 'GQL' | 'A2A';
+export type ToolType = 'NATIVE' | 'MCP' | 'REST' | 'GQL' | 'A2A' | 'RAG';
 
 /**
  * Tool definition record in Supabase
@@ -414,6 +414,8 @@ export interface RestApiSpecRow {
   raw_spec: string | null;
   /** Import method: paste or url */
   import_method: 'paste' | 'url' | null;
+  /** Favicon URL fetched from source */
+  favicon_url: string | null;
   /** When the spec was created */
   created_at: string;
   /** When the spec was last updated */
@@ -438,6 +440,7 @@ export interface RestApiSpecInsert {
   source_url?: string;
   raw_spec?: string;
   import_method?: 'paste' | 'url';
+  favicon_url?: string;
 }
 
 /**

@@ -41,6 +41,7 @@ interface GraphQLSpec {
   api_title: string | null;
   api_description: string | null;
   source_url: string;
+  auth_type?: string;
   created_at: string;
   updated_at: string;
   operation_count?: number;
@@ -59,7 +60,7 @@ export async function GET() {
     // Fetch all GraphQL specs for this user
     const { data: specs, error } = await supabase
       .from('graphql_specs')
-      .select('id, server_name, api_title, api_description, source_url, created_at, updated_at')
+      .select('id, server_name, api_title, api_description, source_url, auth_type, created_at, updated_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 

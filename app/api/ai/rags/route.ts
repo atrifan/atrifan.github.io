@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/src/lib/supabase';
+import type { ToolInsert, ToolCategory } from '@/src/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
+
+// Normalize name helper
+const normalizeName = (name: string): string => {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+};
+
+// Generate RAG tool name: rag_{env}-{rag_name}-search
+function generateRAGToolName(envName: string, ragName: string): string {
+  const normalizedEnv = normalizeName(envName);
+  const normalizedRag = normalizeName(ragName);
+  return `rag_${normalizedEnv}-${normalizedRag}-search`;
+}
 
 // GET - List user's RAGs and active ones
 // Query param: context=chat|automation (default: chat)
@@ -95,6 +108,9 @@ export async function POST(request: NextRequest) {
       paramsLocation,
       requestContentType,
       fieldMapping,
+      // Environment and swagger
+      environmentName,
+      swaggerSpec,
     } = body;
 
     if (!name) {
@@ -146,6 +162,9 @@ export async function POST(request: NextRequest) {
         params_location: paramsLocation || 'body',
         request_content_type: requestContentType || 'application/json',
         field_mapping: fieldMapping || { query: 'query', embedding: 'embedding', top_n: 'top_n', dimensions: 'dimensions', model: 'model' },
+        // Environment and swagger
+        environment_name: environmentName || 'default',
+        swagger_spec: swaggerSpec || null,
       })
       .select()
       .single();
@@ -158,7 +177,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create RAG' }, { status: 500 });
     }
 
-    return NextResponse.json({ rag: data });
+    // Create tool for the RAG
+    const toolName = generateRAGToolName(environmentName || 'default', normalizedRagName);
+    const toolCategory: ToolCategory = 'Utilities';
+
+    const toolInsert: ToolInsert = {
+      name: toolName,
+      description: description?.trim() || `Search ${name} knowledge base`,
+      category: toolCategory,
+      categories: ['RAG', 'Search'],
+      tool_type: 'RAG',
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query text',
+          },
+          top_n: {
+            type: 'integer',
+            description: 'Number of results to return',
+            default: topN || 5,
+          },
+        },
+        required: ['query'],
+      },
+      output_schema: {
+        type: 'object',
+        properties: {
+          results: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                content: { type: 'string' },
+                score: { type: 'number' },
+                metadata: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+      has_widget: false,
+      invoking_message: `Searching ${name}...`,
+      invoked_message: 'Search complete',
+      user_id: userId,
+    };
+
+    const { data: toolData, error: toolError } = await db
+      .from('tools')
+      .upsert(toolInsert as never, { onConflict: 'name' })
+      .select()
+      .single();
+
+    if (toolError) {
+      console.error('Error creating RAG tool:', toolError);
+      // Don't fail the RAG creation, just log the error
+    }
+
+    return NextResponse.json({
+      rag: data,
+      tool: toolData || null,
+      toolName: toolData ? toolName : null,
+    });
   } catch (error) {
     console.error('Error in RAGs POST:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

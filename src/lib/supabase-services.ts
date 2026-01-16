@@ -246,6 +246,45 @@ export async function getToolByName(name: string): Promise<ToolRow | null> {
 }
 
 /**
+ * Get RAG by tool name (rag_{env}-{name}-search pattern)
+ */
+export async function getRAGByToolName(toolName: string): Promise<{
+  id: string;
+  name: string;
+  rag_name: string;
+  source_type: 'csv' | 'url';
+  embedding_model: string | null;
+  embedding_dimensions: number;
+  top_n: number;
+  remote_url: string | null;
+  http_method: string;
+  params_location: string;
+  request_content_type: string;
+  field_mapping: Record<string, string> | null;
+  user_id: string;
+} | null> {
+  // Parse tool name: rag_{env}-{name}-search
+  const match = toolName.match(/^rag_([a-z0-9-]+)-(.+)-search$/);
+  if (!match) return null;
+
+  const [, envName, ragName] = match;
+
+  const { data, error } = await supabase
+    .from('user_rags')
+    .select('id, name, rag_name, source_type, embedding_model, embedding_dimensions, top_n, remote_url, http_method, params_location, request_content_type, field_mapping, user_id')
+    .eq('rag_name', ragName)
+    .eq('environment_name', envName)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching RAG by tool name:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
  * Get tool by ID
  */
 export async function getToolById(id: string): Promise<ToolRow | null> {

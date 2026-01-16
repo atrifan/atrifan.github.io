@@ -39,6 +39,7 @@ export const TOOL_TYPES = {
   REST: 'REST',       // REST API endpoint
   GQL: 'GQL',         // GraphQL endpoint
   A2A: 'A2A',         // Agent-to-Agent protocol
+  RAG: 'RAG',         // RAG knowledge base search
 } as const;
 
 export type ToolType = typeof TOOL_TYPES[keyof typeof TOOL_TYPES];

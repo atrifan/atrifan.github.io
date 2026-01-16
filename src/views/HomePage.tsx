@@ -105,6 +105,20 @@ export class HomePage extends Component<{}, HomePageState> {
       eclipse: <EclipseIcon size={size} />,
       chat: <ChatIcon size={size} />,
       automation: <AutomationIcon size={size} />,
+      'rag-explorer': (
+        <div style={{
+          width: size,
+          height: size,
+          borderRadius: size * 0.2,
+          background: 'rgba(139, 92, 246, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
+        }}>
+          <span style={{ fontSize: size * 0.55 }}>🔮</span>
+        </div>
+      ),
     };
     return iconMap[toolId] || <span className="big-icon">🔧</span>;
   };

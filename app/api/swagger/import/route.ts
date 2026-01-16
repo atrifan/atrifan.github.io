@@ -34,6 +34,46 @@ interface ImportRequest {
   defaultHeaders?: Record<string, string>;
   authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   oauth2Config?: OAuth2ConfigInput;
+  faviconUrl?: string; // Optional favicon URL
+}
+
+/**
+ * Try to fetch favicon from a URL
+ */
+async function tryFetchFavicon(baseUrl: string): Promise<string | null> {
+  if (!baseUrl) return null;
+
+  try {
+    const url = new URL(baseUrl);
+    const origin = url.origin;
+
+    // Try common favicon paths
+    const faviconPaths = [
+      '/favicon.svg',
+      '/favicon.ico',
+      '/favicon.png',
+      '/apple-touch-icon.png',
+    ];
+
+    for (const path of faviconPaths) {
+      try {
+        const response = await fetch(`${origin}${path}`, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(3000),
+        });
+
+        if (response.ok) {
+          return `${origin}${path}`;
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -85,6 +125,12 @@ export async function POST(request: NextRequest) {
       authConfig.registration_endpoint = oauth2Config.registrationEndpoint;
     }
 
+    // Try to fetch favicon if importing from URL
+    let faviconUrl = body.faviconUrl;
+    if (!faviconUrl && sourceUrl && importMethod === 'url') {
+      faviconUrl = await tryFetchFavicon(sourceUrl) || undefined;
+    }
+
     // 1. Create or update REST API spec
     const specInsert: RestApiSpecInsert = {
       user_id: userId,
@@ -101,6 +147,7 @@ export async function POST(request: NextRequest) {
       source_url: sourceUrl,
       raw_spec: rawSpec,
       import_method: importMethod || 'paste',
+      favicon_url: faviconUrl,
     };
     
     const { data: specData, error: specError } = await supabase

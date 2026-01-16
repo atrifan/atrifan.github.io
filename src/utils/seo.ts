@@ -195,6 +195,13 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     ogTitle: 'Tulzo AI Automation - Build Workflows with Natural Language',
     ogDescription: 'Describe your automation in plain English. AI suggests tools and builds your workflow automatically.',
   },
+  ragExplorer: {
+    title: 'RAG Explorer – AI Knowledge Base Search | Tulzo',
+    description: 'Explore your knowledge bases using AI-powered semantic search. Navigate through documents and find relevant content instantly with embedding-based similarity matching.',
+    keywords: ['RAG explorer', 'knowledge base search', 'semantic search', 'document search', 'AI search', 'embedding search', 'vector search', 'content similarity', 'document explorer'],
+    ogTitle: 'Tulzo RAG Explorer - AI-Powered Knowledge Base Search',
+    ogDescription: 'Explore your knowledge bases with AI-powered semantic search. Navigate and find relevant content instantly.',
+  },
 };
 
 /**
