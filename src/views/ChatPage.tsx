@@ -17,7 +17,8 @@ import { OAuthAuthenticationModal, OAuthSuccessData } from '../components/OAuthA
 import { ADS_CONFIG } from '../config/ads.config';
 import type { OAuth2AuthConfig, OAuthServerType } from '../types/supabase';
 import { applySEO } from '../utils/seo';
-import { sendA2AMessage } from '../lib/a2a-client';
+import { sendA2AMessage, sendA2AMessageStream, A2AReasoningEvent } from '../lib/a2a-client';
+import { ReasoningBubbleList, ReasoningEvent } from '../components/ReasoningBubble';
 import {
   AI_MODELS,
   TOKEN_QUOTAS,
@@ -44,6 +45,7 @@ interface ChatMessage {
   timestamp: Date;
   model?: string;
   tokens?: { input: number; output: number };
+  reasoningEvents?: ReasoningEvent[]; // Reasoning events from A2A streaming
 }
 
 interface Conversation {
@@ -354,6 +356,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
   // Track which user messages are expanded (for collapsible long messages)
   const [expandedUserMessages, setExpandedUserMessages] = useState<Set<string>>(new Set());
+
+  // Streaming state for A2A agents
+  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [streamingReasoningEvents, setStreamingReasoningEvents] = useState<ReasoningEvent[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
@@ -1210,7 +1217,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           .map(id => personalities.find(p => p.id === id)?.system_prompt)
           .filter((prompt): prompt is string => !!prompt);
 
-        const a2aResponse = await sendA2AMessage(
+        // Reset streaming state
+        setStreamingContent('');
+        setStreamingReasoningEvents([]);
+        setIsStreaming(true);
+
+        // Collect reasoning events during streaming
+        const collectedReasoningEvents: ReasoningEvent[] = [];
+        let accumulatedContent = '';
+
+        // Use streaming API for A2A agents
+        const a2aResponse = await sendA2AMessageStream(
           {
             agentUrl: selectedAgentConnector.external_url || '',
             agentId: selectedAgentConnector.id,
@@ -1218,21 +1235,45 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             authConfig: selectedAgentConnector.external_auth_config,
             headers: selectedAgentConnector.external_headers,
             systemPrompts: activeSystemPrompts.length > 0 ? activeSystemPrompts : undefined,
-            contextId: a2aContextId || undefined, // Pass existing context ID for conversation continuity
-            signal: abortController.signal, // Pass abort signal for cancellation
+            contextId: a2aContextId || undefined,
+            signal: abortController.signal,
           },
-          a2aMessages
+          a2aMessages,
+          {
+            onReasoning: (event: A2AReasoningEvent) => {
+              const reasoningEvent: ReasoningEvent = {
+                id: event.id,
+                reasoningType: event.reasoningType,
+                title: event.title,
+                text: event.text,
+                timestamp: event.timestamp,
+              };
+              collectedReasoningEvents.push(reasoningEvent);
+              setStreamingReasoningEvents(prev => [...prev, reasoningEvent]);
+            },
+            onContent: (text: string, append: boolean) => {
+              if (append) {
+                accumulatedContent += text;
+              } else {
+                accumulatedContent = text;
+              }
+              setStreamingContent(accumulatedContent);
+            },
+            onError: (error: string) => {
+              console.error('[A2A Stream] Error:', error);
+            },
+          }
         );
+
+        setIsStreaming(false);
 
         // Check if OAuth authentication is needed
         if (!a2aResponse.success && a2aResponse.needsOAuth && a2aResponse.oauthServerId) {
           console.log('[A2A] OAuth authentication required, serverId:', a2aResponse.oauthServerId);
 
-          // Use OAuth config from response (server fetches it from DB) or fall back to connector config
           const serverOAuthConfig = a2aResponse.oauthConfig;
           const connectorAuthConfig = selectedAgentConnector.external_auth_config;
 
-          // Prefer server-provided config as it's fetched from the authoritative source
           const authEndpoint = serverOAuthConfig?.authorization_endpoint || connectorAuthConfig?.authorization_endpoint;
           const tokenEndpoint = serverOAuthConfig?.token_endpoint || connectorAuthConfig?.token_endpoint;
           const clientId = serverOAuthConfig?.client_id || connectorAuthConfig?.client_id;
@@ -1240,13 +1281,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           const useDcr = serverOAuthConfig?.use_dcr || (connectorAuthConfig?.use_dcr as unknown) === true || (connectorAuthConfig?.use_dcr as unknown) === 'true';
           const registrationEndpoint = serverOAuthConfig?.registration_endpoint || connectorAuthConfig?.registration_endpoint;
 
-          console.log('[A2A] OAuth config - auth:', authEndpoint, 'token:', tokenEndpoint, 'client:', clientId, 'useDcr:', useDcr, 'regEndpoint:', registrationEndpoint);
-
-          // Can proceed if we have endpoints AND either a client_id OR DCR is enabled with registration endpoint
           const canAuthenticate = authEndpoint && tokenEndpoint && (clientId || (useDcr && registrationEndpoint));
 
           if (canAuthenticate) {
-            // Use common OAuth trigger and retry mechanism
             triggerOAuthAndRetry(userMessage, {
               serverName: selectedAgentConnector.display_name,
               serverType: 'a2a',
@@ -1256,16 +1293,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 token_endpoint: tokenEndpoint,
                 scopes: scopes,
                 use_dcr: useDcr,
-                client_id: clientId || '', // May be empty if using DCR
+                client_id: clientId || '',
                 client_secret: connectorAuthConfig?.client_secret || '',
                 registration_endpoint: registrationEndpoint || '',
               },
             });
             return;
           } else {
-            // OAuth required but config is incomplete - show helpful error
-            console.error('[A2A] OAuth required but config incomplete. Server config:', serverOAuthConfig, 'Connector config:', connectorAuthConfig);
-            throw new Error('OAuth authentication required but configuration is incomplete. Please check the agent settings.');
+            throw new Error('OAuth authentication required but configuration is incomplete.');
           }
         }
 
@@ -1273,30 +1308,32 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           throw new Error(a2aResponse.error || 'Failed to communicate with agent');
         }
 
-        // Store the context ID (task ID) for conversation continuity
-        // Always update if server returns a contextId (it may change between messages)
+        // Store the context ID for conversation continuity
         if (a2aResponse.contextId && a2aResponse.contextId !== a2aContextId) {
           setA2aContextId(a2aResponse.contextId);
         }
 
-        const assistantMessageContent = a2aResponse.content || 'No response from agent';
+        const assistantMessageContent = a2aResponse.content || accumulatedContent || 'No response from agent';
         const assistantMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: assistantMessageContent,
           timestamp: new Date(),
           model: `agent:${selectedAgentConnector.id}`,
-          // Store both input and output tokens on assistant message for cost calculation (external agents are free)
           tokens: {
             input: a2aResponse.inputTokens || 0,
             output: a2aResponse.outputTokens || 0,
           },
+          reasoningEvents: collectedReasoningEvents.length > 0 ? collectedReasoningEvents : undefined,
         };
+
+        // Clear streaming state
+        setStreamingContent('');
+        setStreamingReasoningEvents([]);
 
         // Update user message with input tokens
         setMessages(prev => {
           const updated = [...prev];
-          // Find the last user message and add input tokens
           for (let i = updated.length - 1; i >= 0; i--) {
             if (updated[i].role === 'user' && updated[i].id === userMessage.id) {
               updated[i] = {
@@ -1743,6 +1780,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                         )}
                       </div>
                     )}
+                    {/* Reasoning bubbles for A2A agent messages */}
+                    {msg.role === 'assistant' && msg.reasoningEvents && msg.reasoningEvents.length > 0 && (
+                      <ReasoningBubbleList events={msg.reasoningEvents} maxVisible={3} />
+                    )}
                     <div style={{
                       fontSize: '0.875rem',
                       maxHeight: msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded ? '5.25rem' : 'none',
@@ -1887,13 +1928,27 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               );
             })}
             {isLoading && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ padding: '0.875rem 1rem', borderRadius: '18px 18px 18px 4px', background: 'rgba(255,255,255,0.1)' }}>
-                  <div style={{ display: 'flex', gap: '0.3rem', color: 'rgba(255,255,255,0.6)' }}>
-                    <span style={{ animation: 'pulse 1s infinite', animationDelay: '0s' }}>●</span>
-                    <span style={{ animation: 'pulse 1s infinite', animationDelay: '0.2s' }}>●</span>
-                    <span style={{ animation: 'pulse 1s infinite', animationDelay: '0.4s' }}>●</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '80%' }}>
+                {/* Show streaming reasoning events */}
+                {isStreaming && streamingReasoningEvents.length > 0 && (
+                  <div style={{ width: '100%', marginBottom: '0.5rem' }}>
+                    <ReasoningBubbleList events={streamingReasoningEvents} maxVisible={5} />
                   </div>
+                )}
+                {/* Show streaming content or loading dots */}
+                <div style={{ padding: '0.875rem 1rem', borderRadius: '18px 18px 18px 4px', background: isExternalAgentSelected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)', width: '100%' }}>
+                  {isStreaming && streamingContent ? (
+                    <div style={{ fontSize: '0.875rem', color: '#fff' }}>
+                      <MarkdownContent content={streamingContent} />
+                      <span style={{ animation: 'pulse 1s infinite', color: 'rgba(255,255,255,0.6)' }}>▌</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.3rem', color: 'rgba(255,255,255,0.6)' }}>
+                      <span style={{ animation: 'pulse 1s infinite', animationDelay: '0s' }}>●</span>
+                      <span style={{ animation: 'pulse 1s infinite', animationDelay: '0.2s' }}>●</span>
+                      <span style={{ animation: 'pulse 1s infinite', animationDelay: '0.4s' }}>●</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

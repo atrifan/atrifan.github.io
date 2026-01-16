@@ -3,13 +3,15 @@
  *
  * Proxies A2A requests to external agents to avoid CORS issues.
  * The browser calls this endpoint, which then forwards the request to the external agent.
+ *
+ * Uses the official @a2a-js/sdk client library for A2A protocol compliance.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { v4 as uuidv4 } from 'uuid';
-import * as https from 'https';
-import * as http from 'http';
+import { ClientFactory, ClientFactoryOptions, CallInterceptor, BeforeArgs } from '@a2a-js/sdk/client';
+import type { Message, MessageSendParams } from '@a2a-js/sdk';
 import { getValidOAuthToken } from '@/src/lib/oauth-token-manager';
 import { supabase } from '@/src/lib/supabase';
 import type { OAuth2AuthConfig } from '@/src/types/supabase';
@@ -20,62 +22,23 @@ export const dynamic = 'force-dynamic';
 const db = supabase as any;
 
 /**
- * Make HTTP/1.1 request using native Node.js http/https modules
- * This avoids HTTP/2 protocol issues with some servers (like Adobe)
+ * Custom interceptor to inject authentication headers
  */
-function makeHttp1Request(
-  url: string,
-  options: { method: string; headers: Record<string, string>; body: string; timeout: number }
-): Promise<{ status: number; headers: Record<string, string>; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const lib = isHttps ? https : http;
+class AuthInterceptor implements CallInterceptor {
+  constructor(private headers: Record<string, string>) {}
 
-    const reqOptions = {
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || (isHttps ? 443 : 80),
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: options.method,
-      headers: {
-        ...options.headers,
-        'Content-Length': Buffer.byteLength(options.body),
+  async before(args: BeforeArgs): Promise<void> {
+    const currentOptions = args.options || {};
+    args.options = {
+      ...currentOptions,
+      serviceParameters: {
+        ...(currentOptions.serviceParameters || {}),
+        ...this.headers,
       },
-      timeout: options.timeout,
     };
+  }
 
-    const req = lib.request(reqOptions, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        const responseHeaders: Record<string, string> = {};
-        for (const [key, value] of Object.entries(res.headers)) {
-          if (typeof value === 'string') {
-            responseHeaders[key] = value;
-          } else if (Array.isArray(value)) {
-            responseHeaders[key] = value.join(', ');
-          }
-        }
-        resolve({
-          status: res.statusCode || 500,
-          headers: responseHeaders,
-          body: data,
-        });
-      });
-    });
-
-    req.on('error', (err) => {
-      reject(err);
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Request timeout'));
-    });
-
-    req.write(options.body);
-    req.end();
-  });
+  async after(): Promise<void> {}
 }
 
 interface A2AProxyRequest {
@@ -239,186 +202,124 @@ export async function POST(request: NextRequest) {
 
     console.log('[A2A Proxy] Request headers:', JSON.stringify(headers, null, 2));
 
-    // Build message parts - include system prompts if provided
-    const messageParts: Array<{ type: string; text: string }> = [];
-
-    // Add system prompts (personalities) first
+    // Build message text - include system prompts if provided
+    let messageText = '';
     if (systemPrompts && systemPrompts.length > 0) {
       for (const prompt of systemPrompts) {
-        messageParts.push({ type: 'text', text: `[System]: ${prompt}` });
+        messageText += `[System]: ${prompt}\n`;
       }
     }
+    messageText += messages[messages.length - 1]?.content || '';
 
-    // Add the user message
-    messageParts.push({
-      type: 'text',
-      text: messages[messages.length - 1]?.content || '',
-    });
+    // Create A2A client using the SDK
+    const interceptors = Object.keys(headers).length > 0 ? [new AuthInterceptor(headers)] : [];
+    const factory = new ClientFactory(
+      ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+        clientConfig: { interceptors },
+      })
+    );
 
-    // A2A protocol request format
-    // - id (JSON-RPC id): unique for each request
-    // - params.message.messageId: unique UUID for each message
-    // - params.message.contextId: reused for conversation continuity
-    const jsonRpcId = uuidv4();
-    const messageId = uuidv4();
-    const requestBody: {
-      jsonrpc: string;
-      method: string;
-      id: string;
-      params: {
-        message: {
-          messageId: string;
-          role: string;
-          parts: Array<{ type: string; text: string }>;
-          contextId?: string;
-        };
-      };
-    } = {
-      jsonrpc: '2.0',
-      method: 'message/send',
-      id: jsonRpcId,
-      params: {
-        message: {
-          messageId,
-          role: 'user',
-          parts: messageParts,
-        },
-      },
-    };
+    console.log('[A2A Proxy] Creating A2A client for:', agentUrl);
 
-    // Add contextId if provided for conversation continuity
-    if (contextId) {
-      requestBody.params.message.contextId = contextId;
-    }
-
-    // Log outgoing request
-    console.log('[A2A Proxy] Sending request to:', agentUrl);
-    console.log('[A2A Proxy] Request body:', JSON.stringify(requestBody, null, 2));
-
-    // Make the request using HTTP/1.1 (native Node.js http/https modules)
-    // This avoids HTTP/2 protocol issues with some servers (like Adobe)
-    const requestBodyStr = JSON.stringify(requestBody);
-    let httpResponse: { status: number; headers: Record<string, string>; body: string };
-
+    let client;
     try {
-      httpResponse = await makeHttp1Request(agentUrl, {
-        method: 'POST',
-        headers,
-        body: requestBodyStr,
-        timeout: 180000, // 3 minutes
-      });
+      // Create client from agent URL - SDK will discover agent card
+      client = await factory.createFromUrl(agentUrl);
     } catch (err) {
-      console.error('[A2A Proxy] HTTP/1.1 request failed:', err);
+      console.error('[A2A Proxy] Failed to create A2A client:', err);
       return NextResponse.json({
         success: false,
-        error: err instanceof Error ? err.message : 'Request failed',
+        error: err instanceof Error ? err.message : 'Failed to connect to agent',
       }, { status: 500 });
     }
 
-    console.log('[A2A Proxy] Response status:', httpResponse.status);
+    // Build A2A message using SDK types
+    const messageId = uuidv4();
+    const sendParams: MessageSendParams = {
+      message: {
+        messageId,
+        role: 'user',
+        parts: [{ kind: 'text', text: messageText }],
+        kind: 'message',
+        ...(contextId && { contextId }),
+      },
+    };
 
-    if (httpResponse.status >= 400) {
-      console.error('[A2A Proxy] Error response status:', httpResponse.status);
-      console.error('[A2A Proxy] Error response headers:', JSON.stringify(httpResponse.headers, null, 2));
-      console.error('[A2A Proxy] Error response body:', httpResponse.body);
+    console.log('[A2A Proxy] Sending message:', JSON.stringify(sendParams, null, 2));
 
-      // Try to parse as JSON for more details
-      try {
-        const errorJson = JSON.parse(httpResponse.body);
-        console.error('[A2A Proxy] Error response JSON:', JSON.stringify(errorJson, null, 2));
-      } catch {
-        // Not JSON, already logged as text
-      }
-
-      // Check for auth failures - return needsOAuth if OAuth is configured
-      if ((httpResponse.status === 401 || httpResponse.status === 403) && authType === 'oauth2' && agentId) {
-        return NextResponse.json({
-          success: false,
-          error: `Authentication failed (${httpResponse.status})`,
-          needsOAuth: true,
-          oauthServerId: agentId,
-          oauthServerType: 'a2a',
-        });
-      }
-
-      return NextResponse.json({
-        success: false,
-        error: `Agent returned ${httpResponse.status}: ${httpResponse.body}`,
-      });
-    }
-
-    let data;
+    let result: Message | { kind: 'task'; id: string; contextId?: string; status?: { state?: string }; artifacts?: Array<{ parts?: Array<{ kind?: string; text?: string }> }> };
     try {
-      data = JSON.parse(httpResponse.body);
-    } catch {
-      console.error('[A2A Proxy] Failed to parse response as JSON:', httpResponse.body);
+      result = await client.sendMessage(sendParams, {
+        signal: AbortSignal.timeout(180000), // 3 minutes timeout
+      });
+    } catch (err) {
+      console.error('[A2A Proxy] A2A request failed:', err);
+
+      // Check for auth failures
+      const errorMessage = err instanceof Error ? err.message : 'Request failed';
+      if (errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('Unauthorized')) {
+        if (authType === 'oauth2' && agentId) {
+          return NextResponse.json({
+            success: false,
+            error: `Authentication failed: ${errorMessage}`,
+            needsOAuth: true,
+            oauthServerId: agentId,
+            oauthServerType: 'a2a',
+          });
+        }
+      }
+
       return NextResponse.json({
         success: false,
-        error: 'Agent returned invalid JSON response',
-      });
-    }
-    console.log('[A2A Proxy] Raw response:', JSON.stringify(data, null, 2));
-
-    // Parse A2A response format
-    if (data.error) {
-      console.error('[A2A Proxy] Agent error:', data.error);
-      return NextResponse.json({
-        success: false,
-        error: data.error.message || 'Agent returned an error',
-      });
+        error: errorMessage,
+      }, { status: 500 });
     }
 
-    // Extract text content from A2A response
+    console.log('[A2A Proxy] Raw response:', JSON.stringify(result, null, 2));
+
+    // Extract content from response
     let content = '';
-    const result = data.result;
+    let responseContextId: string | undefined;
+    let taskState: string | undefined;
 
-    // Extract contextId from A2A response for conversation continuity
-    // A2A protocol returns contextId in the response which should be passed back in subsequent requests
-    const responseContextId = result?.contextId || result?.context_id || result?.id;
-    const taskState = result?.status?.state || result?.state;
-
-    console.log('[A2A Proxy] Parsing result:', JSON.stringify(result, null, 2));
-    console.log('[A2A Proxy] Context ID:', responseContextId, 'State:', taskState);
-
-    // Helper to extract text from parts array (supports both type:"text" and kind:"text")
-    const extractTextFromParts = (parts: Array<{ type?: string; kind?: string; text?: string }>) => {
+    // Helper to extract text from parts array
+    const extractTextFromParts = (parts: Array<{ kind?: string; text?: string }>) => {
       let text = '';
       for (const part of parts) {
-        if ((part.type === 'text' || part.kind === 'text') && part.text) {
+        if (part.kind === 'text' && part.text) {
           text += part.text;
         }
       }
       return text;
     };
 
-    // Try different response formats
-    if (result?.parts && Array.isArray(result.parts)) {
-      // Direct parts array (Adobe A2A format: result.parts with kind:"text")
-      console.log('[A2A Proxy] Found parts in result.parts');
-      content = extractTextFromParts(result.parts);
-    } else if (result?.status?.message?.parts) {
-      console.log('[A2A Proxy] Found parts in result.status.message.parts');
-      content = extractTextFromParts(result.status.message.parts);
-    } else if (result?.message?.parts) {
-      console.log('[A2A Proxy] Found parts in result.message.parts');
-      content = extractTextFromParts(result.message.parts);
-    } else if (typeof result === 'string') {
-      console.log('[A2A Proxy] Result is string');
-      content = result;
-    } else if (result?.content) {
-      console.log('[A2A Proxy] Found result.content');
-      content = result.content;
-    } else if (result?.text) {
-      console.log('[A2A Proxy] Found result.text');
-      content = result.text;
-    } else {
-      console.log('[A2A Proxy] Could not extract content from response structure');
-      console.log('[A2A Proxy] Available keys in result:', result ? Object.keys(result) : 'result is null/undefined');
+    if (result.kind === 'message') {
+      // Direct message response
+      const message = result as Message;
+      responseContextId = message.contextId;
+      if (message.parts) {
+        content = extractTextFromParts(message.parts);
+      }
+    } else if (result.kind === 'task') {
+      // Task response
+      const task = result as { kind: 'task'; id: string; contextId?: string; status?: { state?: string }; artifacts?: Array<{ parts?: Array<{ kind?: string; text?: string }> }> };
+      responseContextId = task.contextId || task.id;
+      taskState = task.status?.state;
+
+      // Extract content from task artifacts
+      if (task.artifacts && task.artifacts.length > 0) {
+        for (const artifact of task.artifacts) {
+          if (artifact.parts) {
+            content += extractTextFromParts(artifact.parts);
+          }
+        }
+      }
     }
 
     console.log('[A2A Proxy] Extracted content:', content || '(empty)');
+    console.log('[A2A Proxy] Context ID:', responseContextId, 'State:', taskState);
 
-    // Estimate tokens - only count current message, not full history
+    // Estimate tokens
     const systemPromptText = systemPrompts ? systemPrompts.join(' ') : '';
     const currentMessage = messages[messages.length - 1]?.content || '';
     const inputText = systemPromptText + ' ' + currentMessage;
@@ -430,8 +331,8 @@ export async function POST(request: NextRequest) {
       content: content || 'No response from agent',
       inputTokens,
       outputTokens,
-      contextId: responseContextId, // Return contextId for conversation continuity
-      taskState, // Return task state (e.g., 'input_required', 'completed')
+      contextId: responseContextId,
+      taskState,
     });
   } catch (error) {
     console.error('A2A proxy error:', error);
