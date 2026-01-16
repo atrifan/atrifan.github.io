@@ -31,7 +31,19 @@ interface ConversationTokens {
   output: number;
 }
 
+// RAG collection for RAG mode
+interface RAGCollection {
+  id: string;
+  name: string;
+  icon: string;
+  source_type: 'csv' | 'url';
+  embedding_model: string | null;
+}
+
 interface ChatInputAreaProps {
+  // Mode: 'chat' (default) or 'rag'
+  mode?: 'chat' | 'rag';
+
   // Core input state
   message: string;
   setMessage: (message: string) => void;
@@ -40,10 +52,10 @@ interface ChatInputAreaProps {
   isDisabled?: boolean;
   placeholder?: string;
 
-  // Model selection
-  selectedModel: string;
-  setSelectedModel: (model: string) => void;
-  tier: 'free' | 'pro' | 'plus';
+  // Model selection (chat mode)
+  selectedModel?: string;
+  setSelectedModel?: (model: string) => void;
+  tier?: 'free' | 'pro' | 'plus';
 
   // Budget info
   remainingBudget: number;
@@ -73,16 +85,27 @@ interface ChatInputAreaProps {
   onReasoningToggle?: () => void;
   showReasoningToggle?: boolean;
 
-  // Optional: RAG toggle
+  // Optional: RAG toggle (chat mode)
   activeRagCount?: number;
   onRagClick?: () => void;
   showRagToggle?: boolean;
 
   // Optional: Stop button callback (when loading)
   onStop?: () => void;
+
+  // RAG mode specific props
+  rags?: RAGCollection[];
+  selectedRagId?: string | null;
+  setSelectedRagId?: (id: string) => void;
+  sessionTokens?: number;
+  sessionCost?: number;
+
+  // Error message
+  error?: string | null;
 }
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
+  mode = 'chat',
   message,
   setMessage,
   onSend,
@@ -90,9 +113,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   isDisabled = false,
   placeholder,
 
-  selectedModel,
+  selectedModel = '',
   setSelectedModel,
-  tier,
+  tier = 'free',
 
   remainingBudget,
 
@@ -120,15 +143,29 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   showRagToggle = false,
 
   onStop,
+
+  // RAG mode props
+  rags = [],
+  selectedRagId,
+  setSelectedRagId,
+  sessionTokens = 0,
+  sessionCost = 0,
+
+  error,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showRagDropdown, setShowRagDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const ragDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get available models for tier
+  // Get available models for tier (chat mode)
   const quota = TOKEN_QUOTAS[tier];
   const availableModels = AI_MODELS.filter(m => quota.models.includes(m.id));
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
+
+  // Get selected RAG (rag mode)
+  const selectedRag = rags.find(r => r.id === selectedRagId);
 
   // Token estimation (rough: ~4 chars per token)
   const estimateTokens = (text: string): number => {
@@ -139,7 +176,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const currentInputTokens = estimateTokens(message);
   const totalSystemPromptTokens = activePersonalities.reduce((sum, p) => sum + p.prompt_token_count, 0);
 
-  // Close dropdown when clicking outside
+  // Close model dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
@@ -149,6 +186,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close RAG dropdown when clicking outside
+  useEffect(() => {
+    if (!showRagDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ragDropdownRef.current && !ragDropdownRef.current.contains(e.target as Node)) {
+        setShowRagDropdown(false);
+      }
+    };
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showRagDropdown]);
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -182,14 +236,38 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [message, setMessage, onSend, adjustTextareaHeight]);
 
-  const defaultPlaceholder = isExternalAgentSelected && selectedAgentConnector
-    ? `Message ${selectedAgentConnector.display_name}...`
-    : `Message ${selectedModelData?.name || 'AI'}...`;
+  // Placeholder text
+  const getPlaceholder = () => {
+    if (mode === 'rag') {
+      return selectedRag ? `Search ${selectedRag.name}...` : 'Select a knowledge base first';
+    }
+    return isExternalAgentSelected && selectedAgentConnector
+      ? `Message ${selectedAgentConnector.display_name}...`
+      : `Message ${selectedModelData?.name || 'AI'}...`;
+  };
+
+  // Can send check
+  const canSend = mode === 'rag'
+    ? !isDisabled && !isLoading && message.trim() && selectedRagId
+    : !isDisabled && !isLoading && message.trim();
 
   return (
     <div style={{ width: '100%' }}>
-      {/* Conversation token stats */}
-      {showConversationStats && conversationTokens && (conversationTokens.input > 0 || conversationTokens.output > 0) && (
+      {/* Session stats for RAG mode */}
+      {mode === 'rag' && sessionTokens > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.7rem' }}>
+          <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+            Session:
+            <span style={{ color: '#10b981', marginLeft: '0.35rem' }}>{formatTokenCount(sessionTokens)} tokens</span>
+            {sessionCost > 0 && (
+              <span style={{ color: '#a78bfa', marginLeft: '0.5rem' }}>• {formatCurrency(sessionCost)}</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Conversation token stats for chat mode */}
+      {mode === 'chat' && showConversationStats && conversationTokens && (conversationTokens.input > 0 || conversationTokens.output > 0) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.7rem' }}>
           <span style={{ color: 'rgba(255,255,255,0.5)' }}>
             Conversation:
@@ -199,6 +277,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               <span style={{ color: '#a78bfa', marginLeft: '0.5rem' }}>• {formatCurrency(conversationCost)}</span>
             )}
           </span>
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', color: '#ef4444', fontSize: '0.8rem' }}>
+          ⚠️ {error}
         </div>
       )}
 
@@ -242,8 +327,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
             }}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder || defaultPlaceholder}
-            disabled={isDisabled || isLoading}
+            placeholder={placeholder || getPlaceholder()}
+            disabled={isDisabled || isLoading || (mode === 'rag' && !selectedRagId)}
             rows={1}
             style={{
               width: '100%',
@@ -302,22 +387,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         ) : (
           <button
             onClick={onSend}
-            disabled={isDisabled || isLoading || !message.trim()}
-            title={isLoading ? 'Sending...' : 'Send (Enter)'}
+            disabled={!canSend}
+            aria-label={mode === 'rag' ? 'Search' : 'Send'}
+            title={isLoading ? 'Sending...' : mode === 'rag' ? 'Search (Enter)' : 'Send (Enter)'}
             style={{
-              background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+              background: mode === 'rag'
+                ? 'linear-gradient(135deg, #10b981, #059669)'
+                : 'linear-gradient(135deg, #f59e0b, #ea580c)',
               border: 'none',
               borderRadius: '12px',
               width: sendButtonLabel ? 'auto' : '48px',
               height: '48px',
               padding: sendButtonLabel ? '0 1rem' : 0,
               color: '#fff',
-              cursor: isDisabled || isLoading || !message.trim() ? 'not-allowed' : 'pointer',
+              cursor: !canSend ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '0.5rem',
-              opacity: isDisabled || isLoading || !message.trim() ? 0.5 : 1,
+              opacity: !canSend ? 0.5 : 1,
               flexShrink: 0,
               fontWeight: 600,
               fontSize: '0.9rem',
@@ -330,6 +418,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               </svg>
             ) : sendButtonLabel ? (
               <span style={{ fontSize: '1.5rem' }}>{sendButtonLabel}</span>
+            ) : mode === 'rag' ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
             ) : (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 2L11 13" />
@@ -340,177 +433,255 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         )}
       </div>
 
-      {/* Model selector + Feature toggles + Helper text */}
+      {/* Selector row - Model selector (chat) or RAG selector (rag) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-        {/* Model selector button with dropdown */}
-        <div ref={modelDropdownRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowModelDropdown(!showModelDropdown)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: '6px',
-              padding: '0.25rem 0.5rem',
-              color: 'rgba(255,255,255,0.7)',
-              cursor: 'pointer',
-              fontSize: '0.7rem',
-              transition: 'all 0.2s',
-            }}
-          >
-            {isExternalAgentSelected && selectedAgentConnector ? (
-              <>
-                <FaviconImage iconUrl={selectedAgentConnector.icon_url} baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined} size={14} fallbackEmoji="🤖" />
-                <span>{selectedAgentConnector.display_name}</span>
-              </>
-            ) : (
-              <>
-                <span>{selectedModelData?.icon}</span>
-                <span>{selectedModelData?.name}</span>
-              </>
-            )}
-            <span style={{ marginLeft: '0.25rem', opacity: 0.5 }}>▾</span>
-          </button>
+        {mode === 'rag' ? (
+          /* RAG selector for RAG mode */
+          <div ref={ragDropdownRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowRagDropdown(!showRagDropdown)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '6px',
+                padding: '0.25rem 0.5rem',
+                color: 'rgba(255,255,255,0.7)',
+                cursor: 'pointer',
+                fontSize: '0.7rem',
+                transition: 'all 0.2s',
+              }}
+            >
+              <span>{selectedRag?.icon || '📚'}</span>
+              <span>{selectedRag?.name || 'Select knowledge base'}</span>
+              <span style={{ marginLeft: '0.25rem', opacity: 0.5 }}>▾</span>
+            </button>
 
-          {/* Dropdown menu - opens upward */}
-          {showModelDropdown && (
-            <div style={{
-              position: 'absolute',
-              bottom: '100%',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              marginBottom: '4px',
-              background: '#1a1a2e',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: '10px',
-              maxHeight: '300px',
-              overflowY: 'auto',
-              zIndex: 100,
-              minWidth: '180px',
-              boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
-            }}>
-              {/* AI Models Section */}
-              <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
-              {availableModels.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => { setSelectedModel(m.id); setShowModelDropdown(false); }}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 0.75rem',
-                    background: selectedModel === m.id ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                    border: 'none',
-                    color: selectedModel === m.id ? '#f59e0b' : 'rgba(255,255,255,0.8)',
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span>{m.icon}</span>
-                  <span>{m.name}</span>
-                </button>
-              ))}
-
-              {/* External Agents Section */}
-              {externalAgents.length > 0 && (
-                <>
-                  <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
-                  {externalAgents.map(agent => (
+            {showRagDropdown && (
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                marginBottom: '4px',
+                background: '#1a1a2e',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 100,
+                minWidth: '220px',
+                boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
+              }}>
+                {rags.length === 0 ? (
+                  <div style={{ padding: '1rem', textAlign: 'center' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: 0 }}>No knowledge bases</p>
+                    <Link href="/dashboard/rag-import" style={{ color: '#10b981', fontSize: '0.75rem' }}>
+                      Create one →
+                    </Link>
+                  </div>
+                ) : (
+                  rags.map(rag => (
                     <button
-                      key={agent.id}
-                      onClick={() => { setSelectedModel(`agent:${agent.id}`); setShowModelDropdown(false); }}
+                      key={rag.id}
+                      onClick={() => { setSelectedRagId?.(rag.id); setShowRagDropdown(false); }}
                       style={{
                         width: '100%',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.5rem',
                         padding: '0.5rem 0.75rem',
-                        background: selectedModel === `agent:${agent.id}` ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                        background: rag.id === selectedRagId ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
                         border: 'none',
-                        color: selectedModel === `agent:${agent.id}` ? '#a78bfa' : 'rgba(255,255,255,0.8)',
+                        color: rag.id === selectedRagId ? '#10b981' : 'rgba(255,255,255,0.8)',
                         cursor: 'pointer',
                         fontSize: '0.75rem',
                         textAlign: 'left',
                       }}
                     >
-                      <FaviconImage iconUrl={agent.icon_url} baseUrl={agent.external_url?.startsWith('http') ? agent.external_url : undefined} size={16} fallbackEmoji="🤖" />
-                      <span>{agent.display_name}</span>
+                      <span>{rag.icon}</span>
+                      <span style={{ flex: 1 }}>{rag.name}</span>
+                      <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
+                        {rag.source_type}
+                      </span>
                     </button>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Feature toggle buttons */}
-        <div style={{ display: 'flex', gap: '0.25rem' }}>
-          {/* Reasoning toggle/indicator */}
-          {showReasoningToggle && (
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Model selector for chat mode */
+          <div ref={modelDropdownRef} style={{ position: 'relative' }}>
             <button
-              onClick={onReasoningToggle}
-              disabled={!onReasoningToggle}
-              title={!onReasoningToggle ? 'Reasoning always enabled' : enableReasoning ? 'Reasoning enabled (click to disable)' : 'Enable reasoning for tool orchestration'}
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.25rem',
-                background: enableReasoning ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.08)',
-                border: enableReasoning ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                gap: '0.35rem',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
                 borderRadius: '6px',
-                padding: '0.25rem 0.4rem',
-                color: enableReasoning ? '#a78bfa' : 'rgba(255,255,255,0.5)',
-                cursor: onReasoningToggle ? 'pointer' : 'default',
-                fontSize: '0.85rem',
-                transition: 'all 0.2s',
-                opacity: !onReasoningToggle ? 0.8 : 1,
-              }}
-            >
-              🧠
-            </button>
-          )}
-
-          {/* RAG toggle */}
-          {showRagToggle && onRagClick && (
-            <button
-              onClick={onRagClick}
-              title={activeRagCount > 0 ? `${activeRagCount} knowledge base${activeRagCount > 1 ? 's' : ''} active (click to manage)` : 'No knowledge bases active (click to add)'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                background: activeRagCount > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
-                border: activeRagCount > 0 ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
-                borderRadius: '6px',
-                padding: '0.25rem 0.4rem',
-                color: activeRagCount > 0 ? '#10b981' : 'rgba(255,255,255,0.5)',
+                padding: '0.25rem 0.5rem',
+                color: 'rgba(255,255,255,0.7)',
                 cursor: 'pointer',
                 fontSize: '0.7rem',
                 transition: 'all 0.2s',
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                <path d="M8 7h8" />
-                <path d="M8 11h8" />
-                <path d="M8 15h4" />
-              </svg>
-              {activeRagCount > 0 && (
-                <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeRagCount}</span>
+              {isExternalAgentSelected && selectedAgentConnector ? (
+                <>
+                  <FaviconImage iconUrl={selectedAgentConnector.icon_url} baseUrl={selectedAgentConnector.external_url?.startsWith('http') ? selectedAgentConnector.external_url : undefined} size={14} fallbackEmoji="🤖" />
+                  <span>{selectedAgentConnector.display_name}</span>
+                </>
+              ) : (
+                <>
+                  <span>{selectedModelData?.icon}</span>
+                  <span>{selectedModelData?.name}</span>
+                </>
               )}
+              <span style={{ marginLeft: '0.25rem', opacity: 0.5 }}>▾</span>
             </button>
-          )}
-        </div>
+
+            {showModelDropdown && (
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                marginBottom: '4px',
+                background: '#1a1a2e',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 100,
+                minWidth: '180px',
+                boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
+              }}>
+                <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>AI Models</div>
+                {availableModels.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setSelectedModel?.(m.id); setShowModelDropdown(false); }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.5rem 0.75rem',
+                      background: selectedModel === m.id ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                      border: 'none',
+                      color: selectedModel === m.id ? '#f59e0b' : 'rgba(255,255,255,0.8)',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span>{m.icon}</span>
+                    <span>{m.name}</span>
+                  </button>
+                ))}
+
+                {externalAgents.length > 0 && (
+                  <>
+                    <div style={{ padding: '0.5rem 0.75rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>External Agents</div>
+                    {externalAgents.map(agent => (
+                      <button
+                        key={agent.id}
+                        onClick={() => { setSelectedModel?.(`agent:${agent.id}`); setShowModelDropdown(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem 0.75rem',
+                          background: selectedModel === `agent:${agent.id}` ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                          border: 'none',
+                          color: selectedModel === `agent:${agent.id}` ? '#a78bfa' : 'rgba(255,255,255,0.8)',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <FaviconImage iconUrl={agent.icon_url} baseUrl={agent.external_url?.startsWith('http') ? agent.external_url : undefined} size={16} fallbackEmoji="🤖" />
+                        <span>{agent.display_name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Feature toggle buttons (chat mode only) */}
+        {mode === 'chat' && (
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            {showReasoningToggle && (
+              <button
+                onClick={onReasoningToggle}
+                disabled={!onReasoningToggle}
+                title={!onReasoningToggle ? 'Reasoning always enabled' : enableReasoning ? 'Reasoning enabled (click to disable)' : 'Enable reasoning for tool orchestration'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: enableReasoning ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: enableReasoning ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: enableReasoning ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+                  cursor: onReasoningToggle ? 'pointer' : 'default',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  opacity: !onReasoningToggle ? 0.8 : 1,
+                }}
+              >
+                🧠
+              </button>
+            )}
+
+            {showRagToggle && onRagClick && (
+              <button
+                onClick={onRagClick}
+                title={activeRagCount > 0 ? `${activeRagCount} knowledge base${activeRagCount > 1 ? 's' : ''} active (click to manage)` : 'No knowledge bases active (click to add)'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: activeRagCount > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: activeRagCount > 0 ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: activeRagCount > 0 ? '#10b981' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.7rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  <path d="M8 7h8" />
+                  <path d="M8 11h8" />
+                  <path d="M8 15h4" />
+                </svg>
+                {activeRagCount > 0 && (
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeRagCount}</span>
+                )}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Token/budget info */}
         <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
-          {isExternalAgentSelected ? (
+          {mode === 'rag' ? (
+            <>{formatCurrency(remainingBudget)} remaining</>
+          ) : isExternalAgentSelected ? (
             '∞ tokens (free)'
           ) : (
             <>~{formatTokenCount(calculateSafeTokensForBudget(selectedModel, remainingBudget))} tokens • {formatCurrency(remainingBudget)} left</>
@@ -519,7 +690,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         {/* Helper text */}
         <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.65rem' }}>
-          Enter to send • ⌘+Enter for new line
+          Enter to {mode === 'rag' ? 'search' : 'send'} • ⌘+Enter for new line
         </span>
       </div>
     </div>

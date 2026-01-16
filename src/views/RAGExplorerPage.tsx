@@ -4,18 +4,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Footer } from '../components/Footer';
+import { RAGSettingsPanel, RAGSettingsPanelMode } from '../components/RAGSettingsPanel';
+import { ChatInputArea } from '../components/ChatInputArea';
+import { OAuthAuthenticationModal, OAuthSuccessData } from '../components/OAuthAuthenticationModal';
 import { applySEO } from '../utils/seo';
 import {
   EMBEDDING_MODELS,
-  formatTokenCount,
   formatCurrency,
   calculateEmbeddingCost,
 } from '../config/ai-tokens.config';
+import type { OAuth2AuthConfig, OAuthServerType } from '../types/supabase';
 
 interface RAGExplorerPageProps {
   isLoggedIn: boolean;
   isPro: boolean;
   isPlus: boolean;
+  sessionId?: string;
 }
 
 interface RAGCollection {
@@ -25,14 +29,25 @@ interface RAGCollection {
   description: string | null;
   icon: string;
   source_type: 'csv' | 'url';
+  source_url?: string;
   embedding_model: string | null;
   embedding_dimensions: number;
   top_n: number;
+  auth_type?: string;
+  auth_config?: {
+    authorization_endpoint?: string;
+    token_endpoint?: string;
+    scopes?: string;
+    client_id?: string;
+    client_secret?: string;
+  };
 }
 
 interface SearchResult {
   content: string;
   score: number;
+  title?: string;
+  source?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -47,7 +62,19 @@ interface SearchMessage {
   ragName?: string;
 }
 
-export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, isPro, isPlus }) => {
+interface RAGSession {
+  id: string;
+  title: string;
+  rag_id: string | null;
+  rag_name: string | null;
+  embedding_model: string | null;
+  message_count: number;
+  total_tokens: number;
+  total_cost: number;
+  updated_at: string;
+}
+
+export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, isPro, isPlus, sessionId }) => {
   const router = useRouter();
 
   // State
@@ -58,13 +85,34 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+
+  // Session management
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
+  const [sessions, setSessions] = useState<RAGSession[]>([]);
+
+  // Settings panel
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [settingsPanelMode, setSettingsPanelMode] = useState<RAGSettingsPanelMode>('main');
 
   // Budget tracking
   const [embeddingTokensUsed, setEmbeddingTokensUsed] = useState(0);
   const [embeddingCostUsed, setEmbeddingCostUsed] = useState(0);
   const [remainingBudget, setRemainingBudget] = useState(5);
+  const [monthlyBudget, setMonthlyBudget] = useState(5);
+
+  // Screen size
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+
+  // OAuth state
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthModalData, setOauthModalData] = useState<{
+    serverName: string;
+    serverType: OAuthServerType;
+    serverId: string;
+    oauthConfig: OAuth2AuthConfig;
+  } | null>(null);
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -80,7 +128,15 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     applySEO('ragExplorer');
   }, []);
 
-  // Fetch RAGs and API key
+  // Screen size detection
+  useEffect(() => {
+    const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 768);
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  // Fetch RAGs, API key, sessions, and budget
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -103,11 +159,19 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
           }
         }
 
+        // Fetch sessions
+        const sessionsRes = await fetch('/api/ai/rag-sessions');
+        if (sessionsRes.ok) {
+          const data = await sessionsRes.json();
+          setSessions(data.sessions || []);
+        }
+
         // Fetch budget
         const budgetRes = await fetch('/api/ai/budget');
         if (budgetRes.ok) {
           const data = await budgetRes.json();
           setRemainingBudget(data.remainingBudget || 5);
+          setMonthlyBudget(data.budget?.monthlyBudgetUsd || 5);
           setEmbeddingCostUsed(data.embeddingCost || 0);
           setEmbeddingTokensUsed(data.embeddingTokens || 0);
         }
@@ -118,6 +182,13 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     fetchData();
   }, [selectedRag]);
 
+  // Load session if sessionId is provided
+  useEffect(() => {
+    if (sessionId && sessionId !== currentSessionId) {
+      loadSession(sessionId);
+    }
+  }, [sessionId]);
+
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -127,14 +198,127 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const totalTokens = messages.reduce((sum, m) => sum + (m.tokens || 0), 0);
   const totalCost = messages.reduce((sum, m) => sum + (m.cost || 0), 0);
 
+  // Load a session
+  const loadSession = async (id: string) => {
+    try {
+      const res = await fetch(`/api/ai/rag-sessions/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentSessionId(id);
+        if (data.session.rag_id) {
+          setSelectedRag(data.session.rag_id);
+        }
+        setMessages(
+          (data.messages || []).map((m: { id: string; role: 'user' | 'assistant'; content: string; results?: SearchResult[]; tokens?: number; cost?: number; created_at: string }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.created_at),
+            results: m.results || [],
+            tokens: m.tokens,
+            cost: m.cost,
+          }))
+        );
+        router.push(`/rag-explorer/${id}`);
+      }
+    } catch (err) {
+      console.error('Failed to load session:', err);
+    }
+  };
+
+  // Delete a session
+  const deleteSession = async (id: string) => {
+    try {
+      await fetch(`/api/ai/rag-sessions/${id}`, { method: 'DELETE' });
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (currentSessionId === id) {
+        startNewSession();
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    }
+  };
+
+  // Clear all history
+  const clearAllHistory = async () => {
+    try {
+      await fetch('/api/ai/rag-sessions', { method: 'DELETE' });
+      setSessions([]);
+      startNewSession();
+    } catch (err) {
+      console.error('Failed to clear history:', err);
+    }
+  };
+
+  // Start new session
+  const startNewSession = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
+    setError(null);
+    router.push('/rag-explorer');
+  };
+
+  // OAuth handlers
+  const triggerOAuthAndRetry = useCallback((
+    queryToRetry: string,
+    ragData: RAGCollection
+  ) => {
+    if (!ragData.auth_config) return;
+
+    console.log('[RAG OAuth] Triggering OAuth flow for:', ragData.name);
+    setPendingQuery(queryToRetry);
+    setOauthModalData({
+      serverName: ragData.name,
+      serverType: 'rag' as OAuthServerType,
+      serverId: ragData.id,
+      oauthConfig: {
+        authorization_endpoint: ragData.auth_config.authorization_endpoint || '',
+        token_endpoint: ragData.auth_config.token_endpoint || '',
+        scopes: ragData.auth_config.scopes || '',
+        client_id: ragData.auth_config.client_id || '',
+        client_secret: ragData.auth_config.client_secret || '',
+        use_dcr: false,
+        registration_endpoint: '',
+      },
+    });
+    setOauthModalOpen(true);
+    setIsLoading(false);
+  }, []);
+
+  const handleOAuthSuccess = useCallback(async (_data?: OAuthSuccessData) => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+
+    // Retry the pending query
+    if (pendingQuery) {
+      console.log('[RAG OAuth] Auth successful, retrying query');
+      setQuery(pendingQuery);
+      setPendingQuery(null);
+      // Trigger search after state update
+      setTimeout(() => {
+        const searchBtn = document.querySelector('button[aria-label="Search"]') as HTMLButtonElement;
+        if (searchBtn && !searchBtn.disabled) {
+          searchBtn.click();
+        }
+      }, 100);
+    }
+  }, [pendingQuery]);
+
+  const handleOAuthCancel = useCallback(() => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+    setPendingQuery(null);
+  }, []);
+
   // Search handler
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !selectedRag || !apiKey || isLoading) return;
 
+    const queryText = query.trim();
     const userMessage: SearchMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: query.trim(),
+      content: queryText,
       timestamp: new Date(),
     };
 
@@ -147,12 +331,35 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
       const ragData = rags.find(r => r.id === selectedRag);
       if (!ragData) throw new Error('RAG not found');
 
+      // Create session if needed
+      let sessionIdToUse = currentSessionId;
+      if (!sessionIdToUse) {
+        const sessionRes = await fetch('/api/ai/rag-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: queryText.slice(0, 50) + (queryText.length > 50 ? '...' : ''),
+            ragId: ragData.id,
+            ragName: ragData.name,
+            embeddingModel: ragData.embedding_model,
+          }),
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          sessionIdToUse = sessionData.session.id;
+          setCurrentSessionId(sessionIdToUse);
+          router.push(`/rag-explorer/${sessionIdToUse}`);
+          // Add to sessions list
+          setSessions(prev => [sessionData.session, ...prev]);
+        }
+      }
+
       // Call collection API
       const response = await fetch(`/api/collection/${apiKey}/${ragData.rag_name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: query.trim(),
+          query: queryText,
           top_n: ragData.top_n || 5,
         }),
       });
@@ -164,15 +371,17 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
 
       const data = await response.json();
       // Estimate tokens (rough: ~4 chars per token)
-      const estimatedTokens = Math.ceil(query.trim().length / 4);
+      const estimatedTokens = Math.ceil(queryText.length / 4);
       const cost = embeddingModel ? calculateEmbeddingCost(embeddingModel.id, estimatedTokens) : 0;
+
+      const assistantContent = data.results?.length > 0
+        ? `Found ${data.results.length} relevant results:`
+        : 'No results found for your query.';
 
       const assistantMessage: SearchMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.results?.length > 0
-          ? `Found ${data.results.length} relevant results:`
-          : 'No results found for your query.',
+        content: assistantContent,
         timestamp: new Date(),
         results: data.results || [],
         tokens: estimatedTokens,
@@ -183,12 +392,27 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
       setMessages(prev => [...prev, assistantMessage]);
       setEmbeddingTokensUsed(prev => prev + estimatedTokens);
       setEmbeddingCostUsed(prev => prev + cost);
+
+      // Save messages to session
+      if (sessionIdToUse) {
+        await fetch(`/api/ai/rag-sessions/${sessionIdToUse}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userMessage: queryText,
+            assistantMessage: assistantContent,
+            results: data.results || [],
+            tokens: estimatedTokens,
+            cost,
+          }),
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
       setIsLoading(false);
     }
-  }, [query, selectedRag, apiKey, isLoading, rags, embeddingModel]);
+  }, [query, selectedRag, apiKey, isLoading, rags, embeddingModel, currentSessionId, router]);
 
   // Toggle message expansion
   const toggleExpand = (id: string) => {
@@ -203,42 +427,13 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     });
   };
 
-  // Styles
-  const containerStyle: React.CSSProperties = {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%)',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    padding: '1rem',
-    borderBottom: '1px solid rgba(255,255,255,0.1)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '1rem',
-    flexWrap: 'wrap',
-  };
-
-  const selectStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.1)',
-    border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: '8px',
-    padding: '0.5rem 1rem',
-    color: '#fff',
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    minWidth: '200px',
-  };
-
   if (!isLoggedIn) {
     return (
-      <div style={containerStyle}>
+      <div className="chat-fullscreen-container">
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
           <div style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>🔍</span>
-            <h1 style={{ color: '#fff', marginBottom: '1rem' }}>Knowledge Base Search</h1>
+            <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>🔮</span>
+            <h1 style={{ color: '#fff', marginBottom: '1rem' }}>RAG Explorer</h1>
             <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '1.5rem' }}>
               Sign in to search your knowledge bases
             </p>
@@ -259,113 +454,74 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     );
   }
 
+  // Add class to body for hiding iubenda
+  useEffect(() => {
+    document.body.classList.add('chat-page-active');
+    return () => {
+      document.body.classList.remove('chat-page-active');
+    };
+  }, []);
+
   return (
-    <div style={containerStyle}>
-      {/* Header */}
-      <header style={headerStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link href="/" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '0.9rem' }}>
-            ← Home
-          </Link>
-          <h1 style={{ color: '#fff', fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>🔍</span> Knowledge Base Search
-          </h1>
-        </div>
-
-        {/* RAG Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <select
-            value={selectedRag || ''}
-            onChange={(e) => setSelectedRag(e.target.value)}
-            style={selectStyle}
-          >
-            {rags.length === 0 ? (
-              <option value="">No knowledge bases</option>
-            ) : (
-              rags.map(rag => (
-                <option key={rag.id} value={rag.id}>
-                  {rag.icon} {rag.name}
-                </option>
-              ))
-            )}
-          </select>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px',
-              padding: '0.5rem',
-              color: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            ⚙️
-          </button>
-        </div>
-      </header>
-
-      {/* Settings Panel */}
-      {showSettings && selectedRagData && (
-        <div style={{
-          padding: '1rem',
-          background: 'rgba(0,0,0,0.3)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-        }}>
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>
-            <div>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>Source:</span>
-              <span style={{ color: '#fff', marginLeft: '0.5rem' }}>
-                {selectedRagData.source_type === 'csv' ? '📄 CSV Upload' : '🌐 Remote URL'}
+    <div className="chat-fullscreen">
+      {/* Header - compact with essential controls */}
+      <div className="chat-fullscreen-header">
+        <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          {/* Left: Back + Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+            <Link href="/" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '1.25rem', flexShrink: 0 }}>←</Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+              <span style={{ fontSize: '1.25rem' }}>🔮</span>
+              <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedRagData?.name || 'RAG Explorer'}
               </span>
-            </div>
-            <div>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>Embedding Model:</span>
-              <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>
-                {embeddingModel?.name || selectedRagData.embedding_model || 'Upstash BGE'}
-              </span>
-            </div>
-            <div>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>Dimensions:</span>
-              <span style={{ color: '#fff', marginLeft: '0.5rem' }}>{selectedRagData.embedding_dimensions}</span>
-            </div>
-            <div>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>Top N:</span>
-              <span style={{ color: '#fff', marginLeft: '0.5rem' }}>{selectedRagData.top_n}</span>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Token Stats Bar */}
-      <div style={{
-        padding: '0.5rem 1rem',
-        background: 'rgba(16, 185, 129, 0.1)',
-        borderBottom: '1px solid rgba(16, 185, 129, 0.2)',
-        display: 'flex',
-        justifyContent: 'center',
-        gap: '2rem',
-        fontSize: '0.8rem',
-      }}>
-        <span style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Session: <span style={{ color: '#10b981' }}>{formatTokenCount(totalTokens)} tokens</span>
-          <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '0.5rem' }}>({formatCurrency(totalCost)})</span>
-        </span>
-        <span style={{ color: 'rgba(255,255,255,0.6)' }}>
-          Budget: <span style={{ color: remainingBudget > 1 ? '#10b981' : '#f59e0b' }}>{formatCurrency(remainingBudget)} remaining</span>
-        </span>
+          {/* Right: Budget + Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            {/* Budget indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255,255,255,0.08)', padding: '0.35rem 0.6rem', borderRadius: '8px' }}>
+              <span style={{ fontSize: '0.8rem' }}>💰</span>
+              <span style={{ color: remainingBudget > 1 ? '#10b981' : '#f59e0b', fontSize: '0.75rem', fontWeight: 600 }}>{formatCurrency(remainingBudget)}</span>
+            </div>
+
+            {/* New search button */}
+            <button onClick={startNewSession} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span>+</span>
+              <span className="desktop-only">New</span>
+            </button>
+
+            {/* History button - opens settings panel */}
+            <button onClick={() => {
+              setShowSettingsPanel(true);
+              setSettingsPanelMode('history');
+            }} style={{ background: showSettingsPanel ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
+              📜
+              {sessions.length > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#10b981', color: '#fff', borderRadius: '8px', padding: '0 0.25rem', fontSize: '0.55rem', fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{sessions.length > 99 ? '99+' : sessions.length}</span>}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Messages Area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+      {/* Main content area */}
+      <div className="chat-with-sidebar">
+        {/* Main Chat Area */}
+        <div className="chat-main-area">
+          {/* Messages Area - Scrollable */}
+          <div className="chat-fullscreen-messages">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.5)' }}>
-            <span style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>🔮</span>
-            <p>Explore your knowledge base</p>
-            {rags.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '50vh', padding: '2rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>🔮</span>
+            <h2 style={{ color: '#fff', marginBottom: '0.5rem', fontWeight: 500 }}>RAG Explorer</h2>
+            <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: '1rem' }}>Search your knowledge bases with semantic understanding</p>
+            {rags.length === 0 ? (
               <Link href="/dashboard/rag-import" style={{ color: '#10b981', textDecoration: 'underline' }}>
                 Create your first knowledge base →
               </Link>
+            ) : (
+              <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)' }}>Select a knowledge base below and start searching</p>
             )}
           </div>
         ) : (
@@ -441,68 +597,76 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
             <div ref={messagesEndRef} />
           </div>
         )}
+            </div>
+          </div>
+
+          {/* Fixed Input Bar - Bottom */}
+          <div className="chat-fullscreen-input">
+            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+              <ChatInputArea
+                mode="rag"
+                message={query}
+                setMessage={setQuery}
+                onSend={handleSearch}
+                isLoading={isLoading}
+                isDisabled={!selectedRag || (selectedRagData?.source_type === 'csv' && !apiKey)}
+                remainingBudget={remainingBudget}
+                rags={rags.map(r => ({
+                  id: r.id,
+                  name: r.name,
+                  icon: r.icon,
+                  source_type: r.source_type,
+                  embedding_model: r.embedding_model,
+                }))}
+                selectedRagId={selectedRag}
+                setSelectedRagId={setSelectedRag}
+                sessionTokens={totalTokens}
+                sessionCost={totalCost}
+                showSettingsButton
+                onSettingsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('main'); }}
+                error={error || (selectedRagData?.source_type === 'csv' && !apiKey ? 'Generate an API key in the dashboard to search' : null)}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Input Area */}
-      <div style={{
-        padding: '1rem',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        background: 'rgba(0,0,0,0.3)',
-      }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', gap: '0.75rem' }}>
-          <textarea
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSearch();
-              }
-            }}
-            placeholder={selectedRag ? 'Search your knowledge base...' : 'Select a knowledge base first'}
-            disabled={!selectedRag || !apiKey || isLoading}
-            rows={1}
-            style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: '12px',
-              padding: '0.75rem 1rem',
-              color: '#fff',
-              fontSize: '1rem',
-              resize: 'none',
-              minHeight: '44px',
-              maxHeight: '120px',
-              outline: 'none',
-            }}
-          />
-          <button
-            onClick={handleSearch}
-            disabled={!query.trim() || !selectedRag || !apiKey || isLoading}
-            style={{
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '0 1.5rem',
-              color: '#fff',
-              fontWeight: 600,
-              cursor: 'pointer',
-              opacity: (!query.trim() || !selectedRag || !apiKey || isLoading) ? 0.5 : 1,
-            }}
-          >
-            {isLoading ? '...' : '🔍'}
-          </button>
-        </div>
-        {error && (
-          <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center', marginTop: '0.5rem' }}>{error}</p>
-        )}
-        {!apiKey && (
-          <p style={{ color: '#f59e0b', fontSize: '0.8rem', textAlign: 'center', marginTop: '0.5rem' }}>
-            ⚠️ Generate an API key in the <Link href="/dashboard" style={{ color: '#f59e0b' }}>dashboard</Link> to search
-          </p>
-        )}
-      </div>
+      {/* RAG Settings Panel */}
+      <RAGSettingsPanel
+        isOpen={showSettingsPanel}
+        onClose={() => setShowSettingsPanel(false)}
+        isLargeScreen={isLargeScreen}
+        panelMode={settingsPanelMode}
+        setPanelMode={setSettingsPanelMode}
+        rags={rags}
+        selectedRagId={selectedRag}
+        setSelectedRagId={setSelectedRag}
+        budgetData={{
+          remainingBudget,
+          embeddingCost: embeddingCostUsed,
+          embeddingTokens: embeddingTokensUsed,
+          monthlyBudget,
+        }}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        loadSession={loadSession}
+        deleteSession={deleteSession}
+        clearAllHistory={clearAllHistory}
+        onNewSession={startNewSession}
+      />
+
+      {/* OAuth Authentication Modal */}
+      {oauthModalData && (
+        <OAuthAuthenticationModal
+          isOpen={oauthModalOpen}
+          serverName={oauthModalData.serverName}
+          serverType={oauthModalData.serverType}
+          serverId={oauthModalData.serverId}
+          oauthConfig={oauthModalData.oauthConfig}
+          onSuccess={handleOAuthSuccess}
+          onCancel={handleOAuthCancel}
+        />
+      )}
     </div>
   );
 };
