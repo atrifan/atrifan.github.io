@@ -87,6 +87,8 @@ interface RAG {
   total_tokens: number;
   token_limit: number;
   created_at: string;
+  source_type?: 'csv' | 'url';
+  source_url?: string;
 }
 
 // Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
@@ -2660,22 +2662,80 @@ export const DashboardPage: React.FC = () => {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                  {rags.map(rag => (
-                    <div key={rag.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <span style={{ fontSize: '1.5rem' }}>{rag.icon}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{rag.name}</div>
-                        {rag.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rag.description}</div>}
-                        <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                          {rag.document_count} docs • {formatTokenCount(rag.total_tokens)} tokens
+                  {rags.map(rag => {
+                    const isCSV = rag.source_type === 'csv';
+                    const collectionUrl = isCSV && apiKey ? `${HOST_URL}/api/collection/${apiKey}` : null;
+                    const displayUrl = isCSV ? collectionUrl : rag.source_url;
+
+                    return (
+                      <div key={rag.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <span style={{ fontSize: '1.5rem' }}>{rag.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{rag.name}</span>
+                            <span style={{
+                              fontSize: '0.6rem',
+                              fontWeight: 600,
+                              padding: '0.15rem 0.4rem',
+                              borderRadius: '4px',
+                              background: isCSV ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                              color: isCSV ? '#10b981' : '#3b82f6',
+                              border: `1px solid ${isCSV ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                            }}>
+                              {isCSV ? '📄 CSV' : '🌐 URL'}
+                            </span>
+                          </div>
+                          {rag.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rag.description}</div>}
+                          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem', marginTop: '0.25rem' }}>
+                            {rag.document_count} docs • {formatTokenCount(rag.total_tokens)} tokens
+                          </div>
+                          {displayUrl && (
+                            <div style={{
+                              marginTop: '0.35rem',
+                              padding: '0.35rem 0.5rem',
+                              background: 'rgba(0,0,0,0.3)',
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                            }}>
+                              <code style={{
+                                color: isCSV ? '#10b981' : '#60a5fa',
+                                fontSize: '0.6rem',
+                                flex: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {displayUrl}
+                              </code>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(displayUrl);
+                                }}
+                                style={{
+                                  background: 'rgba(255,255,255,0.1)',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  padding: '0.2rem 0.35rem',
+                                  color: 'rgba(255,255,255,0.6)',
+                                  cursor: 'pointer',
+                                  fontSize: '0.6rem',
+                                }}
+                              >
+                                📋
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <Link href={`/dashboard/rag/${rag.id}`} style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.7rem', textDecoration: 'none' }}>View</Link>
+                          <button onClick={() => deleteRag(rag.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.25rem' }}>
-                        <Link href={`/dashboard/rag/${rag.id}`} style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#a78bfa', cursor: 'pointer', fontSize: '0.7rem', textDecoration: 'none' }}>View</Link>
-                        <button onClick={() => deleteRag(rag.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.7rem' }}>✕</button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

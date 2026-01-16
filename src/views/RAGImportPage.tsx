@@ -80,6 +80,13 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   const [chunkSize, setChunkSize] = useState(500);
   const [chunkOverlap, setChunkOverlap] = useState(50);
   const [topN, setTopN] = useState(5); // Number of top results to retrieve
+  const [contentType, setContentType] = useState<'text' | 'code' | 'mixed'>('text');
+
+  // Get current model's dimensions
+  const currentModelDimensions = useMemo(() => {
+    const model = availableEmbeddingModels.find(m => m.id === embeddingModel);
+    return model?.dimensions || 384;
+  }, [embeddingModel, availableEmbeddingModels]);
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
@@ -279,6 +286,9 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
         }
       }
 
+      // Determine if embeddings will be generated
+      const needsEmbeddings = (sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings);
+
       // Build request body
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const requestBody: Record<string, any> = {
@@ -291,11 +301,13 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
         authConfig: sourceType === 'url' ? authConfig : {},
         customHeaders: sourceType === 'url' ? headersObj : {},
         hasEmbeddings: sourceType === 'csv' ? csvHasEmbeddings : !urlNeedsEmbeddings,
-        embeddingModel: (sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings) ? embeddingModel : null,
+        embeddingModel: needsEmbeddings ? embeddingModel : null,
+        embeddingDimensions: needsEmbeddings ? currentModelDimensions : null,
+        contentType,
         tokenLimit,
         chunkSize,
         chunkOverlap,
-        topN, // Number of top results to retrieve
+        topN,
       };
 
       // Add OAuth2 config if applicable
@@ -656,52 +668,170 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   );
 
   const renderConfigStep = () => {
-    // Determine if embeddings will be generated
-    const needsEmbeddings = (sourceType === 'csv' && !csvHasEmbeddings) || (sourceType === 'url' && urlNeedsEmbeddings);
+    // Determine if embeddings will be generated (only for URL source)
+    const needsEmbeddings = sourceType === 'url' && urlNeedsEmbeddings;
+
+    // Upstash embedding info for CSV
+    const UPSTASH_MODEL = {
+      name: 'BGE-BASE-EN-V1.5',
+      dimensions: 768,
+      sparseModel: 'BM25',
+      similarity: 'COSINE',
+    };
 
     return (
       <div style={cardStyle}>
         <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>⚙️ Configuration</h2>
         <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          Configure embedding and retrieval settings.
+          {sourceType === 'csv'
+            ? 'Review embedding settings and configure retrieval options.'
+            : 'Configure embedding and retrieval settings.'}
         </p>
 
-        {/* Embedding Model - always show, but disabled when not needed */}
-        <div style={{ marginBottom: '1.5rem', opacity: needsEmbeddings ? 1 : 0.5 }}>
-          <label style={labelStyle}>Embedding Model</label>
-          <select
-            value={embeddingModel}
-            onChange={(e) => setEmbeddingModel(e.target.value)}
-            style={inputStyle}
-            disabled={!needsEmbeddings}
-          >
-            {availableEmbeddingModels.map(model => (
-              <option key={model.id} value={model.id}>
-                {model.icon} {model.name} ({model.dimensions}d) {model.isLocal ? '• Free' : `• ${formatCurrency(model.costPer1M)}/M`}
-              </option>
+        {/* Content Type Selector */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={labelStyle}>Content Type</label>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {[
+              { value: 'text', label: '📝 Text', desc: 'Natural language, docs, articles' },
+              { value: 'code', label: '💻 Code', desc: 'Programming code, scripts' },
+              { value: 'mixed', label: '📦 Mixed', desc: 'Both text and code' },
+            ].map(type => (
+              <button
+                key={type.value}
+                onClick={() => setContentType(type.value as 'text' | 'code' | 'mixed')}
+                style={{
+                  flex: '1 1 100px',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: contentType === type.value ? '2px solid #8b5cf6' : '1px solid rgba(255,255,255,0.2)',
+                  background: contentType === type.value ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                }}
+              >
+                <span style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem' }}>{type.label}</span>
+                <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>{type.desc}</span>
+              </button>
             ))}
-          </select>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-            {!needsEmbeddings
-              ? '⚠️ Embeddings not needed - source already has embeddings'
-              : availableEmbeddingModels.find(m => m.id === embeddingModel)?.isLocal
-                ? '💻 Runs locally - no API costs, works offline'
-                : '☁️ Remote API - higher quality, uses your budget'}
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+            {contentType === 'code'
+              ? '🔍 Hybrid search enabled for exact keyword + semantic matching'
+              : contentType === 'mixed'
+                ? '🔍 Hybrid search enabled for best of both worlds'
+                : '🔍 Semantic search optimized for natural language'}
           </p>
-          {needsEmbeddings && userTier === 'free' && (
-            <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-              💡 Upgrade to Pro or Plus for access to more embedding models
-            </p>
-          )}
-          {needsEmbeddings && userTier === 'pro' && availableEmbeddingModels.length < EMBEDDING_MODELS.length && (
-            <p style={{ color: '#a78bfa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-              ✨ Upgrade to Plus for access to all {EMBEDDING_MODELS.length} embedding models
-            </p>
-          )}
         </div>
 
-        {/* Chunking settings - only show when embeddings are needed */}
-        {needsEmbeddings && (
+        {/* CSV: Show Upstash embedding info (read-only) */}
+        {sourceType === 'csv' && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={labelStyle}>Embedding Configuration</label>
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '12px',
+              padding: '1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '1.25rem' }}>🧠</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>Upstash Vector (Hybrid Search)</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.75rem' }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9rem' }}>{UPSTASH_MODEL.name}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Dense Model</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ color: '#a78bfa', fontWeight: 600, fontSize: '1.1rem' }}>{UPSTASH_MODEL.dimensions}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Dimensions</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.9rem' }}>{UPSTASH_MODEL.sparseModel}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Sparse Model</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ color: '#60a5fa', fontWeight: 600, fontSize: '0.9rem' }}>{UPSTASH_MODEL.similarity}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Similarity</div>
+                </div>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginTop: '0.75rem', marginBottom: 0 }}>
+                ✨ Embeddings are generated automatically by Upstash Vector for optimal search performance.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* URL: Show embedding model selector with dimension warning */}
+        {sourceType === 'url' && (
+          <div style={{ marginBottom: '1.5rem', opacity: needsEmbeddings ? 1 : 0.5 }}>
+            <label style={labelStyle}>Embedding Model</label>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <select
+                  value={embeddingModel}
+                  onChange={(e) => setEmbeddingModel(e.target.value)}
+                  style={inputStyle}
+                  disabled={!needsEmbeddings}
+                >
+                  {availableEmbeddingModels.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.icon} {model.name} {model.isLocal ? '• Free' : `• ${formatCurrency(model.costPer1M)}/M`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* Dimensions display - read-only, auto-set from model */}
+              <div style={{ minWidth: '100px' }}>
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                }}>
+                  <span style={{ color: '#a78bfa', fontWeight: 600, fontSize: '1.1rem' }}>{currentModelDimensions}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', display: 'block' }}>dimensions</span>
+                </div>
+              </div>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+              {!needsEmbeddings
+                ? '⚠️ Embeddings not needed - source already has embeddings'
+                : availableEmbeddingModels.find(m => m.id === embeddingModel)?.isLocal
+                  ? '💻 Runs locally - no API costs, works offline'
+                  : '☁️ Remote API - higher quality, uses your budget'}
+            </p>
+            {needsEmbeddings && (
+              <div style={{
+                background: 'rgba(251, 191, 36, 0.1)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                borderRadius: '8px',
+                padding: '0.75rem',
+                marginTop: '0.75rem',
+              }}>
+                <p style={{ color: '#fbbf24', fontSize: '0.8rem', margin: 0 }}>
+                  ⚠️ <strong>Important:</strong> Your remote API must return embeddings with <strong>DIMENSIONS: {currentModelDimensions}</strong> to match this model.
+                </p>
+              </div>
+            )}
+            {needsEmbeddings && userTier === 'free' && (
+              <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                💡 Upgrade to Pro or Plus for access to more embedding models
+              </p>
+            )}
+            {needsEmbeddings && userTier === 'pro' && availableEmbeddingModels.length < EMBEDDING_MODELS.length && (
+              <p style={{ color: '#a78bfa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                ✨ Upgrade to Plus for access to all {EMBEDDING_MODELS.length} embedding models
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Chunking settings - only show for CSV or URL needing embeddings */}
+        {(sourceType === 'csv' || needsEmbeddings) && (
           <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginBottom: '1.5rem' }}>
             <div>
               <label style={labelStyle}>Chunk Size</label>
