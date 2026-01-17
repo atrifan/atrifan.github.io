@@ -51,6 +51,15 @@ const HeaderLogo = () => (
   />
 );
 
+// Search result type from API
+interface SearchResult {
+  id: string;
+  score: number;
+  title: string;
+  content: string;
+  source: string; // The link path like "/age"
+}
+
 export const Header: React.FC = () => {
   const router = useRouter();
   const { user } = useUser();
@@ -59,6 +68,9 @@ export const Header: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showPlanetaryNav, setShowPlanetaryNav] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchFocusScrollYRef = useRef<number | null>(null);
@@ -77,11 +89,32 @@ export const Header: React.FC = () => {
     }
 
     if (searchQuery.trim()) {
-      debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = setTimeout(async () => {
+        setSearchLoading(true);
+        setSearchError(null);
         setShowSearchResults(true);
+
+        try {
+          const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}&limit=8`);
+          const data = await response.json();
+
+          if (data.success && data.results) {
+            setSearchResults(data.results);
+          } else if (data.error) {
+            setSearchError(data.error);
+            setSearchResults([]);
+          }
+        } catch (err) {
+          console.error('Search error:', err);
+          setSearchError('Search failed');
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
       }, 400);
     } else {
       setShowSearchResults(false);
+      setSearchResults([]);
     }
 
     return () => {
@@ -251,13 +284,70 @@ export const Header: React.FC = () => {
               background: 'rgba(15, 23, 42, 0.98)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               borderRadius: '12px',
-              padding: '1rem',
+              padding: '0.75rem',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
               zIndex: 100,
+              maxHeight: '400px',
+              overflowY: 'auto',
             }}>
-              <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem', margin: 0, textAlign: 'center' }}>
-                🔍 Search not implemented yet
-              </p>
+              {searchLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', gap: '0.5rem' }}>
+                  <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#667eea', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Searching...</span>
+                </div>
+              ) : searchError ? (
+                <p style={{ color: 'rgba(255, 100, 100, 0.8)', fontSize: '0.85rem', margin: 0, textAlign: 'center', padding: '0.5rem' }}>
+                  ⚠️ {searchError}
+                </p>
+              ) : searchResults.length === 0 ? (
+                <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.85rem', margin: 0, textAlign: 'center', padding: '0.5rem' }}>
+                  No results found for &quot;{searchQuery}&quot;
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  {searchResults.map((result) => (
+                    <Link
+                      key={result.id}
+                      href={result.source}
+                      onClick={() => {
+                        setSearchQuery('');
+                        setShowSearchResults(false);
+                      }}
+                      style={{
+                        display: 'block',
+                        padding: '0.6rem 0.75rem',
+                        borderRadius: '8px',
+                        textDecoration: 'none',
+                        transition: 'background 0.15s',
+                        background: 'transparent',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(102, 126, 234, 0.15)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                        <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>{result.title}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>{result.source}</span>
+                      </div>
+                      <p style={{
+                        color: 'rgba(255, 255, 255, 0.5)',
+                        fontSize: '0.75rem',
+                        margin: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }}>
+                        {result.content}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

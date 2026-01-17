@@ -1,4 +1,4 @@
-#!/bin/bash
+e#!/bin/bash
 # Run a SQL migration file against Supabase
 # Usage: ./scripts/run-migration.sh <migration-file.sql>
 

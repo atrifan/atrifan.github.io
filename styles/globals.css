@@ -155,6 +155,12 @@ button:active:not(:disabled),
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Utility classes */
 .animate-float {
   animation: float 3s ease-in-out infinite;

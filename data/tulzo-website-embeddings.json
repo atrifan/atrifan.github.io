@@ -1,0 +1,230 @@
+{
+  "api_key": "tulzo",
+  "rag_name": "website",
+  "description": "Tulzo website pages for smart search",
+  "entries": [
+    {
+      "id": "page-home",
+      "title": "Home - Tulzo",
+      "link": "/",
+      "content": "Tulzo - 20+ Free Online Tools & Calculators. Free online tools: sleep calculator, weight loss planner, blood type compatibility, IQ test, period tracker, tip calculator, coin flip, wheel spinner, trading risk calculator, timezone converter, decision maker & more. 100% free, no signup, works with AI assistants via MCP. Access all tools through natural conversation with AI chat."
+    },
+    {
+      "id": "page-age",
+      "title": "Age Calculator",
+      "link": "/age",
+      "content": "Age Calculator - Calculate Exact Age in Years, Months, Days. Free age calculator to calculate your exact age in years, months, days, hours & minutes. Find days until next birthday, zodiac sign & life statistics. Enter your birth date and get detailed age breakdown."
+    },
+    {
+      "id": "page-blood",
+      "title": "Blood Type Calculator",
+      "link": "/blood",
+      "content": "Blood Type Calculator - Volume, Donation, Compatibility & Baby Blood. Free blood calculator: Calculate your blood volume using Nadler's formula, check donation eligibility, blood type compatibility for transfusions, and predict your baby's blood type. Includes Rh incompatibility warnings. Universal donor and recipient information."
+    },
+    {
+      "id": "page-brain",
+      "title": "IQ Test",
+      "link": "/brain",
+      "content": "Free IQ Test - Quick Intelligence Quiz with Score & Percentile. Take a free quick IQ test online! 15 questions covering pattern recognition, logic, math, and verbal reasoning. Get your estimated IQ score and percentile instantly. For entertainment only. Test your cognitive abilities."
+    },
+    {
+      "id": "page-convert",
+      "title": "Unit Converter",
+      "link": "/convert",
+      "content": "Unit Converter - Length, Weight, Temperature & More. Free unit converter to convert between metric and imperial units. Length, weight, temperature, volume, and more. Fast and accurate conversions. Convert cm to inches, kg to lbs, Celsius to Fahrenheit."
+    },
+    {
+      "id": "page-cut",
+      "title": "Weight Loss Calculator",
+      "link": "/cut",
+      "content": "Weight Loss Calculator - Calorie Deficit & Goal Planner. Free weight loss calculator to calculate daily calories, calorie deficit, and time to reach your goal weight. Includes fasting plans and BMI calculator. Plan your diet and track progress."
+    },
+    {
+      "id": "page-cycle",
+      "title": "Period Calculator",
+      "link": "/cycle",
+      "content": "Period Calculator - Menstrual Cycle & Fertility Tracker. Free period calculator to track your menstrual cycle, predict next period, and estimate fertile window. Simple cycle tracking for women. Ovulation calculator and fertility planning."
+    },
+    {
+      "id": "page-days",
+      "title": "Day of Week Calculator",
+      "link": "/days",
+      "content": "Day of Week Calculator - Find What Day Any Date Falls On. Free day of week calculator to find what day of the week any date falls on - past, present, or future. Calculate days between dates & leap years. Historical date lookup."
+    },
+    {
+      "id": "page-decide",
+      "title": "Decision Maker",
+      "link": "/decide",
+      "content": "Decision Maker - Random Choice Picker. Free decision maker tool. Enter your options and let us pick randomly. Perfect for choosing restaurants, movies, activities, or any tough decision. Random selection generator."
+    },
+    {
+      "id": "page-eclipse",
+      "title": "Eclipse Finder",
+      "link": "/eclipse",
+      "content": "Eclipse Finder - Next Solar & Lunar Eclipse Dates & Times. Find upcoming solar and lunar eclipses visible from your location. Get dates, times, visibility info, countdown timers, and best viewing locations for total, partial, and annular eclipses through 2030. Blood moon and solar eclipse tracker."
+    },
+    {
+      "id": "page-flip",
+      "title": "Coin Flip",
+      "link": "/flip",
+      "content": "Coin Flip - Heads or Tails Random Coin Toss. Free online coin flip simulator. Flip a virtual coin for heads or tails. Perfect for making quick decisions, settling disputes, or games. Animated & fun coin toss."
+    },
+    {
+      "id": "page-luck",
+      "title": "Luck Tester",
+      "link": "/luck",
+      "content": "Luck Tester - Test Your Luck Today. Free luck tester to test your luck with fun random games. See your luck score and compare with others. Just for fun! Lucky number generator and fortune tester."
+    },
+    {
+      "id": "page-match",
+      "title": "Love Calculator",
+      "link": "/match",
+      "content": "Love Calculator - Compatibility Test. Free love calculator. Enter two names and see your compatibility percentage. Fun relationship compatibility test for entertainment. Name matching and love percentage."
+    },
+    {
+      "id": "page-names",
+      "title": "Random Name Generator",
+      "link": "/names",
+      "content": "Random Name Generator - Human, Pet & Fantasy Names. Free random name generator for humans, dogs, cats & other pets. Generate first names, full names, or fantasy character names. Perfect for writers, gamers & new pet owners. Baby name ideas."
+    },
+    {
+      "id": "page-percent",
+      "title": "Percentage Calculator",
+      "link": "/percent",
+      "content": "Percentage Calculator - Calculate Percentages Easily. Free percentage calculator to calculate percentages, percentage change, percentage of a number, and more. Simple and fast percentage calculations. Discount calculator."
+    },
+    {
+      "id": "page-pricing",
+      "title": "Pricing",
+      "link": "/pricing",
+      "content": "Pricing - Free & Pro Plans. Tulzo pricing plans. Free tier with all tools, Pro plan with unlimited API calls, priority support, and advanced features. Plus plan with AI chat and automation. Compare plans and features."
+    },
+    {
+      "id": "page-risk",
+      "title": "Position Size Calculator",
+      "link": "/risk",
+      "content": "Position Size Calculator - Trading Risk Management. Free position size calculator for traders. Calculate optimal position size based on risk percentage, stop loss, and account size. Manage trading risk effectively. Forex and stock trading calculator."
+    },
+    {
+      "id": "page-sleep",
+      "title": "Sleep Cycle Calculator",
+      "link": "/sleep",
+      "content": "Sleep Cycle Calculator - Find Best Bedtime & Wake Time. Free sleep cycle calculator for adults, teens & children. Calculate optimal bedtime and wake times based on 90-minute sleep cycles. Wake up refreshed, not groggy. REM sleep optimization."
+    },
+    {
+      "id": "page-spin",
+      "title": "Spin the Wheel",
+      "link": "/spin",
+      "content": "Spin the Wheel - Custom Random Wheel Spinner. Free customizable wheel spinner. Add your own options and spin to decide! Perfect for games, giveaways, classroom activities, and random selections. Prize wheel and name picker."
+    },
+    {
+      "id": "page-stack",
+      "title": "Budget Calculator",
+      "link": "/stack",
+      "content": "Budget Calculator - Track Income & Expenses. Free budget calculator to track income, expenses, and savings. Plan your monthly budget and reach financial goals. Simple money management and expense tracking."
+    },
+    {
+      "id": "page-tap",
+      "title": "Click Counter",
+      "link": "/tap",
+      "content": "Click Counter & Tally Counter - Count Anything. Free online click counter and tally counter. Count anything with a tap or click. Features multiple counters, lap timer, and history tracking. Counting app."
+    },
+    {
+      "id": "page-tip",
+      "title": "Tip Calculator",
+      "link": "/tip",
+      "content": "Tip Calculator - Calculate Tip & Split Bill Easily. Free tip calculator to calculate tip amount, split bills between friends, and see total per person. Supports custom tip percentages from 10% to 30%. Restaurant gratuity calculator."
+    },
+    {
+      "id": "page-unique",
+      "title": "Uniqueness Calculator",
+      "link": "/unique",
+      "content": "How Unique Are You? – Rarity Percentile Calculator. Discover how rare your traits are! Calculate your uniqueness percentile based on height, weight, eye color, hair & ethnicity. Find out: 1 in how many people share your combination."
+    },
+    {
+      "id": "page-vibe",
+      "title": "Cat or Dog Person Quiz",
+      "link": "/vibe",
+      "content": "Cat or Dog Person Quiz - Personality Test. Are you a cat person or dog person? Take this fun 10-question personality quiz to find out! Discover your pet personality type with instant results. Animal personality test."
+    },
+    {
+      "id": "page-when",
+      "title": "Date Calculator",
+      "link": "/when",
+      "content": "Date Calculator - Day of Week, Zodiac Sign & Calendar Info. Free date calculator to find the day of week for any date, get zodiac sign, week number, day of year, quarter, and leap year info. Calculate days between dates."
+    },
+    {
+      "id": "page-zone",
+      "title": "Time Zone Converter",
+      "link": "/zone",
+      "content": "Time Zone Converter - World Clock & Time Difference. Free timezone converter to convert time between any cities worldwide. See current time in multiple zones, calculate time differences for meetings & calls. International time planner."
+    },
+    {
+      "id": "page-chat",
+      "title": "AI Chat",
+      "link": "/chat",
+      "content": "AI Chat - Multi-Model Chat Assistant. Chat with multiple AI models including GPT-4o, Claude 3.5, Gemini 2.0, Llama 3.3, and more. Access all your Tulzo tools through natural conversation. Save chat history, connect external MCP servers, and use custom personalities."
+    },
+    {
+      "id": "page-automation",
+      "title": "AI Automation",
+      "link": "/automation",
+      "content": "AI Automation - No-Code Workflow Builder. Build powerful automations using natural language. Describe what you want to automate and AI suggests the right tools. Schedule recurring workflows, connect MCP servers, and save automation templates."
+    },
+    {
+      "id": "page-dashboard",
+      "title": "Dashboard",
+      "link": "/dashboard",
+      "content": "Dashboard - Manage Your MCP Server & API Keys. Manage your Tulzo MCP server, API keys, and tool configurations. Connect AI assistants like Claude, Cursor, and Windsurf to access 20+ tools. View usage statistics and manage connectors."
+    },
+    {
+      "id": "page-rag-explorer",
+      "title": "RAG Explorer",
+      "link": "/rag-explorer",
+      "content": "RAG Explorer – AI Knowledge Base Search. Explore your knowledge bases using AI-powered semantic search. Navigate through documents and find relevant content instantly with embedding-based similarity matching. Vector search interface."
+    },
+    {
+      "id": "page-docs-tools",
+      "title": "Tools Documentation",
+      "link": "/docs/tools",
+      "content": "Documentation - MCP Server Setup & API Reference. Complete documentation for Tulzo MCP server. Setup guides for Claude, Cursor, Windsurf, and other AI assistants. API reference and tool documentation. How to connect and use tools."
+    },
+    {
+      "id": "page-swagger-import",
+      "title": "Swagger Import",
+      "link": "/dashboard/swagger-import",
+      "content": "Import Swagger/OpenAPI - Create REST API Tools. Transform any REST API into AI-ready MCP tools. Import OpenAPI 3.0 or Swagger 2.0 specifications to automatically generate tools that AI assistants like Claude, Cursor, and Windsurf can use."
+    },
+    {
+      "id": "page-graphql-import",
+      "title": "GraphQL Import",
+      "link": "/dashboard/graphql-import",
+      "content": "Import GraphQL Schema - Create GraphQL Tools. Turn your GraphQL API into AI-powered MCP tools. Import schemas via introspection to automatically create query and mutation tools for AI assistants. Connect to any GraphQL endpoint."
+    },
+    {
+      "id": "page-mcp-import",
+      "title": "MCP Server Import",
+      "link": "/dashboard/mcp-import",
+      "content": "Import MCP Server - Connect External MCP Tools. Connect to external MCP servers and import their tools. Your AI assistant will proxy requests to the external server. Supports authentication and custom headers."
+    },
+    {
+      "id": "page-agent-import",
+      "title": "A2A Agent Import",
+      "link": "/dashboard/agent-import",
+      "content": "Import A2A Agent - Connect Agent-to-Agent Protocol Agents. Connect to A2A (Agent-to-Agent) protocol agents and import them as tools. Automatically discover agent cards from well-known paths. Your AI assistant can communicate with other AI agents."
+    },
+    {
+      "id": "page-rag-import",
+      "title": "RAG Import",
+      "link": "/dashboard/rag-import",
+      "content": "Import RAG - Create Knowledge Base. Create a RAG (Retrieval Augmented Generation) knowledge base. Upload CSV files or connect to external endpoints. Semantic search with Upstash Vector. Use in AI chat for context-aware responses."
+    },
+    {
+      "id": "page-mcp-composer",
+      "title": "MCP Composer",
+      "link": "/dashboard/mcp-composer",
+      "content": "MCP Creator - Create Custom MCP Servers. Create custom MCP servers with only the tools you need. Build focused tool sets for better AI performance and fewer collisions. Select specific tools and generate unique MCP endpoint."
+    }
+  ]
+}
+
