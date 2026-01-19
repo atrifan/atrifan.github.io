@@ -2306,7 +2306,12 @@ export const DashboardPage: React.FC = () => {
                   </Link>
                 ))}
                 {/* RAGs */}
-                {(importsFilter === 'all' || importsFilter === 'rag') && imports.rags.map(rag => (
+                {(importsFilter === 'all' || importsFilter === 'rag') && imports.rags.map(rag => {
+                  // For CSV: compose endpoint URL, for URL imports: use source URL
+                  const ragEndpointUrl = rag.sourceType === 'csv'
+                    ? `${HOST_URL}/api/collection/${apiKey || '{api_key}'}/${rag.ragName}`
+                    : rag.sourceUrl;
+                  return (
                   <Link key={rag.id} href={`/dashboard/rag/${rag.id}`} style={{ textDecoration: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.25rem', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
@@ -2322,13 +2327,14 @@ export const DashboardPage: React.FC = () => {
                           )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.15rem' }}>
-                          {rag.sourceUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{rag.sourceUrl}</span>}
+                          {ragEndpointUrl && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{ragEndpointUrl}</span>}
                           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', flexShrink: 0 }}>• {rag.toolCount} tool{rag.toolCount !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
 

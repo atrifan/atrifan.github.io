@@ -3,6 +3,8 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FaviconImage } from './FaviconImage';
+import { AdBanner } from './AdBanner';
+import { ADS_CONFIG } from '../config/ads.config';
 import {
   AI_MODELS,
   TOKEN_QUOTAS,
@@ -253,6 +255,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   return (
     <div style={{ width: '100%' }}>
+      {/* Horizontal Ad - always visible above input area */}
+      <div style={{ marginBottom: '0.75rem' }}>
+        <AdBanner slot={ADS_CONFIG.slots.chatInputArea} format="horizontal" delay={1000} />
+      </div>
+
       {/* Session stats for RAG mode */}
       {mode === 'rag' && sessionTokens > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.7rem' }}>

@@ -168,6 +168,7 @@ export const ADS_CONFIG = {
     // AI Chat page ads
     chatTop: '7221401854',
     chatBottom: '5908320187',
+    chatInputArea: '5908320187', // Above the chat input textarea
 
     // AI Automation page ads
     automationTop: '7221401854',

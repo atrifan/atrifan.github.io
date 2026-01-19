@@ -98,6 +98,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({
           background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)',
           border: '2px dashed rgba(255, 255, 255, 0.2)',
           borderRadius: '12px',
+          position: 'relative',
+          zIndex: 10,
           ...style
         }}
       >
@@ -131,7 +133,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         margin: '0 auto',
         minHeight: isVertical ? '16rem' : '3rem',
         maxHeight: isVertical ? undefined : '6rem',
-        overflow: 'hidden',
+        overflow: 'visible', // Changed from hidden to visible for mobile
+        position: 'relative',
+        zIndex: 10, // Ensure ads are above other content
         ...style
       }}
     >
@@ -145,7 +149,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
         data-ad-format={isVertical ? format : 'horizontal'}
-        data-full-width-responsive="false"
+        data-full-width-responsive="true" // Changed to true for better mobile responsiveness
       />
     </View>
   );

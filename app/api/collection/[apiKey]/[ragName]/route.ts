@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/src/lib/supabase';
 import { queryCollection, isUpstashConfigured } from '@/src/lib/upstash-vector';
+import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,18 +68,14 @@ async function handleSearch(
     return NextResponse.json({ error: 'Query required. Use ?q=your+query or POST with {"query": "..."}' }, { status: 400 });
   }
 
-  // Validate API key exists
-  const { data: apiKeyData } = await db
-    .from('user_api_keys')
-    .select('user_id')
-    .eq('api_key', apiKey)
-    .single();
+  // Validate API key exists by hash lookup
+  const apiKeyRecord = await getApiKeyByHash(hashApiKey(apiKey));
 
-  if (!apiKeyData) {
+  if (!apiKeyRecord || !apiKeyRecord.is_active) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
   }
 
-  const userId = apiKeyData.user_id;
+  const userId = apiKeyRecord.user_id;
 
   // Validate RAG exists and belongs to user
   const { data: rag } = await db
@@ -104,8 +101,8 @@ async function handleSearch(
   }
 
   try {
-    // Query Upstash Vector
-    const results = await queryCollection(apiKey, rag.rag_name || ragName, query, effectiveTopK);
+    // Query Upstash Vector (use userId as namespace, not apiKey)
+    const results = await queryCollection(userId, rag.rag_name || ragName, query, effectiveTopK);
 
     return NextResponse.json({
       success: true,

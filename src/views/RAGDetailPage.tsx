@@ -10,6 +10,9 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { ADS_CONFIG } from '../config/ads.config';
 import { getSuggestedFormat } from '../lib/upstash-vector';
 
+// Host URL - uses NEXT_PUBLIC_HOST env var with fallback to production URL
+const HOST_URL = process.env.NEXT_PUBLIC_HOST || 'https://tulzo.vercel.app';
+
 interface RAGDetailPageProps {
   ragId: string;
   isPro: boolean;
@@ -85,6 +88,8 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [saving, setSaving] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
 
   // Editing state
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -149,6 +154,15 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
   useEffect(() => {
     if (canAccessPro) {
       Promise.all([fetchRag(), fetchDocuments()]).finally(() => setLoading(false));
+      // Fetch API key for endpoint display
+      fetch('/api/keys/list')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.hasKey && data?.apiKey) {
+            setApiKey(data.apiKey);
+          }
+        })
+        .catch(() => {});
     }
   }, [canAccessPro, fetchRag, fetchDocuments]);
 
@@ -424,60 +438,115 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
     fontSize: '1rem',
   };
 
+  // Compute endpoint URL
+  const endpointUrl = rag.source_type === 'url' && rag.source_url
+    ? rag.source_url
+    : apiKey && rag.rag_name
+      ? `${HOST_URL}/api/collection/${apiKey}/${rag.rag_name}`
+      : null;
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)' }}>
-      <div style={{ display: 'flex' }}>
-        {ADS_CONFIG.enabled && (
-          <SideAds
-            leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
-            leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
-            leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
-            rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
-            rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
-            rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
-          />
-        )}
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)' }}>
+      {ADS_CONFIG.enabled && (
+        <SideAds
+          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+        />
+      )}
 
-        <main style={{ flex: 1, maxWidth: '900px', margin: '0 auto', padding: 'clamp(1rem, 4vw, 2rem)' }}>
-          <BackToTools />
+      {/* Header Bar - matches MCP server edit page */}
+      <div style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '1rem clamp(1rem, 4vw, 2rem)', position: 'relative', zIndex: 101 }}>
+        <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <Link href="/dashboard" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none', fontSize: '0.9rem' }}>← Back</Link>
+            <span style={{ fontSize: '2rem' }}>{rag.icon}</span>
+            <h1 style={{ color: '#fff', fontSize: '1.5rem', margin: 0 }}>{rag.name}</h1>
+            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', background: 'rgba(139, 92, 246, 0.2)', color: '#8b5cf6', fontSize: '0.75rem', fontWeight: 600 }}>RAG</span>
+            <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', background: rag.source_type === 'csv' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)', color: rag.source_type === 'csv' ? '#10b981' : '#3b82f6', fontSize: '0.75rem', fontWeight: 600 }}>{rag.source_type === 'csv' ? 'CSV' : 'URL'}</span>
+          </div>
+        </div>
+      </div>
 
-          {/* Success/Error Messages */}
-          {success && (
-            <div style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#10b981' }}>
-              ✓ {success}
-            </div>
-          )}
-          {error && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#ef4444' }}>
-              ✕ {error}
-            </div>
-          )}
+      {/* Alerts */}
+      {error && (
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
+          <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '8px', color: '#ef4444' }}>
+            {error}
+            <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>×</button>
+          </div>
+        </div>
+      )}
+      {success && (
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
+          <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '8px', color: '#10b981' }}>{success}</div>
+        </div>
+      )}
 
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ fontSize: '3rem' }}>{rag.icon}</span>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#fff', margin: 0 }}>
-                  {rag.name}
-                </h1>
-                <p style={{ color: 'rgba(255,255,255,0.6)', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-                  {rag.description || 'No description'}
-                </p>
-                {tool && (
-                  <p style={{ color: '#8b5cf6', margin: '0.5rem 0 0 0', fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                    🔧 Tool: {tool.name}
-                  </p>
-                )}
-              </div>
-            </div>
+      {/* Endpoint URL Bar */}
+      {endpointUrl && (
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', flexShrink: 0 }}>
+              {rag.source_type === 'url' ? '🌐 Source:' : '🔗 Endpoint:'}
+            </span>
+            <code style={{
+              flex: 1,
+              background: 'rgba(0,0,0,0.3)',
+              padding: '0.5rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              color: '#10b981',
+              fontFamily: 'monospace',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {endpointUrl}
+            </code>
             <button
-              onClick={() => setShowDeleteModal(true)}
-              style={{ padding: '0.5rem 1rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', cursor: 'pointer' }}
+              onClick={() => {
+                navigator.clipboard.writeText(endpointUrl);
+                setCopiedEndpoint(true);
+                setTimeout(() => setCopiedEndpoint(false), 2000);
+              }}
+              style={{
+                background: copiedEndpoint ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                padding: '0.5rem 0.75rem',
+                color: copiedEndpoint ? '#10b981' : 'rgba(255,255,255,0.7)',
+                fontSize: '0.8rem',
+                flexShrink: 0,
+              }}
+              title="Copy endpoint"
             >
-              🗑️ Delete
+              {copiedEndpoint ? '✓ Copied' : '📋 Copy'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Tool Info */}
+      {tool && (
+        <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+            <span style={{ fontSize: '1.25rem' }}>🔧</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', fontWeight: 600 }}>MCP Tool</div>
+              <div style={{ color: '#a78bfa', fontSize: '0.9rem', fontFamily: 'monospace' }}>{tool.name}</div>
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>Available in your MCP server</div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 2rem) 3rem' }}>
 
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
@@ -526,9 +595,9 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
               <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '1.5rem' }}>Configuration</h3>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                {/* Name */}
+                {/* Display Name - Editable */}
                 <div>
-                  <div style={labelStyle}>Name</div>
+                  <div style={labelStyle}>Display Name</div>
                   {editingField === 'name' ? (
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <input
@@ -546,9 +615,9 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
                   )}
                 </div>
 
-                {/* RAG Name (read-only) */}
+                {/* RAG Name (API identifier - read-only) */}
                 <div>
-                  <div style={labelStyle}>RAG Name (API)</div>
+                  <div style={labelStyle}>API Identifier</div>
                   <div style={{ ...valueStyle, fontFamily: 'monospace', color: '#8b5cf6' }}>{rag.rag_name}</div>
                 </div>
 
@@ -643,6 +712,13 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
                   )}
                 </div>
               )}
+
+              {/* Delete Button - at bottom of overview */}
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <button onClick={() => setShowDeleteModal(true)} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', cursor: 'pointer' }}>
+                  Delete Knowledge Base
+                </button>
+              </div>
             </div>
           )}
 
@@ -723,7 +799,7 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
                   <div style={{ marginBottom: '1.5rem' }}>
                     <div style={labelStyle}>cURL Example</div>
                     <pre style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-{`curl "https://your-domain.com/api/collection/YOUR_API_KEY/${rag.rag_name}?q=search+query&top_k=${rag.top_n || 5}"`}
+{`curl "${HOST_URL}/api/collection/YOUR_API_KEY/${rag.rag_name}?q=search+query&top_k=${rag.top_n || 5}"`}
                     </pre>
                   </div>
 
@@ -755,7 +831,6 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
               )}
             </div>
           )}
-        </main>
       </div>
       <Footer />
 

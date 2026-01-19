@@ -98,6 +98,9 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
   const [reparsingSpec, setReparsingSpec] = useState(false);
   const [regeneratingSpec, setRegeneratingSpec] = useState(false);
 
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   useEffect(() => {
     if (canAccessPro) {
       fetchSpec();
@@ -150,6 +153,20 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       setError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/swagger/${specId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete');
+      router.push('/dashboard/mcp-composer');
+    } catch (err) {
+      setError((err as Error).message);
+      setShowDeleteModal(false);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -409,6 +426,21 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '0 clamp(1rem, 4vw, 2rem) 2rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.swaggerImportBottom} />
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowDeleteModal(false)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+            <h3 style={{ color: '#fff', margin: '0 0 0.5rem' }}>Delete REST API?</h3>
+            <p style={{ color: 'rgba(255,255,255,0.6)', margin: '0 0 1.5rem' }}>This will delete all endpoints, tools, and environments. This action cannot be undone.</p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteModal(false)} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleDelete} disabled={saving} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', cursor: 'pointer' }}>{saving ? 'Deleting...' : 'Delete'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -512,6 +544,13 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
           headers={spec.default_headers || {}}
           onUpdate={fetchSpec}
         />
+
+        {/* Delete Button */}
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button onClick={() => setShowDeleteModal(true)} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', cursor: 'pointer' }}>
+            Delete API
+          </button>
+        </div>
       </div>
     );
   }

@@ -36,8 +36,8 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
   if (!shouldShowAds()) return null;
 
   const isHorizontal = format === 'horizontal';
-  // Sizes: 22rem wide, 6rem tall for horizontal, 38rem tall for vertical
-  const width = '22rem';
+  // Sizes: all ads same width (22rem), horizontal 6rem tall, vertical 38rem tall
+  const width = '22rem'; // Same width for both horizontal and vertical
   const height = isHorizontal ? '6rem' : '38rem';
 
   // Test mode placeholder
@@ -46,6 +46,7 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
     return (
       <div style={{
         width,
+        minWidth: width, // Ensure minimum width
         height,
         background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)',
         border: '2px dashed rgba(255, 255, 255, 0.2)',
@@ -54,6 +55,7 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
+        flexGrow: 0,
       }}>
         <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.6rem' }}>
           <span style={{ display: 'block', marginBottom: '0.1rem' }}>📢</span>
@@ -67,7 +69,7 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
   if (!isReady) return null;
 
   return (
-    <div style={{ width, height, overflow: 'hidden', flexShrink: 0 }}>
+    <div style={{ width, minWidth: width, height, overflow: 'hidden', flexShrink: 0, flexGrow: 0 }}>
       <ins
         ref={adRef}
         className="adsbygoogle"
@@ -116,14 +118,14 @@ export const SideAds: React.FC<SideAdsProps> = ({
 
   const columnStyle: React.CSSProperties = {
     position: 'fixed',
-    top: '50%',
+    top: '55%', // Moved down a bit from 50%
     transform: 'translateY(-50%)',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
     gap: '0.5rem',
     zIndex: 100,
     padding: '0.25rem',
+    width: '22rem', // Fixed width to match ad width
   };
 
   return (
@@ -136,7 +138,7 @@ export const SideAds: React.FC<SideAdsProps> = ({
       </div>
 
       {/* Right Side */}
-      <div style={{ ...columnStyle, right: '0.5rem' }}>
+      <div style={{ ...columnStyle, right: '0.5rem', left: 'auto' }}>
         <SideAd slot={rightTopSlot} format="horizontal" />
         <SideAd slot={rightMiddleSlot} format="vertical" />
         <SideAd slot={rightBottomSlot} format="horizontal" />

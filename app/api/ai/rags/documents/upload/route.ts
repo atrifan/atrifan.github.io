@@ -121,18 +121,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'RAG not found' }, { status: 404 });
     }
 
-    // Get user's API key for Upstash metadata
-    const { data: userApiKeyData } = await db
-      .from('user_api_keys')
-      .select('api_key')
-      .eq('user_id', userId)
-      .single();
-
-    if (!userApiKeyData?.api_key) {
-      return NextResponse.json({ error: 'API key not found. Please generate an API key first.' }, { status: 400 });
-    }
-
-    const userApiKey = userApiKeyData.api_key;
+    // Use userId as the namespace for Upstash vectors (stable identifier)
+    const userApiKey = userId;
     // Use provided ragName, or rag_name from DB, or normalize the name
     const ragName = ragNameParam || rag.rag_name || rag.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
