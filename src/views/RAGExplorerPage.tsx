@@ -350,7 +350,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
           const sessionData = await sessionRes.json();
           sessionIdToUse = sessionData.session.id;
           setCurrentSessionId(sessionIdToUse);
-          router.push(`/rag-explorer/${sessionIdToUse}`);
+          // Use replace to update URL without triggering a full page reload
+          window.history.replaceState(null, '', `/rag-explorer/${sessionIdToUse}`);
           // Add to sessions list
           setSessions(prev => [sessionData.session, ...prev]);
         }
