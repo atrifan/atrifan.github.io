@@ -570,7 +570,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                           try {
                             // Copy all results as markdown
                             const resultsText = msg.results!.map((r, i) =>
-                              `## Result ${i + 1} (Score: ${(r.score * 100).toFixed(1)}%)\n\n${r.content}`
+                              `## Result ${i + 1} (Score: ${r.score < 0.1 ? r.score.toFixed(4) : (r.score * 100).toFixed(1) + '%'})\n\n${r.content}`
                             ).join('\n\n---\n\n');
                             await navigator.clipboard.writeText(resultsText);
                             const btn = e.currentTarget;
@@ -658,7 +658,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                               >
                                 📋
                               </button>
-                              <span style={{ color: '#10b981', fontSize: '0.75rem' }}>Score: {(result.score * 100).toFixed(1)}%</span>
+                              <span style={{ color: '#10b981', fontSize: '0.75rem' }}>Score: {result.score < 0.1 ? result.score.toFixed(4) : (result.score * 100).toFixed(1) + '%'}</span>
                             </div>
                           </div>
                           <p style={{ color: '#fff', fontSize: '0.85rem', margin: 0, whiteSpace: 'pre-wrap' }}>
