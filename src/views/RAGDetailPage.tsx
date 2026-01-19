@@ -96,6 +96,13 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  // Field config editing state (for Overview tab)
+  const [editingFieldConfig, setEditingFieldConfig] = useState(false);
+  const [editFieldMappings, setEditFieldMappings] = useState<FieldMapping[]>([]);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [regenerateSuccess, setRegenerateSuccess] = useState<string | null>(null);
+
   // Update Data modal state
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -371,6 +378,63 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Start editing field config
+  const startEditFieldConfig = () => {
+    if (rag?.field_config?.fields) {
+      setEditFieldMappings([...rag.field_config.fields]);
+    }
+    setEditingFieldConfig(true);
+    setRegenerateError(null);
+    setRegenerateSuccess(null);
+  };
+
+  // Cancel editing field config
+  const cancelEditFieldConfig = () => {
+    setEditingFieldConfig(false);
+    setEditFieldMappings([]);
+    setRegenerateError(null);
+  };
+
+  // Save field config and regenerate embeddings
+  const saveAndRegenerateEmbeddings = async () => {
+    if (!rag) return;
+    setIsRegenerating(true);
+    setRegenerateError(null);
+    setRegenerateSuccess(null);
+
+    try {
+      const newFieldConfig = {
+        id_column: rag.field_config?.id_column || '',
+        document_column: rag.field_config?.document_column || '',
+        fields: editFieldMappings,
+      };
+
+      // Call regenerate endpoint
+      const response = await fetch(`/api/ai/rags/${ragId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fieldConfig: newFieldConfig }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to regenerate embeddings');
+      }
+
+      const data = await response.json();
+      setRegenerateSuccess(`Regenerated ${data.vectorCount} embeddings`);
+      setEditingFieldConfig(false);
+
+      // Update local state
+      setRag({ ...rag, field_config: newFieldConfig, chunk_count: data.vectorCount });
+      setTimeout(() => setRegenerateSuccess(null), 3000);
+    } catch (err) {
+      setRegenerateError((err as Error).message);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -693,7 +757,30 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
               {/* Field Config */}
               {rag.field_config && (
                 <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                  <h4 style={{ color: '#fff', fontSize: '1rem', marginBottom: '1rem' }}>Field Configuration</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <h4 style={{ color: '#fff', fontSize: '1rem', margin: 0 }}>Field Configuration</h4>
+                    {!editingFieldConfig && rag.field_config.fields && rag.field_config.fields.length > 0 && (
+                      <button
+                        onClick={startEditFieldConfig}
+                        style={{ padding: '0.4rem 0.75rem', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', color: '#a78bfa', cursor: 'pointer', fontSize: '0.8rem' }}
+                      >
+                        ✏️ Edit Fields
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Success/Error messages */}
+                  {regenerateSuccess && (
+                    <div style={{ padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', color: '#10b981', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                      ✓ {regenerateSuccess}
+                    </div>
+                  )}
+                  {regenerateError && (
+                    <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: '#ef4444', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                      ✕ {regenerateError}
+                    </div>
+                  )}
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <div style={labelStyle}>ID Column</div>
@@ -704,18 +791,98 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
                       <div style={{ ...valueStyle, fontFamily: 'monospace' }}>{rag.field_config.document_column}</div>
                     </div>
                   </div>
-                  {rag.field_config.fields && rag.field_config.fields.length > 0 && (
+
+                  {/* Editable Field Mappings */}
+                  {editingFieldConfig && editFieldMappings.length > 0 ? (
                     <div style={{ marginTop: '1rem' }}>
-                      <div style={labelStyle}>Additional Fields</div>
+                      <div style={labelStyle}>Additional Fields <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>(📝 = embedded, 🏷️ = metadata)</span></div>
+                      <div style={{ maxHeight: '16rem', overflowY: 'auto', marginTop: '0.5rem' }}>
+                        {editFieldMappings.map((field, idx) => (
+                          <div key={field.column} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', marginBottom: '0.5rem' }}>
+                            <span style={{ fontWeight: 500, color: '#fff', minWidth: '100px', fontSize: '0.875rem' }}>{field.column}</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={field.embed}
+                                onChange={(e) => {
+                                  const updated = [...editFieldMappings];
+                                  updated[idx] = { ...field, embed: e.target.checked };
+                                  setEditFieldMappings(updated);
+                                }}
+                                style={{ accentColor: '#8b5cf6' }}
+                              />
+                              <span style={{ color: 'rgba(255,255,255,0.7)' }}>📝 Embed</span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={field.metadata}
+                                onChange={(e) => {
+                                  const updated = [...editFieldMappings];
+                                  updated[idx] = { ...field, metadata: e.target.checked };
+                                  setEditFieldMappings(updated);
+                                }}
+                                style={{ accentColor: '#8b5cf6' }}
+                              />
+                              <span style={{ color: 'rgba(255,255,255,0.7)' }}>🏷️ Meta</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={field.format}
+                              onChange={(e) => {
+                                const updated = [...editFieldMappings];
+                                updated[idx] = { ...field, format: e.target.value };
+                                setEditFieldMappings(updated);
+                              }}
+                              placeholder="Format: {value}"
+                              style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#fff', fontFamily: 'monospace' }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                        <button
+                          onClick={saveAndRegenerateEmbeddings}
+                          disabled={isRegenerating}
+                          style={{ padding: '0.6rem 1rem', background: isRegenerating ? 'rgba(139, 92, 246, 0.3)' : 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', color: '#fff', cursor: isRegenerating ? 'wait' : 'pointer', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                        >
+                          {isRegenerating ? (
+                            <>
+                              <span style={{ display: 'inline-block', width: '1rem', height: '1rem', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              Regenerating...
+                            </>
+                          ) : (
+                            <>🔄 Save & Regenerate Embeddings</>
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelEditFieldConfig}
+                          disabled={isRegenerating}
+                          style={{ padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.875rem' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : rag.field_config.fields && rag.field_config.fields.length > 0 ? (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={labelStyle}>Additional Fields <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>(📝 = embedded, 🏷️ = metadata)</span></div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
                         {rag.field_config.fields.map((f) => (
-                          <span key={f.column} style={{ padding: '0.25rem 0.5rem', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '4px', fontSize: '0.8rem', color: '#a78bfa' }}>
-                            {f.column} {f.embed && '📝'} {f.metadata && '🏷️'}
+                          <span key={f.column} style={{ padding: '0.35rem 0.6rem', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '6px', fontSize: '0.8rem', color: '#a78bfa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontWeight: 500 }}>{f.column}</span>
+                            {f.embed && <span title="Embedded">📝</span>}
+                            {f.metadata && <span title="Stored as metadata">🏷️</span>}
+                            {f.format && f.format !== '{value}' && (
+                              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', fontFamily: 'monospace' }} title={`Format: ${f.format}`}>
+                                ({f.format})
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
 

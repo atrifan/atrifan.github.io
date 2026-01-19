@@ -101,6 +101,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       topN,
       tokenLimit,
       isEnabled,
+      fieldConfig,
     } = body;
 
     // Build update object
@@ -114,6 +115,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (topN !== undefined) updates.top_n = topN;
     if (tokenLimit !== undefined) updates.token_limit = tokenLimit;
     if (isEnabled !== undefined) updates.is_enabled = isEnabled;
+    if (fieldConfig !== undefined) updates.field_config = fieldConfig;
 
     const { data, error } = await db
       .from('user_rags')
