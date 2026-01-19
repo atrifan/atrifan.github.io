@@ -7,7 +7,8 @@
     "build": "NODE_ENV=production next build",
     "start": "NODE_ENV=production next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "update-site-embeddings": "npx tsx scripts/upload-website-embeddings.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.8",
