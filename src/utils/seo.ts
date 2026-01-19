@@ -47,9 +47,9 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     keywords: ['spin the wheel', 'wheel spinner', 'random wheel', 'prize wheel', 'decision wheel', 'name picker wheel', 'random picker'],
   },
   decide: {
-    title: 'Decision Maker - Random Choice Picker | Tulzo',
-    description: 'Free decision maker tool. Enter your options and let us pick randomly. Perfect for choosing restaurants, movies, activities, or any tough decision.',
-    keywords: ['decision maker', 'random choice picker', 'random decision', 'what should I do', 'random picker', 'choice generator'],
+    title: 'Decision Maker - Random Choice Picker & Voice Oracle | Tulzo',
+    description: 'Free decision maker with voice oracle. Enter options for random selection, or speak your question - your voice pitch and volume seed the oracle\'s answer. Works on mobile and desktop.',
+    keywords: ['decision maker', 'random choice picker', 'random decision', 'what should I do', 'random picker', 'choice generator', 'voice oracle', 'microphone decision', 'ask the oracle'],
   },
   age: {
     title: 'Age Calculator - Calculate Exact Age in Years, Months, Days | Tulzo',

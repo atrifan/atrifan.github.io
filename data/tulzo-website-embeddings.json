@@ -1,13 +1,14 @@
 {
   "api_key": "tulzo",
   "rag_name": "website",
-  "description": "Tulzo website pages for smart search",
+  "description": "Tulzo website pages for smart search - Free tier accessible pages",
+  "updated": "2026-01-19",
   "entries": [
     {
       "id": "page-home",
       "title": "Home - Tulzo",
       "link": "/",
-      "content": "Tulzo - 20+ Free Online Tools & Calculators. Free online tools: sleep calculator, weight loss planner, blood type compatibility, IQ test, period tracker, tip calculator, coin flip, wheel spinner, trading risk calculator, timezone converter, decision maker & more. 100% free, no signup, works with AI assistants via MCP. Access all tools through natural conversation with AI chat."
+      "content": "Tulzo - 20+ Free Online Tools & Calculators. Free online tools: sleep calculator, weight loss planner, blood type compatibility, IQ test, period tracker, tip calculator, coin flip, wheel spinner, trading risk calculator, timezone converter, decision maker, voice oracle & more. 100% free, no signup required. Works with AI assistants via MCP protocol. Access all tools through natural conversation with AI chat. Calculate age, convert units, test your luck, spin the wheel, flip a coin."
     },
     {
       "id": "page-age",
@@ -55,7 +56,7 @@
       "id": "page-decide",
       "title": "Decision Maker",
       "link": "/decide",
-      "content": "Decision Maker - Random Choice Picker. Free decision maker tool. Enter your options and let us pick randomly. Perfect for choosing restaurants, movies, activities, or any tough decision. Random selection generator."
+      "content": "Decision Maker - Random Choice Picker & Voice Oracle. Free decision maker tool with two modes: random and voice oracle. Enter your options and let us pick randomly, or use the microphone to speak your question - your voice characteristics (pitch, volume, duration) seed the oracle's decision. Perfect for choosing restaurants, movies, activities, or any tough decision. Works on mobile and desktop."
     },
     {
       "id": "page-eclipse",
