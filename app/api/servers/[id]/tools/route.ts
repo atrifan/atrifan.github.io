@@ -32,7 +32,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     // Get all tools linked to this server
-    const serverTools = await getServerToolsWithDetails(apiKey.id);
+    const serverTools = await getServerToolsWithDetails(userId, apiKey.server_name);
 
     // Transform to expected format
     const tools = serverTools.map(st => ({
@@ -98,7 +98,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
     }
 
     // Bulk update server tools
-    await bulkUpdateServerTools(apiKey.id, enabledToolIds);
+    await bulkUpdateServerTools(userId, apiKey.server_name, enabledToolIds);
 
     return NextResponse.json({
       success: true,

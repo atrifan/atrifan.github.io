@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Server not found' }, { status: 404 });
     }
 
-    const serverTools = await getServerToolsWithDetails(apiKey.id);
+    const serverTools = await getServerToolsWithDetails(userId, apiKey.server_name);
 
     return NextResponse.json({
       server: {
@@ -103,23 +103,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // If tools array provided, sync the tools
     if (Array.isArray(tools)) {
-      const currentTools = await getServerToolsWithDetails(apiKey.id);
+      const currentTools = await getServerToolsWithDetails(userId, apiKey.server_name);
       const currentToolNames = currentTools.map(st => st.tool.name);
-      
+
       // Add new tools
       for (const toolName of tools) {
         if (!currentToolNames.includes(toolName)) {
           const tool = await getToolByName(toolName);
           if (tool) {
             await linkToolToServer({
-              api_key_id: apiKey.id,
+              user_id: userId,
+              server_name: apiKey.server_name,
               tool_id: tool.id,
               is_enabled: true,
             });
           }
         }
       }
-      
+
       // Remove tools not in the new list
       for (const st of currentTools) {
         if (!tools.includes(st.tool.name)) {
@@ -130,7 +131,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // If disabledTools provided, update enabled status
     if (Array.isArray(disabledTools)) {
-      const currentTools = await getServerToolsWithDetails(apiKey.id);
+      const currentTools = await getServerToolsWithDetails(userId, apiKey.server_name);
       const currentToolNames = new Set(currentTools.map(st => st.tool.name));
       const disabledSet = new Set(disabledTools);
 
@@ -144,7 +145,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         // If tool is not disabled and not already linked, link it
         if (!disabledSet.has(tool.name) && !currentToolNames.has(tool.name)) {
           await linkToolToServer({
-            api_key_id: apiKey.id,
+            user_id: userId,
+            server_name: apiKey.server_name,
             tool_id: tool.id,
             is_enabled: true,
           });
@@ -152,12 +154,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
 
       // Now update enabled status for all linked tools
-      const updatedCurrentTools = await getServerToolsWithDetails(apiKey.id);
+      const updatedCurrentTools = await getServerToolsWithDetails(userId, apiKey.server_name);
       const enabledToolIds = updatedCurrentTools
         .filter(st => !disabledTools.includes(st.tool.name))
         .map(st => st.tool_id);
 
-      await bulkUpdateServerTools(apiKey.id, enabledToolIds);
+      await bulkUpdateServerTools(userId, apiKey.server_name, enabledToolIds);
     }
 
     return NextResponse.json({ success: true });

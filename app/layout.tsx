@@ -78,12 +78,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Google AdSense */}
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7299057534028491"
-          crossOrigin="anonymous"
-        />
+        {/* Google AdSense - account verification only, ads are manually rendered */}
         <meta name="google-adsense-account" content="ca-pub-7299057534028491" />
 
         {/* Google Analytics - using next/script to avoid hydration mismatch */}

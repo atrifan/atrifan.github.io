@@ -235,6 +235,14 @@ export async function POST(request: NextRequest) {
       // Don't fail the RAG creation, just log the error
     }
 
+    // Link the tool to the RAG
+    if (toolData?.id && data?.id) {
+      await db
+        .from('user_rags')
+        .update({ tool_id: toolData.id })
+        .eq('id', data.id);
+    }
+
     return NextResponse.json({
       rag: data,
       tool: toolData || null,

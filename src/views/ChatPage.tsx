@@ -114,7 +114,7 @@ interface ChatConnector {
   connector_type: ConnectorType;
   mcp_server_id?: string;
   a2a_agent_id?: string;
-  api_key_id?: string;
+  server_name?: string; // For internal_mcp connectors (replaces api_key_id)
   external_url?: string;
   external_auth_type?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   external_auth_config?: Record<string, string>;

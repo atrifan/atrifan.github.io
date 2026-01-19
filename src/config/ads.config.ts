@@ -17,6 +17,7 @@ export const ADS_CONFIG = {
     // Homepage ads
     homeTop: '3908062551',
     homeHero: '3908062551',
+    homeSectionSeparator: '3908062551', // Between category sections
     homeFooter: '2008657523',
 
     // CUT page ads

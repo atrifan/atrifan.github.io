@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       connectorType,
       mcpServerId,
       a2aAgentId,
-      apiKeyId,
+      serverName, // For internal_mcp connectors (replaces apiKeyId)
       externalUrl,
       externalAuthType,
       externalAuthConfig,
@@ -145,13 +145,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // For internal_mcp (api_key servers), verify the api_key exists and belongs to user
-    const effectiveApiKeyId = apiKeyId || (externalUrl?.startsWith('api_key:') ? externalUrl.replace('api_key:', '') : null);
-    if (connectorType === 'internal_mcp' && effectiveApiKeyId) {
+    // For internal_mcp, verify the server exists for this user
+    const effectiveServerName = serverName || 'default';
+    if (connectorType === 'internal_mcp') {
       const { data: apiKey } = await db
         .from('api_keys')
         .select('id, server_name')
-        .eq('id', effectiveApiKeyId)
+        .eq('server_name', effectiveServerName)
         .eq('user_id', userId)
         .single();
 
@@ -160,13 +160,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build insert data with proper foreign key references
+    // Build insert data with proper references
     const insertData: Record<string, unknown> = {
       user_id: userId,
       connector_type: connectorType,
       mcp_server_id: connectorType === 'external_mcp' ? mcpServerId : null,
       a2a_agent_id: connectorType === 'external_agent' ? a2aAgentId : null,
-      api_key_id: connectorType === 'internal_mcp' ? effectiveApiKeyId : null,
+      server_name: connectorType === 'internal_mcp' ? effectiveServerName : null,
       external_url: externalUrl || null,
       external_auth_type: externalAuthType || 'none',
       external_auth_config: externalAuthConfig || {},

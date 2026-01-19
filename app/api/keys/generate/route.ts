@@ -134,7 +134,7 @@ export async function POST() {
     });
 
     // Link all NATIVE tools to this server
-    await linkAllNativeToolsToServer(newApiKey.id);
+    await linkAllNativeToolsToServer(userId, 'default');
 
     return NextResponse.json({
       success: true,

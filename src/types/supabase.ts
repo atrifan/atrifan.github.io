@@ -321,8 +321,10 @@ export interface EnvironmentUpdate {
 export interface ServerToolRow {
   /** UUID primary key */
   id: string;
-  /** Foreign key to api_keys.id (the server this tool belongs to) */
-  api_key_id: string;
+  /** Clerk user ID who owns this server-tool link */
+  user_id: string;
+  /** Server name (matches api_keys.server_name) */
+  server_name: string;
   /** Foreign key to tools.id (the tool definition) */
   tool_id: string;
   /** Foreign key to environments.id (null for NATIVE tools) */
@@ -341,7 +343,8 @@ export interface ServerToolRow {
  * Insert DTO for server_tools table
  */
 export interface ServerToolInsert {
-  api_key_id: string;
+  user_id: string;
+  server_name: string;
   tool_id: string;
   environment_id?: string;
   custom_config?: Record<string, unknown>;

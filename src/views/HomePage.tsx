@@ -408,10 +408,12 @@ export class HomePage extends Component<{}, HomePageState> {
 
           {/* Tools Grid - Grouped by Category */}
           <View marginTop="size-600" marginBottom="size-600">
-            {getCategoryOrder().map((category) => {
+            {getCategoryOrder().map((category, categoryIndex) => {
               const toolsInCategory = getToolsByCategory()[category];
               if (toolsInCategory.length === 0) return null;
               const isCollapsed = this.state.collapsedCategories.has(category);
+              const categoryOrder = getCategoryOrder().filter(c => getToolsByCategory()[c].length > 0);
+              const isLastCategory = categoryIndex === categoryOrder.length - 1;
 
               return (
                 <div key={category} style={{ marginBottom: '2rem' }}>
@@ -479,6 +481,13 @@ export class HomePage extends Component<{}, HomePageState> {
                   }}>
                     {toolsInCategory.map((tool, index) => this.renderToolCard(tool, index))}
                   </div>
+
+                  {/* Section Separator Ad - between categories (not after last) */}
+                  {!isLastCategory && (
+                    <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '1.5rem auto 0' }}>
+                      <AdBanner slot={ADS_CONFIG.slots.homeSectionSeparator} format="horizontal" />
+                    </View>
+                  )}
                 </div>
               );
             })}

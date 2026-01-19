@@ -38,7 +38,7 @@ export async function GET() {
     try {
       const apiKeys = await getApiKeysByUser(userId);
       for (const apiKey of apiKeys) {
-        const serverTools = await getServerToolsWithDetails(apiKey.id);
+        const serverTools = await getServerToolsWithDetails(userId, apiKey.server_name);
         const enabledTools = serverTools.filter(st => st.is_enabled);
         allServers.push({
           id: apiKey.id,

@@ -18,13 +18,14 @@ import {
   LOCAL_EMBEDDING_MODEL,
 } from '../config/ai-tokens.config';
 import { generateRAGSwagger } from '../lib/rag-swagger-generator';
+import { FieldConfig, FieldMapping, getSuggestedFormat, buildEmbeddingText } from '../lib/upstash-vector';
 
 interface RAGImportPageProps {
   isPro: boolean;
   isPlus: boolean;
 }
 
-type Step = 'name' | 'source' | 'config' | 'saving';
+type Step = 'name' | 'source' | 'fields' | 'config' | 'saving';
 type SourceType = 'csv' | 'url';
 
 // Normalize name helper (consistent with other imports)
@@ -62,11 +63,18 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   // CSV import
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<string[][]>([]);
-  const [csvHasEmbeddings, setCsvHasEmbeddings] = useState(false);
-  const [csvEmbeddingColumn, setCsvEmbeddingColumn] = useState('');
   const [csvContentColumn, setCsvContentColumn] = useState('');
   const [csvTitleColumn, setCsvTitleColumn] = useState('');
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
+  const [csvIdColumnMissing, setCsvIdColumnMissing] = useState(false);
+  const [csvContentColumnMissing, setCsvContentColumnMissing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // CSV Field Configuration (new step)
+  const [csvIdColumn, setCsvIdColumn] = useState('');
+  const [csvFieldMappings, setCsvFieldMappings] = useState<FieldMapping[]>([]);
+  const [idValidationError, setIdValidationError] = useState<string | null>(null);
+  const [isValidatingIds, setIsValidatingIds] = useState(false);
 
   // Remote URL import
   const [remoteUrl, setRemoteUrl] = useState('');
@@ -123,6 +131,28 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   // Swagger preview state
   const [showSwaggerPreview, setShowSwaggerPreview] = useState(false);
   const [generatedSwagger, setGeneratedSwagger] = useState<object | null>(null);
+
+  // Swagger import for URL source
+  const [swaggerUrl, setSwaggerUrl] = useState('');
+  const [isFetchingSwagger, setIsFetchingSwagger] = useState(false);
+  const [fetchedSwagger, setFetchedSwagger] = useState<Record<string, unknown> | null>(null);
+  const [swaggerError, setSwaggerError] = useState<string | null>(null);
+  const [selectedSwaggerPath, setSelectedSwaggerPath] = useState<string>('');
+  const [selectedSwaggerMethod, setSelectedSwaggerMethod] = useState<string>('');
+  const [swaggerPaths, setSwaggerPaths] = useState<Array<{ path: string; method: string; summary?: string; operationId?: string }>>([]);
+
+  // Detected parameters from swagger for mapping
+  const [detectedParams, setDetectedParams] = useState<Array<{
+    name: string;
+    type: string;
+    required: boolean;
+    description?: string;
+    location: 'query' | 'body' | 'path';
+    isArray?: boolean;
+  }>>([]);
+
+  // Response schema from swagger
+  const [detectedResponseSchema, setDetectedResponseSchema] = useState<Record<string, unknown> | null>(null);
 
   // Get current model's dimensions
   const currentModelDimensions = useMemo(() => {
@@ -206,6 +236,297 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
     fontSize: '0.9rem',
   };
 
+  // Fetch and parse swagger from URL
+  const handleFetchSwagger = async () => {
+    if (!swaggerUrl.trim()) {
+      setSwaggerError('Please enter a Swagger/OpenAPI URL');
+      return;
+    }
+
+    setIsFetchingSwagger(true);
+    setSwaggerError(null);
+    setFetchedSwagger(null);
+    setSwaggerPaths([]);
+
+    try {
+      // Build headers for auth
+      const headers: Record<string, string> = {};
+      if (authType === 'api_key' && apiKey) {
+        headers['x-api-key'] = apiKey;
+      } else if (authType === 'bearer' && bearerToken) {
+        headers['Authorization'] = `Bearer ${bearerToken}`;
+      } else if (authType === 'basic' && basicCredentials) {
+        headers['Authorization'] = `Basic ${btoa(basicCredentials)}`;
+      }
+      customHeaders.forEach(h => {
+        if (h.key.trim() && h.value.trim()) {
+          headers[h.key] = h.value;
+        }
+      });
+
+      const response = await fetch('/api/swagger/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: swaggerUrl, headers }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to fetch swagger');
+      }
+
+      const data = await response.json();
+      let spec: Record<string, unknown>;
+
+      // Parse the spec (could be JSON or YAML)
+      if (data.format === 'yaml') {
+        // Simple YAML parsing for common cases
+        // For complex YAML, we'd need a proper parser
+        try {
+          spec = JSON.parse(data.spec);
+        } catch {
+          // Try to extract basic info from YAML
+          setSwaggerError('YAML parsing not fully supported. Please use a JSON swagger URL.');
+          return;
+        }
+      } else {
+        spec = JSON.parse(data.spec);
+      }
+
+      setFetchedSwagger(spec);
+
+      // Extract paths from swagger
+      const paths: Array<{ path: string; method: string; summary?: string; operationId?: string }> = [];
+      const pathsObj = spec.paths as Record<string, Record<string, { summary?: string; operationId?: string; description?: string }>> | undefined;
+
+      if (pathsObj) {
+        for (const [path, methods] of Object.entries(pathsObj)) {
+          for (const [method, details] of Object.entries(methods)) {
+            if (['get', 'post', 'put', 'patch', 'delete'].includes(method.toLowerCase())) {
+              paths.push({
+                path,
+                method: method.toUpperCase(),
+                summary: details.summary || details.description,
+                operationId: details.operationId,
+              });
+            }
+          }
+        }
+      }
+
+      setSwaggerPaths(paths);
+
+      // Auto-select first POST or GET endpoint
+      const defaultPath = paths.find(p => p.method === 'POST') || paths.find(p => p.method === 'GET') || paths[0];
+      if (defaultPath) {
+        setSelectedSwaggerPath(defaultPath.path);
+        setSelectedSwaggerMethod(defaultPath.method);
+        applySwaggerEndpoint(spec, defaultPath.path, defaultPath.method);
+      }
+
+    } catch (err) {
+      setSwaggerError((err as Error).message);
+    } finally {
+      setIsFetchingSwagger(false);
+    }
+  };
+
+  // Helper to resolve $ref in swagger
+  const resolveRef = (spec: Record<string, unknown>, ref: string): Record<string, unknown> | null => {
+    if (!ref.startsWith('#/')) return null;
+    const parts = ref.slice(2).split('/');
+    let current: unknown = spec;
+    for (const part of parts) {
+      if (current && typeof current === 'object' && part in current) {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        return null;
+      }
+    }
+    return current as Record<string, unknown>;
+  };
+
+  // Apply selected swagger endpoint configuration
+  const applySwaggerEndpoint = (spec: Record<string, unknown>, path: string, method: string) => {
+    const pathsObj = spec.paths as Record<string, Record<string, unknown>> | undefined;
+    if (!pathsObj || !pathsObj[path]) return;
+
+    const endpoint = pathsObj[path][method.toLowerCase()] as Record<string, unknown> | undefined;
+    if (!endpoint) return;
+
+    // Extract server URL
+    const servers = spec.servers as Array<{ url: string }> | undefined;
+    const baseUrl = servers?.[0]?.url || '';
+    const fullUrl = baseUrl.startsWith('http') ? `${baseUrl}${path}` : path;
+    setRemoteUrl(fullUrl);
+
+    // Set HTTP method
+    setUrlHttpMethod(method as 'GET' | 'POST');
+
+    // Collect all parameters
+    const allParams: Array<{
+      name: string;
+      type: string;
+      required: boolean;
+      description?: string;
+      location: 'query' | 'body' | 'path';
+      isArray?: boolean;
+    }> = [];
+
+    // Analyze query/path parameters
+    const parameters = endpoint.parameters as Array<{
+      in: string;
+      name: string;
+      required?: boolean;
+      description?: string;
+      schema?: { type: string; items?: { type: string } }
+    }> | undefined;
+
+    if (parameters) {
+      for (const param of parameters) {
+        const isArray = param.schema?.type === 'array';
+        allParams.push({
+          name: param.name,
+          type: isArray ? `array<${param.schema?.items?.type || 'string'}>` : (param.schema?.type || 'string'),
+          required: param.required || false,
+          description: param.description,
+          location: param.in as 'query' | 'path',
+          isArray,
+        });
+      }
+    }
+
+    // Analyze request body
+    const requestBody = endpoint.requestBody as Record<string, unknown> | undefined;
+    if (requestBody) {
+      setUrlParamsLocation('body');
+      const content = requestBody.content as Record<string, { schema?: Record<string, unknown> }> | undefined;
+
+      if (content?.['application/json']) {
+        setUrlContentType('application/json');
+        let schema = content['application/json'].schema;
+
+        // Resolve $ref if present
+        if (schema && '$ref' in schema) {
+          schema = resolveRef(spec, schema['$ref'] as string) || schema;
+        }
+
+        // Extract properties from schema
+        if (schema && schema.properties) {
+          const props = schema.properties as Record<string, { type?: string; description?: string; items?: { type: string } }>;
+          const required = (schema.required as string[]) || [];
+
+          for (const [propName, propSchema] of Object.entries(props)) {
+            const isArray = propSchema.type === 'array';
+            allParams.push({
+              name: propName,
+              type: isArray ? `array<${propSchema.items?.type || 'number'}>` : (propSchema.type || 'string'),
+              required: required.includes(propName),
+              description: propSchema.description,
+              location: 'body',
+              isArray,
+            });
+          }
+        }
+      } else if (content?.['application/x-www-form-urlencoded']) {
+        setUrlContentType('application/x-www-form-urlencoded');
+      }
+    } else if (parameters?.some(p => p.in === 'query')) {
+      setUrlParamsLocation('query');
+    }
+
+    setDetectedParams(allParams);
+
+    // Auto-detect field mappings based on parameter names
+    const newFieldMapping = { ...fieldMapping };
+
+    // Query field detection
+    const queryParam = allParams.find(p =>
+      p.name.toLowerCase() === 'query' ||
+      p.name.toLowerCase() === 'q' ||
+      p.name.toLowerCase() === 'text' ||
+      p.name.toLowerCase() === 'search' ||
+      p.name.toLowerCase().includes('query')
+    );
+    if (queryParam) {
+      newFieldMapping.query = queryParam.name;
+    }
+
+    // Top N / limit detection
+    const topNParam = allParams.find(p =>
+      p.name.toLowerCase() === 'top_n' ||
+      p.name.toLowerCase() === 'topn' ||
+      p.name.toLowerCase() === 'top_k' ||
+      p.name.toLowerCase() === 'topk' ||
+      p.name.toLowerCase() === 'k' ||
+      p.name.toLowerCase() === 'limit' ||
+      p.name.toLowerCase() === 'n' ||
+      p.name.toLowerCase() === 'count'
+    );
+    if (topNParam) {
+      newFieldMapping.top_n = topNParam.name;
+    }
+
+    // Embedding/vector detection - if found, we DON'T need to generate embeddings (API has them)
+    // OR if it's an array of numbers, the API expects us to send embeddings
+    const embeddingParam = allParams.find(p =>
+      p.name.toLowerCase() === 'embedding' ||
+      p.name.toLowerCase() === 'embeddings' ||
+      p.name.toLowerCase() === 'vector' ||
+      p.name.toLowerCase() === 'vectors' ||
+      (p.isArray && p.type.includes('number'))
+    );
+    if (embeddingParam) {
+      newFieldMapping.embedding = embeddingParam.name;
+      // If API expects embedding array, we need to generate embeddings
+      setUrlNeedsEmbeddings(true);
+    } else {
+      // No embedding param = API does its own embedding from text
+      setUrlNeedsEmbeddings(false);
+    }
+
+    // Dimensions detection
+    const dimensionsParam = allParams.find(p =>
+      p.name.toLowerCase() === 'dimensions' ||
+      p.name.toLowerCase() === 'dim' ||
+      p.name.toLowerCase() === 'dims'
+    );
+    if (dimensionsParam) {
+      newFieldMapping.dimensions = dimensionsParam.name;
+    }
+
+    // Model detection
+    const modelParam = allParams.find(p =>
+      p.name.toLowerCase() === 'model' ||
+      p.name.toLowerCase() === 'embedding_model'
+    );
+    if (modelParam) {
+      newFieldMapping.model = modelParam.name;
+    }
+
+    setFieldMapping(newFieldMapping);
+
+    // Extract response schema
+    const responses = endpoint.responses as Record<string, { content?: Record<string, { schema?: Record<string, unknown> }> }> | undefined;
+    if (responses) {
+      const successResponse = responses['200'] || responses['201'] || Object.values(responses)[0];
+      if (successResponse?.content?.['application/json']?.schema) {
+        let responseSchema = successResponse.content['application/json'].schema;
+        if ('$ref' in responseSchema) {
+          responseSchema = resolveRef(spec, responseSchema['$ref'] as string) || responseSchema;
+        }
+        setDetectedResponseSchema(responseSchema);
+      }
+    }
+
+    // Extract description for the RAG
+    const summary = endpoint.summary as string | undefined;
+    const endpointDescription = endpoint.description as string | undefined;
+    if (summary || endpointDescription) {
+      setServerDescription(summary || endpointDescription || '');
+    }
+  };
+
   // CSV parsing
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -237,23 +558,37 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
       });
 
       if (parsed.length > 0) {
-        setCsvColumns(parsed[0]);
+        const columns = parsed[0];
+        setCsvColumns(columns);
         setCsvPreview(parsed);
-        // Auto-detect embedding column
-        const embCol = parsed[0].find(c => c.toLowerCase().includes('embed'));
-        if (embCol) {
-          setCsvHasEmbeddings(true);
-          setCsvEmbeddingColumn(embCol);
+
+        // Auto-detect ID column - look for 'id' column (case-insensitive)
+        const idCol = columns.find(c => c.toLowerCase() === 'id');
+        if (idCol) {
+          setCsvIdColumn(idCol);
+          setCsvIdColumnMissing(false);
+          // Validate the ID column
+          validateIdColumnFromParsed(idCol, parsed);
+        } else {
+          setCsvIdColumn('');
+          setCsvIdColumnMissing(true);
         }
+
         // Auto-detect content column
-        const contentCol = parsed[0].find(c =>
+        const contentCol = columns.find(c =>
           c.toLowerCase().includes('content') ||
           c.toLowerCase().includes('text') ||
           c.toLowerCase().includes('body')
         );
-        if (contentCol) setCsvContentColumn(contentCol);
+        if (contentCol) {
+          setCsvContentColumn(contentCol);
+          setCsvContentColumnMissing(false);
+        } else {
+          setCsvContentColumn('');
+          setCsvContentColumnMissing(true);
+        }
         // Auto-detect title column
-        const titleCol = parsed[0].find(c =>
+        const titleCol = columns.find(c =>
           c.toLowerCase().includes('title') ||
           c.toLowerCase().includes('name')
         );
@@ -267,6 +602,7 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
   // Navigation
   const handleNext = () => {
     setError(null);
+    setIdValidationError(null);
     switch (currentStep) {
       case 'name':
         if (!name.trim()) {
@@ -281,11 +617,41 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
           return;
         }
         if (sourceType === 'csv' && !csvContentColumn) {
-          setError('Please select the content column');
+          setError('Please select the document column');
           return;
         }
         if (sourceType === 'url' && !remoteUrl.trim()) {
           setError('Please enter a URL');
+          return;
+        }
+        // For CSV, go to fields step; for URL, go to config
+        if (sourceType === 'csv') {
+          // Initialize field mappings for all columns except id and document
+          const otherColumns = csvColumns.filter(
+            col => col !== csvIdColumn && col !== csvContentColumn
+          );
+          setCsvFieldMappings(
+            otherColumns.map(col => ({
+              column: col,
+              embed: col === csvTitleColumn, // Title is embedded by default
+              metadata: true, // All fields stored as metadata by default
+              format: getSuggestedFormat(col),
+            }))
+          );
+          setCurrentStep('fields');
+        } else {
+          setCurrentStep('config');
+        }
+        break;
+      case 'fields':
+        // Validate ID column is selected
+        if (!csvIdColumn) {
+          setError('Please select an ID column');
+          return;
+        }
+        // Validate IDs are unique
+        if (idValidationError) {
+          setError(idValidationError);
           return;
         }
         setCurrentStep('config');
@@ -298,14 +664,126 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
 
   const handleBack = () => {
     setError(null);
+    setIdValidationError(null);
     switch (currentStep) {
       case 'source':
         setCurrentStep('name');
         break;
-      case 'config':
+      case 'fields':
         setCurrentStep('source');
         break;
+      case 'config':
+        setCurrentStep(sourceType === 'csv' ? 'fields' : 'source');
+        break;
     }
+  };
+
+  // Validate ID column uniqueness
+  const validateIdColumn = async (column: string) => {
+    if (!column || !csvFile) return;
+
+    setIsValidatingIds(true);
+    setIdValidationError(null);
+
+    try {
+      const text = await csvFile.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = parseCSVLineSimple(lines[0]);
+      const idIndex = headers.indexOf(column);
+
+      if (idIndex === -1) {
+        setIdValidationError(`Column "${column}" not found`);
+        return;
+      }
+
+      const ids = new Set<string>();
+      const duplicates: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCSVLineSimple(lines[i]);
+        const id = row[idIndex]?.trim();
+
+        if (!id) {
+          setIdValidationError(`Row ${i + 1} has empty ID`);
+          return;
+        }
+
+        if (ids.has(id)) {
+          duplicates.push(id);
+        }
+        ids.add(id);
+      }
+
+      if (duplicates.length > 0) {
+        setIdValidationError(`Duplicate IDs found: ${duplicates.slice(0, 3).join(', ')}${duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : ''}`);
+      }
+    } catch (err) {
+      setIdValidationError('Failed to validate IDs');
+    } finally {
+      setIsValidatingIds(false);
+    }
+  };
+
+  // Validate ID column from already-parsed CSV data (used during file load)
+  const validateIdColumnFromParsed = (column: string, parsed: string[][]) => {
+    if (!column || parsed.length < 2) return;
+
+    setIsValidatingIds(true);
+    setIdValidationError(null);
+
+    try {
+      const headers = parsed[0];
+      const idIndex = headers.indexOf(column);
+
+      if (idIndex === -1) {
+        setIdValidationError(`Column "${column}" not found`);
+        return;
+      }
+
+      const ids = new Set<string>();
+      const duplicates: string[] = [];
+
+      for (let i = 1; i < parsed.length; i++) {
+        const id = parsed[i][idIndex]?.trim();
+
+        if (!id) {
+          setIdValidationError(`Row ${i + 1} has empty ID`);
+          return;
+        }
+
+        if (ids.has(id)) {
+          duplicates.push(id);
+        }
+        ids.add(id);
+      }
+
+      if (duplicates.length > 0) {
+        setIdValidationError(`Duplicate IDs found: ${duplicates.slice(0, 3).join(', ')}${duplicates.length > 3 ? ` and ${duplicates.length - 3} more` : ''}`);
+      }
+    } catch {
+      setIdValidationError('Failed to validate IDs');
+    } finally {
+      setIsValidatingIds(false);
+    }
+  };
+
+  // Simple CSV line parser (for validation)
+  const parseCSVLineSimple = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (const char of line) {
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
   };
 
   const handleSave = async () => {
@@ -382,6 +860,14 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
             model: fieldMapping.model || 'model',
           },
         } : {}),
+        // CSV field configuration
+        ...(sourceType === 'csv' ? {
+          fieldConfig: {
+            id_column: csvIdColumn,
+            document_column: csvContentColumn,
+            fields: csvFieldMappings,
+          },
+        } : {}),
         // Generate swagger spec
         swaggerSpec: generateRAGSwagger({
           ragName: normalizeName(name.trim()),
@@ -429,16 +915,17 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
       const data = await response.json();
       const ragId = data.rag.id;
 
-      // If CSV, upload documents
+      // If CSV, upload documents with field configuration
       if (sourceType === 'csv' && csvFile) {
         const formData = new FormData();
         formData.append('file', csvFile);
         formData.append('ragId', ragId);
+        formData.append('ragName', normalizeName(name.trim()));
+        // Field configuration
+        formData.append('idColumn', csvIdColumn);
         formData.append('contentColumn', csvContentColumn);
         formData.append('titleColumn', csvTitleColumn || '');
-        formData.append('hasEmbeddings', String(csvHasEmbeddings));
-        formData.append('embeddingColumn', csvEmbeddingColumn || '');
-        formData.append('embeddingModel', !csvHasEmbeddings ? embeddingModel : '');
+        formData.append('fieldMappings', JSON.stringify(csvFieldMappings));
 
         const uploadResponse = await fetch('/api/ai/rags/documents/upload', {
           method: 'POST',
@@ -462,11 +949,19 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
 
   // Step indicator
   const renderStepIndicator = () => {
-    const steps = [
-      { key: 'name', label: '1. Name' },
-      { key: 'source', label: '2. Source' },
-      { key: 'config', label: '3. Config' },
-    ];
+    // For CSV imports, include the fields step
+    const steps = sourceType === 'csv'
+      ? [
+          { key: 'name', label: '1. Name' },
+          { key: 'source', label: '2. Source' },
+          { key: 'fields', label: '3. Fields' },
+          { key: 'config', label: '4. Config' },
+        ]
+      : [
+          { key: 'name', label: '1. Name' },
+          { key: 'source', label: '2. Source' },
+          { key: 'config', label: '3. Config' },
+        ];
     const currentIndex = steps.findIndex(s => s.key === currentStep);
 
     return (
@@ -683,21 +1178,62 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
             onChange={handleFileSelect}
             style={{ display: 'none' }}
           />
-          <button
+          <div
             onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+              const files = e.dataTransfer.files;
+              if (files.length > 0) {
+                const file = files[0];
+                if (file.name.endsWith('.csv')) {
+                  // Create a synthetic event to reuse handleFileSelect
+                  const syntheticEvent = {
+                    target: { files: [file] }
+                  } as unknown as React.ChangeEvent<HTMLInputElement>;
+                  handleFileSelect(syntheticEvent);
+                } else {
+                  setError('Please drop a CSV file');
+                }
+              }
+            }}
             style={{
               width: '100%',
               padding: '2rem',
               borderRadius: '8px',
-              border: '2px dashed rgba(139, 92, 246, 0.5)',
-              background: 'rgba(139, 92, 246, 0.1)',
-              color: '#a78bfa',
+              border: `2px dashed ${isDragging ? '#10b981' : 'rgba(139, 92, 246, 0.5)'}`,
+              background: isDragging ? 'rgba(16, 185, 129, 0.15)' : 'rgba(139, 92, 246, 0.1)',
+              color: isDragging ? '#10b981' : '#a78bfa',
               cursor: 'pointer',
               fontSize: '0.9rem',
+              textAlign: 'center',
+              transition: 'all 0.2s ease',
             }}
           >
-            {csvFile ? `📄 ${csvFile.name}` : '📤 Click to select CSV file'}
-          </button>
+            {csvFile ? (
+              <span>📄 {csvFile.name}</span>
+            ) : isDragging ? (
+              <span>📥 Drop CSV file here</span>
+            ) : (
+              <span>📤 Click or drag &amp; drop CSV file here</span>
+            )}
+          </div>
 
           {csvPreview.length > 0 && (
             <div style={{ marginTop: '1rem' }}>
@@ -732,11 +1268,37 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
               {/* Column mapping */}
               <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 <div>
-                  <label style={labelStyle}>Content Column *</label>
-                  <select value={csvContentColumn} onChange={(e) => setCsvContentColumn(e.target.value)} style={selectStyle}>
+                  <label style={{
+                    ...labelStyle,
+                    color: csvContentColumnMissing ? '#ef4444' : labelStyle.color,
+                  }}>
+                    Content Column *
+                    {csvContentColumnMissing && (
+                      <span style={{ color: '#ef4444', fontWeight: 400, marginLeft: '0.5rem' }}>
+                        (required)
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={csvContentColumn}
+                    onChange={(e) => {
+                      setCsvContentColumn(e.target.value);
+                      setCsvContentColumnMissing(!e.target.value);
+                    }}
+                    style={{
+                      ...selectStyle,
+                      borderColor: csvContentColumnMissing ? '#ef4444' : undefined,
+                      boxShadow: csvContentColumnMissing ? '0 0 0 1px #ef4444' : undefined,
+                    }}
+                  >
                     <option value="">Select column...</option>
                     {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
                   </select>
+                  {csvContentColumnMissing && (
+                    <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                      ⚠️ No &quot;content&quot; column found. Please select the column containing your document text.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={labelStyle}>Title Column (optional)</label>
@@ -746,28 +1308,6 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
                   </select>
                 </div>
               </div>
-
-              {/* Embeddings */}
-              <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={csvHasEmbeddings}
-                    onChange={(e) => setCsvHasEmbeddings(e.target.checked)}
-                    style={{ width: '18px', height: '18px' }}
-                  />
-                  CSV already contains embeddings
-                </label>
-                {csvHasEmbeddings && (
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <label style={labelStyle}>Embedding Column</label>
-                    <select value={csvEmbeddingColumn} onChange={(e) => setCsvEmbeddingColumn(e.target.value)} style={selectStyle}>
-                      <option value="">Select column...</option>
-                      {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
-                    </select>
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </div>
@@ -776,17 +1316,219 @@ export function RAGImportPage({ isPro, isPlus }: RAGImportPageProps) {
       {/* Remote URL Import */}
       {sourceType === 'url' && (
         <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem' }}>
+          {/* Swagger Import Section */}
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '8px' }}>
+            <h4 style={{ color: '#a78bfa', fontSize: '0.9rem', margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              📄 Import from Swagger/OpenAPI (Recommended)
+            </h4>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
+              Provide a Swagger/OpenAPI URL to auto-configure the endpoint settings
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input
+                type="url"
+                value={swaggerUrl}
+                onChange={(e) => setSwaggerUrl(e.target.value)}
+                placeholder="https://api.example.com/swagger.json"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button
+                onClick={handleFetchSwagger}
+                disabled={isFetchingSwagger || !swaggerUrl.trim()}
+                style={{
+                  ...buttonStyle,
+                  background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                  color: '#fff',
+                  opacity: (isFetchingSwagger || !swaggerUrl.trim()) ? 0.5 : 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isFetchingSwagger ? '⏳ Fetching...' : '📥 Fetch Swagger'}
+              </button>
+            </div>
+
+            {swaggerError && (
+              <p style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                ❌ {swaggerError}
+              </p>
+            )}
+
+            {/* Swagger Paths Selection */}
+            {swaggerPaths.length > 0 && (
+              <div style={{ marginTop: '1rem' }}>
+                <label style={labelStyle}>Select Endpoint</label>
+                <select
+                  value={`${selectedSwaggerMethod}:${selectedSwaggerPath}`}
+                  onChange={(e) => {
+                    const [method, ...pathParts] = e.target.value.split(':');
+                    const path = pathParts.join(':');
+                    setSelectedSwaggerMethod(method);
+                    setSelectedSwaggerPath(path);
+                    if (fetchedSwagger) {
+                      applySwaggerEndpoint(fetchedSwagger, path, method);
+                    }
+                  }}
+                  style={selectStyle}
+                >
+                  {swaggerPaths.map((p, idx) => (
+                    <option key={idx} value={`${p.method}:${p.path}`}>
+                      {p.method} {p.path} {p.summary ? `- ${p.summary}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p style={{ color: '#10b981', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                  ✓ Found {swaggerPaths.length} endpoint(s). Settings auto-configured below.
+                </p>
+              </div>
+            )}
+
+            {/* Show fetched swagger info */}
+            {fetchedSwagger && (
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', margin: 0 }}>
+                  📋 {(fetchedSwagger.info as { title?: string })?.title || 'API'}
+                  {(fetchedSwagger.info as { version?: string })?.version && ` v${(fetchedSwagger.info as { version?: string })?.version}`}
+                </p>
+              </div>
+            )}
+
+            {/* Detected Parameters & Mapping */}
+            {detectedParams.length > 0 && (
+              <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px' }}>
+                <h5 style={{ color: '#10b981', fontSize: '0.85rem', margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  🔍 Detected Parameters ({detectedParams.length})
+                </h5>
+
+                <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1rem' }}>
+                  {detectedParams.map((param, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                      <span style={{
+                        padding: '0.125rem 0.375rem',
+                        background: param.location === 'body' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(59, 130, 246, 0.3)',
+                        borderRadius: '4px',
+                        fontSize: '0.65rem',
+                        color: param.location === 'body' ? '#a78bfa' : '#60a5fa',
+                        textTransform: 'uppercase',
+                      }}>
+                        {param.location}
+                      </span>
+                      <code style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500 }}>{param.name}</code>
+                      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>({param.type})</span>
+                      {param.required && <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>*required</span>}
+                      {param.description && (
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginLeft: 'auto', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {param.description}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Field Mapping */}
+                <h5 style={{ color: '#10b981', fontSize: '0.85rem', margin: '1rem 0 0.5rem' }}>
+                  🔗 Field Mapping
+                </h5>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
+                  Map the API parameters to our standard RAG fields:
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Query Field *</label>
+                    <select
+                      value={fieldMapping.query}
+                      onChange={(e) => setFieldMapping(prev => ({ ...prev, query: e.target.value }))}
+                      style={{ ...selectStyle, fontSize: '0.8rem', padding: '0.5rem' }}
+                    >
+                      <option value="">Select...</option>
+                      {detectedParams.map(p => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Top N / Limit Field</label>
+                    <select
+                      value={fieldMapping.top_n}
+                      onChange={(e) => setFieldMapping(prev => ({ ...prev, top_n: e.target.value }))}
+                      style={{ ...selectStyle, fontSize: '0.8rem', padding: '0.5rem' }}
+                    >
+                      <option value="">None</option>
+                      {detectedParams.filter(p => p.type === 'integer' || p.type === 'number').map(p => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Embedding Field</label>
+                    <select
+                      value={fieldMapping.embedding}
+                      onChange={(e) => {
+                        setFieldMapping(prev => ({ ...prev, embedding: e.target.value }));
+                        // If embedding field is set, we need to generate embeddings
+                        setUrlNeedsEmbeddings(!!e.target.value);
+                      }}
+                      style={{ ...selectStyle, fontSize: '0.8rem', padding: '0.5rem' }}
+                    >
+                      <option value="">None (API handles embedding)</option>
+                      {detectedParams.filter(p => p.isArray || p.type.includes('array')).map(p => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Embedding status */}
+                <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: urlNeedsEmbeddings ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderRadius: '6px' }}>
+                  {urlNeedsEmbeddings ? (
+                    <p style={{ color: '#f59e0b', fontSize: '0.75rem', margin: 0 }}>
+                      ⚡ We will generate embeddings and send to the API
+                    </p>
+                  ) : (
+                    <p style={{ color: '#10b981', fontSize: '0.75rem', margin: 0 }}>
+                      ✓ API handles text-to-embedding conversion
+                    </p>
+                  )}
+                </div>
+
+                {/* Response Schema Preview */}
+                {detectedResponseSchema && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <h5 style={{ color: '#10b981', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>
+                      📤 Response Schema
+                    </h5>
+                    <pre style={{
+                      padding: '0.5rem',
+                      background: 'rgba(0,0,0,0.3)',
+                      borderRadius: '6px',
+                      color: 'rgba(255,255,255,0.7)',
+                      fontSize: '0.7rem',
+                      overflow: 'auto',
+                      maxHeight: '100px',
+                      margin: 0,
+                    }}>
+                      {JSON.stringify(detectedResponseSchema, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: '1rem' }}>
             <label style={labelStyle}>API Endpoint URL *</label>
             <input
               type="url"
               value={remoteUrl}
               onChange={(e) => setRemoteUrl(e.target.value)}
-              placeholder="https://api.example.com/documents"
+              placeholder="https://api.example.com/search"
               style={inputStyle}
             />
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-              The API should return JSON with document data
+              {fetchedSwagger ? 'Auto-filled from Swagger. Modify if needed.' : 'The API endpoint for RAG queries'}
             </p>
           </div>
 
@@ -1061,6 +1803,265 @@ ${urlContentType === 'application/json' ? JSON.stringify({
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Build preview of embedding text for first data row
+  const getEmbeddingPreview = (): string => {
+    if (csvPreview.length < 2) return '';
+
+    const headers = csvPreview[0];
+    const firstRow = csvPreview[1];
+
+    // Build a row object
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, idx) => {
+      rowData[header] = firstRow[idx] || '';
+    });
+
+    // Build field config
+    const fieldConfig: FieldConfig = {
+      id_column: csvIdColumn,
+      document_column: csvContentColumn,
+      fields: csvFieldMappings,
+    };
+
+    return buildEmbeddingText(rowData, fieldConfig);
+  };
+
+  const renderFieldsStep = () => (
+    <div style={cardStyle}>
+      <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '1rem' }}>📊 Field Configuration</h2>
+
+      {/* Info Card about Embeddings */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15))',
+        border: '1px solid rgba(139, 92, 246, 0.3)',
+        borderRadius: '12px',
+        padding: '1rem',
+        marginBottom: '1.5rem',
+      }}>
+        <h3 style={{ color: '#a78bfa', fontSize: '0.95rem', margin: '0 0 0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          💡 What are Embeddings?
+        </h3>
+        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', margin: '0 0 0.5rem', lineHeight: 1.5 }}>
+          Embeddings convert text into numbers that capture <strong>meaning</strong>. Fields included in embeddings
+          become searchable by semantic similarity, not just exact keywords.
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', margin: 0, fontStyle: 'italic' }}>
+          Example: If you embed &quot;price: $35&quot;, searching for &quot;affordable items&quot; may find it!
+        </p>
+      </div>
+
+      {/* Required Fields */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h3 style={{ color: '#fff', fontSize: '1rem', marginBottom: '0.75rem' }}>Required Fields</h3>
+
+        <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          {/* ID Column */}
+          <div>
+            <label style={{
+              ...labelStyle,
+              color: csvIdColumnMissing ? '#ef4444' : labelStyle.color,
+            }}>
+              ID Column *
+              <span style={{ color: csvIdColumnMissing ? '#ef4444' : 'rgba(255,255,255,0.4)', fontWeight: 400, marginLeft: '0.5rem' }}>
+                (unique identifier)
+              </span>
+            </label>
+            <select
+              value={csvIdColumn}
+              onChange={(e) => {
+                setCsvIdColumn(e.target.value);
+                setCsvIdColumnMissing(!e.target.value);
+                validateIdColumn(e.target.value);
+              }}
+              style={{
+                ...selectStyle,
+                borderColor: csvIdColumnMissing ? '#ef4444' : undefined,
+                boxShadow: csvIdColumnMissing ? '0 0 0 1px #ef4444' : undefined,
+              }}
+            >
+              <option value="">Select column...</option>
+              {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
+            </select>
+            {csvIdColumnMissing && !isValidatingIds && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                ⚠️ No &quot;id&quot; column found. Please select a column with unique identifiers.
+              </p>
+            )}
+            {isValidatingIds && (
+              <p style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                ⏳ Validating IDs...
+              </p>
+            )}
+            {idValidationError && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                ❌ {idValidationError}
+              </p>
+            )}
+            {csvIdColumn && !idValidationError && !isValidatingIds && !csvIdColumnMissing && (
+              <p style={{ color: '#10b981', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                ✅ All IDs are unique
+              </p>
+            )}
+          </div>
+
+          {/* Document Column */}
+          <div>
+            <label style={labelStyle}>
+              Document Column *
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, marginLeft: '0.5rem' }}>
+                (always embedded)
+              </span>
+            </label>
+            <select
+              value={csvContentColumn}
+              onChange={(e) => setCsvContentColumn(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Select column...</option>
+              {csvColumns.map(col => <option key={col} value={col}>{col}</option>)}
+            </select>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+              Main content that will be searchable
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Optional Fields */}
+      {csvFieldMappings.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ color: '#fff', fontSize: '1rem', marginBottom: '0.75rem' }}>
+            Optional Fields
+            <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+              (select which to embed)
+            </span>
+          </h3>
+
+          <div style={{
+            background: 'rgba(0,0,0,0.2)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 80px 80px 1fr',
+              gap: '0.5rem',
+              padding: '0.75rem 1rem',
+              background: 'rgba(139, 92, 246, 0.2)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: '#a78bfa',
+            }}>
+              <div>Column</div>
+              <div style={{ textAlign: 'center' }}>Embed?</div>
+              <div style={{ textAlign: 'center' }}>Metadata</div>
+              <div>Embedding Format</div>
+            </div>
+
+            {/* Rows */}
+            {csvFieldMappings.map((field, idx) => (
+              <div
+                key={field.column}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 80px 80px 1fr',
+                  gap: '0.5rem',
+                  padding: '0.75rem 1rem',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>
+                  {field.column}
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={field.embed}
+                    onChange={(e) => {
+                      const updated = [...csvFieldMappings];
+                      updated[idx] = { ...field, embed: e.target.checked };
+                      setCsvFieldMappings(updated);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={field.metadata}
+                    onChange={(e) => {
+                      const updated = [...csvFieldMappings];
+                      updated[idx] = { ...field, metadata: e.target.checked };
+                      setCsvFieldMappings(updated);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div>
+                  {field.embed ? (
+                    <input
+                      type="text"
+                      value={field.format}
+                      onChange={(e) => {
+                        const updated = [...csvFieldMappings];
+                        updated[idx] = { ...field, format: e.target.value };
+                        setCsvFieldMappings(updated);
+                      }}
+                      placeholder="{value}"
+                      style={{
+                        ...inputStyle,
+                        padding: '0.35rem 0.5rem',
+                        fontSize: '0.8rem',
+                        background: 'rgba(0,0,0,0.3)',
+                      }}
+                    />
+                  ) : (
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                      (not embedded)
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+            💡 Use <code style={{ color: '#10b981' }}>{'{value}'}</code> in format to insert the field value.
+            Example: <code style={{ color: '#10b981' }}>Price: {'{value}'}</code> → &quot;Price: $35&quot;
+          </p>
+        </div>
+      )}
+
+      {/* Embedding Preview */}
+      {csvContentColumn && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.1)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: '8px',
+          padding: '1rem',
+        }}>
+          <h4 style={{ color: '#10b981', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>
+            🔍 Embedding Preview (first row)
+          </h4>
+          <p style={{
+            color: 'rgba(255,255,255,0.8)',
+            fontSize: '0.85rem',
+            margin: 0,
+            fontFamily: 'monospace',
+            background: 'rgba(0,0,0,0.2)',
+            padding: '0.75rem',
+            borderRadius: '4px',
+            lineHeight: 1.5,
+          }}>
+            {getEmbeddingPreview() || 'Select document column to see preview'}
+          </p>
         </div>
       )}
     </div>
@@ -1388,6 +2389,7 @@ ${urlContentType === 'application/json' ? JSON.stringify({
 
         {currentStep === 'name' && renderNameStep()}
         {currentStep === 'source' && renderSourceStep()}
+        {currentStep === 'fields' && renderFieldsStep()}
         {currentStep === 'config' && renderConfigStep()}
         {currentStep === 'saving' && renderSavingStep()}
 

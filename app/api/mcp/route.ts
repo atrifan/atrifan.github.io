@@ -1878,9 +1878,9 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let toolsList: any[] = [...TOOLS];
 
-        if (context.isAuthenticated && context.apiKeyId) {
+        if (context.isAuthenticated && context.userId) {
           try {
-            const serverTools = await getEnabledServerTools(context.apiKeyId);
+            const serverTools = await getEnabledServerTools(context.userId, context.serverName);
             if (serverTools.length > 0) {
               // Separate NATIVE and REST tools
               const filteredNativeTools: typeof TOOLS = [];

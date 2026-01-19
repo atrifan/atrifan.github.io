@@ -305,10 +305,11 @@ export async function getToolById(id: string): Promise<ToolRow | null> {
 // ============ Server Tools ============
 
 /**
- * Get all tools linked to a server (api_key) with full tool details
+ * Get all tools linked to a server with full tool details
  */
 export async function getServerToolsWithDetails(
-  apiKeyId: string
+  userId: string,
+  serverName: string = 'default'
 ): Promise<ServerToolWithDetails[]> {
   const { data, error } = await supabase
     .from('server_tools')
@@ -317,7 +318,8 @@ export async function getServerToolsWithDetails(
       tool:tools(*),
       environment:environments(name, host)
     `)
-    .eq('api_key_id', apiKeyId)
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -332,7 +334,8 @@ export async function getServerToolsWithDetails(
  * Get enabled tools for a server
  */
 export async function getEnabledServerTools(
-  apiKeyId: string
+  userId: string,
+  serverName: string = 'default'
 ): Promise<ServerToolWithDetails[]> {
   const { data, error } = await supabase
     .from('server_tools')
@@ -341,7 +344,8 @@ export async function getEnabledServerTools(
       tool:tools(*),
       environment:environments(name, host)
     `)
-    .eq('api_key_id', apiKeyId)
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
     .eq('is_enabled', true)
     .order('created_at', { ascending: true });
 
@@ -362,7 +366,7 @@ export async function linkToolToServer(
   const { data, error } = await supabase
     .from('server_tools')
     .upsert(insert as never, {
-      onConflict: 'api_key_id,tool_id',
+      onConflict: 'user_id,server_name,tool_id',
       ignoreDuplicates: false
     })
     .select()
@@ -380,21 +384,23 @@ export async function linkToolToServer(
  * Link all NATIVE tools to a server
  */
 export async function linkAllNativeToolsToServer(
-  apiKeyId: string
+  userId: string,
+  serverName: string = 'default'
 ): Promise<void> {
   // Get all native tools
   const nativeTools = await getNativeTools();
 
   // Insert all as enabled
   const inserts: ServerToolInsert[] = nativeTools.map(tool => ({
-    api_key_id: apiKeyId,
+    user_id: userId,
+    server_name: serverName,
     tool_id: tool.id,
     is_enabled: true,
   }));
 
   const { error } = await supabase
     .from('server_tools')
-    .upsert(inserts as never[], { onConflict: 'api_key_id,tool_id' });
+    .upsert(inserts as never[], { onConflict: 'user_id,server_name,tool_id' });
 
   if (error) {
     console.error('Error linking native tools to server:', error);
@@ -428,14 +434,16 @@ export async function updateServerTool(
  * Bulk update server tools (enable/disable multiple)
  */
 export async function bulkUpdateServerTools(
-  apiKeyId: string,
+  userId: string,
+  serverName: string,
   enabledToolIds: string[]
 ): Promise<void> {
   // First, disable all tools for this server
   const { error: disableError } = await supabase
     .from('server_tools')
     .update({ is_enabled: false, updated_at: new Date().toISOString() } as never)
-    .eq('api_key_id', apiKeyId);
+    .eq('user_id', userId)
+    .eq('server_name', serverName);
 
   if (disableError) {
     console.error('Error disabling server tools:', disableError);
@@ -447,7 +455,8 @@ export async function bulkUpdateServerTools(
     const { error: enableError } = await supabase
       .from('server_tools')
       .update({ is_enabled: true, updated_at: new Date().toISOString() } as never)
-      .eq('api_key_id', apiKeyId)
+      .eq('user_id', userId)
+      .eq('server_name', serverName)
       .in('tool_id', enabledToolIds);
 
     if (enableError) {

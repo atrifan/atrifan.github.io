@@ -57,7 +57,7 @@ export async function GET() {
     // For each server, get its tools
     const serversWithTools = await Promise.all(
       apiKeys.map(async (apiKey) => {
-        const serverTools = await getServerToolsWithDetails(apiKey.id);
+        const serverTools = await getServerToolsWithDetails(userId, apiKey.server_name);
         return {
           id: apiKey.id,
           name: apiKey.name || apiKey.server_name,
@@ -174,7 +174,8 @@ export async function POST(request: NextRequest) {
       const tool = await getToolByName(toolName);
       if (tool) {
         await linkToolToServer({
-          api_key_id: newApiKey.id,
+          user_id: userId,
+          server_name: serverName,
           tool_id: tool.id,
           is_enabled: true,
         });
