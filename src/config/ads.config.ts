@@ -197,7 +197,8 @@ export const ADS_CONFIG = {
   enabled: true,
 
   // Test mode - shows placeholder ads instead of real ones
-  testMode: process.env.NODE_ENV === 'development',
+  // Set to false to test real ad containers locally (Google won't serve actual ads on localhost)
+  testMode: false,
 };
 
 /**

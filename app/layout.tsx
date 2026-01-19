@@ -95,7 +95,12 @@ export default function RootLayout({
           `}
         </Script>
 
-
+        {/* Google AdSense - loads the adsbygoogle library for manual ad rendering */}
+        <Script
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7299057534028491"
+          strategy="afterInteractive"
+          crossOrigin="anonymous"
+        />
 
         {/* Preconnect for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

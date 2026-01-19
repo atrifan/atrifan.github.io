@@ -19,7 +19,8 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
   }, []);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' || !shouldShowAds() || ADS_CONFIG.testMode || !isReady) return;
+    // Note: Google won't serve real ads on localhost, but we can test the containers
+    if (!shouldShowAds() || ADS_CONFIG.testMode || !isReady) return;
     if (isAdLoaded.current) return;
     try {
       const adsbygoogle = (window as any).adsbygoogle;
@@ -39,8 +40,8 @@ const SideAd: React.FC<SideAdProps> = ({ slot, format }) => {
   const width = '22rem';
   const height = isHorizontal ? '6rem' : '38rem';
 
-  // Dev/test placeholder
-  if (ADS_CONFIG.testMode || process.env.NODE_ENV !== 'production') {
+  // Test mode placeholder
+  if (ADS_CONFIG.testMode) {
     if (!isReady) return null;
     return (
       <div style={{

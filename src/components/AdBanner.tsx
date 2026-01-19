@@ -48,8 +48,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   }, [delay, showWhen]);
 
   useEffect(() => {
-    // Only load ads in production, when enabled, ready, and only once per component
-    if (process.env.NODE_ENV !== 'production' || !shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
+    // Only load ads when enabled, ready, and only once per component
+    // Note: Google won't serve real ads on localhost, but we can test the containers
+    if (!shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
       return;
     }
 
@@ -74,8 +75,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     return null;
   }
 
-  // Show placeholder in development/test mode
-  if (ADS_CONFIG.testMode || process.env.NODE_ENV !== 'production') {
+  // Show placeholder in test mode only
+  if (ADS_CONFIG.testMode) {
     if (!isReady) return null;
 
     // Match production dimensions in dev mode
