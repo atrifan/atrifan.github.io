@@ -558,6 +558,52 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                     )}
                   </div>
 
+                  {/* Copy button for assistant messages */}
+                  {msg.role === 'assistant' && hasResults && (
+                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem' }}>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            // Copy all results as markdown
+                            const resultsText = msg.results!.map((r, i) =>
+                              `## Result ${i + 1} (Score: ${(r.score * 100).toFixed(1)}%)\n\n${r.content}`
+                            ).join('\n\n---\n\n');
+                            await navigator.clipboard.writeText(resultsText);
+                            const btn = e.currentTarget;
+                            btn.textContent = '✓ Copied';
+                            setTimeout(() => { btn.textContent = '📋 Copy All'; }, 1500);
+                          } catch (err) {
+                            console.error('Failed to copy:', err);
+                          }
+                        }}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                          e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                          e.currentTarget.style.color = '#10b981';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                        }}
+                        title="Copy all results as markdown"
+                      >
+                        📋 Copy All
+                      </button>
+                    </div>
+                  )}
+
                   {/* Expanded Results */}
                   {hasResults && isExpanded && (
                     <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -569,11 +615,48 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                             border: '1px solid rgba(255,255,255,0.1)',
                             borderRadius: '8px',
                             padding: '0.75rem',
+                            position: 'relative',
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Result {idx + 1}</span>
-                            <span style={{ color: '#10b981', fontSize: '0.75rem' }}>Score: {(result.score * 100).toFixed(1)}%</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await navigator.clipboard.writeText(result.content);
+                                    const btn = e.currentTarget;
+                                    btn.textContent = '✓';
+                                    setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                                  } catch (err) {
+                                    console.error('Failed to copy:', err);
+                                  }
+                                }}
+                                style={{
+                                  padding: '0.15rem 0.35rem',
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  borderRadius: '4px',
+                                  color: 'rgba(255,255,255,0.4)',
+                                  fontSize: '0.65rem',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                }}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                                  e.currentTarget.style.color = '#10b981';
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.background = 'transparent';
+                                  e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                                }}
+                                title="Copy this result"
+                              >
+                                📋
+                              </button>
+                              <span style={{ color: '#10b981', fontSize: '0.75rem' }}>Score: {(result.score * 100).toFixed(1)}%</span>
+                            </div>
                           </div>
                           <p style={{ color: '#fff', fontSize: '0.85rem', margin: 0, whiteSpace: 'pre-wrap' }}>
                             {result.content}

@@ -111,9 +111,18 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
+  // Copy diagram definition state
+  const [copied, setCopied] = useState(false);
+
   // Copy diagram definition
-  const copyDefinition = () => {
-    navigator.clipboard.writeText(definition);
+  const copyDefinition = async () => {
+    try {
+      await navigator.clipboard.writeText(definition);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   if (error) {
@@ -183,7 +192,22 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
               <button onClick={resetView} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>⟲</button>
             </>
           )}
-          <button onClick={copyDefinition} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>📋</button>
+          <button
+                onClick={copyDefinition}
+                style={{
+                  background: copied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '0.25rem 0.5rem',
+                  color: copied ? '#10b981' : '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  transition: 'all 0.2s',
+                }}
+                title="Copy Mermaid code"
+              >
+                {copied ? '✓ Copied' : '📋 Copy'}
+              </button>
         </div>
       </div>
 

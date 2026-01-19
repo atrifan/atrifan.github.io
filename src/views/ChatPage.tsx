@@ -1829,9 +1829,50 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                       </div>
                     )}
                   </div>
-                  {/* Like/Dislike buttons for assistant messages */}
+                  {/* Copy/Like/Dislike buttons for assistant messages */}
                   {msg.role === 'assistant' && (
                     <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem' }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(msg.content);
+                            // Visual feedback
+                            const btn = document.activeElement as HTMLButtonElement;
+                            if (btn) {
+                              btn.textContent = '✓';
+                              setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                            }
+                          } catch (err) {
+                            console.error('Failed to copy:', err);
+                          }
+                        }}
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                          e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+                          e.currentTarget.style.color = '#a78bfa';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                        }}
+                        title="Copy response"
+                      >
+                        📋
+                      </button>
                       <button
                         onClick={() => {/* TODO: implement like functionality */}}
                         style={{
@@ -1961,6 +2002,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       {/* Fixed Input Bar - Bottom */}
       <div className="chat-fullscreen-input">
         <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+          {/* Compact sticky ad banner - visible on all devices */}
+          <div style={{ marginBottom: '0.5rem' }}>
+            <AdBanner slot={ADS_CONFIG.slots.chatInputArea} format="horizontal" delay={1000} />
+          </div>
+
           {/* Aggregated token stats */}
           {messages.length > 0 && (conversationTokens.input > 0 || conversationTokens.output > 0) && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '0.5rem', fontSize: '0.7rem' }}>

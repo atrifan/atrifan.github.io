@@ -255,8 +255,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   return (
     <div style={{ width: '100%' }}>
-      {/* Horizontal Ad - always visible above input area */}
-      <div style={{ marginBottom: '0.75rem' }}>
+      {/* Compact sticky ad banner - visible on all devices */}
+      <div style={{ marginBottom: '0.5rem' }}>
         <AdBanner slot={ADS_CONFIG.slots.chatInputArea} format="horizontal" delay={1000} />
       </div>
 
