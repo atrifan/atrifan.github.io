@@ -132,8 +132,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         maxWidth: '38rem',
         margin: '0 auto',
         minHeight: isVertical ? '16rem' : '3rem',
-        maxHeight: isVertical ? undefined : '6rem',
-        overflow: 'visible', // Changed from hidden to visible for mobile
+        maxHeight: isVertical ? undefined : '90px', // Strict max height for horizontal ads
+        overflow: 'hidden', // Clip any overflow to enforce height
         position: 'relative',
         zIndex: 10, // Ensure ads are above other content
         ...style
@@ -144,12 +144,14 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         className="adsbygoogle"
         style={{
           display: 'block',
-          maxHeight: isVertical ? undefined : '6rem',
+          width: '100%',
+          height: isVertical ? '250px' : '90px', // Explicit height for horizontal banner
+          maxHeight: isVertical ? undefined : '90px',
         }}
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
-        data-ad-format={isVertical ? format : 'horizontal'}
-        data-full-width-responsive="true" // Changed to true for better mobile responsiveness
+        data-ad-format={isVertical ? 'vertical' : 'horizontal'}
+        data-full-width-responsive={isVertical ? 'true' : 'false'} // Disable for horizontal to prevent square ads
       />
     </View>
   );

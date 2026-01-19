@@ -215,6 +215,8 @@ export const Header: React.FC = () => {
                 outline: 'none',
                 transition: 'border-color 0.2s, background 0.2s',
                 boxSizing: 'border-box',
+                fontSize: '16px', // Prevents iOS zoom on focus
+                WebkitAppearance: 'none', // Better iOS styling
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#667eea';
