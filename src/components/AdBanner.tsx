@@ -81,7 +81,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
 
     // Match production dimensions in dev mode
     const isVertical = format === 'vertical';
-    const height = isVertical ? '16rem' : '6rem';
+    const height = isVertical ? '250px' : '90px';
 
     return (
       <View
@@ -121,8 +121,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   }
 
   // Production ad - matches AdSense code structure exactly
-  // Constrain height for horizontal and auto formats to prevent oversized mobile ads
+  // Use horizontal format with constrained height like SideAds (6rem = 96px)
   const isVertical = format === 'vertical';
+  const horizontalHeight = '90px'; // Similar to SideAds 6rem
 
   return (
     <View
@@ -131,11 +132,11 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         width: '100%',
         maxWidth: '38rem',
         margin: '0 auto',
-        minHeight: isVertical ? '16rem' : '3rem',
-        maxHeight: isVertical ? undefined : '90px', // Strict max height for horizontal ads
-        overflow: 'hidden', // Clip any overflow to enforce height
+        height: isVertical ? '250px' : horizontalHeight,
+        maxHeight: isVertical ? undefined : horizontalHeight,
+        overflow: 'hidden',
         position: 'relative',
-        zIndex: 10, // Ensure ads are above other content
+        zIndex: 10,
         ...style
       }}
     >
@@ -145,13 +146,12 @@ export const AdBanner: React.FC<AdBannerProps> = ({
         style={{
           display: 'block',
           width: '100%',
-          height: isVertical ? '250px' : '90px', // Explicit height for horizontal banner
-          maxHeight: isVertical ? undefined : '90px',
+          height: '100%',
         }}
         data-ad-client={getAdClient()}
         data-ad-slot={slot}
         data-ad-format={isVertical ? 'vertical' : 'horizontal'}
-        data-full-width-responsive={isVertical ? 'true' : 'false'} // Disable for horizontal to prevent square ads
+        data-full-width-responsive="true"
       />
     </View>
   );

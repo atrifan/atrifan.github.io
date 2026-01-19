@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Footer } from '../components/Footer';
@@ -983,8 +983,12 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
 
             const isCollapsed = collapsedSections.has(type);
 
+            // Show ad after every 2nd type section (after index 1, 3, etc.) if there are more sections
+            const showAdAfter = typeIndex > 0 && typeIndex % 2 === 1 && typeIndex < activeTypes.length - 1;
+
             return (
-              <div key={type} style={{ marginBottom: typeIndex < activeTypes.length - 1 ? '2rem' : '0' }}>
+              <React.Fragment key={type}>
+              <div style={{ marginBottom: typeIndex < activeTypes.length - 1 ? '2rem' : '0' }}>
                 {/* Type Separator Header - Collapsible */}
                 {activeTypes.length > 1 && (
                   <button
@@ -1211,6 +1215,13 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
                 </div>
                 )}
               </div>
+              {/* Ad between tool type sections */}
+              {showAdAfter && (
+                <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+                  <AdBanner slot={ADS_CONFIG.slots.mcpComposerSection1} format="horizontal" />
+                </div>
+              )}
+              </React.Fragment>
             );
           });
         })()}
@@ -1359,8 +1370,13 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
           />
         </div>
 
+        {/* Ad between REST and GraphQL */}
+        <div style={{ marginTop: '1.5rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.mcpComposerSection1} format="horizontal" />
+        </div>
+
         {/* GraphQL Tools Section */}
-        <div style={{ marginTop: '2rem' }}>
+        <div style={{ marginTop: '1.5rem' }}>
           <GraphQLToolsSection
             selectedTools={selectedTools}
             onToolSelect={(toolName, selected) => {
@@ -1390,8 +1406,13 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
           />
         </div>
 
+        {/* Ad between MCP and A2A */}
+        <div style={{ marginTop: '1.5rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.mcpComposerSection2} format="horizontal" />
+        </div>
+
         {/* A2A Agents Section */}
-        <div style={{ marginTop: '2rem' }}>
+        <div style={{ marginTop: '1.5rem' }}>
           <AgentToolsSection
             selectedTools={selectedTools}
             onToolSelect={(toolName, selected) => {

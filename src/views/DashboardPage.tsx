@@ -1814,6 +1814,9 @@ export const DashboardPage: React.FC = () => {
         </div>
         )}
 
+        {/* Ad after MCP Config */}
+        <AdBanner slot={ADS_CONFIG.slots.dashboardSection1} format="horizontal" style={{ marginTop: '1rem', marginBottom: '1rem' }} />
+
         {/* MCP Servers Card */}
         {isPro && apiKey && isMcpComposerEnabled() && (
           <DashboardCard title="MCP Servers" icon={
@@ -2418,6 +2421,9 @@ export const DashboardPage: React.FC = () => {
           </DashboardCard>
         )}
 
+        {/* Ad after Imports */}
+        <AdBanner slot={ADS_CONFIG.slots.dashboardSection2} format="horizontal" style={{ marginTop: '1rem', marginBottom: '1rem' }} />
+
         {/* OAuth Connections Card - Available for all tiers */}
         {isMcpComposerEnabled() && (
           <DashboardCard title="OAuth Connections" icon={
@@ -2566,6 +2572,9 @@ export const DashboardPage: React.FC = () => {
             )}
           </DashboardCard>
         )}
+
+        {/* Ad after OAuth Connections */}
+        <AdBanner slot={ADS_CONFIG.slots.dashboardSection3} format="horizontal" style={{ marginTop: '1rem', marginBottom: '1rem' }} />
 
         {/* MCP Connections Card */}
         {isPro && connections.length > 0 && (

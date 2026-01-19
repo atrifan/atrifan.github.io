@@ -3,6 +3,7 @@ import { View } from '@adobe/react-spectrum';
 import { BackToTools } from '../components/BackToTools';
 import { ConvertIcon } from '../components/ConvertIcon';
 import { SideAds } from '../components/SideAds';
+import { AdBanner } from '../components/AdBanner';
 import { inputStyles, inputPlaceholderCSS } from '../styles/inputStyles';
 import { ADS_CONFIG } from '../config/ads.config';
 import { applySEO } from '../utils/seo';
@@ -62,8 +63,9 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
           rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
         />
         <BackToTools />
-        
+
         <View UNSAFE_style={{ maxWidth: '38rem', margin: '0 auto', textAlign: 'center', paddingTop: '2rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.convertTop} format="horizontal" />
           <ConvertIcon size={100} />
           <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: '1rem 0 0.5rem' }}>CONVERT</h1>
           <h2 style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.2rem', fontWeight: 400, marginBottom: '2rem' }}>
@@ -115,11 +117,12 @@ export class ConvertPage extends Component<{}, ConvertPageState> {
           </div>
 
           {result && (
-            <div ref={this.resultRef} style={{ background: gradient, borderRadius: '16px', padding: '2rem' }}>
+            <div ref={this.resultRef} style={{ background: gradient, borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
               <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1rem', marginBottom: '0.5rem' }}>Result</div>
               <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#fff' }}>{result}</div>
             </div>
           )}
+          <AdBanner slot={ADS_CONFIG.slots.convertFooter} format="horizontal" />
         </View>
         <style>{inputPlaceholderCSS}</style>
       </View>

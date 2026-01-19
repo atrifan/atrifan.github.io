@@ -139,6 +139,9 @@ export const ADS_CONFIG = {
 
     // DASHBOARD page ads
     dashboardTop: '2779099121',
+    dashboardSection1: '2779099121', // After MCP Config
+    dashboardSection2: '2779099121', // After Imports
+    dashboardSection3: '2779099121', // After OAuth Connections
     dashboardFooter: '5852835087',
 
     // DOCS page ads
@@ -147,6 +150,8 @@ export const ADS_CONFIG = {
 
     // MCP Creator page ads
     mcpComposerTop: '7221401854',
+    mcpComposerSection1: '7221401854', // Between REST and GraphQL
+    mcpComposerSection2: '7221401854', // Between MCP and A2A
     mcpComposerBottom: '5908320187',
 
     // Swagger Import page ads (uses same slots as MCP Creator)

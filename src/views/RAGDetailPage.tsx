@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { SideAds } from '../components/SideAds';
+import { AdBanner } from '../components/AdBanner';
 import { Footer } from '../components/Footer';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
@@ -545,6 +546,11 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
         </div>
       )}
 
+      {/* Top Ad */}
+      <div style={{ maxWidth: '56rem', margin: '1rem auto', padding: '0 clamp(1rem, 4vw, 2rem)' }}>
+        <AdBanner slot={ADS_CONFIG.slots.toolTop} format="horizontal" />
+      </div>
+
       {/* Main Content */}
       <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 2rem) 3rem' }}>
 
@@ -831,6 +837,11 @@ export function RAGDetailPage({ ragId, isPro, isPlus }: RAGDetailPageProps) {
               )}
             </div>
           )}
+
+        {/* Footer Ad */}
+        <div style={{ marginTop: '2rem' }}>
+          <AdBanner slot={ADS_CONFIG.slots.toolBottom} format="horizontal" />
+        </div>
       </div>
       <Footer />
 
