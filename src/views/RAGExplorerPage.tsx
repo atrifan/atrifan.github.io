@@ -85,6 +85,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(true); // Track if API key is still loading
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
   // Session management
@@ -158,6 +159,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
             setApiKey(data.apiKey);
           }
         }
+        setApiKeyLoading(false);
 
         // Fetch sessions
         const sessionsRes = await fetch('/api/ai/rag-sessions');
@@ -692,7 +694,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 setMessage={setQuery}
                 onSend={handleSearch}
                 isLoading={isLoading}
-                isDisabled={!selectedRag || (selectedRagData?.source_type === 'csv' && !apiKey)}
+                isDisabled={!selectedRag || (selectedRagData?.source_type === 'csv' && !apiKey && !apiKeyLoading)}
                 remainingBudget={remainingBudget}
                 rags={rags.map(r => ({
                   id: r.id,
@@ -707,7 +709,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 sessionCost={totalCost}
                 showSettingsButton
                 onSettingsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('main'); }}
-                error={error || (selectedRagData?.source_type === 'csv' && !apiKey ? 'Generate an API key in the dashboard to search' : null)}
+                error={error || (selectedRagData?.source_type === 'csv' && !apiKey && !apiKeyLoading ? 'Generate an API key in the dashboard to search' : null)}
               />
             </div>
           </div>

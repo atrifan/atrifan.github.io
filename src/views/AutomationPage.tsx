@@ -1303,11 +1303,17 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 sendButtonLabel="⚡"
                 showSettingsButton={true}
                 onSettingsClick={() => setShowSettingsPanel(true)}
+                showPersonasToggle={true}
+                activePersonasCount={activePersonalityIds.length}
+                onPersonasClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('personas'); }}
                 showReasoningToggle={true}
                 enableReasoning={true}
                 showRagToggle={rags.length > 0}
                 activeRagCount={activeRagIds.length}
                 onRagClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('rags'); }}
+                showConnectorsToggle={true}
+                activeConnectorsCount={connectors.length}
+                onConnectorsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
               />
             </div>
           </div>

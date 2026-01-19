@@ -87,10 +87,20 @@ interface ChatInputAreaProps {
   onReasoningToggle?: () => void;
   showReasoningToggle?: boolean;
 
+  // Optional: Personas toggle (chat mode)
+  activePersonasCount?: number;
+  onPersonasClick?: () => void;
+  showPersonasToggle?: boolean;
+
   // Optional: RAG toggle (chat mode)
   activeRagCount?: number;
   onRagClick?: () => void;
   showRagToggle?: boolean;
+
+  // Optional: Connectors toggle (chat mode)
+  activeConnectorsCount?: number;
+  onConnectorsClick?: () => void;
+  showConnectorsToggle?: boolean;
 
   // Optional: Stop button callback (when loading)
   onStop?: () => void;
@@ -140,9 +150,17 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onReasoningToggle,
   showReasoningToggle = false,
 
+  activePersonasCount = 0,
+  onPersonasClick,
+  showPersonasToggle = false,
+
   activeRagCount = 0,
   onRagClick,
   showRagToggle = false,
+
+  activeConnectorsCount = 0,
+  onConnectorsClick,
+  showConnectorsToggle = false,
 
   onStop,
 
@@ -655,6 +673,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         {/* Feature toggle buttons (chat mode only) */}
         {mode === 'chat' && (
           <div style={{ display: 'flex', gap: '0.25rem' }}>
+            {showPersonasToggle && onPersonasClick && (
+              <button
+                onClick={onPersonasClick}
+                title={activePersonasCount > 0 ? `${activePersonasCount} persona${activePersonasCount > 1 ? 's' : ''} active (click to manage)` : 'No personas active (click to add)'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: activePersonasCount > 0 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: activePersonasCount > 0 ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: activePersonasCount > 0 ? '#f59e0b' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                🎭
+                {activePersonasCount > 0 && (
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activePersonasCount}</span>
+                )}
+              </button>
+            )}
+
             {showReasoningToggle && (
               <button
                 onClick={onReasoningToggle}
@@ -706,6 +749,40 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 </svg>
                 {activeRagCount > 0 && (
                   <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeRagCount}</span>
+                )}
+              </button>
+            )}
+
+            {showConnectorsToggle && onConnectorsClick && (
+              <button
+                onClick={onConnectorsClick}
+                title={activeConnectorsCount > 0 ? `${activeConnectorsCount} connector${activeConnectorsCount > 1 ? 's' : ''} active (click to manage)` : 'No connectors active (click to add)'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: activeConnectorsCount > 0 ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: activeConnectorsCount > 0 ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: activeConnectorsCount > 0 ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.7rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4" />
+                  <path d="M12 18v4" />
+                  <path d="M4.93 4.93l2.83 2.83" />
+                  <path d="M16.24 16.24l2.83 2.83" />
+                  <path d="M2 12h4" />
+                  <path d="M18 12h4" />
+                  <path d="M4.93 19.07l2.83-2.83" />
+                  <path d="M16.24 7.76l2.83-2.83" />
+                </svg>
+                {activeConnectorsCount > 0 && (
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeConnectorsCount}</span>
                 )}
               </button>
             )}

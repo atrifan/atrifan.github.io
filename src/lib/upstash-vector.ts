@@ -278,20 +278,46 @@ export async function deleteCollection(
 }
 
 // Get all vector IDs in a collection (for orphan detection during upsert)
+// Uses range API with pagination to handle large collections (Upstash limit: 1000 per request)
 export async function getCollectionVectorIds(
   apiKey: string,
   ragName: string
 ): Promise<string[]> {
   const index = getIndex();
+  const allIds: string[] = [];
 
-  const results = await index.query({
-    data: '', // Empty query to get all
-    topK: 10000, // Get all vectors in collection
-    includeMetadata: false, // We only need IDs
-    filter: `api_key = '${apiKey}' AND rag_name = '${ragName}'`,
-  });
+  // Vector IDs are prefixed with ragName:apiKey: so we can use prefix filtering
+  const prefix = `${ragName}:${apiKey}:`;
+  let cursor: string | number = 0;
+  const limit = 1000; // Max allowed by Upstash
+  let hasMore = true;
 
-  return results.map(r => r.id as string);
+  // Paginate through all vectors with this prefix
+  while (hasMore) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: { vectors: Array<{ id: string | number }>; nextCursor: string | number } = await index.range({
+      cursor,
+      limit,
+      prefix,
+      includeMetadata: false,
+      includeVectors: false,
+    });
+
+    // Add IDs from this batch
+    for (const vector of result.vectors) {
+      allIds.push(String(vector.id));
+    }
+
+    // Check if there are more results
+    const nextCursor = result.nextCursor;
+    if (nextCursor === '' || nextCursor === '0' || nextCursor === 0) {
+      hasMore = false;
+    } else {
+      cursor = nextCursor;
+    }
+  }
+
+  return allIds;
 }
 
 // Delete vectors by their IDs

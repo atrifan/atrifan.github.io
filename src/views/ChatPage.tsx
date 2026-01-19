@@ -2245,6 +2245,30 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
             {/* Feature toggle buttons */}
             <div style={{ display: 'flex', gap: '0.25rem' }}>
+              {/* Personas toggle - always show */}
+              <button
+                onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('personas'); }}
+                title={activePersonalityIds.length > 0 ? `${activePersonalityIds.length} persona${activePersonalityIds.length > 1 ? 's' : ''} active (click to manage)` : 'No personas active (click to add)'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: activePersonalityIds.length > 0 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: activePersonalityIds.length > 0 ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: activePersonalityIds.length > 0 ? '#f59e0b' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                🎭
+                {activePersonalityIds.length > 0 && (
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activePersonalityIds.length}</span>
+                )}
+              </button>
+
               {/* Reasoning toggle - only show when connectors exist and not using external agent */}
               {connectors.length > 0 && !isExternalAgentSelected && (
                 <button
@@ -2299,6 +2323,39 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   )}
                 </button>
               )}
+
+              {/* Connectors toggle - always show */}
+              <button
+                onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
+                title={connectors.length > 0 ? `${connectors.length} connector${connectors.length > 1 ? 's' : ''} active (click to manage)` : 'No connectors active (click to add)'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: connectors.length > 0 ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: connectors.length > 0 ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: connectors.length > 0 ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.7rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4" />
+                  <path d="M12 18v4" />
+                  <path d="M4.93 4.93l2.83 2.83" />
+                  <path d="M16.24 16.24l2.83 2.83" />
+                  <path d="M2 12h4" />
+                  <path d="M18 12h4" />
+                  <path d="M4.93 19.07l2.83-2.83" />
+                  <path d="M16.24 7.76l2.83-2.83" />
+                </svg>
+                {connectors.length > 0 && (
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{connectors.length}</span>
+                )}
+              </button>
             </div>
 
             {/* Token/budget info */}
