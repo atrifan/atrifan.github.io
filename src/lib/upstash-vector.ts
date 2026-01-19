@@ -1,9 +1,9 @@
 /**
  * Upstash Vector Integration
- * 
- * Stores embeddings with api_key and rag_name metadata for isolated collection search.
- * - User RAGs: api_key={user_api_key}, rag_name={normalized_rag_name}
- * - Website search: api_key="tulzo" (reserved for site-wide smart search)
+ *
+ * Stores embeddings with user_id and rag_name metadata for isolated collection search.
+ * - User RAGs: user_id={clerk_user_id}, rag_name={normalized_rag_name}
+ * - Website search: user_id="tulzo" (reserved for site-wide smart search)
  */
 
 import { Index } from '@upstash/vector';
@@ -23,7 +23,7 @@ const getIndex = () => {
 
 // Vector metadata structure (with index signature for Upstash compatibility)
 export interface VectorMetadata {
-  api_key: string;      // User's API key or "tulzo" for website
+  user_id: string;      // Clerk user ID or "tulzo" for website
   rag_name: string;     // Normalized RAG name (collection identifier, unique per user)
   rag_id?: string;      // Optional: RAG UUID for reference
   doc_id: string;       // Document ID from CSV (required for upsert)
@@ -141,10 +141,10 @@ export function buildEmbeddingText(
 export function buildMetadata(
   row: Record<string, string>,
   fieldConfig: FieldConfig,
-  baseMetadata: { api_key: string; rag_name: string; rag_id?: string; title?: string; source?: string }
+  baseMetadata: { user_id: string; rag_name: string; rag_id?: string; title?: string; source?: string }
 ): VectorMetadata {
   const metadata: VectorMetadata = {
-    api_key: baseMetadata.api_key,
+    user_id: baseMetadata.user_id,
     rag_name: baseMetadata.rag_name,
     rag_id: baseMetadata.rag_id,
     title: baseMetadata.title,
@@ -164,11 +164,11 @@ export function buildMetadata(
   return metadata;
 }
 
-// Generate vector ID in format: {rag_name}_{api_key}_{doc_id}
-export function generateVectorId(ragName: string, apiKey: string, docId: string): string {
+// Generate vector ID in format: {rag_name}_{user_id}_{doc_id}
+export function generateVectorId(ragName: string, userId: string, docId: string): string {
   // Sanitize doc_id to be URL-safe
   const safeDocId = docId.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return `${ragName}_${apiKey}_${safeDocId}`;
+  return `${ragName}_${userId}_${safeDocId}`;
 }
 
 // Upsert vectors with metadata
@@ -188,9 +188,9 @@ export async function upsertVectors(
   return { success: true, count: vectors.length };
 }
 
-// Query vectors by api_key and rag_name (collection search)
+// Query vectors by user_id and rag_name (collection search)
 export async function queryCollection(
-  apiKey: string,
+  userId: string,
   ragName: string,
   query: string,
   topK: number = 5
@@ -205,7 +205,7 @@ export async function queryCollection(
     data: query,
     topK,
     includeMetadata: true,
-    filter: `api_key = '${apiKey}' AND rag_name = '${ragName}'`,
+    filter: `user_id = '${userId}' AND rag_name = '${ragName}'`,
   });
 
   return results.map(r => ({
@@ -215,9 +215,9 @@ export async function queryCollection(
   }));
 }
 
-// Query all vectors for a user's API key (cross-collection search)
-export async function queryByApiKey(
-  apiKey: string,
+// Query all vectors for a user (cross-collection search)
+export async function queryByUserId(
+  userId: string,
   query: string,
   topK: number = 10
 ): Promise<Array<{
@@ -226,14 +226,14 @@ export async function queryByApiKey(
   metadata: VectorMetadata;
 }>> {
   const index = getIndex();
-  
+
   const results = await index.query({
     data: query,
     topK,
     includeMetadata: true,
-    filter: `api_key = '${apiKey}'`,
+    filter: `user_id = '${userId}'`,
   });
-  
+
   return results.map(r => ({
     id: r.id as string,
     score: r.score,
@@ -241,7 +241,7 @@ export async function queryByApiKey(
   }));
 }
 
-// Query website vectors (api_key = "tulzo")
+// Query website vectors (user_id = "tulzo")
 export async function queryWebsite(
   query: string,
   topK: number = 5
@@ -250,44 +250,40 @@ export async function queryWebsite(
   score: number;
   metadata: VectorMetadata;
 }>> {
-  return queryByApiKey('tulzo', query, topK);
+  return queryByUserId('tulzo', query, topK);
 }
 
-// Delete vectors by api_key and rag_name (delete collection)
+// Delete vectors by user_id and rag_name (delete collection)
 export async function deleteCollection(
-  apiKey: string,
+  userId: string,
   ragName: string
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; deletedCount: number }> {
   const index = getIndex();
+  const allIds = await getCollectionVectorIds(userId, ragName);
 
-  // Upstash Vector doesn't support delete by filter directly
-  // We need to query and delete by IDs
-  const results = await index.query({
-    data: '', // Empty query to get all
-    topK: 10000, // Get all vectors in collection
-    includeMetadata: true,
-    filter: `api_key = '${apiKey}' AND rag_name = '${ragName}'`,
-  });
-
-  if (results.length > 0) {
-    const ids = results.map(r => r.id as string);
-    await index.delete(ids);
+  if (allIds.length > 0) {
+    // Delete in batches of 1000
+    const batchSize = 1000;
+    for (let i = 0; i < allIds.length; i += batchSize) {
+      const batch = allIds.slice(i, i + batchSize);
+      await index.delete(batch);
+    }
   }
 
-  return { success: true };
+  return { success: true, deletedCount: allIds.length };
 }
 
 // Get all vector IDs in a collection (for orphan detection during upsert)
 // Uses range API with pagination to handle large collections (Upstash limit: 1000 per request)
 export async function getCollectionVectorIds(
-  apiKey: string,
+  userId: string,
   ragName: string
 ): Promise<string[]> {
   const index = getIndex();
   const allIds: string[] = [];
 
-  // Vector IDs are prefixed with ragName:apiKey: so we can use prefix filtering
-  const prefix = `${ragName}:${apiKey}:`;
+  // Vector IDs are prefixed with ragName_userId_ so we can use prefix filtering
+  const prefix = `${ragName}_${userId}_`;
   let cursor: string | number = 0;
   const limit = 1000; // Max allowed by Upstash
   let hasMore = true;

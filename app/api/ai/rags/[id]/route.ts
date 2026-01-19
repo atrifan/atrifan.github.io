@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE - Delete a RAG (tool is deleted via trigger)
+// DELETE - Delete a RAG (tool is deleted via trigger, vectors deleted from Upstash)
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { userId } = await auth();
@@ -64,7 +64,31 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const { id } = await context.params;
 
-    // Delete the RAG (trigger will delete associated tool)
+    // First, get the RAG to know the rag_name for Upstash cleanup
+    const { data: rag } = await db
+      .from('user_rags')
+      .select('rag_name, source_type')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+
+    // Delete vectors from Upstash if it's a CSV RAG
+    let deletedVectors = 0;
+    if (rag?.source_type === 'csv' && rag?.rag_name) {
+      try {
+        const { deleteCollection, isUpstashConfigured } = await import('@/src/lib/upstash-vector');
+        if (isUpstashConfigured()) {
+          const result = await deleteCollection(userId, rag.rag_name);
+          deletedVectors = result.deletedCount;
+          console.log(`Deleted ${deletedVectors} vectors from Upstash for RAG ${rag.rag_name}`);
+        }
+      } catch (upstashError) {
+        console.error('Error deleting vectors from Upstash:', upstashError);
+        // Continue with RAG deletion even if Upstash cleanup fails
+      }
+    }
+
+    // Delete the RAG (trigger will delete associated tool and documents)
     const { error } = await db
       .from('user_rags')
       .delete()
@@ -76,7 +100,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to delete RAG' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedVectors });
   } catch (error) {
     console.error('Error deleting RAG:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

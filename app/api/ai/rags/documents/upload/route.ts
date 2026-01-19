@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use userId as the namespace for Upstash vectors (stable identifier)
-    const userApiKey = userId;
+    const userIdForVectors = userId;
     // Use provided ragName, or rag_name from DB, or normalize the name
     const ragName = ragNameParam || rag.rag_name || rag.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
@@ -295,11 +295,11 @@ export async function POST(request: NextRequest) {
     if (isUpstashConfigured()) {
       try {
         // Get existing vector IDs for this collection
-        const existingVectorIds = await getCollectionVectorIds(userApiKey, ragName);
+        const existingVectorIds = await getCollectionVectorIds(userIdForVectors, ragName);
 
         // Build new vector IDs
         const newVectorIds = new Set(
-          documents.map(doc => generateVectorId(ragName, userApiKey, doc.doc_id))
+          documents.map(doc => generateVectorId(ragName, userIdForVectors, doc.doc_id))
         );
 
         // Find orphaned vectors (in Upstash but not in new CSV)
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
 
           // Build metadata
           const metadata = buildMetadata(rowData, fieldConfig, {
-            api_key: userApiKey,
+            user_id: userIdForVectors,
             rag_name: ragName,
             rag_id: ragId,
             title: doc.title || undefined,
@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
           });
 
           return {
-            id: generateVectorId(ragName, userApiKey, doc.doc_id),
+            id: generateVectorId(ragName, userIdForVectors, doc.doc_id),
             data: embeddingText, // Composite text for embedding
             metadata,
           };

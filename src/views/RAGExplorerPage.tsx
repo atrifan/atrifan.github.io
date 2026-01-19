@@ -85,7 +85,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
-  const [apiKeyLoading, setApiKeyLoading] = useState(true); // Track if API key is still loading
+  const [apiKeyLoading, setApiKeyLoading] = useState(true);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
   // Session management
@@ -312,7 +312,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     setPendingQuery(null);
   }, []);
 
-  // Search handler
+  // Search handler - uses unified /api/collection/{apiKey}/{ragName} endpoint
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !selectedRag || !apiKey || isLoading) return;
 
@@ -356,7 +356,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
         }
       }
 
-      // Call collection API
+      // Call unified collection API (handles both CSV/internal and URL/external)
       const response = await fetch(`/api/collection/${apiKey}/${ragData.rag_name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -668,8 +668,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                     </div>
                   )}
 
-                  {/* Token info */}
-                  {msg.tokens && msg.tokens > 0 && (
+                  {/* Token info - only show for assistant messages (embedding cost) */}
+                  {msg.role === 'assistant' && msg.tokens && msg.tokens > 0 && (
                     <div style={{ marginTop: '0.25rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
                       <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>
                         {msg.tokens} tokens ({formatCurrency(msg.cost || 0)})
@@ -694,7 +694,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 setMessage={setQuery}
                 onSend={handleSearch}
                 isLoading={isLoading}
-                isDisabled={!selectedRag || (selectedRagData?.source_type === 'csv' && !apiKey && !apiKeyLoading)}
+                isDisabled={!selectedRag || (!apiKey && !apiKeyLoading)}
                 remainingBudget={remainingBudget}
                 rags={rags.map(r => ({
                   id: r.id,
@@ -709,7 +709,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 sessionCost={totalCost}
                 showSettingsButton
                 onSettingsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('main'); }}
-                error={error || (selectedRagData?.source_type === 'csv' && !apiKey && !apiKeyLoading ? 'Generate an API key in the dashboard to search' : null)}
+                error={error || (!apiKey && !apiKeyLoading ? 'Generate an API key in the dashboard to search' : null)}
               />
             </div>
           </div>

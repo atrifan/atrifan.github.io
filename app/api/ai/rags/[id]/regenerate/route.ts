@@ -78,7 +78,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'No documents found to regenerate' }, { status: 400 });
     }
 
-    const userApiKey = userId;
+    const userIdForVectors = userId;
     const ragName = rag.rag_name;
 
     // Build vectors from documents using new field config
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       // Build metadata
       const metadata = buildMetadata(rowData, config, {
-        api_key: userApiKey,
+        user_id: userIdForVectors,
         rag_name: ragName,
         rag_id: ragId,
         title: doc.title || undefined,
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
 
       return {
-        id: generateVectorId(ragName, userApiKey, doc.doc_id),
+        id: generateVectorId(ragName, userIdForVectors, doc.doc_id),
         data: embeddingText,
         metadata,
       };

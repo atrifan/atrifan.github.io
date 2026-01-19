@@ -1,15 +1,15 @@
 /**
  * Upload Website Embeddings to Upstash Vector
- * 
+ *
  * This script reads the website embeddings JSON and upserts them to Upstash Vector
- * with api_key="tulzo" for the website smart search feature.
- * 
+ * with user_id="tulzo" for the website smart search feature.
+ *
  * Usage:
  *   npx tsx scripts/upload-website-embeddings.ts
- * 
+ *
  * Or with ts-node:
  *   npx ts-node --esm scripts/upload-website-embeddings.ts
- * 
+ *
  * Make sure VECTOR_STORAGE_UPSTASH_VECTOR_REST_URL and VECTOR_STORAGE_UPSTASH_VECTOR_REST_TOKEN
  * are set in your environment (or .env.local file).
  */
@@ -30,14 +30,14 @@ interface EmbeddingEntry {
 }
 
 interface EmbeddingsData {
-  api_key: string;
+  user_id: string;
   rag_name: string;
   description: string;
   entries: EmbeddingEntry[];
 }
 
 interface VectorMetadata {
-  api_key: string;
+  user_id: string;
   rag_name: string;
   title: string;
   content: string;
@@ -59,14 +59,14 @@ async function main() {
   }
 
   console.log('📦 Loading embeddings data...');
-  
+
   // Read the JSON file
   const jsonPath = resolve(process.cwd(), 'data/tulzo-website-embeddings.json');
   const rawData = readFileSync(jsonPath, 'utf-8');
   const data: EmbeddingsData = JSON.parse(rawData);
 
   console.log(`   Found ${data.entries.length} entries`);
-  console.log(`   API Key: ${data.api_key}`);
+  console.log(`   User ID: ${data.user_id}`);
   console.log(`   RAG Name: ${data.rag_name}`);
 
   // Initialize Upstash Vector
@@ -77,7 +77,7 @@ async function main() {
     id: entry.id,
     data: entry.content, // Upstash generates embeddings from text
     metadata: {
-      api_key: data.api_key,
+      user_id: data.user_id,
       rag_name: data.rag_name,
       title: entry.title,
       content: entry.content,
