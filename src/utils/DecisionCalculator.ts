@@ -8,6 +8,18 @@
 // ============ TYPES ============
 export type DecisionMode = 'yesNo' | 'pickOne' | 'weighted';
 
+/** Audio metrics used for seeding the oracle decision */
+export interface AudioSeed {
+  /** Size of the recording in bytes */
+  size: number;
+  /** Maximum decibel level recorded */
+  maxDecibel: number;
+  /** Minimum decibel level recorded */
+  minDecibel: number;
+  /** Duration of recording in milliseconds */
+  duration: number;
+}
+
 export interface DecisionCalculatorInput {
   /** Decision mode: 'yesNo' for yes/no questions, 'pickOne' for custom options, 'weighted' for weighted selection */
   mode: DecisionMode;
@@ -15,6 +27,8 @@ export interface DecisionCalculatorInput {
   options?: string[];
   /** Optional weights for each option (only used in 'weighted' mode) */
   weights?: number[];
+  /** Optional audio seed for oracle mode - uses voice characteristics to seed the random decision */
+  audioSeed?: AudioSeed;
 }
 
 export interface DecisionCalculatorOutput {
@@ -50,8 +64,34 @@ export const YES_NO_ANSWERS = [
 /**
  * Get a random yes/no answer
  */
-export function getRandomYesNoAnswer(): { text: string; icon: string; isPositive: boolean | null } {
-  return YES_NO_ANSWERS[Math.floor(Math.random() * YES_NO_ANSWERS.length)];
+export function getRandomYesNoAnswer(seededRandom?: () => number): { text: string; icon: string; isPositive: boolean | null } {
+  const random = seededRandom || Math.random;
+  return YES_NO_ANSWERS[Math.floor(random() * YES_NO_ANSWERS.length)];
+}
+
+// ============ SEEDED RANDOM ============
+/**
+ * Create a seeded random number generator from audio metrics
+ * Uses a simple but effective hash-based approach
+ */
+export function createSeededRandom(seed: AudioSeed): () => number {
+  // Combine all audio metrics into a single seed value
+  let seedValue = seed.size * 31 +
+                  Math.abs(seed.maxDecibel) * 17 +
+                  Math.abs(seed.minDecibel) * 13 +
+                  seed.duration * 7;
+
+  // Add some entropy from the decimal parts
+  seedValue += (seed.maxDecibel % 1) * 1000;
+  seedValue += (seed.minDecibel % 1) * 1000;
+
+  // Simple mulberry32 PRNG
+  return function() {
+    let t = seedValue += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
 }
 
 // ============ MAIN CALCULATOR ============
@@ -63,15 +103,18 @@ export function getRandomYesNoAnswer(): { text: string; icon: string; isPositive
  * @throws Error if options are required but not provided
  */
 export function makeDecision(input: DecisionCalculatorInput): DecisionCalculatorOutput {
-  const { mode, options, weights } = input;
+  const { mode, options, weights, audioSeed } = input;
+
+  // Create seeded random if audio seed is provided
+  const random = audioSeed ? createSeededRandom(audioSeed) : Math.random;
 
   // Yes/No mode
   if (mode === 'yesNo') {
-    const answer = getRandomYesNoAnswer();
+    const answer = getRandomYesNoAnswer(random);
     return {
       decision: `${answer.text} ${answer.icon}`,
       mode,
-      confidence: Math.floor(Math.random() * 30) + 70, // 70-100%
+      confidence: Math.floor(random() * 30) + 70, // 70-100%
       icon: answer.icon,
     };
   }
@@ -95,12 +138,12 @@ export function makeDecision(input: DecisionCalculatorInput): DecisionCalculator
       throw new Error('Total weight must be greater than 0');
     }
 
-    let random = Math.random() * totalWeight;
+    let randomValue = random() * totalWeight;
     let selectedIndex = 0;
 
     for (let i = 0; i < weights.length; i++) {
-      random -= Math.max(0, weights[i]);
-      if (random <= 0) {
+      randomValue -= Math.max(0, weights[i]);
+      if (randomValue <= 0) {
         selectedIndex = i;
         break;
       }
@@ -121,7 +164,7 @@ export function makeDecision(input: DecisionCalculatorInput): DecisionCalculator
   }
 
   // Pick one mode (random selection)
-  const selectedIndex = Math.floor(Math.random() * cleanOptions.length);
+  const selectedIndex = Math.floor(random() * cleanOptions.length);
 
   return {
     decision: cleanOptions[selectedIndex],

@@ -323,6 +323,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Model statistics collapsed state
   const [modelStatsExpanded, setModelStatsExpanded] = useState(false);
 
+  // Ad collapsed state
+  const [adCollapsed, setAdCollapsed] = useState(false);
+
   // Model selector dropdown state (for sidebar/overlay)
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
@@ -2002,9 +2005,36 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       {/* Fixed Input Bar - Bottom */}
       <div className="chat-fullscreen-input">
         <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
-          {/* Compact sticky ad banner - visible on all devices */}
+          {/* Collapsible ad banner - visible on all devices */}
           <div style={{ marginBottom: '0.5rem' }}>
-            <AdBanner slot={ADS_CONFIG.slots.chatInputArea} format="horizontal" delay={1000} />
+            {/* Collapse/Expand toggle button */}
+            <button
+              onClick={() => setAdCollapsed(!adCollapsed)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.35rem',
+                width: '100%',
+                padding: '0.35rem',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: adCollapsed ? '8px' : '8px 8px 0 0',
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <span>{adCollapsed ? '▶' : '▼'}</span>
+              <span>{adCollapsed ? 'Show Ad' : 'Hide Ad'}</span>
+            </button>
+            {/* Ad content - collapsible */}
+            {!adCollapsed && (
+              <div style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                <AdBanner slot={ADS_CONFIG.slots.chatInputArea} format="horizontal" delay={1000} />
+              </div>
+            )}
           </div>
 
           {/* Aggregated token stats */}
