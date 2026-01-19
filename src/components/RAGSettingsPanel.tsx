@@ -54,7 +54,7 @@ export interface RAGSettingsPanelProps {
   // History
   sessions: RAGSession[];
   currentSessionId: string | null;
-  loadSession: (id: string) => void;
+  loadSession: (id: string, updateUrl?: boolean) => void;
   deleteSession: (id: string) => void;
   clearAllHistory: () => void;
   
@@ -317,7 +317,7 @@ export const RAGSettingsPanel: React.FC<RAGSettingsPanelProps> = (props) => {
                     {sessions.map(session => (
                       <div
                         key={session.id}
-                        onClick={() => { loadSession(session.id); onClose(); }}
+                        onClick={() => { loadSession(session.id, true); onClose(); }}
                         style={{
                           padding: '0.75rem',
                           background: currentSessionId === session.id ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',

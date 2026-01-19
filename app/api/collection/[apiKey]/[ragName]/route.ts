@@ -140,18 +140,31 @@ async function handleInternalQuery(
   try {
     const results = await queryCollection(userId, rag.rag_name || ragName, query, topK);
 
+    // Fields to exclude from metadata display
+    const excludeFields = ['user_id', 'rag_name', 'rag_id', 'updated_at', 'content', 'title', 'source'];
+
     return NextResponse.json({
       success: true,
       source: 'internal',
       collection: ragName,
       query,
-      results: results.map(r => ({
-        id: r.id,
-        score: r.score,
-        title: r.metadata.title,
-        content: r.metadata.content,
-        source: r.metadata.source,
-      })),
+      results: results.map(r => {
+        // Filter metadata to exclude internal fields
+        const filteredMetadata: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(r.metadata)) {
+          if (!excludeFields.includes(key) && value !== undefined && value !== null && value !== '') {
+            filteredMetadata[key] = value;
+          }
+        }
+        return {
+          id: r.id,
+          score: r.score,
+          title: r.metadata.title,
+          content: r.metadata.content,
+          source: r.metadata.source,
+          metadata: Object.keys(filteredMetadata).length > 0 ? filteredMetadata : undefined,
+        };
+      }),
       count: results.length,
     });
   } catch (error) {

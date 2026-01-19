@@ -137,18 +137,48 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  // Fetch RAGs, API key, sessions, and budget
+  // Fetch RAGs, API key, sessions, and budget (runs once on mount)
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Fetch RAGs
         const ragsRes = await fetch('/api/ai/rags');
+        let fetchedRags: typeof rags = [];
         if (ragsRes.ok) {
           const data = await ragsRes.json();
-          setRags(data.rags || []);
-          if (data.rags?.length > 0 && !selectedRag) {
-            setSelectedRag(data.rags[0].id);
+          fetchedRags = data.rags || [];
+          setRags(fetchedRags);
+        }
+
+        // If we have a sessionId in URL, load that session to get the correct RAG
+        // Otherwise, select the first RAG as default
+        if (sessionId) {
+          // Load session data to get the RAG ID
+          const sessionRes = await fetch(`/api/ai/rag-sessions/${sessionId}`);
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+            setCurrentSessionId(sessionId);
+            if (sessionData.session.rag_id) {
+              setSelectedRag(sessionData.session.rag_id);
+            } else if (fetchedRags.length > 0) {
+              setSelectedRag(fetchedRags[0].id);
+            }
+            setMessages(
+              (sessionData.messages || []).map((m: { id: string; role: 'user' | 'assistant'; content: string; results?: SearchResult[]; tokens?: number; cost?: number; created_at: string }) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                timestamp: new Date(m.created_at),
+                results: m.results || [],
+                tokens: m.tokens,
+                cost: m.cost,
+              }))
+            );
+          } else if (fetchedRags.length > 0) {
+            setSelectedRag(fetchedRags[0].id);
           }
+        } else if (fetchedRags.length > 0) {
+          setSelectedRag(fetchedRags[0].id);
         }
 
         // Fetch API key
@@ -182,14 +212,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
       }
     };
     fetchData();
-  }, [selectedRag]);
-
-  // Load session if sessionId is provided
-  useEffect(() => {
-    if (sessionId && sessionId !== currentSessionId) {
-      loadSession(sessionId);
-    }
-  }, [sessionId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - sessionId is from URL params and doesn't change
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -201,7 +225,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const totalCost = messages.reduce((sum, m) => sum + (m.cost || 0), 0);
 
   // Load a session
-  const loadSession = async (id: string) => {
+  const loadSession = async (id: string, updateUrl: boolean = true) => {
     try {
       const res = await fetch(`/api/ai/rag-sessions/${id}`);
       if (res.ok) {
@@ -221,7 +245,10 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
             cost: m.cost,
           }))
         );
-        router.push(`/rag-explorer/${id}`);
+        // Only update URL if explicitly requested (e.g., clicking from history sidebar)
+        if (updateUrl) {
+          window.history.replaceState(null, '', `/rag-explorer/${id}`);
+        }
       }
     } catch (err) {
       console.error('Failed to load session:', err);
@@ -661,9 +688,31 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                               <span style={{ color: '#10b981', fontSize: '0.75rem' }}>Score: {result.score < 0.1 ? result.score.toFixed(4) : (result.score * 100).toFixed(1) + '%'}</span>
                             </div>
                           </div>
-                          <p style={{ color: '#fff', fontSize: '0.85rem', margin: 0, whiteSpace: 'pre-wrap' }}>
-                            {result.content}
-                          </p>
+                          {/* Metadata display */}
+                          {result.metadata && Object.keys(result.metadata).length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                              {Object.entries(result.metadata).map(([key, value]) => (
+                                <span
+                                  key={key}
+                                  style={{
+                                    background: 'rgba(139, 92, 246, 0.15)',
+                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                    borderRadius: '4px',
+                                    padding: '0.15rem 0.4rem',
+                                    fontSize: '0.7rem',
+                                  }}
+                                >
+                                  <span style={{ color: 'rgba(255,255,255,0.5)' }}>{key}:</span>{' '}
+                                  <span style={{ color: '#a78bfa' }}>{String(value)}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* Content with label */}
+                          <div style={{ fontSize: '0.85rem' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>content: </span>
+                            <span style={{ color: '#fff', whiteSpace: 'pre-wrap' }}>{result.content}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
