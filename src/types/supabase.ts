@@ -79,6 +79,20 @@ export interface ApiKeyUpdate {
  * Primary key: user_id (Clerk user ID)
  * One row per user storing their preferences.
  */
+/**
+ * Chat/Automation context-specific settings
+ */
+export interface ContextSettings {
+  /** Enable reasoning/thinking mode */
+  enableReasoning?: boolean;
+  /** Send chat history to AI */
+  sendHistory?: boolean;
+  /** Enable history memory (semantic search) */
+  historyMemoryEnabled?: boolean;
+  /** Default model ID */
+  defaultModel?: string;
+}
+
 export interface UserPreferencesRow {
   /** Clerk user ID (primary key) */
   user_id: string;
@@ -88,6 +102,10 @@ export interface UserPreferencesRow {
   measurement_system: MeasurementSystem;
   /** Preferred currency */
   currency: Currency;
+  /** Chat page settings */
+  chat_settings?: ContextSettings;
+  /** Automation page settings */
+  automation_settings?: ContextSettings;
   /** When preferences were created */
   created_at: string;
   /** When preferences were last updated */
@@ -102,6 +120,8 @@ export interface UserPreferencesInsert {
   time_format?: TimeFormat;
   measurement_system?: MeasurementSystem;
   currency?: Currency;
+  chat_settings?: ContextSettings;
+  automation_settings?: ContextSettings;
 }
 
 /**
@@ -111,6 +131,8 @@ export interface UserPreferencesUpdate {
   time_format?: TimeFormat;
   measurement_system?: MeasurementSystem;
   currency?: Currency;
+  chat_settings?: ContextSettings;
+  automation_settings?: ContextSettings;
   updated_at?: string;
 }
 

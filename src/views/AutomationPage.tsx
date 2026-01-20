@@ -206,6 +206,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // History memory state (embeds automation prompts to Upstash for semantic search)
   const [historyMemoryEnabled, setHistoryMemoryEnabled] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
+
+  // Settings persistence - track if settings have been loaded from server
+  const settingsLoadedRef = useRef(false);
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
 
@@ -303,6 +306,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     };
   }, []);
 
+  // Persist settings when they change
+  useEffect(() => {
+    saveAutomationSetting('historyMemoryEnabled', historyMemoryEnabled);
+  }, [historyMemoryEnabled]);
+
+  // Save selected model when it changes (but not when loading an automation)
+  useEffect(() => {
+    if (selectedModel && !currentAutomation) {
+      saveAutomationSetting('defaultModel', selectedModel);
+    }
+  }, [selectedModel, currentAutomation]);
+
   // Fetch data on mount
   useEffect(() => {
     applySEO('automation');
@@ -314,6 +329,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       fetchMcpTools();
       fetchConnectors();
       fetchAvailableMcpServers();
+      fetchAutomationSettings();
     }
   }, [canAccessPro]);
 
@@ -563,6 +579,47 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       }
     } catch (error) {
       console.error('Failed to fetch RAGs:', error);
+    }
+  };
+
+  // Fetch automation settings from preferences
+  const fetchAutomationSettings = async () => {
+    try {
+      const response = await fetch('/api/preferences?context=automation');
+      if (response.ok) {
+        const data = await response.json();
+        const settings = data.contextSettings || data.automationSettings || {};
+        settingsLoadedRef.current = true;
+
+        // Apply saved settings (only if not loading an automation which has its own model)
+        if (settings.historyMemoryEnabled !== undefined) {
+          setHistoryMemoryEnabled(settings.historyMemoryEnabled);
+        }
+        if (settings.defaultModel && !currentAutomation && availableModels.some(m => m.id === settings.defaultModel)) {
+          setSelectedModel(settings.defaultModel);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch automation settings:', err);
+    }
+  };
+
+  // Save a single automation setting
+  const saveAutomationSetting = async (key: string, value: boolean | string) => {
+    // Don't save until initial settings are loaded
+    if (!settingsLoadedRef.current) return;
+
+    try {
+      await fetch('/api/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: 'automation',
+          settings: { [key]: value },
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to save automation setting:', err);
     }
   };
 

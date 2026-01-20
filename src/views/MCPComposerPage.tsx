@@ -10,6 +10,7 @@ import { RestApiToolsSection } from '../components/RestApiToolsSection';
 import { GraphQLToolsSection } from '../components/GraphQLToolsSection';
 import { MCPToolsSection } from '../components/MCPToolsSection';
 import { AgentToolsSection } from '../components/AgentToolsSection';
+import { RAGToolsSection } from '../components/RAGToolsSection';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { BackToTools } from '../components/BackToTools';
 import { FaviconImage } from '../components/FaviconImage';
@@ -425,7 +426,7 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
   });
 
   // Get unique tool types for filter
-  const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'].filter(type =>
+  const toolTypes = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A', 'RAG'].filter(type =>
     type === 'GQL' ? hasGraphQLTools : tools.some(t => (t.toolType || 'NATIVE') === type)
   );
 
@@ -865,6 +866,7 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
                   MCP: '#3b82f6',
                   GQL: '#ec4899',
                   A2A: '#fbbf24',
+                  RAG: '#8b5cf6',
                 };
                 const isActive = selectedType === type;
                 return (
@@ -972,9 +974,10 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
             MCP: { label: 'MCP Tools', icon: '🔌', color: '#3b82f6' },
             GQL: { label: 'GraphQL Tools', icon: '◈', color: '#ec4899' },
             A2A: { label: 'Agent-to-Agent Tools', icon: '🤖', color: '#fbbf24' },
+            RAG: { label: 'Knowledge Base Tools', icon: '📚', color: '#8b5cf6' },
           };
 
-          const typeOrder = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A'];
+          const typeOrder = ['NATIVE', 'REST', 'MCP', 'GQL', 'A2A', 'RAG'];
           const activeTypes = typeOrder.filter(t => groupedTools[t]?.length > 0);
 
           return activeTypes.map((type, typeIndex) => {
@@ -1414,6 +1417,21 @@ export const MCPComposerPage: React.FC<MCPComposerPageProps> = ({ isPro, isPlus 
         {/* A2A Agents Section */}
         <div style={{ marginTop: '1.5rem' }}>
           <AgentToolsSection
+            selectedTools={selectedTools}
+            onToolSelect={(toolName, selected) => {
+              if (selected) {
+                setSelectedTools(prev => [...prev, toolName]);
+              } else {
+                setSelectedTools(prev => prev.filter(t => t !== toolName));
+              }
+            }}
+            onDataChange={refreshTools}
+          />
+        </div>
+
+        {/* RAG Knowledge Base Section */}
+        <div style={{ marginTop: '1.5rem' }}>
+          <RAGToolsSection
             selectedTools={selectedTools}
             onToolSelect={(toolName, selected) => {
               if (selected) {

@@ -371,6 +371,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
 
+  // Settings persistence - track if settings have been loaded from server
+  const settingsLoadedRef = useRef(false);
+  // Track when loading a conversation to avoid saving its model as default
+  const isLoadingConversationRef = useRef(false);
+
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
 
@@ -472,6 +477,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       fetchBudget();
       fetchPersonalities();
       fetchRags();
+      fetchChatSettings();
     }
   }, [canAccessPro, freeUserHasAgents]);
 
@@ -567,6 +573,22 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   useEffect(() => {
     applySEO('chat');
   }, []);
+
+  // Persist settings when they change
+  useEffect(() => {
+    saveChatSetting('enableReasoning', enableReasoning);
+  }, [enableReasoning]);
+
+  useEffect(() => {
+    saveChatSetting('historyMemoryEnabled', historyMemoryEnabled);
+  }, [historyMemoryEnabled]);
+
+  // Save selected model when it changes (but not for agent: models or when loading a conversation)
+  useEffect(() => {
+    if (!selectedModel.startsWith('agent:') && !isLoadingConversationRef.current) {
+      saveChatSetting('defaultModel', selectedModel);
+    }
+  }, [selectedModel]);
 
   // Close chat config popover when clicking outside
   useEffect(() => {
@@ -805,6 +827,50 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       }
     } catch (err) {
       console.error('Failed to fetch RAGs:', err);
+    }
+  };
+
+  // Fetch chat settings from preferences
+  const fetchChatSettings = async () => {
+    try {
+      const response = await fetch('/api/preferences?context=chat');
+      if (response.ok) {
+        const data = await response.json();
+        const settings = data.contextSettings || data.chatSettings || {};
+        settingsLoadedRef.current = true;
+
+        // Apply saved settings
+        if (settings.enableReasoning !== undefined) {
+          setEnableReasoning(settings.enableReasoning);
+        }
+        if (settings.historyMemoryEnabled !== undefined) {
+          setHistoryMemoryEnabled(settings.historyMemoryEnabled);
+        }
+        if (settings.defaultModel && availableModels.some(m => m.id === settings.defaultModel)) {
+          setSelectedModel(settings.defaultModel);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch chat settings:', err);
+    }
+  };
+
+  // Save a single chat setting
+  const saveChatSetting = async (key: string, value: boolean | string) => {
+    // Don't save until initial settings are loaded
+    if (!settingsLoadedRef.current) return;
+
+    try {
+      await fetch('/api/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: 'chat',
+          settings: { [key]: value },
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to save chat setting:', err);
     }
   };
 
@@ -1066,6 +1132,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const loadConversation = async (convId: string) => {
     try {
       setIsLoading(true);
+      isLoadingConversationRef.current = true; // Prevent saving conversation's model as default
       const response = await fetch(`/api/ai/conversations/${convId}`);
       if (response.ok) {
         const data = await response.json();
@@ -1096,6 +1163,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       console.error('Failed to load conversation:', err);
     } finally {
       setIsLoading(false);
+      // Reset after a short delay to allow the model change to be processed
+      setTimeout(() => { isLoadingConversationRef.current = false; }, 100);
     }
   };
 
