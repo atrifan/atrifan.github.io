@@ -404,6 +404,9 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                             boxShadow: `0 4px 16px ${tool.color}33`,
                             position: 'relative',
                             overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
@@ -433,7 +436,7 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                               PRO
                             </div>
                           )}
-                          <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          <div style={{ marginBottom: '0.25rem', display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
                             {this.renderToolIcon(tool.id, isMobile ? 28 : 36)}
                           </div>
                           <div style={{
@@ -441,6 +444,10 @@ export class PlanetaryNav extends Component<PlanetaryNavProps, PlanetaryNavState
                             fontWeight: 700,
                             color: '#fff',
                             textTransform: 'uppercase',
+                            textAlign: 'center',
+                            width: '100%',
+                            display: 'flex',
+                            justifyContent: 'center',
                           }}>
                             {tool.name}
                           </div>
