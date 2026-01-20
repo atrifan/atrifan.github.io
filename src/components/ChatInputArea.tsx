@@ -109,6 +109,9 @@ interface ChatInputAreaProps {
   rags?: RAGCollection[];
   selectedRagId?: string | null;
   setSelectedRagId?: (id: string) => void;
+  // Multi-select support for RAG Explorer
+  selectedRagIds?: string[];
+  toggleRagSelection?: (id: string) => void;
   sessionTokens?: number;
   sessionCost?: number;
 
@@ -173,6 +176,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   rags = [],
   selectedRagId,
   setSelectedRagId,
+  selectedRagIds = [],
+  toggleRagSelection,
   sessionTokens = 0,
   sessionCost = 0,
 
@@ -277,9 +282,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       : `Message ${selectedModelData?.name || 'AI'}...`;
   };
 
-  // Can send check
+  // Can send check - for RAG mode, allow if either single or multi-select has selections
+  const hasRagSelection = selectedRagIds.length > 0 || selectedRagId;
   const canSend = mode === 'rag'
-    ? !isDisabled && !isLoading && message.trim() && selectedRagId
+    ? !isDisabled && !isLoading && message.trim() && hasRagSelection
     : !isDisabled && !isLoading && message.trim();
 
   return (
@@ -400,7 +406,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             }}
             onKeyDown={handleKeyDown}
             placeholder={placeholder || getPlaceholder()}
-            disabled={isDisabled || isLoading || (mode === 'rag' && !selectedRagId)}
+            disabled={isDisabled || isLoading || (mode === 'rag' && !hasRagSelection)}
             rows={1}
             style={{
               width: '100%',
@@ -516,18 +522,22 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                background: selectedRagIds.length > 1 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.08)',
+                border: selectedRagIds.length > 1 ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255,255,255,0.15)',
                 borderRadius: '6px',
                 padding: '0.25rem 0.5rem',
-                color: 'rgba(255,255,255,0.7)',
+                color: selectedRagIds.length > 1 ? '#10b981' : 'rgba(255,255,255,0.7)',
                 cursor: 'pointer',
                 fontSize: '0.7rem',
                 transition: 'all 0.2s',
               }}
             >
               <span>{selectedRag?.icon || '📚'}</span>
-              <span>{selectedRag?.name || 'Select knowledge base'}</span>
+              <span>
+                {selectedRagIds.length > 1
+                  ? `${selectedRagIds.length} sources selected`
+                  : selectedRag?.name || 'Select knowledge base'}
+              </span>
               <span style={{ marginLeft: '0.25rem', opacity: 0.5 }}>▾</span>
             </button>
 
@@ -544,9 +554,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 maxHeight: '300px',
                 overflowY: 'auto',
                 zIndex: 100,
-                minWidth: '220px',
+                minWidth: '260px',
                 boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
               }}>
+                {toggleRagSelection && (
+                  <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+                    Select multiple sources (click checkboxes)
+                  </div>
+                )}
                 {rags.length === 0 ? (
                   <div style={{ padding: '1rem', textAlign: 'center' }}>
                     <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: 0 }}>No knowledge bases</p>
@@ -555,31 +570,54 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     </Link>
                   </div>
                 ) : (
-                  rags.map(rag => (
-                    <button
-                      key={rag.id}
-                      onClick={() => { setSelectedRagId?.(rag.id); setShowRagDropdown(false); }}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        padding: '0.5rem 0.75rem',
-                        background: rag.id === selectedRagId ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                        border: 'none',
-                        color: rag.id === selectedRagId ? '#10b981' : 'rgba(255,255,255,0.8)',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span>{rag.icon}</span>
-                      <span style={{ flex: 1 }}>{rag.name}</span>
-                      <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
-                        {rag.source_type}
-                      </span>
-                    </button>
-                  ))
+                  rags.map(rag => {
+                    const isSelected = toggleRagSelection
+                      ? selectedRagIds.includes(rag.id)
+                      : rag.id === selectedRagId;
+                    return (
+                      <button
+                        key={rag.id}
+                        onClick={() => {
+                          if (toggleRagSelection) {
+                            toggleRagSelection(rag.id);
+                          } else {
+                            setSelectedRagId?.(rag.id);
+                            setShowRagDropdown(false);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem 0.75rem',
+                          background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                          border: 'none',
+                          color: isSelected ? '#10b981' : 'rgba(255,255,255,0.8)',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          textAlign: 'left',
+                        }}
+                      >
+                        {toggleRagSelection && (
+                          <span style={{
+                            width: '16px', height: '16px', borderRadius: '4px',
+                            border: isSelected ? '2px solid #10b981' : '2px solid rgba(255,255,255,0.3)',
+                            background: isSelected ? '#10b981' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.65rem', color: '#fff',
+                          }}>
+                            {isSelected && '✓'}
+                          </span>
+                        )}
+                        <span>{rag.icon}</span>
+                        <span style={{ flex: 1 }}>{rag.name}</span>
+                        <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
+                          {rag.source_type}
+                        </span>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}

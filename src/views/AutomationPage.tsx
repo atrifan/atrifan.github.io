@@ -11,6 +11,7 @@ import { AutomationIcon } from '../components/AutomationIcon';
 import { FaviconImage } from '../components/FaviconImage';
 import { ChatInputArea } from '../components/ChatInputArea';
 import { SettingsPanel, SettingsPanelMode } from '../components/SettingsPanel';
+import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, HistoryMatchEvent } from '../components/RetrievalEventsDisplay';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
 
@@ -211,6 +212,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const settingsLoadedRef = useRef(false);
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
+
+  // Retrieval events state (RAG + history context for current prompt)
+  const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
 
   // Check screen size for responsive layout
   useEffect(() => {
@@ -689,6 +693,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
     setIsGenerating(true);
     setLastTokenUsage(null);
+    setRetrievalEvents({});
 
     // Create abort controller for this request
     const abortController = new AbortController();
@@ -696,9 +701,41 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
     // Build combined system prompt from active personalities
     const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
-    const personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
+    let personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
+
+    // Collected retrieval data
+    let collectedRagData: RAGRetrievalEvent[] = [];
 
     try {
+      // Search active RAGs if any are enabled
+      if (activeRagIds.length > 0) {
+        setRetrievalEvents({ isSearching: true });
+        try {
+          const ragRes = await fetch('/api/ai/rag-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ragIds: activeRagIds,
+              query: prompt,
+              topK: 3,
+            }),
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            collectedRagData = ragData.results || [];
+            if (ragData.contextString) {
+              personaSystemPrompt = ragData.contextString + (personaSystemPrompt || '');
+            }
+            setRetrievalEvents(prev => ({ ...prev, ragEvents: collectedRagData, isSearching: false }));
+          }
+        } catch (ragErr) {
+          console.error('Failed to fetch RAG context:', ragErr);
+          setRetrievalEvents(prev => ({ ...prev, isSearching: false }));
+        }
+      }
+
+      setRetrievalEvents(prev => ({ ...prev, isSending: true }));
+
       const response = await fetch('/api/ai/automations/prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -745,9 +782,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       }
     } finally {
       setIsGenerating(false);
+      setRetrievalEvents({});
       abortControllerRef.current = null;
     }
-  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory, connectors]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory, connectors, activeRagIds]);
 
   // Stop/cancel the current request
   const stopRequest = useCallback(() => {
@@ -1425,6 +1463,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {/* Fixed Input Bar - Bottom */}
           <div className="automation-fullscreen-input">
             <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+              {/* Retrieval events during generation */}
+              {isGenerating && (retrievalEvents.isSearching || retrievalEvents.ragEvents || retrievalEvents.isSending) && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <RetrievalEventsDisplay data={retrievalEvents} />
+                </div>
+              )}
               {/* Last generation stats */}
               {(lastTokenUsage || lastExplanation) && (
                 <div style={{ marginBottom: '0.5rem' }}>

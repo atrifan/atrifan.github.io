@@ -19,6 +19,7 @@ import type { OAuth2AuthConfig, OAuthServerType } from '../types/supabase';
 import { applySEO } from '../utils/seo';
 import { sendA2AMessage, sendA2AMessageStream, A2AReasoningEvent } from '../lib/a2a-client';
 import { ReasoningBubbleList, ReasoningEvent } from '../components/ReasoningBubble';
+import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, HistoryMatchEvent } from '../components/RetrievalEventsDisplay';
 import {
   AI_MODELS,
   TOKEN_QUOTAS,
@@ -38,6 +39,20 @@ interface ChatPageProps {
   isPlus: boolean;
 }
 
+interface RAGResultData {
+  ragId: string;
+  ragName: string;
+  ragIcon: string;
+  sourceType: 'csv' | 'url';
+  results: Array<{ id: string; score: number; title?: string; content: string; source?: string }>;
+}
+
+interface HistoryMatchData {
+  chatId: string;
+  score: number;
+  messages: Array<{ content: string; messageType: string }>;
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -46,6 +61,8 @@ interface ChatMessage {
   model?: string;
   tokens?: { input: number; output: number };
   reasoningEvents?: ReasoningEvent[]; // Reasoning events from A2A streaming
+  ragData?: RAGResultData[]; // RAG retrieval results used for this message
+  historyData?: HistoryMatchData[]; // History context matches used for this message
 }
 
 interface Conversation {
@@ -370,6 +387,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
+
+  // Retrieval events state (RAG + history context for current message)
+  const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
 
   // Settings persistence - track if settings have been loaded from server
   const settingsLoadedRef = useRef(false);
@@ -1354,12 +1374,44 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setIsLoading(true);
     setError(null);
     setFailedMessageId(null); // Clear any previous failed message
+    setRetrievalEvents({}); // Reset retrieval events
 
     // Create abort controller for this request
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
+    // Collected retrieval data for storing with the response
+    let collectedRagData: RAGRetrievalEvent[] = [];
+    let collectedHistoryData: HistoryMatchEvent[] = [];
+    let ragContextString = '';
+    let historyContextString = '';
+
     try {
+      // Search active RAGs if any are enabled
+      if (activeRagIds.length > 0) {
+        setRetrievalEvents({ isSearching: true });
+        try {
+          const ragRes = await fetch('/api/ai/rag-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ragIds: activeRagIds,
+              query: userMessage.content,
+              topK: 3,
+            }),
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            collectedRagData = ragData.results || [];
+            ragContextString = ragData.contextString || '';
+            setRetrievalEvents(prev => ({ ...prev, ragEvents: collectedRagData, isSearching: false }));
+          }
+        } catch (ragErr) {
+          console.error('Failed to fetch RAG context:', ragErr);
+          setRetrievalEvents(prev => ({ ...prev, isSearching: false }));
+        }
+      }
+
       // Handle external agent communication
       if (isExternalAgentSelected && selectedAgentConnector) {
         const a2aMessages = [...messages, userMessage].map(m => ({
@@ -1371,6 +1423,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         let activeSystemPrompts = activePersonalityIds
           .map(id => personalities.find(p => p.id === id)?.system_prompt)
           .filter((prompt): prompt is string => !!prompt);
+
+        // Add RAG context as first system prompt if available
+        if (ragContextString) {
+          activeSystemPrompts = [ragContextString, ...activeSystemPrompts];
+        }
 
         // If history memory is enabled and we have a conversation, fetch related context for A2A
         if (historyMemoryEnabled && currentConversationId) {
@@ -1388,14 +1445,25 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             if (contextRes.ok) {
               const contextData = await contextRes.json();
               if (contextData.contextString) {
+                historyContextString = contextData.contextString;
                 // Prepend context as first system prompt
                 activeSystemPrompts = [contextData.contextString, ...activeSystemPrompts];
+              }
+              if (contextData.context && contextData.context.length > 0) {
+                collectedHistoryData = contextData.context.map((c: string, i: number) => ({
+                  chatId: currentConversationId,
+                  score: 1 - (i * 0.1),
+                  messages: [{ content: c, messageType: 'context' }],
+                }));
+                setRetrievalEvents(prev => ({ ...prev, historyEvents: collectedHistoryData }));
               }
             }
           } catch (contextErr) {
             console.error('Failed to fetch history context for A2A:', contextErr);
           }
         }
+
+        setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
         // Reset streaming state
         setStreamingContent('');
@@ -1505,11 +1573,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             output: a2aResponse.outputTokens || 0,
           },
           reasoningEvents: collectedReasoningEvents.length > 0 ? collectedReasoningEvents : undefined,
+          ragData: collectedRagData.length > 0 ? collectedRagData : undefined,
+          historyData: collectedHistoryData.length > 0 ? collectedHistoryData : undefined,
         };
 
-        // Clear streaming state
+        // Clear streaming state and retrieval events
         setStreamingContent('');
         setStreamingReasoningEvents([]);
+        setRetrievalEvents({});
 
         // Update user message with input tokens
         setMessages(prev => {
@@ -1590,6 +1661,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           .map(p => p.system_prompt)
           .join('\n\n');
 
+        // Add RAG context if available
+        if (ragContextString) {
+          combinedSystemPrompt = ragContextString + (combinedSystemPrompt || '');
+        }
+
         // If history memory is enabled and we have a conversation, fetch related context
         if (historyMemoryEnabled && currentConversationId) {
           try {
@@ -1606,14 +1682,25 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             if (contextRes.ok) {
               const contextData = await contextRes.json();
               if (contextData.contextString) {
+                historyContextString = contextData.contextString;
                 // Prepend context to system prompt
                 combinedSystemPrompt = contextData.contextString + (combinedSystemPrompt || '');
+              }
+              if (contextData.context && contextData.context.length > 0) {
+                collectedHistoryData = contextData.context.map((c: string, i: number) => ({
+                  chatId: currentConversationId,
+                  score: 1 - (i * 0.1),
+                  messages: [{ content: c, messageType: 'context' }],
+                }));
+                setRetrievalEvents(prev => ({ ...prev, historyEvents: collectedHistoryData }));
               }
             }
           } catch (contextErr) {
             console.error('Failed to fetch history context:', contextErr);
           }
         }
+
+        setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
@@ -1660,7 +1747,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           model: selectedModel,
           // Store both input and output tokens on assistant message for cost calculation
           tokens: { input: data.usage?.input || 0, output: data.usage?.output || 0 },
+          ragData: collectedRagData.length > 0 ? collectedRagData : undefined,
+          historyData: collectedHistoryData.length > 0 ? collectedHistoryData : undefined,
         };
+
+        // Clear retrieval events
+        setRetrievalEvents({});
 
         // Update user message with input tokens (for display) and add assistant message
         setMessages(prev => {
@@ -2014,6 +2106,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                     {msg.role === 'assistant' && msg.reasoningEvents && msg.reasoningEvents.length > 0 && (
                       <ReasoningBubbleList events={msg.reasoningEvents} maxVisible={3} />
                     )}
+                    {/* RAG/History context badge for messages that used retrieval */}
+                    {msg.role === 'assistant' && (msg.ragData || msg.historyData) && (
+                      <RetrievalEventsDisplay
+                        data={{
+                          ragEvents: msg.ragData as RAGRetrievalEvent[],
+                          historyEvents: msg.historyData as HistoryMatchEvent[]
+                        }}
+                        style={{ marginBottom: '0.5rem' }}
+                      />
+                    )}
                     <div style={{
                       fontSize: '0.875rem',
                       maxHeight: msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded ? '5.25rem' : 'none',
@@ -2199,7 +2301,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               );
             })}
             {isLoading && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '80%' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '85%', width: '100%' }}>
+                {/* Show retrieval events (RAG search, history matching) */}
+                {(retrievalEvents.isSearching || retrievalEvents.ragEvents || retrievalEvents.historyEvents || retrievalEvents.isSending) && (
+                  <RetrievalEventsDisplay data={retrievalEvents} style={{ width: '100%', marginBottom: '0.5rem' }} />
+                )}
                 {/* Show streaming reasoning events */}
                 {isStreaming && streamingReasoningEvents.length > 0 && (
                   <div style={{ width: '100%', marginBottom: '0.5rem' }}>

@@ -51,12 +51,21 @@ interface SearchResult {
   metadata?: Record<string, unknown>;
 }
 
+interface RAGSearchResults {
+  ragId: string;
+  ragName: string;
+  ragIcon: string;
+  results: SearchResult[];
+  error?: string;
+}
+
 interface SearchMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   results?: SearchResult[];
+  multiRagResults?: RAGSearchResults[]; // Results from multiple RAGs
   tokens?: number;
   cost?: number;
   ragName?: string;
@@ -79,7 +88,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
 
   // State
   const [rags, setRags] = useState<RAGCollection[]>([]);
-  const [selectedRag, setSelectedRag] = useState<string | null>(null);
+  const [selectedRag, setSelectedRag] = useState<string | null>(null); // Primary selection for backward compat
+  const [selectedRagIds, setSelectedRagIds] = useState<string[]>([]); // Multi-select support
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<SearchMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -406,9 +416,11 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     }
   };
 
-  // Search handler - uses unified /api/collection/{apiKey}/{ragName} endpoint
+  // Search handler - supports both single and multi-RAG search
   const handleSearch = useCallback(async () => {
-    if (!query.trim() || !selectedRag || !apiKey || isLoading) return;
+    // Use multi-select if available, otherwise fall back to single selection
+    const ragsToSearch = selectedRagIds.length > 0 ? selectedRagIds : (selectedRag ? [selectedRag] : []);
+    if (!query.trim() || ragsToSearch.length === 0 || !apiKey || isLoading) return;
 
     const queryText = query.trim();
     const userMessage: SearchMessage = {
@@ -424,10 +436,10 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     setError(null);
 
     try {
-      const ragData = rags.find(r => r.id === selectedRag);
-      if (!ragData) throw new Error('RAG not found');
+      const primaryRag = rags.find(r => r.id === ragsToSearch[0]);
+      if (!primaryRag) throw new Error('RAG not found');
 
-      // Create session if needed
+      // Create session if needed (use first RAG for session metadata)
       let sessionIdToUse = currentSessionId;
       if (!sessionIdToUse) {
         const sessionRes = await fetch('/api/ai/rag-sessions', {
@@ -435,91 +447,144 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: queryText.slice(0, 50) + (queryText.length > 50 ? '...' : ''),
-            ragId: ragData.id,
-            ragName: ragData.name,
-            embeddingModel: ragData.embedding_model,
+            ragId: primaryRag.id,
+            ragName: ragsToSearch.length > 1 ? `${primaryRag.name} +${ragsToSearch.length - 1}` : primaryRag.name,
+            embeddingModel: primaryRag.embedding_model,
           }),
         });
         if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
           sessionIdToUse = sessionData.session.id;
           setCurrentSessionId(sessionIdToUse);
-          // Use replace to update URL without triggering a full page reload
           window.history.replaceState(null, '', `/rag-explorer/${sessionIdToUse}`);
-          // Add to sessions list
           setSessions(prev => [sessionData.session, ...prev]);
         }
       }
 
-      // Call unified collection API (handles both CSV/internal and URL/external)
-      const response = await fetch(`/api/collection/${apiKey}/${ragData.rag_name}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: queryText,
-          top_n: ragData.top_n || 5,
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Search failed');
-      }
-
-      const data = await response.json();
-      // Estimate tokens (rough: ~4 chars per token)
-      const estimatedTokens = Math.ceil(queryText.length / 4);
-      const cost = embeddingModel ? calculateEmbeddingCost(embeddingModel.id, estimatedTokens) : 0;
-
-      const assistantContent = data.results?.length > 0
-        ? `Found ${data.results.length} relevant results:`
-        : 'No results found for your query.';
-
-      const assistantMessage: SearchMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: assistantContent,
-        timestamp: new Date(),
-        results: data.results || [],
-        tokens: estimatedTokens,
-        cost,
-        ragName: ragData.name,
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-      setEmbeddingTokensUsed(prev => prev + estimatedTokens);
-      setEmbeddingCostUsed(prev => prev + cost);
-
-      // Save messages to session
-      if (sessionIdToUse) {
-        await fetch(`/api/ai/rag-sessions/${sessionIdToUse}`, {
-          method: 'PATCH',
+      // Multi-RAG search using the new API
+      if (ragsToSearch.length > 1) {
+        const response = await fetch('/api/ai/rag-context', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userMessage: queryText,
-            assistantMessage: assistantContent,
-            results: data.results || [],
-            tokens: estimatedTokens,
-            cost,
+            ragIds: ragsToSearch,
+            query: queryText,
+            topK: 5,
           }),
         });
 
-        // Embed messages to history if enabled
-        const rawResponse = data.results?.length > 0
-          ? data.results.map((r: SearchResult) => `[Score: ${r.score}] ${r.content}`).join('\n')
-          : undefined;
-        embedMessagesToHistory(
-          sessionIdToUse,
-          { id: userMessage.id, content: queryText },
-          { id: assistantMessage.id, content: assistantContent, rawResponse }
-        );
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Search failed');
+        }
+
+        const data = await response.json();
+        const estimatedTokens = Math.ceil(queryText.length / 4) * ragsToSearch.length;
+        const cost = embeddingModel ? calculateEmbeddingCost(embeddingModel.id, estimatedTokens) : 0;
+
+        const totalResults = data.totalResults || 0;
+        const assistantContent = totalResults > 0
+          ? `Found ${totalResults} results across ${ragsToSearch.length} knowledge bases:`
+          : 'No results found in any knowledge base.';
+
+        const assistantMessage: SearchMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: assistantContent,
+          timestamp: new Date(),
+          multiRagResults: data.results || [],
+          tokens: estimatedTokens,
+          cost,
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        setEmbeddingTokensUsed(prev => prev + estimatedTokens);
+        setEmbeddingCostUsed(prev => prev + cost);
+      } else {
+        // Single RAG search (original behavior)
+        const ragData = primaryRag;
+        const response = await fetch(`/api/collection/${apiKey}/${ragData.rag_name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: queryText,
+            top_n: ragData.top_n || 5,
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Search failed');
+        }
+
+        const data = await response.json();
+        const estimatedTokens = Math.ceil(queryText.length / 4);
+        const cost = embeddingModel ? calculateEmbeddingCost(embeddingModel.id, estimatedTokens) : 0;
+
+        const assistantContent = data.results?.length > 0
+          ? `Found ${data.results.length} relevant results:`
+          : 'No results found for your query.';
+
+        const assistantMessage: SearchMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: assistantContent,
+          timestamp: new Date(),
+          results: data.results || [],
+          tokens: estimatedTokens,
+          cost,
+          ragName: ragData.name,
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        setEmbeddingTokensUsed(prev => prev + estimatedTokens);
+        setEmbeddingCostUsed(prev => prev + cost);
+
+        // Save messages to session
+        if (sessionIdToUse) {
+          await fetch(`/api/ai/rag-sessions/${sessionIdToUse}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userMessage: queryText,
+              assistantMessage: assistantContent,
+              results: data.results || [],
+              tokens: estimatedTokens,
+              cost,
+            }),
+          });
+
+          const rawResponse = data.results?.length > 0
+            ? data.results.map((r: SearchResult) => `[Score: ${r.score}] ${r.content}`).join('\n')
+            : undefined;
+          embedMessagesToHistory(
+            sessionIdToUse,
+            { id: userMessage.id, content: queryText },
+            { id: assistantMessage.id, content: assistantContent, rawResponse }
+          );
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
       setIsLoading(false);
     }
-  }, [query, selectedRag, apiKey, isLoading, rags, embeddingModel, currentSessionId, router, historyMemoryEnabled]);
+  }, [query, selectedRag, selectedRagIds, apiKey, isLoading, rags, embeddingModel, currentSessionId, router, historyMemoryEnabled]);
+
+  // Toggle RAG selection for multi-select
+  const toggleRagSelection = (ragId: string) => {
+    setSelectedRagIds(prev => {
+      if (prev.includes(ragId)) {
+        return prev.filter(id => id !== ragId);
+      } else {
+        return [...prev, ragId];
+      }
+    });
+    // Also update single selection for backward compatibility
+    if (!selectedRagIds.includes(ragId)) {
+      setSelectedRag(ragId);
+    }
+  };
 
   // Toggle message expansion
   const toggleExpand = (id: string) => {
@@ -635,7 +700,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
           <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {messages.map(msg => {
               const isExpanded = expandedMessages.has(msg.id);
-              const hasResults = msg.results && msg.results.length > 0;
+              const hasResults = (msg.results && msg.results.length > 0) || (msg.multiRagResults && msg.multiRagResults.length > 0);
+              const hasMultiRagResults = msg.multiRagResults && msg.multiRagResults.length > 0;
 
               return (
                 <div
@@ -660,7 +726,7 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                     <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                     {hasResults && (
                       <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.5rem', display: 'block' }}>
-                        {isExpanded ? '▼ Click to collapse' : '▶ Click to expand results'}
+                        {isExpanded ? '▼ Click to collapse' : `▶ Click to expand ${hasMultiRagResults ? 'multi-source ' : ''}results`}
                       </span>
                     )}
                   </div>
@@ -711,8 +777,32 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                     </div>
                   )}
 
-                  {/* Expanded Results */}
-                  {hasResults && isExpanded && (
+                  {/* Expanded Results - Multi-RAG */}
+                  {hasMultiRagResults && isExpanded && (
+                    <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {msg.multiRagResults!.map((ragResult) => (
+                        <div key={ragResult.ragId} style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '0.75rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span style={{ fontSize: '1.2rem' }}>{ragResult.ragIcon}</span>
+                            <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.85rem' }}>{ragResult.ragName}</span>
+                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>({ragResult.results.length} results)</span>
+                          </div>
+                          {ragResult.results.map((result, idx) => (
+                            <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '0.5rem', marginBottom: idx < ragResult.results.length - 1 ? '0.5rem' : 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>#{idx + 1}</span>
+                                <span style={{ color: '#10b981', fontSize: '0.7rem' }}>{(result.score * 100).toFixed(0)}%</span>
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#fff', whiteSpace: 'pre-wrap' }}>{result.content}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Expanded Results - Single RAG */}
+                  {msg.results && msg.results.length > 0 && isExpanded && !hasMultiRagResults && (
                     <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {msg.results!.map((result, idx) => (
                         <div
@@ -832,6 +922,8 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 }))}
                 selectedRagId={selectedRag}
                 setSelectedRagId={setSelectedRag}
+                selectedRagIds={selectedRagIds}
+                toggleRagSelection={toggleRagSelection}
                 sessionTokens={totalTokens}
                 sessionCost={totalCost}
                 showSettingsButton
