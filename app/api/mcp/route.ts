@@ -807,7 +807,7 @@ async function executeToolAsync(
           headers,
           contextId, // Pass contextId for conversation continuity
         },
-        [{ role: 'user', content: query }]
+        query
       );
 
       // Check if OAuth is needed

@@ -17,7 +17,7 @@ import { OAuthAuthenticationModal, OAuthSuccessData } from '../components/OAuthA
 import { ADS_CONFIG } from '../config/ads.config';
 import type { OAuth2AuthConfig, OAuthServerType } from '../types/supabase';
 import { applySEO } from '../utils/seo';
-import { sendA2AMessage, sendA2AMessageStream, A2AReasoningEvent } from '../lib/a2a-client';
+import { sendA2AMessage, sendA2AMessageStream, A2AReasoningEvent, RAGContextItem, HistoryMatchItem, PersonaItem, RecentMessage } from '../lib/a2a-client';
 import { ReasoningBubbleList, ReasoningEvent } from '../components/ReasoningBubble';
 import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, HistoryMatchEvent } from '../components/RetrievalEventsDisplay';
 import {
@@ -388,6 +388,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
 
+  // Send recent history toggle (last 2-4 exchanges for immediate context)
+  // Disable for agents that don't support multiple text parts
+  const [sendRecentHistory, setSendRecentHistory] = useState(true);
+
   // Retrieval events state (RAG + history context for current message)
   const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
 
@@ -608,6 +612,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   useEffect(() => {
     saveChatSetting('historyMemoryEnabled', historyMemoryEnabled);
   }, [historyMemoryEnabled]);
+
+  useEffect(() => {
+    saveChatSetting('sendRecentHistory', sendRecentHistory);
+  }, [sendRecentHistory]);
 
   // Save selected model when it changes (but not for agent: models or when loading a conversation)
   useEffect(() => {
@@ -871,6 +879,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }
         if (settings.historyMemoryEnabled !== undefined) {
           setHistoryMemoryEnabled(settings.historyMemoryEnabled);
+        }
+        if (settings.sendRecentHistory !== undefined) {
+          setSendRecentHistory(settings.sendRecentHistory);
         }
         if (settings.defaultModel && availableModels.some(m => m.id === settings.defaultModel)) {
           setSelectedModel(settings.defaultModel);
@@ -1252,7 +1263,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }),
       });
 
-      // Embed assistant message
+      // Embed assistant message with tool execution metadata
       await fetch('/api/ai/history-embed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1420,20 +1431,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
       // Handle external agent communication
       if (isExternalAgentSelected && selectedAgentConnector) {
-        const a2aMessages = [...messages, userMessage].map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
-
-        // Get active personality system prompts
-        let activeSystemPrompts = activePersonalityIds
-          .map(id => personalities.find(p => p.id === id)?.system_prompt)
-          .filter((prompt): prompt is string => !!prompt);
-
-        // Add RAG context as first system prompt if available
-        if (ragContextString) {
-          activeSystemPrompts = [ragContextString, ...activeSystemPrompts];
+        // Build structured RAG data from collected results
+        const ragDataItems: RAGContextItem[] = [];
+        if (collectedRagData && collectedRagData.length > 0) {
+          for (const ragEvent of collectedRagData) {
+            for (const result of ragEvent.results) {
+              ragDataItems.push({
+                source: ragEvent.ragName,
+                title: result.title || 'Untitled',
+                content: result.content,
+                score: result.score,
+              });
+            }
+          }
         }
+
+        // Build structured history data
+        const historyDataItems: HistoryMatchItem[] = [];
 
         // If history memory is enabled and we have a conversation, fetch related context for A2A
         if (historyMemoryEnabled && currentConversationId) {
@@ -1452,8 +1466,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               const contextData = await contextRes.json();
               if (contextData.contextString) {
                 historyContextString = contextData.contextString;
-                // Prepend context as first system prompt
-                activeSystemPrompts = [contextData.contextString, ...activeSystemPrompts];
               }
               if (contextData.context && contextData.context.length > 0) {
                 collectedHistoryData = contextData.context.map((c: string, i: number) => ({
@@ -1462,12 +1474,36 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   messages: [{ content: c, messageType: 'context' }],
                 }));
                 setRetrievalEvents(prev => ({ ...prev, historyEvents: collectedHistoryData }));
+
+                // Build structured history items
+                for (let i = 0; i < contextData.context.length; i++) {
+                  historyDataItems.push({
+                    conversationId: currentConversationId,
+                    summary: contextData.context[i],
+                    relevance: 1 - (i * 0.1),
+                  });
+                }
               }
             }
           } catch (contextErr) {
             console.error('Failed to fetch history context for A2A:', contextErr);
           }
         }
+
+        // Build structured persona data
+        const personaItems: PersonaItem[] = activePersonalityIds
+          .map(id => {
+            const p = personalities.find(pers => pers.id === id);
+            return p ? { name: p.name, prompt: p.system_prompt } : null;
+          })
+          .filter((item): item is PersonaItem => item !== null);
+
+        // Extract last 4 messages (2 exchanges) for immediate context (if enabled)
+        // This handles "do that again", "as I said before", etc.
+        // Can be disabled for agents that don't support multiple text parts
+        const recentMessages: RecentMessage[] = sendRecentHistory
+          ? messages.slice(-4).map(m => ({ role: m.role, content: m.content }))
+          : [];
 
         setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
@@ -1480,7 +1516,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         const collectedReasoningEvents: ReasoningEvent[] = [];
         let accumulatedContent = '';
 
-        // Use streaming API for A2A agents
+        // Use streaming API for A2A agents with structured context data
+        // Send query + recent history for immediate context, plus semantic context via ragData/historyData
         const a2aResponse = await sendA2AMessageStream(
           {
             agentUrl: selectedAgentConnector.external_url || '',
@@ -1488,11 +1525,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             authType: selectedAgentConnector.external_auth_type,
             authConfig: selectedAgentConnector.external_auth_config,
             headers: selectedAgentConnector.external_headers,
-            systemPrompts: activeSystemPrompts.length > 0 ? activeSystemPrompts : undefined,
+            recentHistory: recentMessages.length > 0 ? recentMessages : undefined,
+            ragData: ragDataItems.length > 0 ? ragDataItems : undefined,
+            historyData: historyDataItems.length > 0 ? historyDataItems : undefined,
+            personaPrompts: personaItems.length > 0 ? personaItems : undefined,
             contextId: a2aContextId || undefined,
             signal: abortController.signal,
           },
-          a2aMessages,
+          userMessage.content,
           {
             onReasoning: (event: A2AReasoningEvent) => {
               const reasoningEvent: ReasoningEvent = {
@@ -1621,6 +1661,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               inputTokens: a2aResponse.inputTokens || 0,
               outputTokens: a2aResponse.outputTokens || 0,
               a2aContextId: contextIdToSave,
+              // Include structured context data for debugging/display
+              ragData: ragDataItems.length > 0 ? ragDataItems : undefined,
+              historyData: historyDataItems.length > 0 ? historyDataItems : undefined,
+              personaPrompts: personaItems.length > 0 ? personaItems : undefined,
             }),
           });
 
@@ -1631,7 +1675,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               setCurrentConversationId(saveData.conversationId);
               fetchConversations();
             }
-            // Embed messages to history if enabled
+            // Embed messages to history for semantic search
             if (convId) {
               // Include reasoning events (tool calls, etc.) as rawResponse for semantic search
               const rawResponse = collectedReasoningEvents.length > 0
@@ -1708,6 +1752,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
         setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
+        // Extract last 4 messages (2 exchanges) + current user message for immediate context (if enabled)
+        // Semantic history context is already in systemPrompt via historyContextString
+        // When sendRecentHistory is disabled, only send the current message
+        const recentMessagesForAI = sendRecentHistory
+          ? [
+              ...messages.slice(-4).map(m => ({ role: m.role, content: m.content })),
+              { role: userMessage.role, content: userMessage.content },
+            ]
+          : [{ role: userMessage.role, content: userMessage.content }];
+
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: {
@@ -1715,10 +1769,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             'x-user-tier': tier,
           },
           body: JSON.stringify({
-            messages: [...messages, userMessage].map(m => ({
-              role: m.role,
-              content: m.content,
-            })),
+            messages: recentMessagesForAI,
             model: selectedModel,
             conversationId: currentConversationId,
             systemPrompt: combinedSystemPrompt || undefined,
@@ -2833,6 +2884,27 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 }}
               >
                 📜
+              </button>
+
+              {/* Send Recent History toggle */}
+              <button
+                onClick={() => setSendRecentHistory(!sendRecentHistory)}
+                title={sendRecentHistory ? "Recent history enabled - last 2 exchanges sent for context. Click to disable for agents that don't support it." : "Recent history disabled - only current message sent. Click to enable for better context."}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: sendRecentHistory ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: sendRecentHistory ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: sendRecentHistory ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                💬
               </button>
             </div>
 

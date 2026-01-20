@@ -55,13 +55,51 @@ export interface A2AStreamCallbacks {
   onError?: (error: string) => void;
 }
 
+/**
+ * RAG context data for A2A messages
+ */
+export interface RAGContextItem {
+  source: string; // Knowledge base name
+  title: string;
+  content: string;
+  score?: number;
+}
+
+/**
+ * History correlation data for A2A messages
+ */
+export interface HistoryMatchItem {
+  conversationId: string;
+  summary: string;
+  relevance?: number;
+}
+
+/**
+ * Persona prompt data for A2A messages
+ */
+export interface PersonaItem {
+  name: string;
+  prompt: string;
+}
+
+/**
+ * Recent message for immediate context (last 2-4 exchanges)
+ */
+export interface RecentMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface A2AClientConfig {
   agentUrl: string;
   agentId?: string; // A2A agent ID for OAuth token lookup
   authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   authConfig?: Record<string, string>;
   headers?: Record<string, string>;
-  systemPrompts?: string[]; // Personality system prompts
+  recentHistory?: RecentMessage[]; // Last 2-4 exchanges for immediate context
+  ragData?: RAGContextItem[]; // RAG context items
+  historyData?: HistoryMatchItem[]; // Semantic history matches (older relevant context)
+  personaPrompts?: PersonaItem[]; // Persona prompts
   contextId?: string; // A2A protocol context ID for conversation continuity
   signal?: AbortSignal; // External abort signal for cancellation
 }
@@ -71,12 +109,12 @@ export interface A2AClientConfig {
  * Uses a server-side proxy to avoid CORS issues.
  *
  * @param config - Configuration including agent URL and optional abort signal
- * @param messages - Array of messages to send
+ * @param query - The user's query/message to send
  * @throws {Error} Throws AbortError if the request is cancelled via the signal
  */
 export async function sendA2AMessage(
   config: A2AClientConfig,
-  messages: A2AMessage[]
+  query: string
 ): Promise<A2AResponse> {
   // 3 minute timeout for UI to proxy
   const timeoutController = new AbortController();
@@ -109,8 +147,11 @@ export async function sendA2AMessage(
       body: JSON.stringify({
         agentUrl: config.agentUrl,
         agentId: config.agentId,
-        messages,
-        systemPrompts: config.systemPrompts,
+        query,
+        recentHistory: config.recentHistory,
+        ragData: config.ragData,
+        historyData: config.historyData,
+        personaPrompts: config.personaPrompts,
         authType: config.authType,
         authConfig: config.authConfig,
         headers: config.headers,
@@ -163,13 +204,13 @@ export async function sendA2AMessage(
  * Uses SSE to receive real-time updates including reasoning events.
  *
  * @param config - Configuration including agent URL and optional abort signal
- * @param messages - Array of messages to send
+ * @param query - The user's query/message to send
  * @param callbacks - Callbacks for streaming events
  * @returns Promise resolving to final A2AResponse
  */
 export async function sendA2AMessageStream(
   config: A2AClientConfig,
-  messages: A2AMessage[],
+  query: string,
   callbacks: A2AStreamCallbacks
 ): Promise<A2AResponse> {
   const timeoutController = new AbortController();
@@ -199,8 +240,11 @@ export async function sendA2AMessageStream(
       body: JSON.stringify({
         agentUrl: config.agentUrl,
         agentId: config.agentId,
-        messages,
-        systemPrompts: config.systemPrompts,
+        query,
+        recentHistory: config.recentHistory,
+        ragData: config.ragData,
+        historyData: config.historyData,
+        personaPrompts: config.personaPrompts,
         authType: config.authType,
         authConfig: config.authConfig,
         headers: config.headers,

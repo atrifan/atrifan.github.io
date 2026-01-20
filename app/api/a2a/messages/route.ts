@@ -17,6 +17,33 @@ function getSupabaseClient(): SupabaseClient | null {
   return createClient(url, key);
 }
 
+/**
+ * RAG context data for A2A messages
+ */
+interface RAGContextItem {
+  source: string;
+  title: string;
+  content: string;
+  score?: number;
+}
+
+/**
+ * History correlation data for A2A messages
+ */
+interface HistoryMatchItem {
+  conversationId: string;
+  summary: string;
+  relevance?: number;
+}
+
+/**
+ * Persona prompt data for A2A messages
+ */
+interface PersonaItem {
+  name: string;
+  prompt: string;
+}
+
 interface SaveMessagesRequest {
   conversationId?: string;
   modelId: string; // e.g., "agent:connector-id"
@@ -25,6 +52,9 @@ interface SaveMessagesRequest {
   inputTokens?: number;
   outputTokens?: number;
   a2aContextId?: string; // External agent's context/task ID
+  ragData?: RAGContextItem[]; // RAG context sent to agent
+  historyData?: HistoryMatchItem[]; // History context sent to agent
+  personaPrompts?: PersonaItem[]; // Persona prompts sent to agent
 }
 
 export async function POST(request: NextRequest) {
@@ -40,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: SaveMessagesRequest = await request.json();
-    const { conversationId, modelId, userMessage, assistantMessage, inputTokens, outputTokens, a2aContextId } = body;
+    const { conversationId, modelId, userMessage, assistantMessage, inputTokens, outputTokens, a2aContextId, ragData, historyData, personaPrompts } = body;
 
     let activeConversationId = conversationId;
 
@@ -83,14 +113,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to get conversation ID' }, { status: 500 });
     }
 
-    // Save user message
-    const { error: userMsgError } = await supabase.from('chat_messages').insert({
+    // Save user message with context data
+    // Build the message insert data
+    const userMsgData: Record<string, unknown> = {
       conversation_id: activeConversationId,
       role: 'user',
       content: userMessage,
       input_tokens: inputTokens || 0,
       output_tokens: 0,
-    });
+    };
+
+    // Add RAG data if provided
+    if (ragData && ragData.length > 0) {
+      userMsgData.rag_data = ragData;
+    }
+
+    // Add history data if provided
+    if (historyData && historyData.length > 0) {
+      userMsgData.history_data = historyData;
+    }
+
+    // Store persona prompts in metadata if provided
+    if (personaPrompts && personaPrompts.length > 0) {
+      userMsgData.metadata = { personaPrompts };
+    }
+
+    const { error: userMsgError } = await supabase.from('chat_messages').insert(userMsgData);
 
     if (userMsgError) {
       console.error('Error saving user message:', userMsgError);

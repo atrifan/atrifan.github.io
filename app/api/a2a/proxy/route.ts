@@ -41,11 +41,49 @@ class AuthInterceptor implements CallInterceptor {
   async after(): Promise<void> {}
 }
 
+/**
+ * RAG context data for A2A messages
+ */
+interface RAGContextItem {
+  source: string; // Knowledge base name
+  title: string;
+  content: string;
+  score?: number;
+}
+
+/**
+ * History correlation data for A2A messages
+ */
+interface HistoryMatchItem {
+  conversationId: string;
+  summary: string;
+  relevance?: number;
+}
+
+/**
+ * Persona prompt data for A2A messages
+ */
+interface PersonaItem {
+  name: string;
+  prompt: string;
+}
+
+/**
+ * Recent message for immediate context (last 2-4 exchanges)
+ */
+interface RecentMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface A2AProxyRequest {
   agentUrl: string;
   agentId?: string; // A2A agent ID for OAuth token lookup
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  systemPrompts?: string[]; // Personality system prompts
+  query: string; // User's query/message
+  recentHistory?: RecentMessage[]; // Last 2-4 exchanges for immediate context
+  ragData?: RAGContextItem[];
+  historyData?: HistoryMatchItem[]; // Semantic history matches (older relevant context)
+  personaPrompts?: PersonaItem[];
   authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   authConfig?: Record<string, string>;
   headers?: Record<string, string>;
@@ -61,14 +99,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body: A2AProxyRequest = await request.json();
-    const { agentUrl, agentId, messages, systemPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
+    const { agentUrl, agentId, query, recentHistory, ragData, historyData, personaPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
 
     if (!agentUrl) {
       return NextResponse.json({ error: 'agentUrl is required' }, { status: 400 });
     }
 
-    if (!messages || messages.length === 0) {
-      return NextResponse.json({ error: 'messages are required' }, { status: 400 });
+    if (!query) {
+      return NextResponse.json({ error: 'query is required' }, { status: 400 });
     }
 
     // Build headers for the external request - only Content-Type, no auth for now
@@ -202,14 +240,58 @@ export async function POST(request: NextRequest) {
 
     console.log('[A2A Proxy] Request headers:', JSON.stringify(headers, null, 2));
 
-    // Build message text - include system prompts if provided
-    let messageText = '';
-    if (systemPrompts && systemPrompts.length > 0) {
-      for (const prompt of systemPrompts) {
-        messageText += `[System]: ${prompt}\n`;
+    // Build A2A message parts array
+    // Each context piece becomes a separate TextPart for better structure
+    const messageParts: Array<{ kind: 'text'; text: string }> = [];
+
+    // Add persona prompt parts first (system-level instructions)
+    if (personaPrompts && personaPrompts.length > 0) {
+      for (const persona of personaPrompts) {
+        messageParts.push({
+          kind: 'text',
+          text: `[Persona: ${persona.name}]\n${persona.prompt}`,
+        });
       }
     }
-    messageText += messages[messages.length - 1]?.content || '';
+
+    // Add RAG context parts (knowledge base context)
+    if (ragData && ragData.length > 0) {
+      for (const rag of ragData) {
+        const scoreInfo = rag.score ? ` (relevance: ${(rag.score * 100).toFixed(0)}%)` : '';
+        messageParts.push({
+          kind: 'text',
+          text: `[RAG: ${rag.source}] ${rag.title}${scoreInfo}\n${rag.content}`,
+        });
+      }
+    }
+
+    // Add semantic history matches (older relevant context from past conversations)
+    if (historyData && historyData.length > 0) {
+      for (const history of historyData) {
+        const relevanceInfo = history.relevance ? ` (relevance: ${(history.relevance * 100).toFixed(0)}%)` : '';
+        messageParts.push({
+          kind: 'text',
+          text: `[Semantic History Match]${relevanceInfo}\n${history.summary}`,
+        });
+      }
+    }
+
+    // Add recent conversation history (last 2-4 exchanges for immediate context)
+    if (recentHistory && recentHistory.length > 0) {
+      const recentExchanges = recentHistory
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n\n');
+      messageParts.push({
+        kind: 'text',
+        text: `[Recent Conversation]\n${recentExchanges}`,
+      });
+    }
+
+    // Add the user's current query as the last part
+    messageParts.push({
+      kind: 'text',
+      text: query,
+    });
 
     // Create A2A client using the SDK
     const interceptors = Object.keys(headers).length > 0 ? [new AuthInterceptor(headers)] : [];
@@ -270,19 +352,19 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Build A2A message using SDK types
+    // Build A2A message using SDK types with structured parts
     const messageId = uuidv4();
     const sendParams: MessageSendParams = {
       message: {
         messageId,
         role: 'user',
-        parts: [{ kind: 'text', text: messageText }],
+        parts: messageParts,
         kind: 'message',
         ...(contextId && { contextId }),
       },
     };
 
-    console.log('[A2A Proxy] Sending message:', JSON.stringify(sendParams, null, 2));
+    console.log('[A2A Proxy] Sending message with', messageParts.length, 'parts');
 
     let result: Message | { kind: 'task'; id: string; contextId?: string; status?: { state?: string }; artifacts?: Array<{ parts?: Array<{ kind?: string; text?: string }> }> };
     try {
@@ -356,10 +438,11 @@ export async function POST(request: NextRequest) {
     console.log('[A2A Proxy] Extracted content:', content || '(empty)');
     console.log('[A2A Proxy] Context ID:', responseContextId, 'State:', taskState);
 
-    // Estimate tokens
-    const systemPromptText = systemPrompts ? systemPrompts.join(' ') : '';
-    const currentMessage = messages[messages.length - 1]?.content || '';
-    const inputText = systemPromptText + ' ' + currentMessage;
+    // Estimate tokens based on query and context data
+    const ragText = ragData ? ragData.map(r => r.content).join(' ') : '';
+    const historyText = historyData ? historyData.map(h => h.summary).join(' ') : '';
+    const personaText = personaPrompts ? personaPrompts.map(p => p.prompt).join(' ') : '';
+    const inputText = ragText + ' ' + historyText + ' ' + personaText + ' ' + query;
     const inputTokens = Math.ceil(inputText.length / 4);
     const outputTokens = Math.ceil(content.length / 4);
 

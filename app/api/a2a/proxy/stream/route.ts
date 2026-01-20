@@ -40,11 +40,49 @@ class AuthInterceptor implements CallInterceptor {
   async after(): Promise<void> {}
 }
 
+/**
+ * RAG context data for A2A messages
+ */
+interface RAGContextItem {
+  source: string; // Knowledge base name
+  title: string;
+  content: string;
+  score?: number;
+}
+
+/**
+ * History correlation data for A2A messages
+ */
+interface HistoryMatchItem {
+  conversationId: string;
+  summary: string;
+  relevance?: number;
+}
+
+/**
+ * Persona prompt data for A2A messages
+ */
+interface PersonaItem {
+  name: string;
+  prompt: string;
+}
+
+/**
+ * Recent message for immediate context (last 2-4 exchanges)
+ */
+interface RecentMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface A2AStreamRequest {
   agentUrl: string;
   agentId?: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  systemPrompts?: string[];
+  query: string; // User's query/message
+  recentHistory?: RecentMessage[]; // Last 2-4 exchanges for immediate context
+  ragData?: RAGContextItem[];
+  historyData?: HistoryMatchItem[]; // Semantic history matches (older relevant context)
+  personaPrompts?: PersonaItem[];
   authType?: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
   authConfig?: Record<string, string>;
   headers?: Record<string, string>;
@@ -124,7 +162,7 @@ export async function POST(request: NextRequest) {
       }
 
       const body: A2AStreamRequest = await request.json();
-      const { agentUrl, agentId, messages, systemPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
+      const { agentUrl, agentId, query, recentHistory, ragData, historyData, personaPrompts, authType, authConfig, headers: customHeaders, contextId } = body;
 
       if (!agentUrl) {
         await sendEvent({ type: 'error', data: { error: 'agentUrl is required' } });
@@ -132,8 +170,8 @@ export async function POST(request: NextRequest) {
         return;
       }
 
-      if (!messages || messages.length === 0) {
-        await sendEvent({ type: 'error', data: { error: 'messages are required' } });
+      if (!query) {
+        await sendEvent({ type: 'error', data: { error: 'query is required' } });
         await writer.close();
         return;
       }
@@ -169,14 +207,58 @@ export async function POST(request: NextRequest) {
         headers['Authorization'] = `Basic ${credentials}`;
       }
 
-      // Build message text
-      let messageText = '';
-      if (systemPrompts && systemPrompts.length > 0) {
-        for (const prompt of systemPrompts) {
-          messageText += `[System]: ${prompt}\n`;
+      // Build A2A message parts array
+      // Each context piece becomes a separate TextPart for better structure
+      const messageParts: Array<{ kind: 'text'; text: string }> = [];
+
+      // Add persona prompt parts first (system-level instructions)
+      if (personaPrompts && personaPrompts.length > 0) {
+        for (const persona of personaPrompts) {
+          messageParts.push({
+            kind: 'text',
+            text: `[Persona: ${persona.name}]\n${persona.prompt}`,
+          });
         }
       }
-      messageText += messages[messages.length - 1]?.content || '';
+
+      // Add RAG context parts (knowledge base context)
+      if (ragData && ragData.length > 0) {
+        for (const rag of ragData) {
+          const scoreInfo = rag.score ? ` (relevance: ${(rag.score * 100).toFixed(0)}%)` : '';
+          messageParts.push({
+            kind: 'text',
+            text: `[RAG: ${rag.source}] ${rag.title}${scoreInfo}\n${rag.content}`,
+          });
+        }
+      }
+
+      // Add semantic history matches (older relevant context from past conversations)
+      if (historyData && historyData.length > 0) {
+        for (const history of historyData) {
+          const relevanceInfo = history.relevance ? ` (relevance: ${(history.relevance * 100).toFixed(0)}%)` : '';
+          messageParts.push({
+            kind: 'text',
+            text: `[Semantic History Match]${relevanceInfo}\n${history.summary}`,
+          });
+        }
+      }
+
+      // Add recent conversation history (last 2-4 exchanges for immediate context)
+      if (recentHistory && recentHistory.length > 0) {
+        const recentExchanges = recentHistory
+          .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+          .join('\n\n');
+        messageParts.push({
+          kind: 'text',
+          text: `[Recent Conversation]\n${recentExchanges}`,
+        });
+      }
+
+      // Add the user's current query as the last part
+      messageParts.push({
+        kind: 'text',
+        text: query,
+      });
 
       // Create A2A client
       const interceptors = Object.keys(headers).length > 0 ? [new AuthInterceptor(headers)] : [];
@@ -240,17 +322,19 @@ export async function POST(request: NextRequest) {
       const supportsStreaming = agentCard.capabilities?.streaming === true;
       console.log('[A2A Stream] Agent supports streaming:', supportsStreaming);
 
-      // Build message params
+      // Build message params with structured parts
       const messageId = uuidv4();
       const sendParams: MessageSendParams = {
         message: {
           messageId,
           role: 'user',
-          parts: [{ kind: 'text', text: messageText }],
+          parts: messageParts,
           kind: 'message',
           ...(contextId && { contextId }),
         },
       };
+
+      console.log('[A2A Stream] Sending message with', messageParts.length, 'parts');
 
       let finalContent = '';
       let responseContextId: string | undefined;
@@ -376,7 +460,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Send done event with final data
-      const inputTokens = Math.ceil((messageText.length) / 4);
+      // Calculate total input from all message parts
+      const totalInputLength = messageParts.reduce((sum, part) => sum + part.text.length, 0);
+      const inputTokens = Math.ceil(totalInputLength / 4);
       const outputTokens = Math.ceil(finalContent.length / 4);
 
       await sendEvent({
