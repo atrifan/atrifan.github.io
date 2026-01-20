@@ -935,13 +935,13 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {currentAutomation && <button onClick={() => setView('history')} style={{ background: view === 'history' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>📜 Prompt History</button>}
           {exportedCode && <button onClick={() => setView('code')} style={{ background: view === 'code' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>💻 Code</button>}
 
-          {/* History Memory button - opens settings panel in history mode */}
+          {/* History Memory toggle */}
           <button
-            onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
-            style={{ background: showSettingsPanel && settingsPanelMode === 'history' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', position: 'relative' }}
+            onClick={() => setHistoryMemoryEnabled(!historyMemoryEnabled)}
+            title={historyMemoryEnabled ? "History Memory enabled - click to disable" : "History Memory disabled - click to enable"}
+            style={{ background: historyMemoryEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)', border: historyMemoryEnabled ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: historyMemoryEnabled ? '#10b981' : '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
           >
-            🧠 Memory
-            {historyMemoryEnabled && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#10b981', width: '8px', height: '8px', borderRadius: '50%' }} />}
+            📜
           </button>
 
           <button onClick={startNew} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}>+ New Automation</button>
@@ -1413,7 +1413,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 activeConnectorsCount={connectors.length}
                 onConnectorsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
                 historyMemoryEnabled={historyMemoryEnabled}
-                onHistoryMemoryClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
+                setHistoryMemoryEnabled={setHistoryMemoryEnabled}
               />
             </div>
           </div>

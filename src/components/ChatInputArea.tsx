@@ -112,8 +112,9 @@ interface ChatInputAreaProps {
   sessionTokens?: number;
   sessionCost?: number;
 
-  // History Memory indicator
+  // History Memory toggle
   historyMemoryEnabled?: boolean;
+  setHistoryMemoryEnabled?: (enabled: boolean) => void;
   onHistoryMemoryClick?: () => void;
 
   // Error message
@@ -177,6 +178,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // History Memory
   historyMemoryEnabled = false,
+  setHistoryMemoryEnabled,
   onHistoryMemoryClick,
 
   error,
@@ -804,27 +806,26 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               </button>
             )}
 
-            {/* History Memory indicator */}
-            {historyMemoryEnabled && (
+            {/* History Memory toggle */}
+            {setHistoryMemoryEnabled && (
               <button
-                onClick={onHistoryMemoryClick}
-                title="History Memory enabled - semantic context from past conversations will be injected"
+                onClick={() => setHistoryMemoryEnabled(!historyMemoryEnabled)}
+                title={historyMemoryEnabled ? "History Memory enabled - click to disable" : "History Memory disabled - click to enable semantic context injection"}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.25rem',
-                  background: 'rgba(16, 185, 129, 0.25)',
-                  border: '1px solid rgba(16, 185, 129, 0.5)',
+                  justifyContent: 'center',
+                  background: historyMemoryEnabled ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: historyMemoryEnabled ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
                   borderRadius: '6px',
                   padding: '0.25rem 0.4rem',
-                  color: '#10b981',
-                  cursor: onHistoryMemoryClick ? 'pointer' : 'default',
-                  fontSize: '0.7rem',
+                  color: historyMemoryEnabled ? '#10b981' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
                   transition: 'all 0.2s',
                 }}
               >
-                🧠
-                <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>ON</span>
+                📜
               </button>
             )}
           </div>

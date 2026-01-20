@@ -2524,29 +2524,26 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 )}
               </button>
 
-              {/* History Memory indicator - show when enabled */}
-              {historyMemoryEnabled && (
-                <button
-                  onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
-                  title="History Memory enabled - semantic context from past conversations will be injected"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    background: 'rgba(16, 185, 129, 0.25)',
-                    border: '1px solid rgba(16, 185, 129, 0.5)',
-                    borderRadius: '6px',
-                    padding: '0.25rem 0.4rem',
-                    color: '#10b981',
-                    cursor: 'pointer',
-                    fontSize: '0.7rem',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  🧠
-                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>MEM</span>
-                </button>
-              )}
+              {/* History Memory toggle */}
+              <button
+                onClick={() => setHistoryMemoryEnabled(!historyMemoryEnabled)}
+                title={historyMemoryEnabled ? "History Memory enabled - click to disable" : "History Memory disabled - click to enable semantic context injection"}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: historyMemoryEnabled ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: historyMemoryEnabled ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: historyMemoryEnabled ? '#10b981' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                📜
+              </button>
             </div>
 
             {/* Token/budget info */}
