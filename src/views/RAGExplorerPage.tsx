@@ -96,6 +96,12 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<RAGSettingsPanelMode>('main');
 
+  // History memory state (embeds RAG queries to Upstash for semantic search)
+  const [historyMemoryEnabled, setHistoryMemoryEnabled] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
+  const [isSearchingHistory, setIsSearchingHistory] = useState(false);
+
   // Budget tracking
   const [embeddingTokensUsed, setEmbeddingTokensUsed] = useState(0);
   const [embeddingCostUsed, setEmbeddingCostUsed] = useState(0);
@@ -339,6 +345,67 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     setPendingQuery(null);
   }, []);
 
+  // History search handler
+  const handleHistorySearch = async () => {
+    if (!historySearchQuery.trim()) return;
+    setIsSearchingHistory(true);
+    try {
+      const res = await fetch('/api/ai/history-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: historySearchQuery,
+          historyType: 'rag_history',
+          topK: 5,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistorySearchResults(data.sessions || []);
+      }
+    } catch (err) {
+      console.error('History search failed:', err);
+    } finally {
+      setIsSearchingHistory(false);
+    }
+  };
+
+  // Embed messages to history (when history memory is enabled)
+  const embedMessagesToHistory = async (
+    sessionId: string,
+    userMsg: { id: string; content: string },
+    assistantMsg: { id: string; content: string; rawResponse?: string }
+  ) => {
+    if (!historyMemoryEnabled) return;
+    try {
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: sessionId,
+          messageId: userMsg.id,
+          messageType: 'user',
+          content: userMsg.content,
+          historyType: 'rag_history',
+        }),
+      });
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: sessionId,
+          messageId: assistantMsg.id,
+          messageType: 'assistant',
+          content: assistantMsg.content,
+          rawResponse: assistantMsg.rawResponse,
+          historyType: 'rag_history',
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to embed messages to history:', err);
+    }
+  };
+
   // Search handler - uses unified /api/collection/{apiKey}/{ragName} endpoint
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !selectedRag || !apiKey || isLoading) return;
@@ -436,13 +503,23 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
             cost,
           }),
         });
+
+        // Embed messages to history if enabled
+        const rawResponse = data.results?.length > 0
+          ? data.results.map((r: SearchResult) => `[Score: ${r.score}] ${r.content}`).join('\n')
+          : undefined;
+        embedMessagesToHistory(
+          sessionIdToUse,
+          { id: userMessage.id, content: queryText },
+          { id: assistantMessage.id, content: assistantContent, rawResponse }
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
       setIsLoading(false);
     }
-  }, [query, selectedRag, apiKey, isLoading, rags, embeddingModel, currentSessionId, router]);
+  }, [query, selectedRag, apiKey, isLoading, rags, embeddingModel, currentSessionId, router, historyMemoryEnabled]);
 
   // Toggle message expansion
   const toggleExpand = (id: string) => {
@@ -788,6 +865,13 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
         deleteSession={deleteSession}
         clearAllHistory={clearAllHistory}
         onNewSession={startNewSession}
+        historyMemoryEnabled={historyMemoryEnabled}
+        setHistoryMemoryEnabled={setHistoryMemoryEnabled}
+        historySearchQuery={historySearchQuery}
+        setHistorySearchQuery={setHistorySearchQuery}
+        historySearchResults={historySearchResults}
+        onHistorySearch={handleHistorySearch}
+        isSearchingHistory={isSearchingHistory}
       />
 
       {/* OAuth Authentication Modal */}

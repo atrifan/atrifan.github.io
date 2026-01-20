@@ -42,24 +42,33 @@ export interface RAGSettingsPanelProps {
   isLargeScreen: boolean;
   panelMode: RAGSettingsPanelMode;
   setPanelMode: (mode: RAGSettingsPanelMode) => void;
-  
+
   // RAG selection
   rags: RAGCollection[];
   selectedRagId: string | null;
   setSelectedRagId: (id: string) => void;
-  
+
   // Budget
   budgetData: BudgetData | null;
-  
+
   // History
   sessions: RAGSession[];
   currentSessionId: string | null;
   loadSession: (id: string, updateUrl?: boolean) => void;
   deleteSession: (id: string) => void;
   clearAllHistory: () => void;
-  
+
   // New session
   onNewSession: () => void;
+
+  // History Memory (optional)
+  historyMemoryEnabled?: boolean;
+  setHistoryMemoryEnabled?: (enabled: boolean) => void;
+  historySearchQuery?: string;
+  setHistorySearchQuery?: (query: string) => void;
+  historySearchResults?: Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>;
+  onHistorySearch?: () => void;
+  isSearchingHistory?: boolean;
 }
 
 // Donut chart component
@@ -110,6 +119,14 @@ export const RAGSettingsPanel: React.FC<RAGSettingsPanelProps> = (props) => {
     deleteSession,
     clearAllHistory,
     onNewSession,
+    // History Memory
+    historyMemoryEnabled = false,
+    setHistoryMemoryEnabled,
+    historySearchQuery = '',
+    setHistorySearchQuery,
+    historySearchResults = [],
+    onHistorySearch,
+    isSearchingHistory = false,
   } = props;
 
   const [showRagDropdown, setShowRagDropdown] = useState(false);
@@ -274,6 +291,27 @@ export const RAGSettingsPanel: React.FC<RAGSettingsPanelProps> = (props) => {
                 </div>
               )}
 
+              {/* History Memory Toggle */}
+              {setHistoryMemoryEnabled && (
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                      <span style={{ fontSize: '1rem' }}>🧠</span>
+                      <div>
+                        <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>History Memory</span>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Auto-inject semantic context</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setHistoryMemoryEnabled(!historyMemoryEnabled)}
+                      style={{ width: '44px', height: '24px', borderRadius: '12px', border: 'none', background: historyMemoryEnabled ? '#10b981' : 'rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s' }}
+                    >
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: historyMemoryEnabled ? '23px' : '3px', transition: 'left 0.2s' }} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Quick Actions */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <button
@@ -297,6 +335,54 @@ export const RAGSettingsPanel: React.FC<RAGSettingsPanelProps> = (props) => {
           {/* HISTORY MODE */}
           {panelMode === 'history' && (
             <>
+              {/* Semantic Search */}
+              {setHistorySearchQuery && onHistorySearch && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>🔍 Semantic Search</div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      value={historySearchQuery}
+                      onChange={(e) => setHistorySearchQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') onHistorySearch(); }}
+                      placeholder="Search past sessions..."
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', fontSize: '0.85rem', outline: 'none' }}
+                    />
+                    <button
+                      onClick={onHistorySearch}
+                      disabled={isSearchingHistory}
+                      style={{ background: '#10b981', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', cursor: isSearchingHistory ? 'wait' : 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {isSearchingHistory ? '...' : '🔍'}
+                    </button>
+                  </div>
+
+                  {/* Search Results */}
+                  {historySearchResults.length > 0 && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Found {historySearchResults.length} related session{historySearchResults.length > 1 ? 's' : ''}</div>
+                      {historySearchResults.map((result, idx) => (
+                        <div
+                          key={result.chatId || idx}
+                          onClick={() => { loadSession(result.chatId, true); onClose(); }}
+                          style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <span style={{ color: '#10b981', fontSize: '0.7rem', fontWeight: 600 }}>Score: {(result.topScore * 100).toFixed(0)}%</span>
+                          </div>
+                          {result.messages.slice(0, 2).map((msg, msgIdx) => (
+                            <div key={msgIdx} style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: msg.messageType === 'user' ? '#10b981' : '#8b5cf6', marginRight: '0.35rem' }}>{msg.messageType === 'user' ? '👤' : '🤖'}</span>
+                              {msg.content.substring(0, 100)}{msg.content.length > 100 ? '...' : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {sessions.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.5)' }}>
                   <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>📜</span>

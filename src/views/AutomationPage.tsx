@@ -203,6 +203,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [viewingPersona, setViewingPersona] = useState<Personality | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
 
+  // History memory state (embeds automation prompts to Upstash for semantic search)
+  const [historyMemoryEnabled, setHistoryMemoryEnabled] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
+  const [isSearchingHistory, setIsSearchingHistory] = useState(false);
+
   // Check screen size for responsive layout
   useEffect(() => {
     const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -655,6 +661,17 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         if (data.mermaid) setMermaidDiagram(data.mermaid);
         if (data.explanation) setLastExplanation(data.explanation);
         if (data.usage) setLastTokenUsage(data.usage);
+
+        // Embed to history if enabled and we have an automation
+        if (currentAutomation?.id && data.historyId) {
+          embedPromptToHistory(
+            currentAutomation.id,
+            data.historyId,
+            prompt,
+            `${data.explanation || ''}\n\nMermaid:\n${data.mermaid || ''}`
+          );
+        }
+
         setPrompt('');
         fetchBudget();
         // Refresh prompt history if we have an automation
@@ -755,6 +772,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const deleteAutomation = async (id: string) => {
     try {
       await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
+      // Also delete embeddings from Upstash if history memory was enabled
+      fetch(`/api/ai/history-embed?chatId=${id}&historyType=chat_history`, { method: 'DELETE' })
+        .catch(err => console.error('Failed to delete history embeddings:', err));
       fetchAutomations();
       if (currentAutomation?.id === id) {
         setCurrentAutomation(null);
@@ -762,6 +782,74 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       }
     } catch (error) {
       console.error('Failed to delete:', error);
+    }
+  };
+
+  // Search history using semantic search
+  const handleHistorySearch = async () => {
+    if (!historySearchQuery.trim() || isSearchingHistory) return;
+
+    setIsSearchingHistory(true);
+    try {
+      const response = await fetch('/api/ai/history-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: historySearchQuery,
+          historyType: 'chat_history', // Automations use same history type
+          topK: 5,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHistorySearchResults(data.sessions || []);
+      }
+    } catch (err) {
+      console.error('History search failed:', err);
+    } finally {
+      setIsSearchingHistory(false);
+    }
+  };
+
+  // Embed prompt to history (when history memory is enabled)
+  const embedPromptToHistory = async (
+    automationId: string,
+    promptId: string,
+    userPrompt: string,
+    assistantResponse: string
+  ) => {
+    if (!historyMemoryEnabled) return;
+
+    try {
+      // Embed user prompt
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: automationId,
+          messageId: `${promptId}-user`,
+          messageType: 'user',
+          content: userPrompt,
+          historyType: 'chat_history',
+        }),
+      });
+
+      // Embed assistant response (mermaid + explanation)
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: automationId,
+          messageId: `${promptId}-assistant`,
+          messageType: 'assistant',
+          content: assistantResponse,
+          modelId: selectedModel,
+          historyType: 'chat_history',
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to embed prompt to history:', err);
     }
   };
 
@@ -846,6 +934,16 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           <button onClick={() => setView('builder')} style={{ background: view === 'builder' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>🔧 Builder</button>
           {currentAutomation && <button onClick={() => setView('history')} style={{ background: view === 'history' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>📜 Prompt History</button>}
           {exportedCode && <button onClick={() => setView('code')} style={{ background: view === 'code' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>💻 Code</button>}
+
+          {/* History Memory button - opens settings panel in history mode */}
+          <button
+            onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
+            style={{ background: showSettingsPanel && settingsPanelMode === 'history' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', position: 'relative' }}
+          >
+            🧠 Memory
+            {historyMemoryEnabled && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#10b981', width: '8px', height: '8px', borderRadius: '50%' }} />}
+          </button>
+
           <button onClick={startNew} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}>+ New Automation</button>
         </div>
 
@@ -1314,6 +1412,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 showConnectorsToggle={true}
                 activeConnectorsCount={connectors.length}
                 onConnectorsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
+                historyMemoryEnabled={historyMemoryEnabled}
+                onHistoryMemoryClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
               />
             </div>
           </div>
@@ -1350,6 +1450,13 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         currentAutomationId={currentAutomation?.id || null}
         loadAutomation={loadAutomation}
         deleteAutomation={deleteAutomation}
+        historyMemoryEnabled={historyMemoryEnabled}
+        setHistoryMemoryEnabled={setHistoryMemoryEnabled}
+        historySearchQuery={historySearchQuery}
+        setHistorySearchQuery={setHistorySearchQuery}
+        historySearchResults={historySearchResults}
+        onHistorySearch={handleHistorySearch}
+        isSearchingHistory={isSearchingHistory}
         onNewItem={startNew}
         newItemLabel="New Automation"
         scheduleOptions={SCHEDULE_OPTIONS}

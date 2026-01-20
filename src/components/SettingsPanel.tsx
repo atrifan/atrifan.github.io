@@ -97,7 +97,7 @@ const UsageDonut: React.FC<{ percent: number; size?: number; strokeWidth?: numbe
   );
 };
 
-export type SettingsPanelMode = 'main' | 'connectors' | 'personas' | 'rags' | 'run-settings';
+export type SettingsPanelMode = 'main' | 'connectors' | 'personas' | 'rags' | 'run-settings' | 'history';
 
 export interface SettingsPanelProps {
   // Mode: 'chat' or 'automation'
@@ -161,6 +161,17 @@ export interface SettingsPanelProps {
   loadConversation?: (id: string) => void;
   confirmDeleteConversation?: (id: string, e: React.MouseEvent) => void;
   confirmClearAllHistory?: () => void;
+
+  // History memory toggle (embeds chat history to Upstash for semantic search)
+  historyMemoryEnabled?: boolean;
+  setHistoryMemoryEnabled?: (enabled: boolean) => void;
+
+  // History search
+  historySearchQuery?: string;
+  setHistorySearchQuery?: (query: string) => void;
+  historySearchResults?: Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>;
+  onHistorySearch?: () => void;
+  isSearchingHistory?: boolean;
   
   // Automations (automation mode) - folder structure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -220,6 +231,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     loadConversation,
     confirmDeleteConversation,
     confirmClearAllHistory,
+    historyMemoryEnabled = false,
+    setHistoryMemoryEnabled,
+    historySearchQuery = '',
+    setHistorySearchQuery,
+    historySearchResults = [],
+    onHistorySearch,
+    isSearchingHistory = false,
     automationFolders = [],
     currentAutomationId,
     loadAutomation,
@@ -290,6 +308,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                 {panelMode === 'personas' && '🎭 Personas'}
                 {panelMode === 'rags' && '📚 Knowledge Bases'}
                 {panelMode === 'run-settings' && '⏰ Run Settings'}
+                {panelMode === 'history' && '🧠 History Memory'}
               </h2>
             </>
           )}
@@ -563,79 +582,32 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                 </div>
               )}
 
-              {/* History Section - Chat mode */}
-              {mode === 'chat' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📜 History</span>
-                    {conversations.length > 0 && confirmClearAllHistory && (
-                      <button onClick={confirmClearAllHistory} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.2rem 0.4rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.65rem' }}>
-                        🗑️ Clear
+              {/* History Memory Section - Chat and Automation modes */}
+              {(mode === 'chat' || mode === 'automation') && setHistoryMemoryEnabled && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  {/* History Memory Toggle */}
+                  <div style={{ padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                        <span style={{ fontSize: '1rem' }}>🧠</span>
+                        <div>
+                          <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>History Memory</span>
+                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Auto-inject semantic context</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setHistoryMemoryEnabled(!historyMemoryEnabled)}
+                        style={{ width: '44px', height: '24px', borderRadius: '12px', border: 'none', background: historyMemoryEnabled ? '#10b981' : 'rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s' }}
+                      >
+                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: historyMemoryEnabled ? '23px' : '3px', transition: 'left 0.2s' }} />
                       </button>
-                    )}
-                  </div>
-                  {conversations.length === 0 ? (
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
-                  ) : (
-                    <div>
-                      {conversations.map(conv => (
-                        <div key={conv.id} onClick={() => { loadConversation?.(conv.id); onClose(); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div className="chat-history-title" style={{ flex: 1 }}>{conv.title}</div>
-                            {confirmDeleteConversation && (
-                              <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
-                            )}
-                          </div>
-                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</div>
-                        </div>
-                      ))}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Automations Section - Automation mode (folder structure) */}
-              {mode === 'automation' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📁 Automations</span>
                   </div>
-                  {automationFolders.length === 0 ? (
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No automations yet</p>
-                  ) : (
-                    <div>
-                      {automationFolders.map(folder => (
-                        <div key={folder.name} style={{ marginBottom: '0.75rem' }}>
-                          <div style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <span>📂</span> {folder.name}
-                          </div>
-                          {folder.automations.map(auto => (
-                            <div
-                              key={auto.id}
-                              onClick={() => { loadAutomation?.(auto); onClose(); }}
-                              style={{
-                                padding: '0.5rem 0.75rem',
-                                marginLeft: '1rem',
-                                background: currentAutomationId === auto.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.03)',
-                                borderRadius: '6px',
-                                marginBottom: '0.25rem',
-                                cursor: 'pointer',
-                                border: currentAutomationId === auto.id ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ color: '#fff', fontSize: '0.8rem' }}>{auto.name}</span>
-                                {deleteAutomation && (
-                                  <button onClick={(e) => { e.stopPropagation(); deleteAutomation(auto.id); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
-                                )}
-                              </div>
-                              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>{auto.schedule_type} • {auto.status}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {/* Search History Button */}
+                  <button onClick={() => setPanelMode('history')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>📜 Search History</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{mode === 'chat' ? `${conversations.length} chats` : `${automationFolders.reduce((sum, f) => sum + f.automations.length, 0)} automations`}</span>
+                  </button>
                 </div>
               )}
             </>
@@ -818,6 +790,135 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* HISTORY MODE - Chat and Automation */}
+          {panelMode === 'history' && (
+            <div>
+              {/* Semantic Search - always available */}
+              {setHistorySearchQuery && onHistorySearch && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>🔍 Semantic Search</div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      value={historySearchQuery}
+                      onChange={(e) => setHistorySearchQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') onHistorySearch(); }}
+                      placeholder="Search past conversations..."
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', fontSize: '0.85rem', outline: 'none' }}
+                    />
+                    <button
+                      onClick={onHistorySearch}
+                      disabled={isSearchingHistory}
+                      style={{ background: mode === 'chat' ? '#8b5cf6' : '#f59e0b', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', cursor: isSearchingHistory ? 'wait' : 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {isSearchingHistory ? '...' : '🔍'}
+                    </button>
+                  </div>
+
+                  {/* Search Results */}
+                  {historySearchResults.length > 0 && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.5rem' }}>Found {historySearchResults.length} related conversation{historySearchResults.length > 1 ? 's' : ''}</div>
+                      {historySearchResults.map((result, idx) => (
+                        <div
+                          key={result.chatId || idx}
+                          onClick={() => { loadConversation?.(result.chatId); onClose(); }}
+                          style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <span style={{ color: mode === 'chat' ? '#8b5cf6' : '#f59e0b', fontSize: '0.7rem', fontWeight: 600 }}>Score: {(result.topScore * 100).toFixed(0)}%</span>
+                          </div>
+                          {result.messages.slice(0, 2).map((msg, msgIdx) => (
+                            <div key={msgIdx} style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: msg.messageType === 'user' ? '#10b981' : '#8b5cf6', marginRight: '0.35rem' }}>{msg.messageType === 'user' ? '👤' : '🤖'}</span>
+                              {msg.content.substring(0, 100)}{msg.content.length > 100 ? '...' : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Conversation History List - Chat mode */}
+              {mode === 'chat' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📜 All Conversations</span>
+                    {conversations.length > 0 && confirmClearAllHistory && (
+                      <button onClick={confirmClearAllHistory} style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.2rem 0.4rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.65rem' }}>
+                        🗑️ Clear
+                      </button>
+                    )}
+                  </div>
+                  {conversations.length === 0 ? (
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No conversations yet</p>
+                  ) : (
+                    <div>
+                      {conversations.map(conv => (
+                        <div key={conv.id} onClick={() => { loadConversation?.(conv.id); onClose(); }} className={`chat-history-item-compact ${currentConversationId === conv.id ? 'active' : ''}`}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className="chat-history-title" style={{ flex: 1 }}>{conv.title}</div>
+                            {confirmDeleteConversation && (
+                              <button onClick={(e) => confirmDeleteConversation(conv.id, e)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
+                            )}
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{conv.message_count} messages</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Automation History List - Automation mode */}
+              {mode === 'automation' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📁 All Automations</span>
+                  </div>
+                  {automationFolders.length === 0 ? (
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No automations yet</p>
+                  ) : (
+                    <div>
+                      {automationFolders.map(folder => (
+                        <div key={folder.name} style={{ marginBottom: '0.75rem' }}>
+                          <div style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span>📂</span> {folder.name}
+                          </div>
+                          {folder.automations.map(auto => (
+                            <div
+                              key={auto.id}
+                              onClick={() => { loadAutomation?.(auto); onClose(); }}
+                              style={{
+                                padding: '0.5rem 0.75rem',
+                                marginLeft: '1rem',
+                                background: currentAutomationId === auto.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.03)',
+                                borderRadius: '6px',
+                                marginBottom: '0.25rem',
+                                cursor: 'pointer',
+                                border: currentAutomationId === auto.id ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: '#fff', fontSize: '0.8rem' }}>{auto.name}</span>
+                                {deleteAutomation && (
+                                  <button onClick={(e) => { e.stopPropagation(); deleteAutomation(auto.id); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '0.7rem', padding: '0' }} title="Delete">✕</button>
+                                )}
+                              </div>
+                              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>{auto.schedule_type} • {auto.status}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

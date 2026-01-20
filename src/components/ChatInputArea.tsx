@@ -112,6 +112,10 @@ interface ChatInputAreaProps {
   sessionTokens?: number;
   sessionCost?: number;
 
+  // History Memory indicator
+  historyMemoryEnabled?: boolean;
+  onHistoryMemoryClick?: () => void;
+
   // Error message
   error?: string | null;
 }
@@ -170,6 +174,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   setSelectedRagId,
   sessionTokens = 0,
   sessionCost = 0,
+
+  // History Memory
+  historyMemoryEnabled = false,
+  onHistoryMemoryClick,
 
   error,
 }) => {
@@ -793,6 +801,30 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {activeConnectorsCount > 0 && (
                   <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{activeConnectorsCount}</span>
                 )}
+              </button>
+            )}
+
+            {/* History Memory indicator */}
+            {historyMemoryEnabled && (
+              <button
+                onClick={onHistoryMemoryClick}
+                title="History Memory enabled - semantic context from past conversations will be injected"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  background: 'rgba(16, 185, 129, 0.25)',
+                  border: '1px solid rgba(16, 185, 129, 0.5)',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.4rem',
+                  color: '#10b981',
+                  cursor: onHistoryMemoryClick ? 'pointer' : 'default',
+                  fontSize: '0.7rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                🧠
+                <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>ON</span>
               </button>
             )}
           </div>

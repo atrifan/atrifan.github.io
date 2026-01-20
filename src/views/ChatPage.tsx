@@ -365,6 +365,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [streamingReasoningEvents, setStreamingReasoningEvents] = useState<ReasoningEvent[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // History memory state (embeds chat messages to Upstash for semantic search)
+  const [historyMemoryEnabled, setHistoryMemoryEnabled] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
+  const [isSearchingHistory, setIsSearchingHistory] = useState(false);
+
   const canAccessPro = isPro || isPlus;
   const selectedModelData = AI_MODELS.find(m => m.id === selectedModel);
 
@@ -648,6 +654,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       if (deleteConfirm.type === 'single' && deleteConfirm.convId) {
         const response = await fetch(`/api/ai/conversations/${deleteConfirm.convId}`, { method: 'DELETE' });
         if (response.ok) {
+          // Also delete embeddings from Upstash if history memory was enabled
+          fetch(`/api/ai/history-embed?chatId=${deleteConfirm.convId}&historyType=chat_history`, { method: 'DELETE' })
+            .catch(err => console.error('Failed to delete history embeddings:', err));
+
           setConversations(prev => prev.filter(c => c.id !== deleteConfirm.convId));
           if (currentConversationId === deleteConfirm.convId) {
             setCurrentConversationId(null);
@@ -656,9 +666,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           }
         }
       } else if (deleteConfirm.type === 'all') {
-        await Promise.all(conversations.map(conv =>
-          fetch(`/api/ai/conversations/${conv.id}`, { method: 'DELETE' })
-        ));
+        // Delete all conversations and their embeddings
+        await Promise.all(conversations.map(async conv => {
+          await fetch(`/api/ai/conversations/${conv.id}`, { method: 'DELETE' });
+          // Also delete embeddings
+          fetch(`/api/ai/history-embed?chatId=${conv.id}&historyType=chat_history`, { method: 'DELETE' })
+            .catch(err => console.error('Failed to delete history embeddings:', err));
+        }));
         setConversations([]);
         setCurrentConversationId(null);
         setMessages([]);
@@ -1093,6 +1107,75 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     setError(null);
   };
 
+  // Search history using semantic search
+  const handleHistorySearch = async () => {
+    if (!historySearchQuery.trim() || isSearchingHistory) return;
+
+    setIsSearchingHistory(true);
+    try {
+      const response = await fetch('/api/ai/history-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: historySearchQuery,
+          historyType: 'chat_history',
+          topK: 5,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHistorySearchResults(data.sessions || []);
+      }
+    } catch (err) {
+      console.error('History search failed:', err);
+    } finally {
+      setIsSearchingHistory(false);
+    }
+  };
+
+  // Embed messages to Upstash for semantic search (when history memory is enabled)
+  const embedMessagesToHistory = async (
+    conversationId: string,
+    userMsg: { id: string; content: string },
+    assistantMsg: { id: string; content: string; rawResponse?: string },
+    modelId: string
+  ) => {
+    if (!historyMemoryEnabled) return;
+
+    try {
+      // Embed user message
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: conversationId,
+          messageId: userMsg.id,
+          messageType: 'user',
+          content: userMsg.content,
+          historyType: 'chat_history',
+        }),
+      });
+
+      // Embed assistant message
+      await fetch('/api/ai/history-embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: conversationId,
+          messageId: assistantMsg.id,
+          messageType: 'assistant',
+          content: assistantMsg.content,
+          rawResponse: assistantMsg.rawResponse,
+          modelId,
+          historyType: 'chat_history',
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to embed messages to history:', err);
+    }
+  };
+
   /**
    * NOTE TO SELF: OAuth Authentication and Retry Mechanism
    *
@@ -1216,9 +1299,34 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }));
 
         // Get active personality system prompts
-        const activeSystemPrompts = activePersonalityIds
+        let activeSystemPrompts = activePersonalityIds
           .map(id => personalities.find(p => p.id === id)?.system_prompt)
           .filter((prompt): prompt is string => !!prompt);
+
+        // If history memory is enabled and we have a conversation, fetch related context for A2A
+        if (historyMemoryEnabled && currentConversationId) {
+          try {
+            const contextRes = await fetch('/api/ai/history-context', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: currentConversationId,
+                currentMessage: userMessage.content,
+                topK: 3,
+                historyType: 'chat_history',
+              }),
+            });
+            if (contextRes.ok) {
+              const contextData = await contextRes.json();
+              if (contextData.contextString) {
+                // Prepend context as first system prompt
+                activeSystemPrompts = [contextData.contextString, ...activeSystemPrompts];
+              }
+            }
+          } catch (contextErr) {
+            console.error('Failed to fetch history context for A2A:', contextErr);
+          }
+        }
 
         // Reset streaming state
         setStreamingContent('');
@@ -1372,9 +1480,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
           if (saveResponse.ok) {
             const saveData = await saveResponse.json();
+            const convId = saveData.conversationId || currentConversationId;
             if (saveData.conversationId && !currentConversationId) {
               setCurrentConversationId(saveData.conversationId);
               fetchConversations();
+            }
+            // Embed messages to history if enabled
+            if (convId) {
+              // Include reasoning events (tool calls, etc.) as rawResponse for semantic search
+              const rawResponse = collectedReasoningEvents.length > 0
+                ? collectedReasoningEvents.map(e => `[${e.reasoningType}] ${e.title || ''}: ${e.text || ''}`).join('\n')
+                : undefined;
+              embedMessagesToHistory(
+                convId,
+                { id: userMessage.id, content: userMessage.content },
+                { id: assistantMessage.id, content: assistantMessageContent, rawResponse },
+                `agent:${selectedAgentConnector.id}`
+              );
             }
           }
         } catch (saveErr) {
@@ -1395,9 +1517,34 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       } else {
         // Handle regular AI model communication
         // Build system prompt from active personalities
-        const combinedSystemPrompt = activePersonalities
+        let combinedSystemPrompt = activePersonalities
           .map(p => p.system_prompt)
           .join('\n\n');
+
+        // If history memory is enabled and we have a conversation, fetch related context
+        if (historyMemoryEnabled && currentConversationId) {
+          try {
+            const contextRes = await fetch('/api/ai/history-context', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: currentConversationId,
+                currentMessage: userMessage.content,
+                topK: 3,
+                historyType: 'chat_history',
+              }),
+            });
+            if (contextRes.ok) {
+              const contextData = await contextRes.json();
+              if (contextData.contextString) {
+                // Prepend context to system prompt
+                combinedSystemPrompt = contextData.contextString + (combinedSystemPrompt || '');
+              }
+            }
+          } catch (contextErr) {
+            console.error('Failed to fetch history context:', contextErr);
+          }
+        }
 
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
@@ -1429,6 +1576,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         const data = await response.json();
 
         // Update conversation ID if new conversation was created
+        const convId = data.conversationId || currentConversationId;
         if (data.conversationId && !currentConversationId) {
           setCurrentConversationId(data.conversationId);
           // Refresh conversations list
@@ -1476,6 +1624,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           }
           // Refresh budget data to update the display
           fetchBudget();
+        }
+
+        // Embed messages to history if enabled
+        if (convId) {
+          embedMessagesToHistory(
+            convId,
+            { id: userMessage.id, content: userMessage.content },
+            { id: assistantMessage.id, content: data.content },
+            selectedModel
+          );
         }
       }
     } catch (err) {
@@ -1659,11 +1817,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               <span className="desktop-only">New</span>
             </button>
 
-            {/* History button - opens settings panel */}
+            {/* History button - opens settings panel in history mode */}
             <button onClick={() => {
               setShowSettingsPanel(true);
-              setSettingsPanelMode('main');
-            }} style={{ background: showSettingsPanel ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
+              setSettingsPanelMode('history');
+            }} style={{ background: showSettingsPanel && settingsPanelMode === 'history' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', position: 'relative' }}>
               📜
               {conversations.length > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#8b5cf6', color: '#fff', borderRadius: '8px', padding: '0 0.25rem', fontSize: '0.55rem', fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{conversations.length > 99 ? '99+' : conversations.length}</span>}
             </button>
@@ -2365,6 +2523,30 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{connectors.length}</span>
                 )}
               </button>
+
+              {/* History Memory indicator - show when enabled */}
+              {historyMemoryEnabled && (
+                <button
+                  onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('history'); }}
+                  title="History Memory enabled - semantic context from past conversations will be injected"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    background: 'rgba(16, 185, 129, 0.25)',
+                    border: '1px solid rgba(16, 185, 129, 0.5)',
+                    borderRadius: '6px',
+                    padding: '0.25rem 0.4rem',
+                    color: '#10b981',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  🧠
+                  <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>MEM</span>
+                </button>
+              )}
             </div>
 
             {/* Token/budget info */}
@@ -2420,6 +2602,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         loadConversation={loadConversation}
         confirmDeleteConversation={confirmDeleteConversation}
         confirmClearAllHistory={confirmClearAllHistory}
+        historyMemoryEnabled={historyMemoryEnabled}
+        setHistoryMemoryEnabled={setHistoryMemoryEnabled}
+        historySearchQuery={historySearchQuery}
+        setHistorySearchQuery={setHistorySearchQuery}
+        historySearchResults={historySearchResults}
+        onHistorySearch={handleHistorySearch}
+        isSearchingHistory={isSearchingHistory}
         onNewItem={startNewChat}
         newItemLabel="New Chat"
       />
