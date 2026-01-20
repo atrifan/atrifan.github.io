@@ -391,6 +391,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Retrieval events state (RAG + history context for current message)
   const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
 
+  // Context preview state (debounced RAG/history token estimation)
+  const [ragContextTokens, setRagContextTokens] = useState(0);
+  const [historyContextTokens, setHistoryContextTokens] = useState(0);
+  const [isLoadingContextPreview, setIsLoadingContextPreview] = useState(false);
+  const contextPreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Settings persistence - track if settings have been loaded from server
   const settingsLoadedRef = useRef(false);
   // Track when loading a conversation to avoid saving its model as default
@@ -1849,6 +1855,91 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }, 50);
   }, [failedMessageId, messages, isLoading]);
 
+  // Debounced context preview - fetch RAG/history token estimates after 3.5s of no typing
+  useEffect(() => {
+    // Clear any existing timeout
+    if (contextPreviewTimeoutRef.current) {
+      clearTimeout(contextPreviewTimeoutRef.current);
+      contextPreviewTimeoutRef.current = null;
+    }
+
+    // Reset tokens when message is empty
+    if (!message.trim()) {
+      setRagContextTokens(0);
+      setHistoryContextTokens(0);
+      setIsLoadingContextPreview(false);
+      return;
+    }
+
+    // Only fetch if we have active RAGs or history memory enabled
+    const hasActiveContext = activeRagIds.length > 0 || historyMemoryEnabled;
+    if (!hasActiveContext) {
+      setRagContextTokens(0);
+      setHistoryContextTokens(0);
+      return;
+    }
+
+    // Set timeout to fetch context preview after 3.5 seconds
+    contextPreviewTimeoutRef.current = setTimeout(async () => {
+      setIsLoadingContextPreview(true);
+
+      try {
+        // Fetch RAG context if active
+        if (activeRagIds.length > 0) {
+          const ragRes = await fetch('/api/ai/rag-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ragIds: activeRagIds, query: message.trim(), topK: 3 }),
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            // Estimate tokens from context string (rough: ~4 chars per token)
+            const contextTokens = ragData.contextString ? Math.ceil(ragData.contextString.length / 4) : 0;
+            setRagContextTokens(contextTokens);
+          }
+        } else {
+          setRagContextTokens(0);
+        }
+
+        // Fetch history context if enabled
+        if (historyMemoryEnabled) {
+          const historyRes = await fetch('/api/ai/history-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: message.trim(), historyType: 'chat_history', topK: 3 }),
+          });
+          if (historyRes.ok) {
+            const historyData = await historyRes.json();
+            // Estimate tokens from results
+            let historyTokens = 0;
+            if (historyData.results) {
+              historyData.results.forEach((r: { messages?: Array<{ content: string }> }) => {
+                if (r.messages) {
+                  r.messages.forEach((m: { content: string }) => {
+                    historyTokens += Math.ceil((m.content?.length || 0) / 4);
+                  });
+                }
+              });
+            }
+            setHistoryContextTokens(historyTokens);
+          }
+        } else {
+          setHistoryContextTokens(0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch context preview:', err);
+      } finally {
+        setIsLoadingContextPreview(false);
+      }
+    }, 3500); // 3.5 seconds debounce
+
+    return () => {
+      if (contextPreviewTimeoutRef.current) {
+        clearTimeout(contextPreviewTimeoutRef.current);
+      }
+    };
+  }, [message, activeRagIds, historyMemoryEnabled]);
+
   // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const adjustTextareaHeight = useCallback(() => {
@@ -2433,14 +2524,28 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 rows={1}
                 style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '0.75rem 1rem', paddingRight: '5rem', color: '#fff', fontSize: '1rem', lineHeight: 1.4, resize: 'none', minHeight: '44px', maxHeight: '120px', outline: 'none', fontFamily: 'inherit' }}
               />
-              {/* Live token counter */}
-              {(currentInputTokens > 0 || totalSystemPromptTokens > 0) && (
-                <div style={{ position: 'absolute', right: '0.75rem', bottom: '0.75rem', display: 'flex', gap: '0.25rem', fontSize: '0.65rem', pointerEvents: 'none' }}>
+              {/* Live token counter - shows input, persona, RAG, and history tokens */}
+              {(currentInputTokens > 0 || totalSystemPromptTokens > 0 || ragContextTokens > 0 || historyContextTokens > 0 || isLoadingContextPreview) && (
+                <div style={{ position: 'absolute', right: '0.75rem', bottom: '0.75rem', display: 'flex', gap: '0.25rem', fontSize: '0.65rem', pointerEvents: 'none', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '70%' }}>
+                  {/* Input tokens - green */}
                   {currentInputTokens > 0 && (
-                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>{currentInputTokens}</span>
+                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="Your message tokens">{currentInputTokens}</span>
                   )}
+                  {/* Persona tokens - orange */}
                   {totalSystemPromptTokens > 0 && (
-                    <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>+{totalSystemPromptTokens} 🎭</span>
+                    <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="Persona system prompt tokens">+{totalSystemPromptTokens} 🎭</span>
+                  )}
+                  {/* RAG context tokens - purple */}
+                  {ragContextTokens > 0 && (
+                    <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="RAG context tokens">+{ragContextTokens} 📚</span>
+                  )}
+                  {/* History context tokens - cyan/blue */}
+                  {historyContextTokens > 0 && (
+                    <span style={{ background: 'rgba(6, 182, 212, 0.2)', color: '#22d3ee', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="History memory tokens">+{historyContextTokens} 🧠</span>
+                  )}
+                  {/* Loading indicator for context preview */}
+                  {isLoadingContextPreview && (
+                    <span style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'rgba(255,255,255,0.5)', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="Fetching context preview...">⏳</span>
                   )}
                 </div>
               )}
@@ -2666,22 +2771,32 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                 </button>
               )}
 
-              {/* Connectors toggle - always show */}
+              {/* Connectors toggle - disabled when using external agent */}
               <button
-                onClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
-                title={connectors.length > 0 ? `${connectors.length} connector${connectors.length > 1 ? 's' : ''} active (click to manage)` : 'No connectors active (click to add)'}
+                onClick={() => { if (!isExternalAgentSelected) { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); } }}
+                disabled={isExternalAgentSelected}
+                title={isExternalAgentSelected
+                  ? 'Connectors not available when using external agent'
+                  : (connectors.length > 0 ? `${connectors.length} connector${connectors.length > 1 ? 's' : ''} active (click to manage)` : 'No connectors active (click to add)')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.25rem',
-                  background: connectors.length > 0 ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)',
-                  border: connectors.length > 0 ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  background: isExternalAgentSelected
+                    ? 'rgba(255,255,255,0.03)'
+                    : (connectors.length > 0 ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)'),
+                  border: isExternalAgentSelected
+                    ? '1px solid rgba(255,255,255,0.08)'
+                    : (connectors.length > 0 ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.15)'),
                   borderRadius: '6px',
                   padding: '0.25rem 0.4rem',
-                  color: connectors.length > 0 ? '#3b82f6' : 'rgba(255,255,255,0.5)',
-                  cursor: 'pointer',
+                  color: isExternalAgentSelected
+                    ? 'rgba(255,255,255,0.25)'
+                    : (connectors.length > 0 ? '#3b82f6' : 'rgba(255,255,255,0.5)'),
+                  cursor: isExternalAgentSelected ? 'not-allowed' : 'pointer',
                   fontSize: '0.7rem',
                   transition: 'all 0.2s',
+                  opacity: isExternalAgentSelected ? 0.5 : 1,
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2694,7 +2809,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
                   <path d="M4.93 19.07l2.83-2.83" />
                   <path d="M16.24 7.76l2.83-2.83" />
                 </svg>
-                {connectors.length > 0 && (
+                {connectors.length > 0 && !isExternalAgentSelected && (
                   <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>{connectors.length}</span>
                 )}
               </button>

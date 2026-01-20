@@ -112,6 +112,12 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
   const [isSearchingHistory, setIsSearchingHistory] = useState(false);
 
+  // Context preview state (debounced RAG token estimation)
+  const [ragContextTokens, setRagContextTokens] = useState(0);
+  const [historyContextTokens, setHistoryContextTokens] = useState(0);
+  const [isLoadingContextPreview, setIsLoadingContextPreview] = useState(false);
+  const contextPreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Budget tracking
   const [embeddingTokensUsed, setEmbeddingTokensUsed] = useState(0);
   const [embeddingCostUsed, setEmbeddingCostUsed] = useState(0);
@@ -586,6 +592,92 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
     }
   };
 
+  // Debounced context preview - fetch RAG/history token estimates after 3.5s of no typing
+  useEffect(() => {
+    // Clear any existing timeout
+    if (contextPreviewTimeoutRef.current) {
+      clearTimeout(contextPreviewTimeoutRef.current);
+      contextPreviewTimeoutRef.current = null;
+    }
+
+    // Reset tokens when query is empty
+    if (!query.trim()) {
+      setRagContextTokens(0);
+      setHistoryContextTokens(0);
+      setIsLoadingContextPreview(false);
+      return;
+    }
+
+    // Determine which RAGs to search
+    const ragsToSearch = selectedRagIds.length > 0 ? selectedRagIds : (selectedRag ? [selectedRag] : []);
+    const hasActiveContext = ragsToSearch.length > 0 || historyMemoryEnabled;
+    if (!hasActiveContext) {
+      setRagContextTokens(0);
+      setHistoryContextTokens(0);
+      return;
+    }
+
+    // Set timeout to fetch context preview after 3.5 seconds
+    contextPreviewTimeoutRef.current = setTimeout(async () => {
+      setIsLoadingContextPreview(true);
+
+      try {
+        // Fetch RAG context if active
+        if (ragsToSearch.length > 0) {
+          const ragRes = await fetch('/api/ai/rag-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ragIds: ragsToSearch, query: query.trim(), topK: 3 }),
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            // Estimate tokens from context string (rough: ~4 chars per token)
+            const contextTokens = ragData.contextString ? Math.ceil(ragData.contextString.length / 4) : 0;
+            setRagContextTokens(contextTokens);
+          }
+        } else {
+          setRagContextTokens(0);
+        }
+
+        // Fetch history context if enabled
+        if (historyMemoryEnabled) {
+          const historyRes = await fetch('/api/ai/history-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query.trim(), historyType: 'rag_history', topK: 3 }),
+          });
+          if (historyRes.ok) {
+            const historyData = await historyRes.json();
+            // Estimate tokens from results
+            let historyTokens = 0;
+            if (historyData.results) {
+              historyData.results.forEach((r: { messages?: Array<{ content: string }> }) => {
+                if (r.messages) {
+                  r.messages.forEach((m: { content: string }) => {
+                    historyTokens += Math.ceil((m.content?.length || 0) / 4);
+                  });
+                }
+              });
+            }
+            setHistoryContextTokens(historyTokens);
+          }
+        } else {
+          setHistoryContextTokens(0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch context preview:', err);
+      } finally {
+        setIsLoadingContextPreview(false);
+      }
+    }, 3500); // 3.5 seconds debounce
+
+    return () => {
+      if (contextPreviewTimeoutRef.current) {
+        clearTimeout(contextPreviewTimeoutRef.current);
+      }
+    };
+  }, [query, selectedRag, selectedRagIds, historyMemoryEnabled]);
+
   // Toggle message expansion
   const toggleExpand = (id: string) => {
     setExpandedMessages(prev => {
@@ -926,6 +1018,9 @@ export const RAGExplorerPage: React.FC<RAGExplorerPageProps> = ({ isLoggedIn, is
                 toggleRagSelection={toggleRagSelection}
                 sessionTokens={totalTokens}
                 sessionCost={totalCost}
+                ragContextTokens={ragContextTokens}
+                historyContextTokens={historyContextTokens}
+                isLoadingContextPreview={isLoadingContextPreview}
                 showSettingsButton
                 onSettingsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('main'); }}
                 error={error || (!apiKey && !apiKeyLoading ? 'Generate an API key in the dashboard to search' : null)}

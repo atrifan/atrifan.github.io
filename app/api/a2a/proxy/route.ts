@@ -223,8 +223,45 @@ export async function POST(request: NextRequest) {
 
     let client;
     try {
-      // Create client from agent URL - SDK will discover agent card
-      client = await factory.createFromUrl(agentUrl);
+      // Try to get stored agent card from database first (avoids re-fetching from URL)
+      let storedAgentCard = null;
+      if (agentId) {
+        // First try connector lookup
+        const { data: connector } = await db
+          .from('chat_connectors')
+          .select('a2a_agent_id')
+          .eq('id', agentId)
+          .eq('user_id', userId)
+          .single();
+
+        const actualAgentId = connector?.a2a_agent_id || agentId;
+
+        // Get agent card from a2a_agents table
+        const { data: agent } = await db
+          .from('a2a_agents')
+          .select('agent_card, agent_url')
+          .eq('id', actualAgentId)
+          .eq('user_id', userId)
+          .single();
+
+        if (agent?.agent_card) {
+          storedAgentCard = agent.agent_card;
+          // Ensure the agent card has the URL set
+          if (!storedAgentCard.url && agent.agent_url) {
+            storedAgentCard.url = agent.agent_url;
+          }
+          console.log('[A2A Proxy] Using stored agent card from database');
+        }
+      }
+
+      if (storedAgentCard) {
+        // Use stored agent card - no network fetch needed
+        client = await factory.createFromAgentCard(storedAgentCard);
+      } else {
+        // Fall back to fetching from URL (for agents without stored card)
+        console.log('[A2A Proxy] No stored agent card, fetching from URL');
+        client = await factory.createFromUrl(agentUrl);
+      }
     } catch (err) {
       console.error('[A2A Proxy] Failed to create A2A client:', err);
       return NextResponse.json({

@@ -120,6 +120,12 @@ interface ChatInputAreaProps {
   setHistoryMemoryEnabled?: (enabled: boolean) => void;
   onHistoryMemoryClick?: () => void;
 
+  // RAG/History context preview (for token estimation)
+  // These are fetched after user stops typing for 3-4 seconds
+  ragContextTokens?: number;
+  historyContextTokens?: number;
+  isLoadingContextPreview?: boolean;
+
   // Error message
   error?: string | null;
 }
@@ -185,6 +191,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   historyMemoryEnabled = false,
   setHistoryMemoryEnabled,
   onHistoryMemoryClick,
+
+  // RAG/History context preview
+  ragContextTokens = 0,
+  historyContextTokens = 0,
+  isLoadingContextPreview = false,
 
   error,
 }) => {
@@ -425,14 +436,28 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               fontFamily: 'inherit',
             }}
           />
-          {/* Live token counter */}
-          {(currentInputTokens > 0 || totalSystemPromptTokens > 0) && (
-            <div style={{ position: 'absolute', right: '0.75rem', bottom: '0.75rem', display: 'flex', gap: '0.25rem', fontSize: '0.65rem', pointerEvents: 'none' }}>
+          {/* Live token counter - shows input, persona, RAG, and history tokens */}
+          {(currentInputTokens > 0 || totalSystemPromptTokens > 0 || ragContextTokens > 0 || historyContextTokens > 0 || isLoadingContextPreview) && (
+            <div style={{ position: 'absolute', right: '0.75rem', bottom: '0.75rem', display: 'flex', gap: '0.25rem', fontSize: '0.65rem', pointerEvents: 'none', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '70%' }}>
+              {/* Input tokens - green */}
               {currentInputTokens > 0 && (
-                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>{currentInputTokens}</span>
+                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="Your message tokens">{currentInputTokens}</span>
               )}
+              {/* Persona tokens - orange */}
               {totalSystemPromptTokens > 0 && (
-                <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>+{totalSystemPromptTokens} 🎭</span>
+                <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="Persona system prompt tokens">+{totalSystemPromptTokens} 🎭</span>
+              )}
+              {/* RAG context tokens - purple */}
+              {ragContextTokens > 0 && (
+                <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="RAG context tokens">+{ragContextTokens} 📚</span>
+              )}
+              {/* History context tokens - cyan/blue */}
+              {historyContextTokens > 0 && (
+                <span style={{ background: 'rgba(6, 182, 212, 0.2)', color: '#22d3ee', padding: '0.1rem 0.35rem', borderRadius: '4px' }} title="History memory tokens">+{historyContextTokens} 🧠</span>
+              )}
+              {/* Loading indicator for context preview */}
+              {isLoadingContextPreview && (
+                <span style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'rgba(255,255,255,0.5)', padding: '0.1rem 0.35rem', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} title="Fetching context preview...">⏳</span>
               )}
             </div>
           )}

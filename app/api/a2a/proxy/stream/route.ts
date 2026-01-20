@@ -189,8 +189,47 @@ export async function POST(request: NextRequest) {
       let client;
       let agentCard: AgentCard;
       try {
-        client = await factory.createFromUrl(agentUrl);
-        agentCard = await client.getAgentCard();
+        // Try to get stored agent card from database first (avoids re-fetching from URL)
+        let storedAgentCard: AgentCard | null = null;
+        if (agentId) {
+          // First try connector lookup
+          const { data: connector } = await db
+            .from('chat_connectors')
+            .select('a2a_agent_id')
+            .eq('id', agentId)
+            .eq('user_id', userId)
+            .single();
+
+          const actualAgentId = connector?.a2a_agent_id || agentId;
+
+          // Get agent card from a2a_agents table
+          const { data: agent } = await db
+            .from('a2a_agents')
+            .select('agent_card, agent_url')
+            .eq('id', actualAgentId)
+            .eq('user_id', userId)
+            .single();
+
+          if (agent?.agent_card) {
+            storedAgentCard = agent.agent_card as AgentCard;
+            // Ensure the agent card has the URL set
+            if (!storedAgentCard.url && agent.agent_url) {
+              storedAgentCard.url = agent.agent_url;
+            }
+            console.log('[A2A Stream] Using stored agent card from database');
+          }
+        }
+
+        if (storedAgentCard) {
+          // Use stored agent card - no network fetch needed
+          client = await factory.createFromAgentCard(storedAgentCard);
+          agentCard = storedAgentCard;
+        } else {
+          // Fall back to fetching from URL (for agents without stored card)
+          console.log('[A2A Stream] No stored agent card, fetching from URL');
+          client = await factory.createFromUrl(agentUrl);
+          agentCard = await client.getAgentCard();
+        }
       } catch (err) {
         await sendEvent({ type: 'error', data: { error: err instanceof Error ? err.message : 'Failed to connect' } });
         await writer.close();
