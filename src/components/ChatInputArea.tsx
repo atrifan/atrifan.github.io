@@ -284,19 +284,28 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '0.35rem',
+              gap: '0.4rem',
               width: '100%',
-              padding: '0.35rem',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              padding: '0.5rem',
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.25) 100%)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
               borderRadius: '8px 8px 0 0',
-              color: 'rgba(255,255,255,0.5)',
-              fontSize: '0.7rem',
+              color: 'rgba(255,255,255,0.85)',
+              fontSize: '0.75rem',
+              fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.35) 100%)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.25) 100%)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+            }}
           >
-            <span>✕</span>
+            <span style={{ fontSize: '0.85rem' }}>✕</span>
             <span>Hide Ad</span>
           </button>
           {/* Ad content */}
