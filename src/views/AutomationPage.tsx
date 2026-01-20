@@ -208,6 +208,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [historyMemoryEnabled, setHistoryMemoryEnabled] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
 
+  // Send recent history toggle (last 2-4 exchanges for immediate context)
+  // Disable for agents that don't support multiple text parts
+  const [sendRecentHistory, setSendRecentHistory] = useState(true);
+
   // Settings persistence - track if settings have been loaded from server
   const settingsLoadedRef = useRef(false);
   const [historySearchResults, setHistorySearchResults] = useState<Array<{ chatId: string; topScore: number; messages: Array<{ content: string; messageType: string }> }>>([]);
@@ -314,6 +318,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   useEffect(() => {
     saveAutomationSetting('historyMemoryEnabled', historyMemoryEnabled);
   }, [historyMemoryEnabled]);
+
+  useEffect(() => {
+    saveAutomationSetting('sendRecentHistory', sendRecentHistory);
+  }, [sendRecentHistory]);
 
   // Save selected model when it changes (but not when loading an automation)
   useEffect(() => {
@@ -599,6 +607,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         if (settings.historyMemoryEnabled !== undefined) {
           setHistoryMemoryEnabled(settings.historyMemoryEnabled);
         }
+        if (settings.sendRecentHistory !== undefined) {
+          setSendRecentHistory(settings.sendRecentHistory);
+        }
         if (settings.defaultModel && !currentAutomation && availableModels.some(m => m.id === settings.defaultModel)) {
           setSelectedModel(settings.defaultModel);
         }
@@ -705,6 +716,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
     // Collected retrieval data
     let collectedRagData: RAGRetrievalEvent[] = [];
+    let collectedHistoryData: HistoryMatchEvent[] = [];
 
     try {
       // Search active RAGs if any are enabled
@@ -734,7 +746,53 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         }
       }
 
+      // Fetch semantic history context if enabled and we have an automation
+      if (historyMemoryEnabled && currentAutomation?.id) {
+        setRetrievalEvents(prev => ({ ...prev, isSearching: true }));
+        try {
+          const contextRes = await fetch('/api/ai/history-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: currentAutomation.id,
+              currentMessage: prompt,
+              topK: 3,
+              historyType: 'chat_history',
+            }),
+          });
+          if (contextRes.ok) {
+            const contextData = await contextRes.json();
+            if (contextData.contextString) {
+              // Prepend semantic history context to system prompt
+              personaSystemPrompt = contextData.contextString + (personaSystemPrompt || '');
+            }
+            if (contextData.context && contextData.context.length > 0) {
+              collectedHistoryData = contextData.context.map((c: string, i: number) => ({
+                chatId: currentAutomation.id,
+                score: 1 - (i * 0.1),
+                messages: [{ content: c, messageType: 'context' }],
+              }));
+            }
+            setRetrievalEvents(prev => ({ ...prev, historyEvents: collectedHistoryData, isSearching: false }));
+          }
+        } catch (histErr) {
+          console.error('Failed to fetch history context:', histErr);
+          setRetrievalEvents(prev => ({ ...prev, isSearching: false }));
+        }
+      }
+
       setRetrievalEvents(prev => ({ ...prev, isSending: true }));
+
+      // Build recent history for context (last 2 prompts) if enabled
+      // Helps with references like "undo that", "make it faster", etc.
+      // Note: promptHistory is ordered descending (newest first), so we take first 2 and reverse
+      const recentHistoryData = sendRecentHistory && promptHistory.length > 0
+        ? promptHistory.slice(0, 2).reverse().map(h => ({
+            prompt: h.prompt,
+            // Include a brief note about what the mermaid result was
+            response: h.response_mermaid ? '(flow updated)' : undefined,
+          }))
+        : undefined;
 
       const response = await fetch('/api/ai/automations/prompt', {
         method: 'POST',
@@ -746,6 +804,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           modelId: selectedModel,
           availableTools: activeTools,
           personaSystemPrompt: personaSystemPrompt || undefined,
+          recentHistory: recentHistoryData,
         }),
         signal: abortController.signal,
       });
@@ -785,7 +844,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       setRetrievalEvents({});
       abortControllerRef.current = null;
     }
-  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory, connectors, activeRagIds]);
+  }, [prompt, mermaidDiagram, selectedModel, activeTools, currentAutomation, isGenerating, personalities, activePersonalityIds, fetchPromptHistory, connectors, activeRagIds, sendRecentHistory, promptHistory, historyMemoryEnabled]);
 
   // Stop/cancel the current request
   const stopRequest = useCallback(() => {
@@ -1037,6 +1096,15 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             style={{ background: historyMemoryEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)', border: historyMemoryEnabled ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: historyMemoryEnabled ? '#10b981' : '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
           >
             📜
+          </button>
+
+          {/* Send Recent History toggle */}
+          <button
+            onClick={() => setSendRecentHistory(!sendRecentHistory)}
+            title={sendRecentHistory ? "Recent history enabled - last 2 exchanges sent for context. Click to disable." : "Recent history disabled - only current message sent. Click to enable."}
+            style={{ background: sendRecentHistory ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: sendRecentHistory ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: sendRecentHistory ? '#3b82f6' : '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+          >
+            💬
           </button>
 
           <button onClick={startNew} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}>+ New Automation</button>
@@ -1553,6 +1621,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         deleteAutomation={deleteAutomation}
         historyMemoryEnabled={historyMemoryEnabled}
         setHistoryMemoryEnabled={setHistoryMemoryEnabled}
+        sendRecentHistory={sendRecentHistory}
+        setSendRecentHistory={setSendRecentHistory}
         historySearchQuery={historySearchQuery}
         setHistorySearchQuery={setHistorySearchQuery}
         historySearchResults={historySearchResults}

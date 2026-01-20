@@ -57,17 +57,33 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseClient();
     const body = await request.json();
-    const { automationId, prompt, currentMermaid, modelId, availableTools, personaSystemPrompt } = body;
+    const { automationId, prompt, currentMermaid, modelId, availableTools, personaSystemPrompt, recentHistory } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
     // Build context message
-    let contextMessage = prompt;
-    if (currentMermaid) {
-      contextMessage = `Current flow:\n\`\`\`mermaid\n${currentMermaid}\n\`\`\`\n\nUser request: ${prompt}`;
+    let contextMessage = '';
+
+    // Add recent prompt history for context (helps with "undo that", "make it faster", etc.)
+    if (recentHistory && Array.isArray(recentHistory) && recentHistory.length > 0) {
+      contextMessage += '[Recent Prompts]\n';
+      recentHistory.forEach((h: { prompt: string; response?: string }) => {
+        contextMessage += `User: ${h.prompt}\n`;
+        if (h.response) {
+          contextMessage += `Result: ${h.response}\n`;
+        }
+      });
+      contextMessage += '\n';
     }
+
+    if (currentMermaid) {
+      contextMessage += `Current flow:\n\`\`\`mermaid\n${currentMermaid}\n\`\`\`\n\n`;
+    }
+
+    contextMessage += `User request: ${prompt}`;
+
     if (availableTools && availableTools.length > 0) {
       contextMessage += `\n\nAvailable MCP tools:\n${availableTools.map((t: { server: string; name: string; description: string }) => `- ${t.server}.${t.name}: ${t.description}`).join('\n')}`;
     }

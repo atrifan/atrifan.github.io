@@ -166,6 +166,10 @@ export interface SettingsPanelProps {
   historyMemoryEnabled?: boolean;
   setHistoryMemoryEnabled?: (enabled: boolean) => void;
 
+  // Send recent history toggle (last 2-4 exchanges for immediate context)
+  sendRecentHistory?: boolean;
+  setSendRecentHistory?: (enabled: boolean) => void;
+
   // History search
   historySearchQuery?: string;
   setHistorySearchQuery?: (query: string) => void;
@@ -233,6 +237,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     confirmClearAllHistory,
     historyMemoryEnabled = false,
     setHistoryMemoryEnabled,
+    sendRecentHistory = true,
+    setSendRecentHistory,
     historySearchQuery = '',
     setHistorySearchQuery,
     historySearchResults = [],
@@ -603,6 +609,28 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                       </button>
                     </div>
                   </div>
+
+                  {/* Send Recent History Toggle */}
+                  {setSendRecentHistory && (
+                    <div style={{ padding: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                          <span style={{ fontSize: '1rem' }}>💬</span>
+                          <div>
+                            <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Recent History</span>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Send last 2 exchanges for context</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSendRecentHistory(!sendRecentHistory)}
+                          style={{ width: '44px', height: '24px', borderRadius: '12px', border: 'none', background: sendRecentHistory ? '#3b82f6' : 'rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s' }}
+                        >
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: sendRecentHistory ? '23px' : '3px', transition: 'left 0.2s' }} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Search History Button */}
                   <button onClick={() => setPanelMode('history')} style={{ width: '100%', padding: '0.6rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>📜 Search History</span>
