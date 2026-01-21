@@ -267,7 +267,7 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ isLoggedIn, isPro,
         rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
       />
 
-      <View maxWidth="72rem" marginX="auto">
+      <View maxWidth="56rem" marginX="auto">
         <div style={{ marginBottom: '1.5rem' }}><BackToTools /></div>
 
         {/* Top Ad */}
