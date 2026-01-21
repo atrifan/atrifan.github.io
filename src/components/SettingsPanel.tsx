@@ -445,6 +445,39 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                           </div>
                         );
                       })}
+                      {/* Analytics Link */}
+                      <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <a
+                          href="/analytics"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            padding: '0.5rem',
+                            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2))',
+                            border: '1px solid rgba(139, 92, 246, 0.3)',
+                            borderRadius: '8px',
+                            color: '#a78bfa',
+                            textDecoration: 'none',
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.3))';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2))';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                        >
+                          <span>📈</span>
+                          <span>View Full Analytics</span>
+                          <span style={{ marginLeft: 'auto', opacity: 0.6 }}>→</span>
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>

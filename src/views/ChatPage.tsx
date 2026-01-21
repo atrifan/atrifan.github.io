@@ -1762,6 +1762,21 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             ]
           : [{ role: userMessage.role, content: userMessage.content }];
 
+        // Estimate token counts for context tracking
+        const ragTokensEstimate = ragContextString ? estimateTokens(ragContextString) : 0;
+        const historyTokensEstimate = historyContextString ? estimateTokens(historyContextString) : 0;
+        const recentHistoryTokensEstimate = sendRecentHistory
+          ? messages.slice(-4).reduce((sum, m) => sum + estimateTokens(m.content), 0)
+          : 0;
+        const personaTokensEstimate = activePersonalities.reduce(
+          (sum, p) => sum + estimateTokens(p.system_prompt), 0
+        );
+
+        // Build persona data for tracking
+        const personaDataForTracking = activePersonalities.length > 0
+          ? activePersonalities.map(p => ({ id: p.id, name: p.name, prompt: p.system_prompt }))
+          : null;
+
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: {
@@ -1773,6 +1788,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             model: selectedModel,
             conversationId: currentConversationId,
             systemPrompt: combinedSystemPrompt || undefined,
+            // Context tracking data
+            ragData: collectedRagData.length > 0 ? collectedRagData : null,
+            historyData: collectedHistoryData.length > 0 ? collectedHistoryData : null,
+            personaData: personaDataForTracking,
+            ragTokens: ragTokensEstimate,
+            historyTokens: historyTokensEstimate,
+            recentHistoryTokens: recentHistoryTokensEstimate,
+            personaTokens: personaTokensEstimate,
           }),
           signal: abortController.signal,
         });

@@ -57,7 +57,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseClient();
     const body = await request.json();
-    const { automationId, prompt, currentMermaid, modelId, availableTools, personaSystemPrompt, recentHistory } = body;
+    const {
+      automationId,
+      prompt,
+      currentMermaid,
+      modelId,
+      availableTools,
+      personaSystemPrompt,
+      recentHistory,
+      // Context tracking data
+      ragData,
+      historyData,
+      personaData,
+      ragTokens,
+      historyTokens,
+      recentHistoryTokens,
+      personaTokens,
+    } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -131,8 +147,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Save prompt history if automation exists
+    let historyId: string | undefined;
     if (automationId && supabase) {
-      await supabase.from('automation_prompt_history').insert({
+      const { data: historyRecord } = await supabase.from('automation_prompt_history').insert({
         automation_id: automationId,
         user_id: userId,
         prompt,
@@ -140,7 +157,17 @@ export async function POST(request: NextRequest) {
         response_mermaid: parsedResponse.mermaid,
         input_tokens: usage.prompt_tokens,
         output_tokens: usage.completion_tokens,
-      });
+        // Context tracking data
+        rag_data: ragData || null,
+        history_data: historyData || null,
+        persona_data: personaData || null,
+        rag_tokens: ragTokens || 0,
+        history_tokens: historyTokens || 0,
+        recent_history_tokens: recentHistoryTokens || 0,
+        persona_tokens: personaTokens || 0,
+      }).select('id').single();
+
+      historyId = historyRecord?.id;
 
       // Track token usage
       const modelInfo = AI_MODELS.find(m => m.id === model);
@@ -161,6 +188,7 @@ export async function POST(request: NextRequest) {
       mermaid: parsedResponse.mermaid,
       flow: parsedResponse.flow,
       explanation: parsedResponse.explanation,
+      historyId,
       usage: {
         input: usage.prompt_tokens,
         output: usage.completion_tokens,

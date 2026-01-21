@@ -1303,6 +1303,66 @@ export const DashboardPage: React.FC = () => {
           </div>
         </DashboardCard>
 
+        {/* AI Analytics Card - Pro+ only */}
+        <DashboardCard
+          title="AI Analytics"
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>}
+        >
+          {/* Pro-only blur overlay */}
+          {!isPro && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📈</span>
+              <span style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>Pro Feature</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', textAlign: 'center' }}>Track detailed AI usage analytics</span>
+              {isBillingEnabled() && (
+                <Link href="/pricing" style={{ marginTop: '0.75rem', textDecoration: 'none' }}>
+                  <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Upgrade to Pro</button>
+                </Link>
+              )}
+            </div>
+          )}
+          <div style={{ position: 'relative' }}>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              View detailed analytics of your AI usage including costs, tokens, model breakdown, and context usage patterns.
+            </p>
+
+            {/* Quick Stats Preview */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ background: 'rgba(139, 92, 246, 0.1)', borderRadius: '10px', padding: '0.75rem', textAlign: 'center', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#8b5cf6' }}>💬</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Messages</div>
+              </div>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', padding: '0.75rem', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>🔤</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Tokens</div>
+              </div>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', padding: '0.75rem', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f59e0b' }}>💰</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Cost</div>
+              </div>
+              <div style={{ background: 'rgba(167, 139, 250, 0.1)', borderRadius: '10px', padding: '0.75rem', textAlign: 'center', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#a78bfa' }}>🧠</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '0.25rem' }}>Context</div>
+              </div>
+            </div>
+
+            {/* Features List */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              {['📊 Model breakdown', '📈 Daily trends', '🎯 Context analysis', '💵 Cost tracking'].map(feature => (
+                <span key={feature} style={{ background: 'rgba(255,255,255,0.05)', padding: '0.35rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>{feature}</span>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Link href="/analytics" style={{ textDecoration: 'none' }}>
+                <button style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', borderRadius: '10px', padding: '0.75rem 1.5rem', color: '#fff', cursor: isPro ? 'pointer' : 'not-allowed', fontSize: '0.9rem', fontWeight: 600, opacity: isPro ? 1 : 0.5, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>📈</span> View Analytics
+                </button>
+              </Link>
+            </div>
+          </div>
+        </DashboardCard>
+
         {/* Preferences Card */}
         <DashboardCard
           title="Preferences"

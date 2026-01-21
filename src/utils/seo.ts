@@ -202,6 +202,13 @@ export const SEO_DATA: Record<string, SEOConfig> = {
     ogTitle: 'Tulzo RAG Explorer - AI-Powered Knowledge Base Search',
     ogDescription: 'Explore your knowledge bases with AI-powered semantic search. Navigate and find relevant content instantly.',
   },
+  analytics: {
+    title: 'AI Usage Analytics – Track Costs, Tokens & Models | Tulzo',
+    description: 'View detailed analytics of your AI usage. Track costs by model, token breakdown by context type (RAG, history, persona), daily trends, and usage patterns.',
+    keywords: ['AI analytics', 'usage analytics', 'token tracking', 'AI cost tracking', 'model usage', 'context breakdown', 'RAG analytics', 'AI budget', 'usage trends', 'cost analysis'],
+    ogTitle: 'Tulzo AI Analytics - Track Your AI Usage & Costs',
+    ogDescription: 'Detailed analytics for your AI usage. Track costs, tokens, and context breakdown across models.',
+  },
 };
 
 /**

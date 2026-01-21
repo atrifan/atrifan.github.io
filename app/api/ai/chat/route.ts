@@ -43,7 +43,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { messages, model: modelId, conversationId, systemPrompt } = body;
+    const {
+      messages,
+      model: modelId,
+      conversationId,
+      systemPrompt,
+      // Context tracking data
+      ragData,
+      historyData,
+      personaData,
+      ragTokens,
+      historyTokens,
+      recentHistoryTokens,
+      personaTokens,
+    } = body;
     const userMessage = messages[messages.length - 1]?.content || '';
 
     // Validate model access
@@ -165,20 +178,34 @@ export async function POST(request: NextRequest) {
         // Save user message
         await supabase.from('chat_messages').insert({
           conversation_id: activeConversationId,
+          user_id: userId,
           role: 'user',
           content: userMessage,
           input_tokens: usage.prompt_tokens,
           output_tokens: 0,
         });
 
-        // Save assistant message
+        // Calculate cost for this message
+        const messageCost = calculateCost(modelId, usage.prompt_tokens, usage.completion_tokens);
+
+        // Save assistant message with context tracking data
         await supabase.from('chat_messages').insert({
           conversation_id: activeConversationId,
+          user_id: userId,
           role: 'assistant',
           content: assistantMessage,
           model_id: modelId,
           input_tokens: 0,
           output_tokens: usage.completion_tokens,
+          cost: messageCost,
+          // Context tracking
+          rag_data: ragData || null,
+          history_data: historyData || null,
+          persona_data: personaData || null,
+          rag_tokens: ragTokens || 0,
+          history_tokens: historyTokens || 0,
+          recent_history_tokens: recentHistoryTokens || 0,
+          persona_tokens: personaTokens || 0,
         });
 
         // Update conversation message count and tokens

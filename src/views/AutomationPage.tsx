@@ -714,9 +714,17 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     const activePersonalities = personalities.filter(p => activePersonalityIds.includes(p.id));
     let personaSystemPrompt = activePersonalities.map(p => p.system_prompt).filter(Boolean).join('\n\n');
 
+    // Token estimation function (rough: ~4 chars per token)
+    const estimateTokens = (text: string): number => {
+      if (!text) return 0;
+      return Math.ceil(text.length / 4);
+    };
+
     // Collected retrieval data
     let collectedRagData: RAGRetrievalEvent[] = [];
     let collectedHistoryData: HistoryMatchEvent[] = [];
+    let ragContextString = '';
+    let historyContextString = '';
 
     try {
       // Search active RAGs if any are enabled
@@ -736,6 +744,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             const ragData = await ragRes.json();
             collectedRagData = ragData.results || [];
             if (ragData.contextString) {
+              ragContextString = ragData.contextString;
               personaSystemPrompt = ragData.contextString + (personaSystemPrompt || '');
             }
             setRetrievalEvents(prev => ({ ...prev, ragEvents: collectedRagData, isSearching: false }));
@@ -763,6 +772,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           if (contextRes.ok) {
             const contextData = await contextRes.json();
             if (contextData.contextString) {
+              historyContextString = contextData.contextString;
               // Prepend semantic history context to system prompt
               personaSystemPrompt = contextData.contextString + (personaSystemPrompt || '');
             }
@@ -794,6 +804,21 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           }))
         : undefined;
 
+      // Estimate token counts for context tracking
+      const ragTokensEstimate = ragContextString ? estimateTokens(ragContextString) : 0;
+      const historyTokensEstimate = historyContextString ? estimateTokens(historyContextString) : 0;
+      const recentHistoryTokensEstimate = recentHistoryData
+        ? recentHistoryData.reduce((sum, h) => sum + estimateTokens(h.prompt) + estimateTokens(h.response || ''), 0)
+        : 0;
+      const personaTokensEstimate = activePersonalities.reduce(
+        (sum, p) => sum + estimateTokens(p.system_prompt), 0
+      );
+
+      // Build persona data for tracking
+      const personaDataForTracking = activePersonalities.length > 0
+        ? activePersonalities.map(p => ({ id: p.id, name: p.name, prompt: p.system_prompt }))
+        : null;
+
       const response = await fetch('/api/ai/automations/prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -805,6 +830,14 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           availableTools: activeTools,
           personaSystemPrompt: personaSystemPrompt || undefined,
           recentHistory: recentHistoryData,
+          // Context tracking data
+          ragData: collectedRagData.length > 0 ? collectedRagData : null,
+          historyData: collectedHistoryData.length > 0 ? collectedHistoryData : null,
+          personaData: personaDataForTracking,
+          ragTokens: ragTokensEstimate,
+          historyTokens: historyTokensEstimate,
+          recentHistoryTokens: recentHistoryTokensEstimate,
+          personaTokens: personaTokensEstimate,
         }),
         signal: abortController.signal,
       });
