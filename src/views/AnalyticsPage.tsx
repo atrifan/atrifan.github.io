@@ -271,7 +271,7 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ isLoggedIn, isPro,
         <div style={{ marginBottom: '1.5rem' }}><BackToTools /></div>
 
         {/* Top Ad */}
-        <AdBanner slot="top" style={{ marginBottom: '1.5rem' }} />
+        <AdBanner slot={ADS_CONFIG.slots.analyticsTop} style={{ marginBottom: '1.5rem' }} />
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -638,7 +638,7 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ isLoggedIn, isPro,
         )}
 
         {/* Bottom Ad */}
-        <AdBanner slot="footer" style={{ marginTop: '2rem' }} />
+        <AdBanner slot={ADS_CONFIG.slots.analyticsFooter} style={{ marginTop: '2rem' }} />
       </View>
       <Footer />
     </View>

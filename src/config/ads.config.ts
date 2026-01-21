@@ -179,6 +179,10 @@ export const ADS_CONFIG = {
     automationTop: '7221401854',
     automationBottom: '5908320187',
 
+    // Analytics page ads
+    analyticsTop: '7221401854',
+    analyticsFooter: '5908320187',
+
     // Generic tool page ads (for new AI tools)
     toolTop: '7221401854',
     toolBottom: '5908320187',
