@@ -540,7 +540,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
         {mode === 'rag' ? (
           /* RAG selector for RAG mode */
-          <div ref={ragDropdownRef} style={{ position: 'relative' }}>
+          <div ref={ragDropdownRef} style={{ position: 'relative', maxWidth: '200px' }}>
             <button
               onClick={() => setShowRagDropdown(!showRagDropdown)}
               style={{
@@ -555,23 +555,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 cursor: 'pointer',
                 fontSize: '0.7rem',
                 transition: 'all 0.2s',
+                maxWidth: '100%',
               }}
             >
-              <span>{selectedRag?.icon || '📚'}</span>
-              <span>
+              <span style={{ flexShrink: 0 }}>{selectedRag?.icon || '📚'}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedRagIds.length > 1
-                  ? `${selectedRagIds.length} sources selected`
-                  : selectedRag?.name || 'Select knowledge base'}
+                  ? `${selectedRagIds.length} sources`
+                  : selectedRag?.name || 'Select KB'}
               </span>
-              <span style={{ marginLeft: '0.25rem', opacity: 0.5 }}>▾</span>
+              <span style={{ marginLeft: '0.25rem', opacity: 0.5, flexShrink: 0 }}>▾</span>
             </button>
 
             {showRagDropdown && (
               <div style={{
                 position: 'absolute',
                 bottom: '100%',
-                left: '50%',
-                transform: 'translateX(-50%)',
+                left: '0',
                 marginBottom: '4px',
                 background: '#1a1a2e',
                 border: '1px solid rgba(255,255,255,0.15)',
@@ -579,18 +579,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 maxHeight: '300px',
                 overflowY: 'auto',
                 zIndex: 100,
-                minWidth: '260px',
+                minWidth: '180px',
+                maxWidth: 'min(220px, calc(100vw - 2rem))',
                 boxShadow: '0 -4px 20px rgba(0,0,0,0.4)',
               }}>
                 {toggleRagSelection && (
-                  <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
-                    Select multiple sources (click checkboxes)
+                  <div style={{ padding: '0.4rem 0.6rem', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
+                    Select sources
                   </div>
                 )}
                 {rags.length === 0 ? (
-                  <div style={{ padding: '1rem', textAlign: 'center' }}>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: 0 }}>No knowledge bases</p>
-                    <Link href="/dashboard/rag-import" style={{ color: '#10b981', fontSize: '0.75rem' }}>
+                  <div style={{ padding: '0.75rem', textAlign: 'center' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', margin: 0 }}>No knowledge bases</p>
+                    <Link href="/dashboard/rag-import" style={{ color: '#10b981', fontSize: '0.65rem' }}>
                       Create one →
                     </Link>
                   </div>
@@ -614,30 +615,30 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                           width: '100%',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.5rem',
-                          padding: '0.5rem 0.75rem',
+                          gap: '0.35rem',
+                          padding: '0.4rem 0.6rem',
                           background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
                           border: 'none',
                           color: isSelected ? '#10b981' : 'rgba(255,255,255,0.8)',
                           cursor: 'pointer',
-                          fontSize: '0.75rem',
+                          fontSize: '0.7rem',
                           textAlign: 'left',
                         }}
                       >
                         {toggleRagSelection && (
                           <span style={{
-                            width: '16px', height: '16px', borderRadius: '4px',
+                            width: '14px', height: '14px', borderRadius: '3px',
                             border: isSelected ? '2px solid #10b981' : '2px solid rgba(255,255,255,0.3)',
                             background: isSelected ? '#10b981' : 'transparent',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.65rem', color: '#fff',
+                            fontSize: '0.55rem', color: '#fff', flexShrink: 0,
                           }}>
                             {isSelected && '✓'}
                           </span>
                         )}
-                        <span>{rag.icon}</span>
-                        <span style={{ flex: 1 }}>{rag.name}</span>
-                        <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
+                        <span style={{ flexShrink: 0 }}>{rag.icon}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rag.name}</span>
+                        <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', flexShrink: 0 }}>
                           {rag.source_type}
                         </span>
                       </button>
