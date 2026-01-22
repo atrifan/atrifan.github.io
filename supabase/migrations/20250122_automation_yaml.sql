@@ -26,6 +26,11 @@ ADD COLUMN IF NOT EXISTS trigger_config JSONB DEFAULT '{"type": "manual"}';
 ALTER TABLE automations
 ADD COLUMN IF NOT EXISTS cron_expression TEXT;
 
+-- ============ Add schedule_config to automations ============
+-- Store schedule configuration (hour, minute, days, etc.)
+ALTER TABLE automations
+ADD COLUMN IF NOT EXISTS schedule_config JSONB DEFAULT '{}';
+
 -- ============ Add required_inputs to automations ============
 -- Pre-configured inputs with values or human_input markers
 ALTER TABLE automations
@@ -316,7 +321,19 @@ WHERE responded_at IS NULL;
 
 -- ============ Enable Realtime for human requests ============
 -- So frontend can show pending input requests
-ALTER PUBLICATION supabase_realtime ADD TABLE automation_human_requests;
+DO $$
+BEGIN
+  -- Add automation_human_requests to realtime publication if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'automation_human_requests'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE automation_human_requests;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- Ignore if publication doesn't exist or table already added
+  NULL;
+END $$;
 
 -- ============ Comments ============
 COMMENT ON COLUMN automations.notification_config IS 'Detected notification tools and user preferences: {channels: [{type, connector_id, tool_name}], preferences: {}}';
