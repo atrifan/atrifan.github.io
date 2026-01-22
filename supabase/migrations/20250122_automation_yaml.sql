@@ -179,8 +179,33 @@ ON automation_logs(automation_id, timestamp DESC);
 
 -- ============ Enable Realtime for logs ============
 -- This allows the frontend to subscribe to log updates
-ALTER PUBLICATION supabase_realtime ADD TABLE automation_logs;
-ALTER PUBLICATION supabase_realtime ADD TABLE automation_executions;
+DO $$
+BEGIN
+  -- Add automation_logs to realtime publication if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'automation_logs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE automation_logs;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- Ignore if publication doesn't exist or table already added
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  -- Add automation_executions to realtime publication if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'automation_executions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE automation_executions;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- Ignore if publication doesn't exist or table already added
+  NULL;
+END $$;
 
 -- ============ Function to clear old logs on new execution ============
 -- When a new execution starts, clear logs from previous runs

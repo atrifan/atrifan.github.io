@@ -159,6 +159,11 @@ async function buildToolsDocumentation(
 
   const sections: string[] = [];
   const notificationTools: NotificationTool[] = [];
+  let totalToolCount = 0;
+
+  // Add summary header
+  sections.push('## Available Tools\n');
+  sections.push('The following tools are available from your active connectors. Use the full tool name (server.tool_name) in your workflow steps.\n');
 
   for (const connector of connectors) {
     const server = mcpServers.find(s => s.id === connector.mcp_server_id);
@@ -169,12 +174,24 @@ async function buildToolsDocumentation(
 
     if (tools.length === 0) continue;
 
-    sections.push(`### ${connector.display_name} (\`${serverName}\`)\n`);
+    totalToolCount += tools.length;
+    const connectorType = connector.connector_type === 'external_mcp' ? 'External MCP' :
+                          connector.connector_type === 'internal_mcp' ? 'Internal MCP' :
+                          connector.connector_type === 'internal_agent' ? 'A2A Agent' :
+                          connector.connector_type === 'external_agent' ? 'External Agent' : 'Unknown';
+
+    sections.push(`### ${connector.display_name}`);
+    sections.push(`- **Server Name:** \`${serverName}\``);
+    sections.push(`- **Type:** ${connectorType}`);
+    sections.push(`- **Tools:** ${tools.length}`);
+    sections.push('');
 
     for (const tool of tools) {
       const fullName = `${serverName}.${tool.name}`;
-      sections.push(`#### \`${fullName}\`\n`);
-      sections.push(`${tool.description}\n`);
+      sections.push(`#### \`${fullName}\``);
+      sections.push('');
+      sections.push(`**Description:** ${tool.description}`);
+      sections.push('');
 
       // Detect notification tools by name/description
       const notificationType = detectNotificationType(tool.name, tool.description);
@@ -190,21 +207,68 @@ async function buildToolsDocumentation(
         });
       }
 
+      // Format input schema with property descriptions
       if (tool.inputSchema && Object.keys(tool.inputSchema).length > 0) {
         sections.push('**Input Schema:**');
         sections.push('```json');
         sections.push(JSON.stringify(tool.inputSchema, null, 2));
-        sections.push('```\n');
+        sections.push('```');
+
+        // Add human-readable parameter list
+        const props = (tool.inputSchema as { properties?: Record<string, { type?: string; description?: string }> }).properties;
+        const required = (tool.inputSchema as { required?: string[] }).required || [];
+        if (props && Object.keys(props).length > 0) {
+          sections.push('');
+          sections.push('**Parameters:**');
+          for (const [propName, propDef] of Object.entries(props)) {
+            const isRequired = required.includes(propName);
+            const typeStr = propDef.type || 'any';
+            const desc = propDef.description || '';
+            sections.push(`- \`${propName}\` (${typeStr}${isRequired ? ', required' : ''}): ${desc}`);
+          }
+        }
+        sections.push('');
       }
 
       if (tool.outputSchema && Object.keys(tool.outputSchema).length > 0) {
         sections.push('**Output Schema:**');
         sections.push('```json');
         sections.push(JSON.stringify(tool.outputSchema, null, 2));
-        sections.push('```\n');
+        sections.push('```');
+        sections.push('');
       }
+
+      // Add usage example
+      sections.push('**Usage Example:**');
+      sections.push('```yaml');
+      sections.push('steps:');
+      sections.push(`  - id: use_${tool.name.replace(/[^a-zA-Z0-9]/g, '_')}`);
+      sections.push('    type: action');
+      sections.push(`    name: "Use ${tool.name}"`);
+      sections.push(`    tool: "${fullName}"`);
+
+      const props = (tool.inputSchema as { properties?: Record<string, { type?: string }> }).properties;
+      if (props && Object.keys(props).length > 0) {
+        sections.push('    input:');
+        for (const [propName, propDef] of Object.entries(props)) {
+          const exampleValue = propDef.type === 'string' ? '"example"' :
+                               propDef.type === 'number' ? '123' :
+                               propDef.type === 'boolean' ? 'true' :
+                               propDef.type === 'array' ? '[]' :
+                               propDef.type === 'object' ? '{}' : '"value"';
+          sections.push(`      ${propName}: ${exampleValue}`);
+        }
+      }
+      sections.push('```');
+      sections.push('');
+      sections.push('---');
+      sections.push('');
     }
   }
+
+  // Add summary at the top
+  const summary = `**Total Connectors:** ${connectors.length} | **Total Tools:** ${totalToolCount}\n`;
+  sections.splice(2, 0, summary);
 
   return { toolsDocs: sections.join('\n'), notificationTools };
 }
@@ -314,7 +378,7 @@ async function fetchToolsForConnector(
   server: MCPServer | undefined,
   supabase: SupabaseClient
 ): Promise<MCPTool[]> {
-  // For internal MCP connectors, fetch tools from the tools table
+  // For internal MCP connectors, fetch tools from the tools table via server_name
   if (connector.connector_type === 'internal_mcp' && server) {
     const { data: tools } = await supabase
       .from('tools')
@@ -329,19 +393,83 @@ async function fetchToolsForConnector(
     }));
   }
 
-  // For external MCP connectors, we'd need to call the MCP server
-  // For now, return empty - tools would be fetched dynamically
-  if (connector.connector_type === 'external_mcp') {
+  // For external MCP connectors, fetch tools from mcp_server_tools table
+  if (connector.connector_type === 'external_mcp' && connector.mcp_server_id) {
+    const { data: serverTools } = await supabase
+      .from('mcp_server_tools')
+      .select(`
+        original_name,
+        original_description,
+        is_enabled,
+        tool:tools (
+          name,
+          description,
+          input_schema,
+          output_schema
+        )
+      `)
+      .eq('mcp_server_id', connector.mcp_server_id)
+      .eq('is_enabled', true);
+
+    if (serverTools && serverTools.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return serverTools.map((st: any) => {
+        // tool can be an array or single object depending on Supabase version
+        const tool = Array.isArray(st.tool) ? st.tool[0] : st.tool;
+        return {
+          name: tool?.name || st.original_name,
+          description: tool?.description || st.original_description || '',
+          inputSchema: tool?.input_schema || {},
+          outputSchema: tool?.output_schema || {},
+        };
+      });
+    }
+
+    // Fallback if no tools found
     return [{
       name: '*',
-      description: `External MCP server at ${connector.external_url}. Tools are fetched dynamically.`,
+      description: `External MCP server at ${connector.external_url}. Tools are fetched dynamically at runtime.`,
       inputSchema: {},
       outputSchema: {},
     }];
   }
 
-  // For A2A agents
+  // For A2A agents (internal or external)
   if (connector.connector_type === 'internal_agent' || connector.connector_type === 'external_agent') {
+    // Try to fetch agent's skills/tools if available
+    if (connector.mcp_server_id) {
+      const { data: agentTools } = await supabase
+        .from('mcp_server_tools')
+        .select(`
+          original_name,
+          original_description,
+          is_enabled,
+          tool:tools (
+            name,
+            description,
+            input_schema,
+            output_schema
+          )
+        `)
+        .eq('mcp_server_id', connector.mcp_server_id)
+        .eq('is_enabled', true);
+
+      if (agentTools && agentTools.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return agentTools.map((st: any) => {
+          // tool can be an array or single object depending on Supabase version
+          const tool = Array.isArray(st.tool) ? st.tool[0] : st.tool;
+          return {
+            name: tool?.name || st.original_name,
+            description: tool?.description || st.original_description || '',
+            inputSchema: tool?.input_schema || {},
+            outputSchema: tool?.output_schema || {},
+          };
+        });
+      }
+    }
+
+    // Default agent invoke tool
     return [{
       name: 'invoke',
       description: `Invoke the ${connector.display_name} agent with a task.`,
@@ -349,15 +477,15 @@ async function fetchToolsForConnector(
         type: 'object',
         properties: {
           task: { type: 'string', description: 'The task to perform' },
-          context: { type: 'object', description: 'Additional context' },
+          context: { type: 'object', description: 'Additional context for the agent' },
         },
         required: ['task'],
       },
       outputSchema: {
         type: 'object',
         properties: {
-          result: { type: 'string' },
-          artifacts: { type: 'array' },
+          result: { type: 'string', description: 'The agent response' },
+          artifacts: { type: 'array', description: 'Any artifacts produced by the agent' },
         },
       },
     }];
