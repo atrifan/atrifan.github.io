@@ -1178,3 +1178,270 @@ export interface OAuthTokenUpdate {
 /** Server type for OAuth token lookup */
 export type OAuthServerType = 'rest_api' | 'graphql' | 'mcp' | 'a2a' | 'rag';
 
+// ============ Automation Tables ============
+
+/** Automation status enum */
+export type AutomationStatus = 'draft' | 'active' | 'paused' | 'archived';
+
+/** Schedule type enum */
+export type ScheduleType = 'manual' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'cron';
+
+/** Last run status for display */
+export type LastRunStatus = 'success' | 'warning' | 'error' | null;
+
+/** Execution status */
+export type ExecutionStatus = 'pending' | 'waiting_input' | 'running' | 'paused' | 'completed' | 'failed';
+
+/** Log level */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/**
+ * Automation record in Supabase
+ * Table: automations
+ */
+export interface AutomationRow {
+  id: string;
+  user_id: string;
+  name: string;
+  display_name: string | null;
+  description: string | null;
+  category: string;
+  flow_definition: { nodes: unknown[]; edges: unknown[] };
+  mermaid_diagram: string | null;
+  yaml_definition: string | null;
+  typescript_code: string | null;
+  workflow_version: number;
+  model_id: string;
+  personality_ids: string[];
+  schedule_type: ScheduleType;
+  schedule_config: Record<string, unknown>;
+  trigger_config: Record<string, unknown>;
+  cron_expression: string | null;
+  required_inputs: Record<string, RequiredInputConfig>;
+  output_config: OutputConfigItem[];
+  next_run_at: string | null;
+  status: AutomationStatus;
+  last_run_status: LastRunStatus;
+  last_run_at: string | null;
+  last_run_message: string | null;
+  total_runs: number;
+  successful_runs: number;
+  total_tokens_used: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Required input configuration */
+export interface RequiredInputConfig {
+  value?: unknown;
+  sensitive?: boolean;
+  human_input?: boolean;
+  description?: string;
+  type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
+}
+
+/** Output configuration item */
+export interface OutputConfigItem {
+  type: 'email' | 'slack' | 'webhook' | 'push' | 'automation';
+  [key: string]: unknown;
+}
+
+/**
+ * Insert DTO for automations table
+ */
+export interface AutomationInsert {
+  user_id: string;
+  name: string;
+  display_name?: string;
+  description?: string;
+  category?: string;
+  flow_definition?: { nodes: unknown[]; edges: unknown[] };
+  mermaid_diagram?: string;
+  yaml_definition?: string;
+  typescript_code?: string;
+  workflow_version?: number;
+  model_id?: string;
+  personality_ids?: string[];
+  schedule_type?: ScheduleType;
+  schedule_config?: Record<string, unknown>;
+  trigger_config?: Record<string, unknown>;
+  cron_expression?: string;
+  required_inputs?: Record<string, RequiredInputConfig>;
+  output_config?: OutputConfigItem[];
+  next_run_at?: string;
+  status?: AutomationStatus;
+}
+
+/**
+ * Update DTO for automations table
+ */
+export interface AutomationUpdate {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  category?: string;
+  flow_definition?: { nodes: unknown[]; edges: unknown[] };
+  mermaid_diagram?: string;
+  yaml_definition?: string;
+  typescript_code?: string;
+  workflow_version?: number;
+  model_id?: string;
+  personality_ids?: string[];
+  schedule_type?: ScheduleType;
+  schedule_config?: Record<string, unknown>;
+  trigger_config?: Record<string, unknown>;
+  cron_expression?: string;
+  required_inputs?: Record<string, RequiredInputConfig>;
+  output_config?: OutputConfigItem[];
+  next_run_at?: string;
+  status?: AutomationStatus;
+  last_run_status?: LastRunStatus;
+  last_run_at?: string;
+  last_run_message?: string;
+}
+
+/**
+ * Automation execution record
+ * Table: automation_executions
+ */
+export interface AutomationExecutionRow {
+  id: string;
+  automation_id: string;
+  user_id: string;
+  status: ExecutionStatus;
+  trigger_type: string;
+  triggered_by: string | null;
+  collected_inputs: Record<string, unknown>;
+  pending_inputs: PendingInputItem[];
+  current_step: string | null;
+  context: Record<string, unknown>;
+  output_results: OutputResultItem[];
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
+/** Pending input item */
+export interface PendingInputItem {
+  fieldName: string;
+  stepId?: string;
+  toolName?: string;
+  description?: string;
+  type?: string;
+  required: boolean;
+}
+
+/** Output result item */
+export interface OutputResultItem {
+  type: string;
+  success: boolean;
+  sentAt?: string;
+  error?: string;
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Insert DTO for automation_executions table
+ */
+export interface AutomationExecutionInsert {
+  automation_id: string;
+  user_id: string;
+  trigger_type: string;
+  triggered_by?: string;
+  collected_inputs?: Record<string, unknown>;
+  pending_inputs?: PendingInputItem[];
+  status?: ExecutionStatus;
+}
+
+/**
+ * Update DTO for automation_executions table
+ */
+export interface AutomationExecutionUpdate {
+  status?: ExecutionStatus;
+  current_step?: string;
+  collected_inputs?: Record<string, unknown>;
+  pending_inputs?: PendingInputItem[];
+  context?: Record<string, unknown>;
+  output_results?: OutputResultItem[];
+  error?: string;
+  completed_at?: string;
+}
+
+/**
+ * Automation log entry
+ * Table: automation_logs
+ */
+export interface AutomationLogRow {
+  id: string;
+  execution_id: string;
+  automation_id: string;
+  timestamp: string;
+  level: LogLevel;
+  step_id: string | null;
+  step_name: string | null;
+  message: string;
+  data: Record<string, unknown> | null;
+  status: string | null;
+  duration_ms: number | null;
+}
+
+/**
+ * Insert DTO for automation_logs table
+ */
+export interface AutomationLogInsert {
+  execution_id: string;
+  automation_id: string;
+  level?: LogLevel;
+  step_id?: string;
+  step_name?: string;
+  message: string;
+  data?: Record<string, unknown>;
+  status?: string;
+  duration_ms?: number;
+}
+
+/**
+ * Human input request record
+ * Table: automation_human_requests
+ */
+export interface AutomationHumanRequestRow {
+  id: string;
+  execution_id: string;
+  automation_id: string;
+  user_id: string;
+  request_type: 'input' | 'approval' | 'choice';
+  field_name: string | null;
+  message: string | null;
+  choices: unknown[] | null;
+  notification_channels: string[];
+  notification_sent: boolean;
+  response: string | null;
+  responded_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Insert DTO for automation_human_requests table
+ */
+export interface AutomationHumanRequestInsert {
+  execution_id: string;
+  automation_id: string;
+  user_id: string;
+  request_type: 'input' | 'approval' | 'choice';
+  field_name?: string;
+  message?: string;
+  choices?: unknown[];
+  notification_channels?: string[];
+  expires_at?: string;
+}
+
+/**
+ * Update DTO for automation_human_requests table
+ */
+export interface AutomationHumanRequestUpdate {
+  notification_sent?: boolean;
+  response?: string;
+  responded_at?: string;
+}

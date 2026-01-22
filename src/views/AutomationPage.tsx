@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { View } from '@adobe/react-spectrum';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Footer } from '../components/Footer';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
@@ -14,6 +15,13 @@ import { SettingsPanel, SettingsPanelMode } from '../components/SettingsPanel';
 import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, HistoryMatchEvent } from '../components/RetrievalEventsDisplay';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
+import { parseMermaid, mermaidToWorkflow, workflowToYamlString, ScheduleConfig } from '../lib/automation/mermaid-to-yaml';
+import { WorkflowDefinition } from '../lib/automation/types';
+
+// Supabase client for realtime subscriptions
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 interface AutomationPageProps {
   isLoggedIn: boolean;
@@ -24,18 +32,65 @@ interface AutomationPageProps {
 interface Automation {
   id: string;
   name: string;
+  display_name: string | null;
   description: string;
+  category: string;
   mermaid_diagram: string;
+  yaml_definition: string | null;
   flow_definition: { nodes: FlowNode[]; edges: FlowEdge[] };
   typescript_code: string | null;
   model_id: string;
   personality_ids: string[];
   schedule_type: string;
   schedule_config: Record<string, unknown>;
+  trigger_config: Record<string, unknown> | null;
+  cron_expression: string | null;
+  required_inputs: Record<string, RequiredInputConfig> | null;
+  output_config: OutputConfigItem[] | null;
+  workflow_version: number;
   status: string;
+  last_run_status: 'success' | 'warning' | 'error' | null;
+  last_run_at: string | null;
+  last_run_message: string | null;
   total_runs: number;
   created_at: string;
   updated_at: string;
+}
+
+interface RequiredInputConfig {
+  value?: unknown;
+  sensitive?: boolean;
+  human_input?: boolean;
+  description?: string;
+  type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
+}
+
+interface OutputConfigItem {
+  type: 'email' | 'slack' | 'webhook' | 'push' | 'automation';
+  [key: string]: unknown;
+}
+
+interface AutomationExecution {
+  id: string;
+  automation_id: string;
+  status: 'pending' | 'waiting_input' | 'running' | 'paused' | 'completed' | 'failed';
+  trigger_type: string;
+  current_step: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+interface AutomationLog {
+  id: string;
+  execution_id: string;
+  timestamp: string;
+  level: 'debug' | 'info' | 'warn' | 'error';
+  step_id: string | null;
+  step_name: string | null;
+  message: string;
+  status: string | null;
+  duration_ms: number | null;
 }
 
 interface FlowNode {
@@ -132,13 +187,144 @@ interface MCPServer {
 //   5. Trigger the automation execution
 //   6. Return execution result or queue confirmation
 const SCHEDULE_OPTIONS = [
-  { id: 'manual', label: 'Manual', icon: '▶️' },
-  { id: 'daily', label: 'Daily', icon: '📅' },
-  { id: 'weekly', label: 'Weekly', icon: '📆' },
-  { id: 'monthly', label: 'Monthly', icon: '🗓️' },
-  { id: 'cron', label: 'Cron', icon: '⚙️' },
-  { id: 'webhook', label: 'Webhook', icon: '🔗', comingSoon: true },
+  { id: 'manual', label: 'Manual', icon: '▶️', description: 'Run manually or via API' },
+  { id: 'daily', label: 'Daily', icon: '📅', description: 'Run every day at a specific time' },
+  { id: 'weekly', label: 'Weekly', icon: '📆', description: 'Run on specific days each week' },
+  { id: 'monthly', label: 'Monthly', icon: '🗓️', description: 'Run on specific days each month' },
+  { id: 'cron', label: 'Cron', icon: '⚙️', description: 'Custom cron expression' },
+  { id: 'webhook', label: 'Webhook', icon: '🔗', description: 'Trigger via HTTP webhook' },
 ];
+
+// Weekly frequency options
+const WEEKLY_FREQUENCY_OPTIONS = [
+  { id: 1, label: 'Every week' },
+  { id: 2, label: 'Every 2 weeks' },
+  { id: 3, label: 'Every 3 weeks' },
+  { id: 4, label: 'Every 4 weeks' },
+];
+
+// Days of week
+const DAYS_OF_WEEK = [
+  { id: 0, label: 'Sun', full: 'Sunday' },
+  { id: 1, label: 'Mon', full: 'Monday' },
+  { id: 2, label: 'Tue', full: 'Tuesday' },
+  { id: 3, label: 'Wed', full: 'Wednesday' },
+  { id: 4, label: 'Thu', full: 'Thursday' },
+  { id: 5, label: 'Fri', full: 'Friday' },
+  { id: 6, label: 'Sat', full: 'Saturday' },
+];
+
+// Validate cron expression (basic validation)
+const validateCron = (cron: string): { valid: boolean; error?: string } => {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    return { valid: false, error: 'Cron must have 5 parts: minute hour day month weekday' };
+  }
+  const [minute, hour, day, month, weekday] = parts;
+
+  const validatePart = (part: string, min: number, max: number, name: string): string | null => {
+    if (part === '*') return null;
+    if (part.includes('/')) {
+      const [base, step] = part.split('/');
+      if (base !== '*' && (isNaN(Number(base)) || Number(base) < min || Number(base) > max)) {
+        return `Invalid ${name} base value`;
+      }
+      if (isNaN(Number(step)) || Number(step) < 1) {
+        return `Invalid ${name} step value`;
+      }
+      return null;
+    }
+    if (part.includes(',')) {
+      for (const p of part.split(',')) {
+        const num = Number(p);
+        if (isNaN(num) || num < min || num > max) {
+          return `Invalid ${name} value: ${p}`;
+        }
+      }
+      return null;
+    }
+    if (part.includes('-')) {
+      const [start, end] = part.split('-').map(Number);
+      if (isNaN(start) || isNaN(end) || start < min || end > max || start > end) {
+        return `Invalid ${name} range`;
+      }
+      return null;
+    }
+    const num = Number(part);
+    if (isNaN(num) || num < min || num > max) {
+      return `Invalid ${name}: must be ${min}-${max}`;
+    }
+    return null;
+  };
+
+  const errors = [
+    validatePart(minute, 0, 59, 'minute'),
+    validatePart(hour, 0, 23, 'hour'),
+    validatePart(day, 1, 31, 'day'),
+    validatePart(month, 1, 12, 'month'),
+    validatePart(weekday, 0, 6, 'weekday'),
+  ].filter(Boolean);
+
+  if (errors.length > 0) {
+    return { valid: false, error: errors[0] || 'Invalid cron expression' };
+  }
+  return { valid: true };
+};
+
+// Generate cron from schedule config
+const generateCronFromConfig = (
+  scheduleType: string,
+  hour: number,
+  minute: number,
+  selectedDays: number[],
+  selectedMonthDays: number[],
+  weeklyFrequency: number
+): string => {
+  switch (scheduleType) {
+    case 'daily':
+      return `${minute} ${hour} * * *`;
+    case 'weekly':
+      if (selectedDays.length === 0) return `${minute} ${hour} * * 1`; // Default Monday
+      // For frequency > 1, we'd need external scheduling logic, but cron can represent the days
+      return `${minute} ${hour} * * ${selectedDays.join(',')}`;
+    case 'monthly':
+      if (selectedMonthDays.length === 0) return `${minute} ${hour} 1 * *`; // Default 1st
+      return `${minute} ${hour} ${selectedMonthDays.join(',')} * *`;
+    default:
+      return '0 0 * * *';
+  }
+};
+
+const DEFAULT_CATEGORY_OPTIONS = [
+  { id: 'general', label: 'General', icon: '📁' },
+  { id: 'marketing', label: 'Marketing', icon: '📣' },
+  { id: 'sales', label: 'Sales', icon: '💰' },
+  { id: 'operations', label: 'Operations', icon: '⚙️' },
+  { id: 'support', label: 'Support', icon: '🎧' },
+  { id: 'analytics', label: 'Analytics', icon: '📊' },
+  { id: 'development', label: 'Development', icon: '💻' },
+  { id: 'hr', label: 'HR', icon: '👥' },
+  { id: 'finance', label: 'Finance', icon: '💵' },
+];
+
+// Helper to generate snake_case ID from display name
+const toSnakeCase = (str: string): string => {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+};
+
+// Generate a simple UUID v4
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPro, isPlus }) => {
   // Core state
@@ -182,19 +368,64 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
 
   // UI state
-  const [view, setView] = useState<'list' | 'builder' | 'history' | 'code'>('list');
+  const [view, setView] = useState<'list' | 'builder' | 'history' | 'code' | 'yaml' | 'logs'>('list');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [automationName, setAutomationName] = useState('');
+  const [automationDisplayName, setAutomationDisplayName] = useState('');
   const [automationDescription, setAutomationDescription] = useState('');
+  const [automationCategory, setAutomationCategory] = useState('general');
   const [selectedSchedule, setSelectedSchedule] = useState('manual');
+  const [scheduleHour, setScheduleHour] = useState(9);
+  const [scheduleMinute, setScheduleMinute] = useState(0);
+  const [scheduleDays, setScheduleDays] = useState<number[]>([1]); // Monday default
+  const [scheduleMonthDays, setScheduleMonthDays] = useState<number[]>([1]); // 1st default
+  const [weeklyFrequency, setWeeklyFrequency] = useState(1);
+  const [cronExpression, setCronExpression] = useState('0 9 * * 1');
+  const [cronError, setCronError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportedCode, setExportedCode] = useState('');
+  const [exportedYaml, setExportedYaml] = useState('');
+  const [workflowDef, setWorkflowDef] = useState<WorkflowDefinition | null>(null);
   const [lastTokenUsage, setLastTokenUsage] = useState<{ input: number; output: number } | null>(null);
   const [toolInfoModal, setToolInfoModal] = useState<{ server: string; tools: MCPTool[] } | null>(null);
 
+  // Builder UI state
+  const [tempAutomationId, setTempAutomationId] = useState<string | null>(null);
+  const [showYamlPanel, setShowYamlPanel] = useState(false);
+  const [categories, setCategories] = useState<Array<{ id: string; label: string; icon: string; isSystem?: boolean }>>([...DEFAULT_CATEGORY_OPTIONS]);
+  // Version history for mermaid diagrams (from AI responses)
+  const [diagramVersions, setDiagramVersions] = useState<Array<{ diagram: string; yaml: string; timestamp: number; prompt: string }>>([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(-1);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('📦');
+
+  // Execution state
+  const [currentExecution, setCurrentExecution] = useState<AutomationExecution | null>(null);
+  const [executionLogs, setExecutionLogs] = useState<AutomationLog[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [showRunModal, setShowRunModal] = useState(false);
+  const [runInputs, setRunInputs] = useState<Record<string, unknown>>({});
+  const executionSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const logsSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+
+  // Running instances state (for list view)
+  const [runningExecutions, setRunningExecutions] = useState<Record<string, AutomationExecution[]>>({});
+
   // No connectors error modal state
   const [showNoConnectorsModal, setShowNoConnectorsModal] = useState(false);
+
+  // Workflow rules state
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [workflowRules, setWorkflowRules] = useState<string>('');
+  const [isLoadingRules, setIsLoadingRules] = useState(false);
+
+  // Manual paste areas state
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteYaml, setPasteYaml] = useState('');
+  const [pasteMermaid, setPasteMermaid] = useState('');
 
   // Settings panel state
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
@@ -246,20 +477,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     return mcpTools.filter(tool => selectedServers.has(tool.server));
   }, [mcpTools, selectedServers]);
 
-  // Group automations into folders by schedule type (or use a default folder)
+  // Group automations into folders by category
   const automationFolders = useMemo(() => {
     const folders: Record<string, Automation[]> = {};
     automations.forEach(auto => {
-      const folderName = auto.schedule_type === 'manual' ? '📁 Manual' :
-                         auto.schedule_type === 'daily' ? '📅 Daily' :
-                         auto.schedule_type === 'weekly' ? '📆 Weekly' :
-                         auto.schedule_type === 'monthly' ? '🗓️ Monthly' :
-                         auto.schedule_type === 'cron' ? '⚙️ Cron' : '📁 Other';
+      const category = auto.category || 'general';
+      const categoryOption = categories.find(c => c.id === category);
+      const folderName = categoryOption ? `${categoryOption.icon} ${categoryOption.label}` : '📁 General';
       if (!folders[folderName]) folders[folderName] = [];
       folders[folderName].push(auto);
     });
     return Object.entries(folders).map(([name, autos]) => ({ name, automations: autos }));
-  }, [automations]);
+  }, [automations, categories]);
 
   const toggleServerExpand = (server: string) => {
     setExpandedServers(prev => {
@@ -330,6 +559,44 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   }, [selectedModel, currentAutomation]);
 
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories');
+        if (response.ok) {
+          const data = await response.json();
+          const fetchedCategories = (data.categories || []).map((c: { id?: string; name: string; icon: string; is_system?: boolean }) => ({
+            id: c.id || c.name.toLowerCase().replace(/\s+/g, '_'),
+            label: c.name,
+            icon: c.icon,
+            isSystem: c.is_system,
+          }));
+          // Merge with defaults, avoiding duplicates
+          const merged = [...DEFAULT_CATEGORY_OPTIONS];
+          fetchedCategories.forEach((fc: { id: string; label: string; icon: string; isSystem?: boolean }) => {
+            if (!merged.find(m => m.id === fc.id)) {
+              merged.push(fc);
+            }
+          });
+          setCategories(merged);
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Auto-generate snake_case name from display name
+  const handleDisplayNameChange = (value: string) => {
+    setAutomationDisplayName(value);
+    // Only auto-generate if name hasn't been manually edited or is empty
+    if (!automationName || automationName === toSnakeCase(automationDisplayName)) {
+      setAutomationName(toSnakeCase(value));
+    }
+  };
+
   // Fetch data on mount
   useEffect(() => {
     applySEO('automation');
@@ -351,9 +618,31 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       if (response.ok) {
         const data = await response.json();
         setAutomations(data.automations || []);
+        // Also fetch running executions
+        fetchRunningExecutions(data.automations || []);
       }
     } catch (error) {
       console.error('Failed to fetch automations:', error);
+    }
+  };
+
+  const fetchRunningExecutions = async (autos: Automation[]) => {
+    if (autos.length === 0) return;
+    try {
+      const response = await fetch('/api/ai/automations/executions?status=running,waiting_input,pending');
+      if (response.ok) {
+        const data = await response.json();
+        const executions = data.executions || [];
+        // Group by automation_id
+        const grouped: Record<string, AutomationExecution[]> = {};
+        for (const exec of executions) {
+          if (!grouped[exec.automation_id]) grouped[exec.automation_id] = [];
+          grouped[exec.automation_id].push(exec);
+        }
+        setRunningExecutions(grouped);
+      }
+    } catch (error) {
+      console.error('Failed to fetch running executions:', error);
     }
   };
 
@@ -621,8 +910,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // Save a single automation setting
   const saveAutomationSetting = async (key: string, value: boolean | string) => {
-    // Don't save until initial settings are loaded
-    if (!settingsLoadedRef.current) return;
+    // Don't save until initial settings are loaded and user is authenticated
+    if (!settingsLoadedRef.current || !canAccessPro) return;
 
     try {
       await fetch('/api/preferences', {
@@ -844,7 +1133,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
       if (response.ok) {
         const data = await response.json();
-        if (data.mermaid) setMermaidDiagram(data.mermaid);
+        if (data.mermaid) {
+          setMermaidDiagram(data.mermaid);
+          // Add to version history
+          const newVersion = {
+            diagram: data.mermaid,
+            yaml: '', // Will be generated when user clicks generate
+            timestamp: Date.now(),
+            prompt: prompt,
+          };
+          setDiagramVersions(prev => [...prev, newVersion]);
+          setCurrentVersionIndex(prev => prev + 1);
+        }
         if (data.explanation) setLastExplanation(data.explanation);
         if (data.usage) setLastTokenUsage(data.usage);
 
@@ -890,11 +1190,61 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const saveAutomation = async () => {
     if (!automationName.trim()) return;
 
+    // Build schedule config
+    const scheduleConfig = {
+      hour: scheduleHour,
+      minute: scheduleMinute,
+      days: scheduleDays,
+      monthDays: scheduleMonthDays,
+      weeklyFrequency: weeklyFrequency,
+    };
+
+    // Generate cron expression based on schedule type
+    let generatedCron: string | null = null;
+    switch (selectedSchedule) {
+      case 'daily':
+        generatedCron = `${scheduleMinute} ${scheduleHour} * * *`;
+        break;
+      case 'weekly':
+        generatedCron = `${scheduleMinute} ${scheduleHour} * * ${scheduleDays.length > 0 ? scheduleDays.join(',') : '1'}`;
+        break;
+      case 'monthly':
+        generatedCron = `${scheduleMinute} ${scheduleHour} ${scheduleMonthDays.length > 0 ? scheduleMonthDays.join(',') : '1'} * *`;
+        break;
+      case 'cron':
+        generatedCron = cronExpression;
+        break;
+    }
+
     try {
       const method = currentAutomation ? 'PUT' : 'POST';
       const body = currentAutomation
-        ? { id: currentAutomation.id, name: automationName, description: automationDescription, mermaid_diagram: mermaidDiagram, model_id: selectedModel, personality_ids: activePersonalityIds, schedule_type: selectedSchedule }
-        : { name: automationName, description: automationDescription, model_id: selectedModel, personality_ids: activePersonalityIds };
+        ? {
+            id: currentAutomation.id,
+            name: automationName,
+            display_name: automationDisplayName || automationName,
+            description: automationDescription,
+            category: automationCategory,
+            mermaid_diagram: mermaidDiagram,
+            yaml_definition: exportedYaml || null,
+            model_id: selectedModel,
+            personality_ids: activePersonalityIds,
+            schedule_type: selectedSchedule,
+            schedule_config: scheduleConfig,
+            cron_expression: generatedCron,
+            workflow_version: 1,
+          }
+        : {
+            name: automationName,
+            display_name: automationDisplayName || automationName,
+            description: automationDescription,
+            category: automationCategory,
+            model_id: selectedModel,
+            personality_ids: activePersonalityIds,
+            schedule_type: selectedSchedule,
+            schedule_config: scheduleConfig,
+            cron_expression: generatedCron,
+          };
 
       const response = await fetch('/api/ai/automations', {
         method,
@@ -910,6 +1260,191 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       }
     } catch (error) {
       console.error('Failed to save automation:', error);
+    }
+  };
+
+  // Run automation
+  const runAutomation = async (automation: Automation, inputs?: Record<string, unknown>) => {
+    if (!automation.yaml_definition) {
+      alert('Please save the automation with a YAML definition first');
+      return;
+    }
+
+    setIsExecuting(true);
+    setExecutionLogs([]);
+    setCurrentExecution(null);
+
+    try {
+      // Start execution via API
+      const response = await fetch('/api/ai/automations/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          automationId: automation.id,
+          inputs: inputs || runInputs,
+          triggerType: 'manual',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to start execution');
+      }
+
+      const data = await response.json();
+      setCurrentExecution(data.execution);
+      setView('logs');
+
+      // Subscribe to realtime updates
+      subscribeToExecution(data.execution.id, automation.id);
+    } catch (error) {
+      console.error('Failed to run automation:', error);
+      alert(error instanceof Error ? error.message : 'Failed to run automation');
+      setIsExecuting(false);
+    }
+  };
+
+  // Subscribe to execution updates via Supabase Realtime
+  const subscribeToExecution = (executionId: string, automationId: string) => {
+    if (!supabase) {
+      console.warn('Supabase client not available for realtime');
+      return;
+    }
+
+    // Unsubscribe from previous subscriptions
+    executionSubscriptionRef.current?.unsubscribe();
+    logsSubscriptionRef.current?.unsubscribe();
+
+    // Subscribe to execution status changes
+    const executionChannel = supabase
+      .channel(`execution-${executionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'automation_executions',
+          filter: `id=eq.${executionId}`,
+        },
+        (payload) => {
+          const updated = payload.new as AutomationExecution;
+          setCurrentExecution(updated);
+
+          // Stop polling when execution completes
+          if (['completed', 'failed'].includes(updated.status)) {
+            setIsExecuting(false);
+            fetchAutomations(); // Refresh to get updated last_run_status
+          }
+        }
+      )
+      .subscribe();
+
+    executionSubscriptionRef.current = executionChannel;
+
+    // Subscribe to new log entries
+    const logsChannel = supabase
+      .channel(`logs-${executionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'automation_logs',
+          filter: `execution_id=eq.${executionId}`,
+        },
+        (payload) => {
+          const newLog = payload.new as AutomationLog;
+          setExecutionLogs((prev) => [...prev, newLog]);
+        }
+      )
+      .subscribe();
+
+    logsSubscriptionRef.current = logsChannel;
+  };
+
+  // Cleanup subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      executionSubscriptionRef.current?.unsubscribe();
+      logsSubscriptionRef.current?.unsubscribe();
+    };
+  }, []);
+
+  // Fetch logs for an automation (most recent execution)
+  const fetchLogs = async (automationId: string) => {
+    try {
+      const response = await fetch(`/api/ai/automations/${automationId}/logs`);
+      if (response.ok) {
+        const data = await response.json();
+        setExecutionLogs(data.logs || []);
+        setCurrentExecution(data.execution || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch logs:', error);
+    }
+  };
+
+  // Fetch workflow rules documentation
+  const fetchWorkflowRules = async () => {
+    setIsLoadingRules(true);
+    try {
+      const response = await fetch('/api/ai/automations/rules');
+      if (response.ok) {
+        const data = await response.json();
+        setWorkflowRules(data.rules || '');
+        setShowRulesModal(true);
+      } else {
+        console.error('Failed to fetch rules');
+      }
+    } catch (error) {
+      console.error('Failed to fetch rules:', error);
+    } finally {
+      setIsLoadingRules(false);
+    }
+  };
+
+  // Apply pasted YAML and Mermaid content
+  const applyPastedContent = () => {
+    if (pasteYaml.trim()) {
+      setExportedYaml(pasteYaml.trim());
+    }
+    if (pasteMermaid.trim()) {
+      setMermaidDiagram(pasteMermaid.trim());
+    }
+    setShowPasteModal(false);
+    setPasteYaml('');
+    setPasteMermaid('');
+    // Switch to builder view to see the changes
+    setView('builder');
+  };
+
+  // Get status icon for last run
+  const getStatusIcon = (status: 'success' | 'warning' | 'error' | null) => {
+    switch (status) {
+      case 'success':
+        return <span style={{ color: '#10b981' }}>●</span>;
+      case 'warning':
+        return <span style={{ color: '#f59e0b' }}>●</span>;
+      case 'error':
+        return <span style={{ color: '#ef4444' }}>●</span>;
+      default:
+        return <span style={{ color: '#6b7280' }}>○</span>;
+    }
+  };
+
+  // Get log level color
+  const getLogLevelColor = (level: string) => {
+    switch (level) {
+      case 'error':
+        return '#ef4444';
+      case 'warn':
+        return '#f59e0b';
+      case 'info':
+        return '#3b82f6';
+      case 'debug':
+        return '#6b7280';
+      default:
+        return '#9ca3af';
     }
   };
 
@@ -954,6 +1489,293 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       setIsExporting(false);
     }
   };
+
+  // Export to YAML (local, no API call needed)
+  const exportToYaml = useCallback(() => {
+    try {
+      // Parse the current mermaid diagram
+      const parsed = parseMermaid(mermaidDiagram);
+
+      // Build schedule config
+      const scheduleConfig: ScheduleConfig = {
+        scheduleType: selectedSchedule,
+        hour: scheduleHour,
+        minute: scheduleMinute,
+        days: scheduleDays,
+        monthDays: scheduleMonthDays,
+        weeklyFrequency: weeklyFrequency,
+        cronExpression: cronExpression,
+      };
+
+      // Convert to workflow definition with schedule config
+      const workflow = mermaidToWorkflow(parsed, {
+        name: automationName || currentAutomation?.name || 'Untitled Workflow',
+        description: automationDescription || currentAutomation?.description,
+      }, scheduleConfig);
+
+      // Store the workflow definition
+      setWorkflowDef(workflow);
+
+      // Convert to YAML string
+      const yamlString = workflowToYamlString(workflow);
+      setExportedYaml(yamlString);
+
+      // Open YAML panel in builder view (don't switch away)
+      if (view === 'builder') {
+        setShowYamlPanel(true);
+      } else {
+        // Switch to YAML view only if not in builder
+        setView('yaml');
+      }
+    } catch (error) {
+      console.error('Failed to export to YAML:', error);
+    }
+  }, [mermaidDiagram, automationName, automationDescription, currentAutomation, selectedSchedule, scheduleHour, scheduleMinute, scheduleDays, scheduleMonthDays, weeklyFrequency, cronExpression]);
+
+  // Regenerate Mermaid diagram from YAML
+  const regenerateMermaidFromYaml = useCallback(() => {
+    try {
+      if (!exportedYaml.trim()) return;
+
+      // Parse YAML to workflow definition
+      const lines = exportedYaml.split('\n');
+      const steps: Array<{ id: string; name: string; type: string; next?: string[] }> = [];
+      let currentStep: { id: string; name: string; type: string; next?: string[] } | null = null;
+      let inSteps = false;
+      let inTrigger = false;
+      let workflowName = automationDisplayName;
+      let triggerType = 'manual';
+      let triggerSchedule = '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        // Get workflow name
+        if (trimmed.startsWith('name:')) {
+          workflowName = trimmed.split(':')[1]?.trim().replace(/['"]/g, '') || workflowName;
+        }
+
+        // Check if we're in trigger section
+        if (trimmed === 'trigger:') {
+          inTrigger = true;
+          inSteps = false;
+          continue;
+        }
+
+        // Parse trigger
+        if (inTrigger && !trimmed.startsWith('-')) {
+          if (trimmed.startsWith('type:')) {
+            triggerType = trimmed.replace('type:', '').trim().replace(/['"]/g, '');
+          } else if (trimmed.startsWith('schedule:')) {
+            triggerSchedule = trimmed.replace('schedule:', '').trim().replace(/['"]/g, '');
+          } else if (trimmed.startsWith('method:')) {
+            // Webhook trigger
+            triggerType = 'webhook';
+          }
+        }
+
+        // Check if we're in steps section
+        if (trimmed === 'steps:') {
+          inSteps = true;
+          inTrigger = false;
+          continue;
+        }
+
+        if (inSteps) {
+          // New step starts with "- id:"
+          if (trimmed.startsWith('- id:')) {
+            if (currentStep) steps.push(currentStep);
+            currentStep = {
+              id: trimmed.replace('- id:', '').trim().replace(/['"]/g, ''),
+              name: '',
+              type: 'action',
+            };
+          } else if (currentStep) {
+            if (trimmed.startsWith('name:')) {
+              currentStep.name = trimmed.replace('name:', '').trim().replace(/['"]/g, '');
+            } else if (trimmed.startsWith('type:')) {
+              currentStep.type = trimmed.replace('type:', '').trim().replace(/['"]/g, '');
+            } else if (trimmed.startsWith('next:')) {
+              const nextVal = trimmed.replace('next:', '').trim();
+              if (nextVal.startsWith('[')) {
+                // Array format
+                currentStep.next = nextVal.replace(/[\[\]'"]/g, '').split(',').map(s => s.trim());
+              } else {
+                currentStep.next = [nextVal.replace(/['"]/g, '')];
+              }
+            }
+          }
+        }
+      }
+      if (currentStep) steps.push(currentStep);
+
+      // Update schedule settings from parsed trigger
+      if (triggerType === 'manual') {
+        setSelectedSchedule('manual');
+      } else if (triggerType === 'webhook') {
+        setSelectedSchedule('webhook');
+      } else if (triggerType === 'cron' && triggerSchedule) {
+        // Parse cron expression to determine schedule type
+        const cronParts = triggerSchedule.split(/\s+/);
+        if (cronParts.length === 5) {
+          const [minute, hour, day, month, weekday] = cronParts;
+
+          // Set hour and minute
+          if (hour !== '*') setScheduleHour(parseInt(hour) || 9);
+          if (minute !== '*') setScheduleMinute(parseInt(minute) || 0);
+
+          // Determine schedule type
+          if (day === '*' && month === '*' && weekday === '*') {
+            // Daily
+            setSelectedSchedule('daily');
+          } else if (day === '*' && month === '*' && weekday !== '*') {
+            // Weekly
+            setSelectedSchedule('weekly');
+            const days = weekday.split(',').map(d => parseInt(d)).filter(d => !isNaN(d));
+            if (days.length > 0) setScheduleDays(days);
+          } else if (day !== '*' && month === '*' && weekday === '*') {
+            // Monthly
+            setSelectedSchedule('monthly');
+            const monthDays = day.split(',').map(d => parseInt(d)).filter(d => !isNaN(d));
+            if (monthDays.length > 0) setScheduleMonthDays(monthDays);
+          } else {
+            // Complex cron - use cron mode
+            setSelectedSchedule('cron');
+            setCronExpression(triggerSchedule);
+          }
+        } else {
+          setSelectedSchedule('cron');
+          setCronExpression(triggerSchedule);
+        }
+      }
+
+      // Generate Mermaid from steps
+      if (steps.length > 0) {
+        let mermaid = 'flowchart TD\n';
+        mermaid += '  start([Start])\n';
+
+        for (const step of steps) {
+          const shape = step.type === 'condition' ? `{${step.name || step.id}}` : `[${step.name || step.id}]`;
+          mermaid += `  ${step.id}${shape}\n`;
+        }
+
+        mermaid += '  end_node([End])\n\n';
+
+        // Add connections
+        if (steps.length > 0) {
+          mermaid += `  start --> ${steps[0].id}\n`;
+        }
+
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i];
+          if (step.next && step.next.length > 0) {
+            for (const nextId of step.next) {
+              if (nextId && nextId !== 'null') {
+                mermaid += `  ${step.id} --> ${nextId}\n`;
+              }
+            }
+          } else if (i < steps.length - 1) {
+            mermaid += `  ${step.id} --> ${steps[i + 1].id}\n`;
+          } else {
+            mermaid += `  ${step.id} --> end_node\n`;
+          }
+        }
+
+        setMermaidDiagram(mermaid);
+        if (workflowName) setAutomationDisplayName(workflowName);
+      }
+    } catch (error) {
+      console.error('Failed to regenerate Mermaid from YAML:', error);
+    }
+  }, [exportedYaml, automationDisplayName]);
+
+  // Auto-update YAML when schedule settings change (if YAML exists)
+  useEffect(() => {
+    if (!exportedYaml || !showYamlPanel) return;
+
+    // Update the trigger section in the YAML
+    const lines = exportedYaml.split('\n');
+    const newLines: string[] = [];
+    let inTrigger = false;
+    let triggerUpdated = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (trimmed === 'trigger:') {
+        inTrigger = true;
+        newLines.push(line);
+
+        // Generate new trigger content based on schedule settings
+        let triggerType = selectedSchedule;
+        let schedule = '';
+
+        switch (selectedSchedule) {
+          case 'daily':
+            triggerType = 'cron';
+            schedule = `${scheduleMinute} ${scheduleHour} * * *`;
+            break;
+          case 'weekly':
+            triggerType = 'cron';
+            schedule = `${scheduleMinute} ${scheduleHour} * * ${scheduleDays.length > 0 ? scheduleDays.join(',') : '1'}`;
+            break;
+          case 'monthly':
+            triggerType = 'cron';
+            schedule = `${scheduleMinute} ${scheduleHour} ${scheduleMonthDays.length > 0 ? scheduleMonthDays.join(',') : '1'} * *`;
+            break;
+          case 'cron':
+            triggerType = 'cron';
+            schedule = cronExpression;
+            break;
+          case 'webhook':
+            triggerType = 'webhook';
+            break;
+          default:
+            triggerType = 'manual';
+        }
+
+        newLines.push(`  type: ${triggerType}`);
+        if (schedule) {
+          newLines.push(`  schedule: "${schedule}"`);
+        }
+        if (triggerType === 'webhook') {
+          newLines.push(`  method: POST`);
+        }
+
+        triggerUpdated = true;
+        continue;
+      }
+
+      if (inTrigger) {
+        // Skip old trigger content until we hit a new section
+        if (trimmed.startsWith('type:') || trimmed.startsWith('schedule:') || trimmed.startsWith('method:') || trimmed.startsWith('timezone:') || trimmed.startsWith('#')) {
+          continue;
+        }
+        // Check if we've hit a new section
+        if (!trimmed.startsWith(' ') && trimmed.endsWith(':') && !trimmed.startsWith('-')) {
+          inTrigger = false;
+          newLines.push('');
+          newLines.push(line);
+          continue;
+        }
+        if (trimmed === '' || trimmed.startsWith('#')) {
+          continue;
+        }
+        inTrigger = false;
+      }
+
+      newLines.push(line);
+    }
+
+    if (triggerUpdated) {
+      const newYaml = newLines.join('\n');
+      if (newYaml !== exportedYaml) {
+        setExportedYaml(newYaml);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSchedule, scheduleHour, scheduleMinute, scheduleDays, scheduleMonthDays, cronExpression, showYamlPanel]);
 
   // Delete automation
   const deleteAutomation = async (id: string) => {
@@ -1042,27 +1864,85 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // Start new automation
   const startNew = () => {
+    const newId = generateUUID();
+    const timestamp = Date.now();
+    const defaultDisplayName = `Automation ${timestamp}`;
+    const defaultName = `automation_${timestamp}`;
+
+    setTempAutomationId(newId);
     setCurrentAutomation(null);
     setMermaidDiagram('flowchart TD\n  start([Start]) --> end_node([End])');
     setPromptHistory([]);
     setExportHistory([]);
     setExportedCode('');
-    setAutomationName('');
+    setExportedYaml('');
+    setWorkflowDef(null);
+    setAutomationName(defaultName);
+    setAutomationDisplayName(defaultDisplayName);
     setAutomationDescription('');
+    setAutomationCategory('general');
+    setShowYamlPanel(false);
+    setDiagramVersions([]);
+    setCurrentVersionIndex(-1);
+    setIsEditingName(false);
     setView('builder');
+
+    // Update URL with temp ID (without page reload)
+    window.history.pushState({}, '', `/automation?id=${newId}`);
   };
 
   // Load automation
   const loadAutomation = (auto: Automation) => {
+    setTempAutomationId(null); // Clear temp ID when loading existing
     setCurrentAutomation(auto);
     setMermaidDiagram(auto.mermaid_diagram || 'flowchart TD\n  start([Start]) --> end_node([End])');
     setAutomationName(auto.name);
+    setAutomationDisplayName(auto.display_name || auto.name);
     setAutomationDescription(auto.description || '');
+    setAutomationCategory(auto.category || 'general');
     setSelectedModel(auto.model_id);
     setActivePersonalityIds(auto.personality_ids || []);
-    setSelectedSchedule(auto.schedule_type);
+    setSelectedSchedule(auto.schedule_type || 'manual');
+
+    // Load schedule config if available
+    if (auto.schedule_config) {
+      const config = auto.schedule_config;
+      if (typeof config.hour === 'number') setScheduleHour(config.hour);
+      if (typeof config.minute === 'number') setScheduleMinute(config.minute);
+      if (Array.isArray(config.days)) setScheduleDays(config.days as number[]);
+      if (Array.isArray(config.monthDays)) setScheduleMonthDays(config.monthDays as number[]);
+      if (typeof config.weeklyFrequency === 'number') setWeeklyFrequency(config.weeklyFrequency);
+    }
+    if (auto.cron_expression) {
+      setCronExpression(auto.cron_expression);
+    }
+
     setExportedCode(auto.typescript_code || '');
+    setExportedYaml(auto.yaml_definition || '');
+    setShowYamlPanel(false);
+    // Parse YAML to workflow definition if available
+    if (auto.yaml_definition) {
+      try {
+        const parsed = parseMermaid(auto.mermaid_diagram || '');
+        const scheduleConfig: ScheduleConfig = {
+          scheduleType: auto.schedule_type || 'manual',
+          hour: (auto.schedule_config?.hour as number) || 9,
+          minute: (auto.schedule_config?.minute as number) || 0,
+          days: (auto.schedule_config?.days as number[]) || [1],
+          monthDays: (auto.schedule_config?.monthDays as number[]) || [1],
+          cronExpression: auto.cron_expression || undefined,
+        };
+        const workflow = mermaidToWorkflow(parsed, { name: auto.name, description: auto.description }, scheduleConfig);
+        setWorkflowDef(workflow);
+      } catch {
+        setWorkflowDef(null);
+      }
+    } else {
+      setWorkflowDef(null);
+    }
     setView('builder');
+    // Update URL with automation ID
+    window.history.pushState({}, '', `/automation?id=${auto.id}`);
     // Fetch prompt and export history for this automation
     fetchPromptHistory(auto.id);
     fetchExportHistory(auto.id);
@@ -1086,6 +1966,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   return (
     <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
+      {/* Show main explorer UI when NOT in builder view */}
+      {view !== 'builder' && (
       <View maxWidth="56rem" marginX="auto">
         <div style={{ marginBottom: '1.5rem' }}><BackToTools /></div>
 
@@ -1118,9 +2000,60 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         {/* View Tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <button onClick={() => setView('list')} style={{ background: view === 'list' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>📁 My Automations</button>
-          <button onClick={() => setView('builder')} style={{ background: view === 'builder' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>🔧 Builder</button>
+          <button onClick={startNew} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>🔧 New Automation</button>
           {currentAutomation && <button onClick={() => setView('history')} style={{ background: view === 'history' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>📜 Prompt History</button>}
           {exportedCode && <button onClick={() => setView('code')} style={{ background: view === 'code' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>💻 Code</button>}
+          {currentAutomation && (
+            <button
+              onClick={() => { fetchLogs(currentAutomation.id); setView('logs'); }}
+              style={{
+                background: view === 'logs' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
+                border: view === 'logs' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                padding: '0.5rem 1rem',
+                color: view === 'logs' ? '#3b82f6' : '#fff',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+            >
+              📋 Logs {currentAutomation.last_run_status && getStatusIcon(currentAutomation.last_run_status)}
+            </button>
+          )}
+
+          {/* Run Button */}
+          {currentAutomation && currentAutomation.yaml_definition && (
+            <button
+              onClick={() => {
+                // If there are required inputs with human_input flag, show modal
+                const hasHumanInputs = currentAutomation.required_inputs &&
+                  Object.values(currentAutomation.required_inputs).some(config => config.human_input);
+                if (hasHumanInputs) {
+                  setShowRunModal(true);
+                } else {
+                  runAutomation(currentAutomation);
+                }
+              }}
+              disabled={isExecuting}
+              style={{
+                background: isExecuting ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981, #059669)',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.5rem 1rem',
+                color: '#fff',
+                cursor: isExecuting ? 'not-allowed' : 'pointer',
+                fontSize: '0.85rem',
+                opacity: isExecuting ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+            >
+              {isExecuting ? '⏳ Running...' : '▶️ Run'}
+            </button>
+          )}
 
           {/* History Memory toggle */}
           <button
@@ -1140,6 +2073,47 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             💬
           </button>
 
+          {/* Get Rules Button */}
+          <button
+            onClick={fetchWorkflowRules}
+            disabled={isLoadingRules}
+            title="View workflow YAML rules and available tools"
+            style={{
+              background: 'rgba(139, 92, 246, 0.2)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              borderRadius: '8px',
+              padding: '0.5rem 1rem',
+              color: '#a78bfa',
+              cursor: isLoadingRules ? 'wait' : 'pointer',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            {isLoadingRules ? '⏳' : '📖'} Rules
+          </button>
+
+          {/* Paste YAML/Mermaid Button */}
+          <button
+            onClick={() => setShowPasteModal(true)}
+            title="Paste existing YAML or Mermaid diagram"
+            style={{
+              background: 'rgba(245, 158, 11, 0.2)',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              borderRadius: '8px',
+              padding: '0.5rem 1rem',
+              color: '#f59e0b',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            📥 Import
+          </button>
+
           <button onClick={startNew} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}>+ New Automation</button>
         </div>
 
@@ -1154,33 +2128,101 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                {automations.map(auto => (
-                  <div key={auto.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                      <h3 style={{ color: '#fff', fontSize: '1rem', margin: 0, fontWeight: 600 }}>{auto.name}</h3>
-                      <span style={{ background: auto.status === 'active' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)', color: auto.status === 'active' ? '#10b981' : 'rgba(255,255,255,0.5)', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem' }}>{auto.status}</span>
+                {automations.map(auto => {
+                  const executions = runningExecutions[auto.id] || [];
+                  const hasRunning = executions.some(e => e.status === 'running');
+                  const hasWaiting = executions.some(e => e.status === 'waiting_input');
+
+                  return (
+                    <div key={auto.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: hasWaiting ? '1px solid rgba(245, 158, 11, 0.4)' : hasRunning ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                        <h3 style={{ color: '#fff', fontSize: '1rem', margin: 0, fontWeight: 600 }}>{auto.name}</h3>
+                        <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                          {hasRunning && <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem', animation: 'pulse 2s infinite' }}>⚡ Running</span>}
+                          {hasWaiting && <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem' }}>⏳ Input</span>}
+                          <span style={{ background: auto.status === 'active' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)', color: auto.status === 'active' ? '#10b981' : 'rgba(255,255,255,0.5)', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem' }}>{auto.status}</span>
+                        </div>
+                      </div>
+                      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.5rem' }}>{auto.description || 'No description'}</p>
+
+                      {/* Running instances */}
+                      {executions.length > 0 && (
+                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.5rem', marginBottom: '0.5rem' }}>
+                          <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Active Runs:</div>
+                          {executions.slice(0, 3).map(exec => (
+                            <div key={exec.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', padding: '0.25rem 0' }}>
+                              <span style={{ color: exec.status === 'waiting_input' ? '#f59e0b' : exec.status === 'running' ? '#3b82f6' : 'rgba(255,255,255,0.6)' }}>
+                                {exec.status === 'waiting_input' ? '⏳' : exec.status === 'running' ? '⚡' : '⏸️'} {exec.status}
+                              </span>
+                              {exec.status === 'waiting_input' && (
+                                <a
+                                  href={`/automation/${auto.id}/running/${exec.id}/input`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#f59e0b', textDecoration: 'underline', fontSize: '0.65rem' }}
+                                >
+                                  Provide Input →
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                          {executions.length > 3 && (
+                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.25rem' }}>
+                              +{executions.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                        <span>⏰ {auto.schedule_type}</span>
+                        <span>•</span>
+                        <span>{auto.total_runs} runs</span>
+                        {auto.last_run_status && (
+                          <>
+                            <span>•</span>
+                            <span>{getStatusIcon(auto.last_run_status)}</span>
+                          </>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {auto.yaml_definition && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Check if automation has human inputs
+                              const hasInputs = auto.yaml_definition && auto.yaml_definition.includes('inputs:');
+                              if (hasInputs) {
+                                setCurrentAutomation(auto);
+                                setShowRunModal(true);
+                              } else {
+                                runAutomation(auto);
+                              }
+                            }}
+                            disabled={isExecuting}
+                            style={{
+                              background: isExecuting ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981, #059669)',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '0.5rem 0.75rem',
+                              color: '#fff',
+                              cursor: isExecuting ? 'not-allowed' : 'pointer',
+                              fontSize: '0.8rem',
+                              opacity: isExecuting ? 0.5 : 1,
+                            }}
+                            title="Run automation"
+                          >
+                            ▶️
+                          </button>
+                        )}
+                        <button onClick={() => loadAutomation(auto)} style={{ flex: 1, background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Edit</button>
+                        <button onClick={() => deleteAutomation(auto.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>🗑️</button>
+                      </div>
                     </div>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.5rem' }}>{auto.description || 'No description'}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
-                      <span>⏰ {auto.schedule_type}</span>
-                      <span>•</span>
-                      <span>{auto.total_runs} runs</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => loadAutomation(auto)} style={{ flex: 1, background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Edit</button>
-                      <button onClick={() => deleteAutomation(auto.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>🗑️</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
-        )}
-
-        {/* BUILDER VIEW - Placeholder, actual content rendered in fullscreen portal */}
-        {view === 'builder' && (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.5)' }}>
-            <p>Loading builder...</p>
           </div>
         )}
 
@@ -1372,6 +2414,86 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           </div>
         )}
 
+        {/* YAML VIEW */}
+        {view === 'yaml' && exportedYaml && (
+          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h2 style={{ color: '#10b981', fontSize: '1.1rem', margin: 0 }}>📄 Workflow YAML</h2>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => {
+                    const blob = new Blob([exportedYaml], { type: 'text/yaml' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${workflowDef?.name || 'workflow'}.yaml`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '6px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+                >
+                  💾 Download
+                </button>
+                <button
+                  onClick={() => navigator.clipboard.writeText(exportedYaml)}
+                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+                >
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+
+            {/* Workflow Info */}
+            {workflowDef && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.85rem' }}>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Name: </span>
+                    <span style={{ color: '#10b981' }}>{workflowDef.name}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Trigger: </span>
+                    <span style={{ color: '#f59e0b' }}>{workflowDef.trigger.type}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Steps: </span>
+                    <span style={{ color: '#3b82f6' }}>{workflowDef.steps.length}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* YAML Editor */}
+            <textarea
+              value={exportedYaml}
+              onChange={(e) => setExportedYaml(e.target.value)}
+              style={{
+                width: '100%',
+                minHeight: '400px',
+                background: 'rgba(0,0,0,0.4)',
+                borderRadius: '10px',
+                padding: '1rem',
+                fontSize: '0.8rem',
+                color: '#a5b4fc',
+                fontFamily: 'monospace',
+                border: '1px solid rgba(255,255,255,0.1)',
+                resize: 'vertical',
+                lineHeight: 1.5,
+              }}
+            />
+
+            {/* Sync back to Mermaid button */}
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setView('builder')}
+                style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                ← Back to Builder
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* CODE VIEW */}
         {view === 'code' && exportedCode && (
           <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -1383,13 +2505,242 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           </div>
         )}
 
+        {/* LOGS VIEW */}
+        {view === 'logs' && (
+          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h2 style={{ color: '#fff', fontSize: '1.1rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📋 Execution Logs
+                {isExecuting && <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>⏳ Running...</span>}
+                {currentExecution?.status === 'completed' && <span style={{ fontSize: '0.8rem', color: '#10b981' }}>✓ Completed</span>}
+                {currentExecution?.status === 'failed' && <span style={{ fontSize: '0.8rem', color: '#ef4444' }}>✗ Failed</span>}
+                {currentExecution?.status === 'waiting_input' && <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>⏸ Waiting for input</span>}
+              </h2>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {currentAutomation && (
+                  <button
+                    onClick={() => runAutomation(currentAutomation)}
+                    disabled={isExecuting}
+                    style={{
+                      background: isExecuting ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981, #059669)',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '0.4rem 0.75rem',
+                      color: '#fff',
+                      cursor: isExecuting ? 'not-allowed' : 'pointer',
+                      fontSize: '0.8rem',
+                      opacity: isExecuting ? 0.5 : 1,
+                    }}
+                  >
+                    ▶️ Run Again
+                  </button>
+                )}
+                <button
+                  onClick={() => setView('builder')}
+                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
+
+            {/* Execution Info */}
+            {currentExecution && (
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.85rem' }}>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Status: </span>
+                    <span style={{ color: currentExecution.status === 'completed' ? '#10b981' : currentExecution.status === 'failed' ? '#ef4444' : '#f59e0b' }}>
+                      {currentExecution.status}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Started: </span>
+                    <span style={{ color: '#fff' }}>{new Date(currentExecution.started_at).toLocaleTimeString()}</span>
+                  </div>
+                  {currentExecution.completed_at && (
+                    <div>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Completed: </span>
+                      <span style={{ color: '#fff' }}>{new Date(currentExecution.completed_at).toLocaleTimeString()}</span>
+                    </div>
+                  )}
+                  {currentExecution.current_step && (
+                    <div>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Current Step: </span>
+                      <span style={{ color: '#3b82f6' }}>{currentExecution.current_step}</span>
+                    </div>
+                  )}
+                </div>
+                {currentExecution.error && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                    <span style={{ color: '#ef4444', fontSize: '0.85rem' }}>Error: {currentExecution.error}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Log Entries */}
+            <div style={{
+              background: 'rgba(0,0,0,0.5)',
+              borderRadius: '10px',
+              padding: '1rem',
+              fontFamily: 'monospace',
+              fontSize: '0.8rem',
+              maxHeight: '400px',
+              overflowY: 'auto',
+            }}>
+              {executionLogs.length === 0 ? (
+                <div style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '2rem' }}>
+                  {isExecuting ? 'Waiting for logs...' : 'No logs available'}
+                </div>
+              ) : (
+                executionLogs.map((log, i) => (
+                  <div key={log.id || i} style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '70px' }}>
+                      {new Date(log.timestamp).toLocaleTimeString()}
+                    </span>
+                    <span style={{ color: getLogLevelColor(log.level), minWidth: '50px' }}>
+                      [{log.level}]
+                    </span>
+                    {log.step_name && (
+                      <span style={{ color: '#3b82f6', minWidth: '100px' }}>
+                        [{log.step_name}]
+                      </span>
+                    )}
+                    <span style={{ color: '#fff', flex: 1 }}>
+                      {log.message}
+                      {log.status === 'completed' && log.duration_ms && (
+                        <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '0.5rem' }}>
+                          ({log.duration_ms}ms)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Save Modal */}
         {showSaveModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '400px', width: '90%' }}>
+            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '450px', width: '90%' }}>
               <h3 style={{ color: '#fff', margin: '0 0 1rem' }}>💾 Save Automation</h3>
-              <input type="text" value={automationName} onChange={(e) => setAutomationName(e.target.value)} placeholder="Automation name..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', marginBottom: '0.75rem' }} />
-              <textarea value={automationDescription} onChange={(e) => setAutomationDescription(e.target.value)} placeholder="Description (optional)..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', marginBottom: '1rem', minHeight: '80px', resize: 'vertical' }} />
+
+              {/* Display Name */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Display Name</label>
+                <input
+                  type="text"
+                  value={automationDisplayName}
+                  onChange={(e) => handleDisplayNameChange(e.target.value)}
+                  placeholder="My Awesome Automation"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+                />
+              </div>
+
+              {/* ID (auto-generated from display name) */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>ID (snake_case)</label>
+                <input
+                  type="text"
+                  value={automationName}
+                  onChange={(e) => setAutomationName(e.target.value)}
+                  placeholder="my_awesome_automation"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontFamily: 'monospace' }}
+                />
+              </div>
+
+              {/* Category with create new option */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Category</label>
+                {!showNewCategoryInput ? (
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <select
+                      value={automationCategory}
+                      onChange={(e) => {
+                        if (e.target.value === '__new__') {
+                          setShowNewCategoryInput(true);
+                        } else {
+                          setAutomationCategory(e.target.value);
+                        }
+                      }}
+                      style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'white\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
+                    >
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
+                      ))}
+                      <option value="__new__">➕ Create New Category...</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={newCategoryIcon}
+                      onChange={(e) => setNewCategoryIcon(e.target.value)}
+                      style={{ width: '50px', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', textAlign: 'center', fontSize: '1.1rem' }}
+                      placeholder="📦"
+                    />
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Category name..."
+                      style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!newCategoryName.trim()) return;
+                        try {
+                          const response = await fetch('/api/categories', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newCategoryName.trim(), icon: newCategoryIcon || '📦' }),
+                          });
+                          if (response.ok) {
+                            const data = await response.json();
+                            const newCat = { id: data.category.name.toLowerCase().replace(/\s+/g, '_'), label: data.category.name, icon: data.category.icon };
+                            setCategories(prev => [...prev, newCat]);
+                            setAutomationCategory(newCat.id);
+                            setShowNewCategoryInput(false);
+                            setNewCategoryName('');
+                            setNewCategoryIcon('📦');
+                          }
+                        } catch (err) {
+                          console.error('Failed to create category:', err);
+                        }
+                      }}
+                      style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewCategoryInput(false);
+                        setNewCategoryName('');
+                        setNewCategoryIcon('📦');
+                      }}
+                      style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Description (optional)</label>
+                <textarea
+                  value={automationDescription}
+                  onChange={(e) => setAutomationDescription(e.target.value)}
+                  placeholder="What does this automation do?"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', minHeight: '80px', resize: 'vertical' }}
+                />
+              </div>
+
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowSaveModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={saveAutomation} disabled={!automationName.trim()} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', opacity: !automationName.trim() ? 0.5 : 1 }}>Save</button>
@@ -1410,6 +2761,192 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                 <button onClick={() => setShowExportModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={exportToTypeScript} disabled={isExporting} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', cursor: 'pointer' }}>{isExporting ? 'Generating...' : 'Generate Code'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Run Modal - Input Collection */}
+        {showRunModal && currentAutomation && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowRunModal(false)}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '500px', width: '100%', border: '1px solid rgba(16, 185, 129, 0.3)', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '1.5rem' }}>▶️</div>
+                <div>
+                  <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: 0 }}>Run Automation</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>{currentAutomation.display_name || currentAutomation.name}</p>
+                </div>
+              </div>
+
+              {/* Required Inputs */}
+              {currentAutomation.required_inputs && Object.keys(currentAutomation.required_inputs).length > 0 ? (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                    📝 Fill in the required inputs:
+                  </p>
+                  {Object.entries(currentAutomation.required_inputs).map(([key, config]) => (
+                    <div key={key} style={{ marginBottom: '0.75rem' }}>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                        {key} {config.human_input && <span style={{ color: '#f59e0b' }}>*</span>}
+                        {config.description && <span style={{ color: 'rgba(255,255,255,0.5)', marginLeft: '0.5rem' }}>({config.description})</span>}
+                      </label>
+                      {config.type === 'boolean' ? (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!runInputs[key]}
+                            onChange={(e) => setRunInputs({ ...runInputs, [key]: e.target.checked })}
+                            style={{ width: '18px', height: '18px' }}
+                          />
+                          <span style={{ color: '#fff', fontSize: '0.85rem' }}>{runInputs[key] ? 'Yes' : 'No'}</span>
+                        </label>
+                      ) : config.type === 'number' ? (
+                        <input
+                          type="number"
+                          value={(runInputs[key] as number) || ''}
+                          onChange={(e) => setRunInputs({ ...runInputs, [key]: parseFloat(e.target.value) || 0 })}
+                          placeholder={`Enter ${key}...`}
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                        />
+                      ) : (
+                        <input
+                          type={config.sensitive ? 'password' : 'text'}
+                          value={(runInputs[key] as string) || ''}
+                          onChange={(e) => setRunInputs({ ...runInputs, [key]: e.target.value })}
+                          placeholder={`Enter ${key}...`}
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem' }}>
+                  <p style={{ color: '#10b981', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
+                    ✅ No inputs required. Ready to run!
+                  </p>
+                </div>
+              )}
+
+              {/* Execution Info */}
+              <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '10px', padding: '0.75rem', marginBottom: '1.25rem' }}>
+                <p style={{ color: '#3b82f6', fontSize: '0.8rem', margin: 0 }}>
+                  ℹ️ The automation will run in the background. You can view progress in the Logs tab.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { setShowRunModal(false); setRunInputs({}); }}
+                  style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setShowRunModal(false); runAutomation(currentAutomation, runInputs); }}
+                  disabled={isExecuting}
+                  style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', opacity: isExecuting ? 0.5 : 1 }}
+                >
+                  {isExecuting ? '⏳ Running...' : '▶️ Run Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Paste YAML/Mermaid Modal */}
+        {showPasteModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowPasteModal(false)}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '700px', width: '100%', border: '1px solid rgba(245, 158, 11, 0.3)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '1.5rem' }}>📋</div>
+                  <div>
+                    <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: 0 }}>Paste Workflow</h3>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>Import existing YAML or Mermaid diagram</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPasteModal(false)}
+                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '1rem' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* YAML Paste Area */}
+                <div>
+                  <label style={{ display: 'block', color: '#10b981', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                    📄 YAML Definition (optional)
+                  </label>
+                  <textarea
+                    value={pasteYaml}
+                    onChange={(e) => setPasteYaml(e.target.value)}
+                    placeholder={`name: my_workflow\ndescription: What this workflow does\nversion: 1\n\ninputs:\n  query:\n    type: string\n    required: true\n\nsteps:\n  - id: step_1\n    action: connector.tool\n    inputs:\n      param: "{{inputs.query}}"`}
+                    style={{
+                      width: '100%',
+                      minHeight: '150px',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      background: 'rgba(0,0,0,0.3)',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+
+                {/* Mermaid Paste Area */}
+                <div>
+                  <label style={{ display: 'block', color: '#f59e0b', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                    📊 Mermaid Diagram (optional)
+                  </label>
+                  <textarea
+                    value={pasteMermaid}
+                    onChange={(e) => setPasteMermaid(e.target.value)}
+                    placeholder={`flowchart TD\n  start([Start]) --> step1[Step 1]\n  step1 --> step2[Step 2]\n  step2 --> end_node([End])`}
+                    style={{
+                      width: '100%',
+                      minHeight: '120px',
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      background: 'rgba(0,0,0,0.3)',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                <button
+                  onClick={() => { setShowPasteModal(false); setPasteYaml(''); setPasteMermaid(''); }}
+                  style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyPastedContent}
+                  disabled={!pasteYaml.trim() && !pasteMermaid.trim()}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: (!pasteYaml.trim() && !pasteMermaid.trim()) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                    color: '#fff',
+                    cursor: (!pasteYaml.trim() && !pasteMermaid.trim()) ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem',
+                    opacity: (!pasteYaml.trim() && !pasteMermaid.trim()) ? 0.5 : 1,
+                  }}
+                >
+                  ✅ Apply
+                </button>
               </div>
             </div>
           </div>
@@ -1517,107 +3054,512 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
         <Footer />
       </View>
+      )}
 
-      {/* FULLSCREEN BUILDER VIEW */}
+      {/* BUILDER VIEW - Inline with fixed input at bottom */}
       {view === 'builder' && (
-        <div className="automation-fullscreen">
-          {/* Content Area - Scrollable (between fixed input at bottom) */}
-          <div className="automation-fullscreen-content" style={{ paddingTop: '1rem' }}>
-            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-              {/* Mermaid Diagram - Fill available space */}
-              <div className="automation-fullscreen-diagram">
-                <MermaidDiagram
-                  definition={mermaidDiagram}
-                  title={currentAutomation?.name || 'Workflow'}
-                  editable={true}
-                  onDefinitionChange={setMermaidDiagram}
-                  minHeight="100%"
-                  maxHeight="none"
-                />
-              </div>
+        <View maxWidth="100%" marginX="auto" UNSAFE_style={{ paddingBottom: '180px' }}>
+          {/* Top Bar: Back + Actions */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1rem',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+          }}>
+            {/* Left: Back button + ID */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  setView('list');
+                  window.history.pushState({}, '', '/automation');
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                ← Back to Automation Explorer
+              </button>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                ID: {automationName || 'auto-generated'}
+              </span>
+            </div>
 
-              {/* Create Automation Button - Centered under diagram */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', marginBottom: '0.5rem' }}>
+            {/* Right: Action buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {/* Play button - only show if we have YAML */}
+              {(currentAutomation?.yaml_definition || exportedYaml) && (
                 <button
-                  onClick={() => setShowSaveModal(true)}
+                  onClick={() => {
+                    if (currentAutomation) {
+                      // Check if automation has human inputs
+                      const hasInputs = currentAutomation.yaml_definition?.includes('inputs:') || exportedYaml.includes('inputs:');
+                      if (hasInputs) {
+                        setShowRunModal(true);
+                      } else {
+                        runAutomation(currentAutomation);
+                      }
+                    } else {
+                      alert('Please save the automation first');
+                    }
+                  }}
+                  disabled={isExecuting || !currentAutomation}
                   style={{
-                    background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                    background: isExecuting ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981, #059669)',
                     border: 'none',
-                    borderRadius: '12px',
-                    padding: '0.75rem 2rem',
+                    borderRadius: '8px',
+                    padding: '0.5rem 1rem',
                     color: '#fff',
-                    cursor: 'pointer',
-                    fontSize: '1rem',
-                    fontWeight: 600,
+                    cursor: isExecuting || !currentAutomation ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem',
+                    opacity: isExecuting || !currentAutomation ? 0.5 : 1,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+                    gap: '0.25rem',
                   }}
+                  title={currentAutomation ? 'Run automation' : 'Save automation first'}
                 >
-                  ⚡ Create Automation
+                  {isExecuting ? '⏳' : '▶️'} Run
                 </button>
-              </div>
+              )}
+              <button
+                onClick={fetchWorkflowRules}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  color: '#a78bfa',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                📋 Rules
+              </button>
+              <button
+                onClick={() => setShowSaveModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1.5rem',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                }}
+              >
+                💾 Save
+              </button>
             </div>
           </div>
 
-          {/* Fixed Input Bar - Bottom */}
-          <div className="automation-fullscreen-input">
-            <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
-              {/* Retrieval events during generation */}
-              {isGenerating && (retrievalEvents.isSearching || retrievalEvents.ragEvents || retrievalEvents.isSending) && (
-                <div style={{ marginBottom: '0.5rem' }}>
-                  <RetrievalEventsDisplay data={retrievalEvents} />
-                </div>
-              )}
-              {/* Last generation stats */}
-              {(lastTokenUsage || lastExplanation) && (
-                <div style={{ marginBottom: '0.5rem' }}>
-                  {lastTokenUsage && (
-                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginBottom: lastExplanation ? '0.25rem' : 0 }}>
-                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>Last generation:</span>
-                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {lastTokenUsage.input}</span>
-                      <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {lastTokenUsage.output}</span>
-                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>= {lastTokenUsage.input + lastTokenUsage.output} tokens</span>
-                    </div>
+          {/* Main Content Area */}
+          <div style={{
+            display: 'flex',
+            flexDirection: showYamlPanel && isLargeScreen ? 'row' : 'column',
+            gap: '1rem',
+            marginBottom: '1rem',
+          }}>
+            {/* Mermaid Diagram Panel */}
+            <div style={{
+              flex: showYamlPanel && isLargeScreen ? '1 1 50%' : '1 1 100%',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              overflow: 'hidden',
+              minHeight: '300px',
+            }}>
+              {/* Diagram Header with Name */}
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+              }}>
+                {/* Editable Name */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '150px' }}>
+                  {isEditingName ? (
+                    <input
+                      type="text"
+                      value={automationDisplayName}
+                      onChange={(e) => handleDisplayNameChange(e.target.value)}
+                      onBlur={() => setIsEditingName(false)}
+                      onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
+                      autoFocus
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.5)',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        padding: '0.35rem 0.5rem',
+                        outline: 'none',
+                        width: '100%',
+                        maxWidth: '300px',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => setIsEditingName(true)}
+                      style={{
+                        color: '#f59e0b',
+                        fontWeight: 600,
+                        fontSize: '1rem',
+                        cursor: 'pointer',
+                        padding: '0.35rem 0.5rem',
+                        borderRadius: '6px',
+                        border: '1px solid transparent',
+                      }}
+                      title="Click to edit name"
+                    >
+                      📊 {automationDisplayName || 'Click to name...'}
+                    </span>
                   )}
-                  {lastExplanation && (
-                    <div style={{ padding: '0.35rem 0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>{lastExplanation}</div>
-                  )}
                 </div>
-              )}
 
-              {/* Reusable Chat Input Area */}
-              <ChatInputArea
-                message={prompt}
-                setMessage={setPrompt}
-                onSend={generateFlow}
-                onStop={stopRequest}
-                isLoading={isGenerating}
-                placeholder="Describe your workflow..."
-                selectedModel={selectedModel}
-                setSelectedModel={setSelectedModel}
-                tier={tier}
-                remainingBudget={budgetData?.usage.remainingBudget || 0}
-                activePersonalities={personalities.filter(p => activePersonalityIds.includes(p.id))}
-                sendButtonLabel="⚡"
-                showSettingsButton={true}
-                onSettingsClick={() => setShowSettingsPanel(true)}
-                showPersonasToggle={true}
-                activePersonasCount={activePersonalityIds.length}
-                onPersonasClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('personas'); }}
-                showReasoningToggle={true}
-                enableReasoning={true}
-                showRagToggle={rags.length > 0}
-                activeRagCount={activeRagIds.length}
-                onRagClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('rags'); }}
-                showConnectorsToggle={true}
-                activeConnectorsCount={connectors.length}
-                onConnectorsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
-                historyMemoryEnabled={historyMemoryEnabled}
-                setHistoryMemoryEnabled={setHistoryMemoryEnabled}
-              />
+                {/* Version Selector */}
+                {diagramVersions.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <button
+                      onClick={() => {
+                        if (currentVersionIndex > 0) {
+                          setCurrentVersionIndex(currentVersionIndex - 1);
+                          setMermaidDiagram(diagramVersions[currentVersionIndex - 1].diagram);
+                        }
+                      }}
+                      disabled={currentVersionIndex <= 0}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '0.25rem 0.5rem',
+                        color: currentVersionIndex <= 0 ? 'rgba(255,255,255,0.3)' : '#fff',
+                        cursor: currentVersionIndex <= 0 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      ◀
+                    </button>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', padding: '0 0.25rem' }}>
+                      v{currentVersionIndex + 1}/{diagramVersions.length}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (currentVersionIndex < diagramVersions.length - 1) {
+                          setCurrentVersionIndex(currentVersionIndex + 1);
+                          setMermaidDiagram(diagramVersions[currentVersionIndex + 1].diagram);
+                        }
+                      }}
+                      disabled={currentVersionIndex >= diagramVersions.length - 1}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '0.25rem 0.5rem',
+                        color: currentVersionIndex >= diagramVersions.length - 1 ? 'rgba(255,255,255,0.3)' : '#fff',
+                        cursor: currentVersionIndex >= diagramVersions.length - 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                )}
+
+                {/* Diagram Actions */}
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(mermaidDiagram);
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      padding: '0.35rem 0.5rem',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                    }}
+                    title="Copy Mermaid"
+                  >
+                    📋 Copy
+                  </button>
+                  <button
+                    onClick={exportToYaml}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: '6px',
+                      padding: '0.35rem 0.5rem',
+                      color: '#10b981',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                    }}
+                    title="Generate YAML from diagram"
+                  >
+                    → YAML
+                  </button>
+                  <button
+                    onClick={() => setShowYamlPanel(!showYamlPanel)}
+                    style={{
+                      background: showYamlPanel ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)',
+                      border: showYamlPanel ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      padding: '0.35rem 0.5rem',
+                      color: showYamlPanel ? '#10b981' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    {showYamlPanel ? '✕ Hide YAML' : '📄 Show YAML'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mermaid Diagram */}
+              <div style={{ padding: '0.5rem' }}>
+                <MermaidDiagram
+                  definition={mermaidDiagram}
+                  title=""
+                  editable={true}
+                  onDefinitionChange={setMermaidDiagram}
+                  minHeight="300px"
+                  maxHeight="500px"
+                />
+              </div>
             </div>
+
+            {/* YAML Panel */}
+            {showYamlPanel && (
+              <div style={{
+                flex: isLargeScreen ? '1 1 50%' : '1 1 100%',
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: '300px',
+                maxHeight: isLargeScreen ? '600px' : '400px',
+              }}>
+                {/* YAML Header */}
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}>
+                  <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9rem' }}>📄 YAML Definition</span>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(exportedYaml);
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '6px',
+                        padding: '0.35rem 0.5rem',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem',
+                      }}
+                      title="Copy YAML"
+                    >
+                      📋 Copy
+                    </button>
+                    <button
+                      onClick={regenerateMermaidFromYaml}
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: '6px',
+                        padding: '0.35rem 0.5rem',
+                        color: '#f59e0b',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem',
+                      }}
+                      title="Regenerate diagram from YAML"
+                    >
+                      ← Diagram
+                    </button>
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([exportedYaml], { type: 'text/yaml' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${automationName || 'workflow'}.yaml`;
+                        a.click();
+                      }}
+                      style={{
+                        background: 'rgba(59, 130, 246, 0.2)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '6px',
+                        padding: '0.35rem 0.5rem',
+                        color: '#60a5fa',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem',
+                      }}
+                    >
+                      ⬇️ Download
+                    </button>
+                  </div>
+                </div>
+
+                {/* YAML Editor */}
+                <textarea
+                  value={exportedYaml}
+                  onChange={(e) => setExportedYaml(e.target.value)}
+                  placeholder="Click '→ YAML' on the diagram to generate, or paste your YAML here..."
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#e2e8f0',
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    padding: '1rem',
+                    resize: 'none',
+                    outline: 'none',
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* AI Messages Area - Shows generation feedback */}
+          <div style={{
+            background: 'rgba(0,0,0,0.15)',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.05)',
+            padding: '1rem',
+            minHeight: '80px',
+            marginBottom: '1rem',
+          }}>
+            {/* Retrieval events during generation */}
+            {isGenerating && (retrievalEvents.isSearching || retrievalEvents.ragEvents || retrievalEvents.isSending) && (
+              <div style={{ marginBottom: '0.5rem' }}>
+                <RetrievalEventsDisplay data={retrievalEvents} />
+              </div>
+            )}
+
+            {/* Generation in progress indicator */}
+            {isGenerating && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '8px',
+                marginBottom: '0.5rem',
+              }}>
+                <span style={{ animation: 'pulse 1.5s infinite' }}>⚡</span>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Generating workflow...</span>
+              </div>
+            )}
+
+            {/* Last generation stats and explanation */}
+            {!isGenerating && (lastTokenUsage || lastExplanation) && (
+              <div>
+                {lastExplanation && (
+                  <div style={{
+                    padding: '0.75rem',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    color: 'rgba(255,255,255,0.8)',
+                    marginBottom: lastTokenUsage ? '0.5rem' : 0,
+                    lineHeight: 1.5,
+                  }}>
+                    <span style={{ color: '#f59e0b', marginRight: '0.5rem' }}>🤖</span>
+                    {lastExplanation}
+                  </div>
+                )}
+                {lastTokenUsage && (
+                  <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Tokens used:</span>
+                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {lastTokenUsage.input}</span>
+                    <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {lastTokenUsage.output}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!isGenerating && !lastExplanation && !lastTokenUsage && (
+              <div style={{
+                textAlign: 'center',
+                color: 'rgba(255,255,255,0.3)',
+                fontSize: '0.85rem',
+                padding: '1rem',
+              }}>
+                Describe your workflow below to get started
+              </div>
+            )}
+          </div>
+        </View>
+      )}
+
+      {/* Fixed Chat Input at Bottom */}
+      {view === 'builder' && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(to top, rgba(15,15,26,0.98) 0%, rgba(15,15,26,0.95) 80%, transparent 100%)',
+          padding: '1rem',
+          paddingTop: '1.5rem',
+          zIndex: 100,
+        }}>
+          <div style={{ maxWidth: '56rem', margin: '0 auto', width: '100%' }}>
+            <ChatInputArea
+              message={prompt}
+              setMessage={setPrompt}
+              onSend={generateFlow}
+              onStop={stopRequest}
+              isLoading={isGenerating}
+              placeholder="Describe your workflow changes..."
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
+              tier={tier}
+              remainingBudget={budgetData?.usage.remainingBudget || 0}
+              activePersonalities={personalities.filter(p => activePersonalityIds.includes(p.id))}
+              sendButtonLabel="⚡"
+              showSettingsButton={true}
+              onSettingsClick={() => setShowSettingsPanel(true)}
+              showPersonasToggle={true}
+              activePersonasCount={activePersonalityIds.length}
+              onPersonasClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('personas'); }}
+              showReasoningToggle={true}
+              enableReasoning={true}
+              showRagToggle={rags.length > 0}
+              activeRagCount={activeRagIds.length}
+              onRagClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('rags'); }}
+              showConnectorsToggle={true}
+              activeConnectorsCount={connectors.length}
+              onConnectorsClick={() => { setShowSettingsPanel(true); setSettingsPanelMode('connectors'); }}
+              historyMemoryEnabled={historyMemoryEnabled}
+              setHistoryMemoryEnabled={setHistoryMemoryEnabled}
+            />
           </div>
         </div>
       )}
@@ -1666,7 +3608,122 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         scheduleOptions={SCHEDULE_OPTIONS}
         selectedSchedule={selectedSchedule}
         setSelectedSchedule={setSelectedSchedule}
+        scheduleHour={scheduleHour}
+        setScheduleHour={setScheduleHour}
+        scheduleMinute={scheduleMinute}
+        setScheduleMinute={setScheduleMinute}
+        scheduleDays={scheduleDays}
+        setScheduleDays={setScheduleDays}
+        scheduleMonthDays={scheduleMonthDays}
+        setScheduleMonthDays={setScheduleMonthDays}
+        weeklyFrequency={weeklyFrequency}
+        setWeeklyFrequency={setWeeklyFrequency}
+        cronExpression={cronExpression}
+        setCronExpression={setCronExpression}
+        cronError={cronError}
+        setCronError={setCronError}
+        automationId={currentAutomation?.id}
+        webhookInputs={workflowDef?.inputs ? Object.entries(workflowDef.inputs).map(([name, def]) => ({
+          name,
+          type: (def as { type?: string }).type || 'string',
+          required: (def as { required?: boolean }).required || false,
+        })) : []}
       />
+
+      {/* Workflow Rules Modal - Global so it works from both list and builder views */}
+      {showRulesModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setShowRulesModal(false)}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(30,30,50,0.98), rgba(20,20,40,0.98))', borderRadius: '16px', padding: '1.5rem', maxWidth: '800px', width: '100%', border: '1px solid rgba(139, 92, 246, 0.3)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ fontSize: '1.5rem' }}>📖</div>
+                <div>
+                  <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: 0 }}>Workflow YAML Rules</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>Reference for building automations</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '1rem' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', padding: '1rem' }}>
+              <pre style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
+                {workflowRules}
+              </pre>
+            </div>
+            <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '10px', padding: '0.75rem', marginTop: '1rem' }}>
+              <p style={{ color: '#3b82f6', fontSize: '0.8rem', margin: 0 }}>
+                💡 <strong>Tip:</strong> Download these rules to use with AI coding assistants like Claude, Augment, or Cursor.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(workflowRules);
+                  alert('Rules copied to clipboard!');
+                }}
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                📋 Copy
+              </button>
+              <button
+                onClick={() => {
+                  const blob = new Blob([workflowRules], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'claude.md';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                title="Download as claude.md for Claude Projects"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                ⬇️ claude.md
+              </button>
+              <button
+                onClick={() => {
+                  const blob = new Blob([workflowRules], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = '.augment-guidelines';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                title="Download as .augment-guidelines for Augment Code"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                ⬇️ .augment-guidelines
+              </button>
+              <button
+                onClick={() => {
+                  const blob = new Blob([workflowRules], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = '.cursorrules';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                title="Download as .cursorrules for Cursor"
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.4)', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                ⬇️ .cursorrules
+              </button>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Persona View Modal */}
       {viewingPersona && (

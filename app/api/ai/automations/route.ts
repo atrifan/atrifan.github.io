@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, model_id, personality_ids } = body;
+    const { name, display_name, description, category, model_id, personality_ids } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -67,7 +67,9 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userId,
         name,
+        display_name: display_name || name,
         description: description || '',
+        category: category || 'general',
         model_id: model_id || 'meta-llama/llama-3.1-8b-instruct:free',
         personality_ids: personality_ids || [],
         flow_definition: { nodes: [], edges: [] },
@@ -110,7 +112,14 @@ export async function PUT(request: NextRequest) {
     }
 
     // Only allow updating certain fields
-    const allowedFields = ['name', 'description', 'flow_definition', 'mermaid_diagram', 'typescript_code', 'model_id', 'personality_ids', 'schedule_type', 'schedule_config', 'status'];
+    const allowedFields = [
+      'name', 'display_name', 'description', 'category',
+      'flow_definition', 'mermaid_diagram', 'yaml_definition', 'typescript_code',
+      'model_id', 'personality_ids',
+      'schedule_type', 'schedule_config', 'trigger_config', 'cron_expression',
+      'required_inputs', 'output_config',
+      'workflow_version', 'status'
+    ];
     const filteredUpdates: Record<string, unknown> = {};
     for (const key of allowedFields) {
       if (key in updates) {

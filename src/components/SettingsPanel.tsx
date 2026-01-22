@@ -190,9 +190,27 @@ export interface SettingsPanelProps {
   newItemLabel: string;
   
   // Run settings (automation mode)
-  scheduleOptions?: Array<{ id: string; label: string; icon: string; comingSoon?: boolean }>;
+  scheduleOptions?: Array<{ id: string; label: string; icon: string; description?: string; comingSoon?: boolean }>;
   selectedSchedule?: string;
   setSelectedSchedule?: (schedule: string) => void;
+  // Schedule configuration
+  scheduleHour?: number;
+  setScheduleHour?: (hour: number) => void;
+  scheduleMinute?: number;
+  setScheduleMinute?: (minute: number) => void;
+  scheduleDays?: number[];
+  setScheduleDays?: (days: number[]) => void;
+  scheduleMonthDays?: number[];
+  setScheduleMonthDays?: (days: number[]) => void;
+  weeklyFrequency?: number;
+  setWeeklyFrequency?: (freq: number) => void;
+  cronExpression?: string;
+  setCronExpression?: (cron: string) => void;
+  cronError?: string | null;
+  setCronError?: (error: string | null) => void;
+  // Webhook info
+  automationId?: string;
+  webhookInputs?: Array<{ name: string; type: string; required: boolean }>;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
@@ -253,6 +271,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     scheduleOptions = [],
     selectedSchedule,
     setSelectedSchedule,
+    scheduleHour = 9,
+    setScheduleHour,
+    scheduleMinute = 0,
+    setScheduleMinute,
+    scheduleDays = [1],
+    setScheduleDays,
+    scheduleMonthDays = [1],
+    setScheduleMonthDays,
+    weeklyFrequency = 1,
+    setWeeklyFrequency,
+    cronExpression = '0 9 * * 1',
+    setCronExpression,
+    cronError,
+    setCronError,
+    automationId,
+    webhookInputs = [],
   } = props;
 
   // Model dropdown state
@@ -819,12 +853,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
           {/* RUN SETTINGS MODE - Automation only */}
           {panelMode === 'run-settings' && mode === 'automation' && (
             <div>
-              <div style={{ marginBottom: '1rem' }}>
+              {/* Schedule Type Selection */}
+              <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>Schedule Type</div>
                 {scheduleOptions.map(opt => (
                   <div
                     key={opt.id}
-                    onClick={() => { if (!opt.comingSoon && setSelectedSchedule) { setSelectedSchedule(opt.id); setPanelMode('main'); } }}
+                    onClick={() => { if (setSelectedSchedule) setSelectedSchedule(opt.id); }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -833,24 +868,309 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                       background: selectedSchedule === opt.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
                       borderRadius: '8px',
                       marginBottom: '0.5rem',
-                      cursor: opt.comingSoon ? 'not-allowed' : 'pointer',
+                      cursor: 'pointer',
                       border: selectedSchedule === opt.id ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
-                      opacity: opt.comingSoon ? 0.5 : 1,
                     }}
                   >
                     <span style={{ fontSize: '1.25rem' }}>{opt.icon}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{opt.label}</div>
+                      {opt.description && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{opt.description}</div>}
                     </div>
-                    {opt.comingSoon && (
-                      <span style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.6rem' }}>Coming Soon</span>
-                    )}
-                    {selectedSchedule === opt.id && !opt.comingSoon && (
+                    {selectedSchedule === opt.id && (
                       <span style={{ color: '#f59e0b', fontSize: '1rem' }}>✓</span>
                     )}
                   </div>
                 ))}
               </div>
+
+              {/* Daily Configuration */}
+              {selectedSchedule === 'daily' && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>Run Time</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <select
+                      value={scheduleHour}
+                      onChange={(e) => setScheduleHour?.(Number(e.target.value))}
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                      ))}
+                    </select>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>:</span>
+                    <select
+                      value={scheduleMinute}
+                      onChange={(e) => setScheduleMinute?.(Number(e.target.value))}
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                    >
+                      {[0, 15, 30, 45].map(m => (
+                        <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Weekly Configuration */}
+              {selectedSchedule === 'weekly' && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  {/* Frequency */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Frequency</div>
+                    <select
+                      value={weeklyFrequency}
+                      onChange={(e) => setWeeklyFrequency?.(Number(e.target.value))}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                    >
+                      <option value={1}>Every week</option>
+                      <option value={2}>Every 2 weeks</option>
+                      <option value={3}>Every 3 weeks</option>
+                      <option value={4}>Every 4 weeks</option>
+                    </select>
+                  </div>
+                  {/* Days */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Days</div>
+                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
+                        <button
+                          key={day}
+                          onClick={() => {
+                            if (setScheduleDays) {
+                              const newDays = scheduleDays.includes(i)
+                                ? scheduleDays.filter(d => d !== i)
+                                : [...scheduleDays, i].sort();
+                              setScheduleDays(newDays.length > 0 ? newDays : [i]);
+                            }
+                          }}
+                          style={{
+                            padding: '0.4rem 0.6rem',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: scheduleDays.includes(i) ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                            color: scheduleDays.includes(i) ? '#000' : '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: scheduleDays.includes(i) ? 600 : 400,
+                          }}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Time */}
+                  <div>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Time</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select
+                        value={scheduleHour}
+                        onChange={(e) => setScheduleHour?.(Number(e.target.value))}
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                      >
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                        ))}
+                      </select>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>:</span>
+                      <select
+                        value={scheduleMinute}
+                        onChange={(e) => setScheduleMinute?.(Number(e.target.value))}
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                      >
+                        {[0, 15, 30, 45].map(m => (
+                          <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Monthly Configuration */}
+              {selectedSchedule === 'monthly' && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  {/* Days of month */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Days of Month</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.25rem' }}>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <button
+                          key={day}
+                          onClick={() => {
+                            if (setScheduleMonthDays) {
+                              const newDays = scheduleMonthDays.includes(day)
+                                ? scheduleMonthDays.filter(d => d !== day)
+                                : [...scheduleMonthDays, day].sort((a, b) => a - b);
+                              setScheduleMonthDays(newDays.length > 0 ? newDays : [day]);
+                            }
+                          }}
+                          style={{
+                            padding: '0.35rem',
+                            borderRadius: '4px',
+                            border: 'none',
+                            background: scheduleMonthDays.includes(day) ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                            color: scheduleMonthDays.includes(day) ? '#000' : '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem',
+                            fontWeight: scheduleMonthDays.includes(day) ? 600 : 400,
+                          }}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Time */}
+                  <div>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Time</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select
+                        value={scheduleHour}
+                        onChange={(e) => setScheduleHour?.(Number(e.target.value))}
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                      >
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                        ))}
+                      </select>
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>:</span>
+                      <select
+                        value={scheduleMinute}
+                        onChange={(e) => setScheduleMinute?.(Number(e.target.value))}
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem', color: '#fff', fontSize: '0.85rem' }}
+                      >
+                        {[0, 15, 30, 45].map(m => (
+                          <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cron Configuration */}
+              {selectedSchedule === 'cron' && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Cron Expression</div>
+                  <input
+                    type="text"
+                    value={cronExpression}
+                    onChange={(e) => {
+                      setCronExpression?.(e.target.value);
+                      // Basic validation
+                      const parts = e.target.value.trim().split(/\s+/);
+                      if (parts.length !== 5) {
+                        setCronError?.('Cron must have 5 parts: minute hour day month weekday');
+                      } else {
+                        setCronError?.(null);
+                      }
+                    }}
+                    placeholder="0 9 * * 1"
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: cronError ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '8px',
+                      padding: '0.6rem',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  {cronError && (
+                    <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.5rem' }}>{cronError}</div>
+                  )}
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: '0.5rem' }}>
+                    Format: minute (0-59) hour (0-23) day (1-31) month (1-12) weekday (0-6, Sun=0)
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                    Example: <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>0 9 * * 1-5</code> = 9 AM on weekdays
+                  </div>
+                </div>
+              )}
+
+              {/* Webhook Configuration */}
+              {selectedSchedule === 'webhook' && automationId && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>Webhook URL</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/webhook/${automationId}`}
+                      style={{
+                        flex: 1,
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '8px',
+                        padding: '0.5rem',
+                        color: '#10b981',
+                        fontSize: '0.75rem',
+                        fontFamily: 'monospace',
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/webhook/${automationId}`);
+                      }}
+                      style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#10b981', cursor: 'pointer', fontSize: '0.8rem' }}
+                    >
+                      📋
+                    </button>
+                  </div>
+
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>cURL Example</div>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', position: 'relative' }}>
+                    <pre style={{ color: '#e2e8f0', fontSize: '0.7rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', lineHeight: 1.5 }}>
+{`curl -X POST \\
+  ${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/webhook/${automationId} \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '${webhookInputs.length > 0
+    ? JSON.stringify(Object.fromEntries(webhookInputs.map(i => [i.name, i.type === 'number' ? 0 : ''])), null, 2)
+    : '{}'}'`}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        const curl = `curl -X POST \\
+  ${window.location.origin}/api/ai/automations/webhook/${automationId} \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '${webhookInputs.length > 0
+    ? JSON.stringify(Object.fromEntries(webhookInputs.map(i => [i.name, i.type === 'number' ? 0 : ''])))
+    : '{}'}'`;
+                        navigator.clipboard.writeText(curl);
+                      }}
+                      style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.65rem' }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  {webhookInputs.length > 0 && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginBottom: '0.25rem' }}>Required inputs:</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                        {webhookInputs.map(input => (
+                          <span key={input.name} style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem' }}>
+                            {input.name}: {input.type}{input.required ? '*' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Webhook without automation saved */}
+              {selectedSchedule === 'webhook' && !automationId && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ color: '#f59e0b', fontSize: '0.85rem', textAlign: 'center' }}>
+                    💾 Save the automation first to get the webhook URL
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
