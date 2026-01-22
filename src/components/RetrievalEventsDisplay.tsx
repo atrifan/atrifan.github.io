@@ -106,7 +106,7 @@ export function RetrievalEventsDisplay({ data, style }: RetrievalEventsDisplayPr
                       <span style={{ color: 'rgba(16, 185, 129, 0.7)', fontSize: '0.7rem' }}>#{idx + 1}</span>
                       {result.title && <span style={{ color: '#fff', fontWeight: 500 }}>{result.title}</span>}
                       <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-                        {(result.score * 100).toFixed(0)}% match
+                        score: {result.score.toFixed(4)}
                       </span>
                     </div>
                     <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', lineHeight: 1.4 }}>
@@ -142,7 +142,7 @@ export function RetrievalEventsDisplay({ data, style }: RetrievalEventsDisplayPr
               {historyEvents.map((event, idx) => (
                 <div key={idx} style={{ marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>
                   <div style={{ color: 'rgba(245, 158, 11, 0.7)', fontSize: '0.7rem', marginBottom: '0.25rem' }}>
-                    {(event.score * 100).toFixed(0)}% relevance
+                    score: {event.score.toFixed(4)}
                   </div>
                   {event.messages.slice(0, 2).map((msg, mIdx) => (
                     <div key={mIdx} style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>

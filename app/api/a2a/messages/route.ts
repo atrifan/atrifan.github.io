@@ -133,9 +133,9 @@ export async function POST(request: NextRequest) {
       userMsgData.history_data = historyData;
     }
 
-    // Store persona prompts in metadata if provided
+    // Store persona prompts in persona_data if provided
     if (personaPrompts && personaPrompts.length > 0) {
-      userMsgData.metadata = { personaPrompts };
+      userMsgData.persona_data = personaPrompts;
     }
 
     const { error: userMsgError } = await supabase.from('chat_messages').insert(userMsgData);

@@ -53,6 +53,16 @@ interface HistoryMatchData {
   messages: Array<{ content: string; messageType: string }>;
 }
 
+// Operation log entry - tracks each step in the reasoning process
+interface OperationLogEntry {
+  id: string;
+  type: 'rag_search' | 'rag_result' | 'history_search' | 'history_result' | 'sending' | 'connected' | 'reasoning' | 'action';
+  message: string;
+  status: 'pending' | 'success' | 'error';
+  data?: unknown; // Optional data payload (RAG results, history matches, etc.)
+  timestamp: Date;
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -63,6 +73,7 @@ interface ChatMessage {
   reasoningEvents?: ReasoningEvent[]; // Reasoning events from A2A streaming
   ragData?: RAGResultData[]; // RAG retrieval results used for this message
   historyData?: HistoryMatchData[]; // History context matches used for this message
+  operationLog?: OperationLogEntry[]; // Full log of operations performed
 }
 
 interface Conversation {
@@ -121,6 +132,198 @@ function formatMessageContent(content: string): React.ReactNode {
     }
     return part;
   });
+}
+
+// Unified Reasoning Data Block - shows operation log with messages and results
+interface ReasoningDataBlockProps {
+  operationLog?: OperationLogEntry[];
+  ragData?: RAGRetrievalEvent[];
+  historyData?: HistoryMatchEvent[];
+  reasoningEvents?: ReasoningEvent[];
+}
+
+// Collapsible result component for RAG/History data
+function CollapsibleResult({
+  label,
+  count,
+  icon,
+  color,
+  children
+}: {
+  label: string;
+  count: number;
+  icon: string;
+  color: string;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div style={{ marginLeft: '1.5rem', marginTop: '0.25rem' }}>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpanded(!expanded); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.35rem', width: '100%',
+          fontSize: '0.7rem', color, padding: '0.25rem 0.4rem',
+          background: `${color}15`, borderRadius: '4px', border: 'none',
+          cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span>{icon}</span>
+        <span>{label} ({count})</span>
+        <span style={{ marginLeft: 'auto', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease', fontSize: '0.55rem' }}>▼</span>
+      </button>
+      {expanded && <div style={{ marginTop: '0.25rem' }}>{children}</div>}
+    </div>
+  );
+}
+
+function ReasoningDataBlock({ operationLog, ragData, historyData, reasoningEvents }: ReasoningDataBlockProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Build operation log from data if not provided
+  const log: OperationLogEntry[] = operationLog || [];
+
+  // If no operationLog, build one from the data
+  if (log.length === 0) {
+    const ragCount = ragData?.reduce((acc, r) => acc + (r.results?.length || 0), 0) || 0;
+    const historyCount = historyData?.length || 0;
+
+    if (ragCount > 0) {
+      log.push({ id: 'rag-search', type: 'rag_search', message: 'Retrieving from knowledge bases...', status: 'success', timestamp: new Date() });
+      log.push({ id: 'rag-result', type: 'rag_result', message: `Retrieved ${ragCount} results from knowledge bases`, status: 'success', data: ragData, timestamp: new Date() });
+    }
+    if (historyCount > 0) {
+      log.push({ id: 'history-search', type: 'history_search', message: 'Searching chat history...', status: 'success', timestamp: new Date() });
+      log.push({ id: 'history-result', type: 'history_result', message: `Retrieved ${historyCount} matches from chat history`, status: 'success', data: historyData, timestamp: new Date() });
+    }
+    if (ragCount > 0 || historyCount > 0) {
+      log.push({ id: 'sending', type: 'sending', message: 'Sending to model with context...', status: 'success', timestamp: new Date() });
+      log.push({ id: 'connected', type: 'connected', message: 'Connected to model', status: 'success', timestamp: new Date() });
+    }
+    if (reasoningEvents && reasoningEvents.length > 0) {
+      reasoningEvents.forEach((event, idx) => {
+        log.push({
+          id: event.id || `reasoning-${idx}`,
+          type: event.reasoningType === 'thinking' ? 'reasoning' : 'action',
+          message: event.title || (event.reasoningType === 'thinking' ? 'Thinking' : 'Action'),
+          status: 'success',
+          data: event.text,
+          timestamp: new Date(),
+        });
+      });
+    }
+  }
+
+  if (log.length === 0) return null;
+
+  const totalSteps = log.length;
+
+  return (
+    <div style={{
+      marginBottom: '0.75rem',
+      background: 'rgba(139, 92, 246, 0.08)',
+      border: '1px solid rgba(139, 92, 246, 0.25)',
+      borderRadius: '8px',
+      overflow: 'hidden',
+    }}>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(!isExpanded); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%',
+          padding: '0.5rem 0.75rem', background: 'transparent', border: 'none',
+          cursor: 'pointer', color: '#a78bfa', fontSize: '0.8rem', fontWeight: 500, textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: '1rem' }}>🧠</span>
+        <span>Reasoning Data: {totalSteps} operations</span>
+        <span style={{ marginLeft: 'auto', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease', fontSize: '0.7rem' }}>▼</span>
+      </button>
+      {isExpanded && (
+        <div style={{ padding: '0.5rem 0.75rem', borderTop: '1px solid rgba(139, 92, 246, 0.2)', maxHeight: '500px', overflowY: 'auto' }}>
+          {log.map((entry, idx) => {
+            // Determine icon and color based on type
+            let entryIcon = '●';
+            let entryColor = '#10b981';
+            if (entry.type === 'rag_search' || entry.type === 'rag_result') { entryIcon = '📚'; entryColor = '#10b981'; }
+            else if (entry.type === 'history_search' || entry.type === 'history_result') { entryIcon = '🕐'; entryColor = '#f59e0b'; }
+            else if (entry.type === 'sending' || entry.type === 'connected') { entryIcon = '🧠'; entryColor = '#a78bfa'; }
+            else if (entry.type === 'reasoning') { entryIcon = '🧠'; entryColor = '#a78bfa'; }
+            else if (entry.type === 'action') { entryIcon = '🔨'; entryColor = '#fbbf24'; }
+
+            // Extract typed data
+            const ragResultData = entry.type === 'rag_result' && entry.data ? entry.data as RAGRetrievalEvent[] : null;
+            const historyResultData = entry.type === 'history_result' && entry.data ? entry.data as HistoryMatchEvent[] : null;
+            const reasoningText = (entry.type === 'reasoning' || entry.type === 'action') && entry.data ? String(entry.data) : null;
+
+            return (
+              <div key={entry.id || `entry-${idx}`} style={{ marginBottom: idx < log.length - 1 ? '0.35rem' : 0 }}>
+                {/* Operation message line */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.8)' }}>
+                  {/* Status light */}
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                    background: entry.status === 'success' ? '#10b981' : entry.status === 'error' ? '#ef4444' : '#f59e0b',
+                    boxShadow: `0 0 6px ${entry.status === 'success' ? '#10b981' : entry.status === 'error' ? '#ef4444' : '#f59e0b'}`,
+                  }} />
+                  <span>{entryIcon}</span>
+                  <span style={{ color: entryColor }}>{entry.message}</span>
+                </div>
+
+                {/* RAG Results - collapsible */}
+                {ragResultData && (
+                  <CollapsibleResult label="View results" count={ragResultData.reduce((acc, r) => acc + (r.results?.length || 0), 0)} icon="📄" color="#10b981">
+                    {ragResultData.map((rag, ragIdx) => (
+                      <div key={rag.ragId || `rag-${ragIdx}`} style={{ marginBottom: '0.35rem' }}>
+                        <div style={{ fontSize: '0.65rem', color: '#10b981', marginBottom: '0.2rem' }}>
+                          {rag.ragIcon || '📄'} {rag.ragName}
+                        </div>
+                        {rag.results?.map((result, rIdx) => (
+                          <div key={result.id || `result-${rIdx}`} style={{ padding: '0.25rem 0.4rem', marginBottom: '0.2rem', background: 'rgba(16,185,129,0.1)', borderRadius: '3px', borderLeft: '2px solid #10b981' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', marginBottom: '0.15rem' }}>
+                              {result.title && <span style={{ color: '#fff' }}>{result.title}</span>}
+                              <span style={{ color: 'rgba(255,255,255,0.4)' }}>score: {result.score.toFixed(4)}</span>
+                            </div>
+                            <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.3 }}>
+                              {result.content.length > 150 ? result.content.substring(0, 150) + '...' : result.content}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </CollapsibleResult>
+                )}
+
+                {/* History Results - collapsible */}
+                {historyResultData && (
+                  <CollapsibleResult label="View matches" count={historyResultData.length} icon="🕐" color="#f59e0b">
+                    {historyResultData.map((match, mIdx) => (
+                      <div key={match.chatId || `match-${mIdx}`} style={{ padding: '0.25rem 0.4rem', marginBottom: '0.2rem', background: 'rgba(245,158,11,0.1)', borderRadius: '3px', borderLeft: '2px solid #f59e0b' }}>
+                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: '0.1rem' }}>score: {match.score.toFixed(4)}</div>
+                        {match.messages?.slice(0, 1).map((msg, msgIdx) => (
+                          <div key={`msg-${msgIdx}`} style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)' }}>
+                            {msg.content.length > 100 ? msg.content.substring(0, 100) + '...' : msg.content}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </CollapsibleResult>
+                )}
+
+                {/* Reasoning text - inline */}
+                {reasoningText && (
+                  <div style={{ marginLeft: '1.5rem', marginTop: '0.15rem', padding: '0.25rem 0.4rem', background: entry.type === 'reasoning' ? 'rgba(139,92,246,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '3px', borderLeft: `2px solid ${entry.type === 'reasoning' ? '#8b5cf6' : '#f59e0b'}` }}>
+                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {reasoningText.length > 200 ? reasoningText.substring(0, 200) + '...' : reasoningText}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Connector types
@@ -2222,261 +2425,372 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               const isUserMessageLong = msg.role === 'user' && msg.content.length > 200;
               const isUserMessageExpanded = expandedUserMessages.has(msg.id);
 
-              return (
-                <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  <div
-                    style={{
-                      maxWidth: '80%',
-                      padding: '0.875rem 1rem',
-                      borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                      background: msg.role === 'user' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : isAgentMessage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)',
-                      color: '#fff',
-                      cursor: msg.role === 'user' && isUserMessageLong ? 'pointer' : 'default',
-                    }}
-                    onClick={() => {
-                      if (msg.role === 'user' && isUserMessageLong) {
-                        setExpandedUserMessages(prev => {
-                          const newSet = new Set(prev);
-                          if (newSet.has(msg.id)) {
-                            newSet.delete(msg.id);
-                          } else {
-                            newSet.add(msg.id);
-                          }
-                          return newSet;
-                        });
-                      }
-                    }}
-                  >
-                    {msg.role === 'assistant' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>
-                        {isAgentMessage && agentConnector ? (
-                          <>
-                            <FaviconImage
-                              iconUrl={agentConnector.icon_url || undefined}
-                              baseUrl={agentConnector.external_url?.startsWith('http') ? agentConnector.external_url : undefined}
-                              size={14}
-                              fallbackEmoji="🤖"
-                            />
-                            <span>{agentConnector.display_name}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>{msgModelData?.icon || selectedModelData?.icon}</span>
-                            <span>{msgModelData?.name || selectedModelData?.name || 'AI'}</span>
-                          </>
+              // User messages: bubble style, right-aligned
+              if (msg.role === 'user') {
+                return (
+                  <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <div
+                      style={{
+                        maxWidth: '80%',
+                        padding: '0.875rem 1rem',
+                        borderRadius: '18px 18px 4px 18px',
+                        background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                        color: '#fff',
+                        cursor: isUserMessageLong ? 'pointer' : 'default',
+                      }}
+                      onClick={() => {
+                        if (isUserMessageLong) {
+                          setExpandedUserMessages(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(msg.id)) {
+                              newSet.delete(msg.id);
+                            } else {
+                              newSet.add(msg.id);
+                            }
+                            return newSet;
+                          });
+                        }
+                      }}
+                    >
+                      <div style={{
+                        fontSize: '0.875rem',
+                        maxHeight: isUserMessageLong && !isUserMessageExpanded ? '5.25rem' : 'none',
+                        overflow: 'hidden',
+                        position: 'relative',
+                      }}>
+                        <MarkdownContent content={msg.content} />
+                        {isUserMessageLong && !isUserMessageExpanded && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: '2.5rem',
+                            background: 'linear-gradient(transparent 0%, rgba(99, 102, 241, 0.9) 50%, rgba(99, 102, 241, 1) 100%)',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                            paddingBottom: '0.35rem',
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>▼ Click to expand</span>
+                          </div>
                         )}
                       </div>
-                    )}
-                    {/* Reasoning bubbles for A2A agent messages */}
-                    {msg.role === 'assistant' && msg.reasoningEvents && msg.reasoningEvents.length > 0 && (
-                      <ReasoningBubbleList events={msg.reasoningEvents} maxVisible={3} />
-                    )}
-                    {/* RAG/History context badge for messages that used retrieval */}
-                    {msg.role === 'assistant' && (msg.ragData || msg.historyData) && (
-                      <RetrievalEventsDisplay
-                        data={{
-                          ragEvents: msg.ragData as RAGRetrievalEvent[],
-                          historyEvents: msg.historyData as HistoryMatchEvent[]
-                        }}
-                        style={{ marginBottom: '0.5rem' }}
-                      />
-                    )}
-                    <div style={{
-                      fontSize: '0.875rem',
-                      maxHeight: msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded ? '5.25rem' : 'none',
-                      overflow: 'hidden',
-                      position: 'relative',
-                    }}>
-                      <MarkdownContent content={msg.content} />
-                      {msg.role === 'user' && isUserMessageLong && !isUserMessageExpanded && (
-                        <div style={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: '2.5rem',
-                          background: 'linear-gradient(transparent 0%, rgba(99, 102, 241, 0.9) 50%, rgba(99, 102, 241, 1) 100%)',
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          justifyContent: 'center',
-                          paddingBottom: '0.35rem',
-                        }}>
-                          <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>▼ Click to expand</span>
+                      {isUserMessageLong && isUserMessageExpanded && (
+                        <div style={{ marginTop: '0.75rem', textAlign: 'center', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500 }}>▲ Click to collapse</span>
+                        </div>
+                      )}
+                      {msg.tokens && msg.tokens.input > 0 && (
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input} prompt</span>
                         </div>
                       )}
                     </div>
-                    {isUserMessageLong && isUserMessageExpanded && (
-                      <div style={{ marginTop: '0.75rem', textAlign: 'center', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 500 }}>▲ Click to collapse</span>
-                      </div>
-                    )}
-                    {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0) && (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {msg.role === 'user' && msg.tokens.input > 0 && (
-                          <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#10b981' }}>↑ {msg.tokens.input} prompt</span>
-                        )}
-                        {msg.role === 'assistant' && msg.tokens.output > 0 && (
-                          <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output} generated</span>
-                        )}
-                        {msg.role === 'assistant' && (
-                          <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: isAgentMessage ? 'rgba(255,255,255,0.5)' : '#f59e0b' }}>
-                            {isAgentMessage ? '$0.00' : formatCurrency(calculateTokenCost(msg.model || selectedModel, msg.tokens.input, msg.tokens.output))}
-                          </span>
-                        )}
-                      </div>
+                    {/* Retry button for failed user messages */}
+                    {showRetry && (
+                      <button
+                        onClick={retryFailedMessage}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          marginTop: '0.5rem',
+                          padding: '0.35rem 0.65rem',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          borderRadius: '8px',
+                          color: '#ef4444',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                          e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                          e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                        }}
+                        title="Retry sending this message"
+                      >
+                        <span style={{ fontSize: '0.85rem' }}>↻</span>
+                        <span>Retry</span>
+                      </button>
                     )}
                   </div>
-                  {/* Copy/Like/Dislike buttons for assistant messages */}
-                  {msg.role === 'assistant' && (
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem' }}>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(msg.content);
-                            // Visual feedback
-                            const btn = document.activeElement as HTMLButtonElement;
-                            if (btn) {
-                              btn.textContent = '✓';
-                              setTimeout(() => { btn.textContent = '📋'; }, 1500);
-                            }
-                          } catch (err) {
-                            console.error('Failed to copy:', err);
-                          }
-                        }}
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          background: 'transparent',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          borderRadius: '6px',
-                          color: 'rgba(255,255,255,0.5)',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
-                          e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
-                          e.currentTarget.style.color = '#a78bfa';
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
-                        }}
-                        title="Copy response"
-                      >
-                        📋
-                      </button>
-                      <button
-                        onClick={() => {/* TODO: implement like functionality */}}
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          background: 'transparent',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          borderRadius: '6px',
-                          color: 'rgba(255,255,255,0.5)',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
-                          e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-                          e.currentTarget.style.color = '#10b981';
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
-                        }}
-                        title="Good response"
-                      >
-                        👍
-                      </button>
-                      <button
-                        onClick={() => {/* TODO: implement dislike functionality */}}
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          background: 'transparent',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          borderRadius: '6px',
-                          color: 'rgba(255,255,255,0.5)',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                          e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                          e.currentTarget.style.color = '#ef4444';
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-                          e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
-                        }}
-                        title="Bad response"
-                      >
-                        👎
-                      </button>
+                );
+              }
+
+              // Assistant messages: full-width with separator lines, no bubble
+              return (
+                <div key={msg.id} style={{
+                  width: '100%',
+                  paddingBottom: '1rem',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                }}>
+                  {/* Header with icon */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    paddingBottom: '0.5rem',
+                    marginBottom: '0.75rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  }}>
+                    {isAgentMessage && agentConnector ? (
+                      <>
+                        <FaviconImage
+                          iconUrl={agentConnector.icon_url || undefined}
+                          baseUrl={agentConnector.external_url?.startsWith('http') ? agentConnector.external_url : undefined}
+                          size={20}
+                          fallbackEmoji="🤖"
+                        />
+                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{agentConnector.display_name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '1.1rem' }}>{msgModelData?.icon || selectedModelData?.icon}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{msgModelData?.name || selectedModelData?.name || 'AI'}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Unified Reasoning Data Block - RAG, History, and Agent reasoning */}
+                  {(msg.ragData || msg.historyData || (msg.reasoningEvents && msg.reasoningEvents.length > 0)) && (
+                    <ReasoningDataBlock
+                      key={`reasoning-${msg.id}`}
+                      ragData={msg.ragData as RAGRetrievalEvent[]}
+                      historyData={msg.historyData as HistoryMatchEvent[]}
+                      reasoningEvents={msg.reasoningEvents}
+                    />
+                  )}
+
+                  {/* Response content - full width */}
+                  <div style={{ fontSize: '0.875rem', color: '#fff', lineHeight: 1.6 }}>
+                    <MarkdownContent content={msg.content} />
+                  </div>
+
+                  {/* Token consumption + cost */}
+                  {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0) && (
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {msg.tokens.output > 0 && (
+                        <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#60a5fa' }}>↓ {msg.tokens.output} tokens</span>
+                      )}
+                      <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '4px', color: isAgentMessage ? 'rgba(255,255,255,0.5)' : '#f59e0b' }}>
+                        {isAgentMessage ? '$0.00' : formatCurrency(calculateTokenCost(msg.model || selectedModel, msg.tokens.input, msg.tokens.output))}
+                      </span>
                     </div>
                   )}
-                  {/* Retry button for failed messages */}
-                  {showRetry && (
+
+                  {/* Like/Dislike/Copy buttons */}
+                  <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem' }}>
                     <button
-                      onClick={retryFailedMessage}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(msg.content);
+                          const btn = document.activeElement as HTMLButtonElement;
+                          if (btn) {
+                            btn.textContent = '✓';
+                            setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                          }
+                        } catch (err) {
+                          console.error('Failed to copy:', err);
+                        }
+                      }}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        marginTop: '0.5rem',
-                        padding: '0.35rem 0.65rem',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: '8px',
-                        color: '#ef4444',
+                        padding: '0.25rem 0.5rem',
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: 'rgba(255,255,255,0.5)',
                         fontSize: '0.75rem',
                         cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
                         transition: 'all 0.2s',
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
-                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+                        e.currentTarget.style.color = '#a78bfa';
                       }}
                       onMouseLeave={e => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
                       }}
-                      title="Retry sending this message"
+                      title="Copy response"
                     >
-                      <span style={{ fontSize: '0.85rem' }}>↻</span>
-                      <span>Retry</span>
+                      📋
                     </button>
-                  )}
+                    <button
+                      onClick={() => {/* TODO: implement like functionality */}}
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                        e.currentTarget.style.color = '#10b981';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                      }}
+                      title="Good response"
+                    >
+                      👍
+                    </button>
+                    <button
+                      onClick={() => {/* TODO: implement dislike functionality */}}
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                        e.currentTarget.style.color = '#ef4444';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                      }}
+                      title="Bad response"
+                    >
+                      👎
+                    </button>
+                  </div>
                 </div>
               );
             })}
             {isLoading && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '85%', width: '100%' }}>
-                {/* Show retrieval events (RAG search, history matching) */}
-                {(retrievalEvents.isSearching || retrievalEvents.ragEvents || retrievalEvents.historyEvents || retrievalEvents.isSending) && (
-                  <RetrievalEventsDisplay data={retrievalEvents} style={{ width: '100%', marginBottom: '0.5rem' }} />
-                )}
-                {/* Show streaming reasoning events */}
-                {isStreaming && streamingReasoningEvents.length > 0 && (
-                  <div style={{ width: '100%', marginBottom: '0.5rem' }}>
-                    <ReasoningBubbleList events={streamingReasoningEvents} maxVisible={5} />
-                  </div>
-                )}
+                {/* Live status messages - all steps visible with status lights */}
+                <div style={{ width: '100%', marginBottom: '0.5rem' }}>
+                  {/* Step 1: Knowledge base retrieval */}
+                  {(retrievalEvents.isSearching || retrievalEvents.ragEvents) && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.4rem 0.6rem',
+                      marginBottom: '0.25rem',
+                      fontSize: '0.7rem',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}>
+                      {/* Status light */}
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: retrievalEvents.isSearching ? '#f59e0b' : '#10b981',
+                        boxShadow: retrievalEvents.isSearching
+                          ? '0 0 6px #f59e0b'
+                          : '0 0 6px #10b981',
+                        animation: retrievalEvents.isSearching ? 'pulse 1s infinite' : 'none',
+                      }} />
+                      <span>📚</span>
+                      <span>
+                        {retrievalEvents.isSearching
+                          ? 'Retrieving from knowledge bases...'
+                          : `Retrieved ${retrievalEvents.ragEvents?.reduce((acc, r) => acc + (r.results?.length || 0), 0) || 0} results from knowledge bases`}
+                      </span>
+                    </div>
+                  )}
+                  {/* Step 2: History context */}
+                  {retrievalEvents.historyEvents && retrievalEvents.historyEvents.length > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.4rem 0.6rem',
+                      marginBottom: '0.25rem',
+                      fontSize: '0.7rem',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}>
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: '#10b981',
+                        boxShadow: '0 0 6px #10b981',
+                      }} />
+                      <span>🕐</span>
+                      <span>Retrieved {retrievalEvents.historyEvents.length} matches from chat history</span>
+                    </div>
+                  )}
+                  {/* Step 3: Sending to model */}
+                  {(retrievalEvents.isSending || isStreaming) && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.4rem 0.6rem',
+                      marginBottom: '0.25rem',
+                      fontSize: '0.7rem',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}>
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: isStreaming ? '#10b981' : '#f59e0b',
+                        boxShadow: isStreaming ? '0 0 6px #10b981' : '0 0 6px #f59e0b',
+                        animation: !isStreaming ? 'pulse 1s infinite' : 'none',
+                      }} />
+                      <span>🧠</span>
+                      <span>{isStreaming ? 'Connected to model' : 'Sending to model with context...'}</span>
+                    </div>
+                  )}
+                  {/* Step 4: Streaming reasoning events from agent */}
+                  {isStreaming && streamingReasoningEvents.length > 0 && streamingReasoningEvents.map((event, idx) => (
+                    <div key={event.id || idx} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.4rem 0.6rem',
+                      marginBottom: '0.25rem',
+                      fontSize: '0.7rem',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}>
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: idx === streamingReasoningEvents.length - 1 ? '#f59e0b' : '#10b981',
+                        boxShadow: idx === streamingReasoningEvents.length - 1 ? '0 0 6px #f59e0b' : '0 0 6px #10b981',
+                        animation: idx === streamingReasoningEvents.length - 1 ? 'pulse 1s infinite' : 'none',
+                      }} />
+                      <span>{event.reasoningType === 'thinking' ? '🧠' : '🔨'}</span>
+                      <span>{event.title || (event.reasoningType === 'thinking' ? 'Thinking...' : 'Action')}</span>
+                    </div>
+                  ))}
+                </div>
                 {/* Show streaming content or loading dots */}
                 <div style={{ padding: '0.875rem 1rem', borderRadius: '18px 18px 18px 4px', background: isExternalAgentSelected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.1)', width: '100%' }}>
                   {isStreaming && streamingContent ? (
