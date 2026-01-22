@@ -272,6 +272,7 @@ COMMENT ON COLUMN automations.yaml_definition IS 'YAML workflow definition - sou
 COMMENT ON COLUMN automations.workflow_version IS 'Schema version of the YAML workflow (for future migrations)';
 COMMENT ON COLUMN automations.trigger_config IS 'Parsed trigger configuration from YAML';
 COMMENT ON COLUMN automations.cron_expression IS 'Normalized cron expression for scheduling (5-field format)';
+COMMENT ON COLUMN automations.schedule_config IS 'Schedule configuration: {hour, minute, days, monthDays, weeklyFrequency}';
 COMMENT ON COLUMN automations.required_inputs IS 'Pre-configured inputs: {fieldName: {value, sensitive, humanInput, description}}';
 COMMENT ON COLUMN automations.output_config IS 'Output configuration: [{type, channel, template}]';
 COMMENT ON COLUMN automations.display_name IS 'User-friendly display name for the automation';
