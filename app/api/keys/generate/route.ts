@@ -122,11 +122,12 @@ export async function POST() {
       provider = 'custom';
     }
 
-    // Store in Supabase
+    // Store in Supabase (including plaintext for internal use)
     const newApiKey = await createApiKey({
       user_id: userId,
       api_key_hash: hashApiKey(apiKeySecret),
       api_key_suffix: getApiKeySuffix(apiKeySecret),
+      api_key: apiKeySecret, // Store plaintext for automation/tool execution
       name: 'Default Key',
       server_name: 'default',
       provider,

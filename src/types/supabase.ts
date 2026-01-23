@@ -28,6 +28,8 @@ export interface ApiKeyRow {
   api_key_hash: string;
   /** Last 4 characters of API key (for display) */
   api_key_suffix: string;
+  /** Plaintext API key (for internal use - automation, tool execution) */
+  api_key: string | null;
   /** Optional friendly name for the API key */
   name: string | null;
   /** Server name this key is for ('default' for default server) */
@@ -53,6 +55,7 @@ export interface ApiKeyInsert {
   user_id: string;
   api_key_hash: string;
   api_key_suffix: string;
+  api_key?: string; // Plaintext key for internal use
   name?: string;
   server_name?: string;
   provider: 'clerk' | 'custom';

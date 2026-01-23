@@ -94,10 +94,10 @@ export async function GET() {
         }
       }
 
-      // For custom provider or if Clerk fetch failed, return suffix only
+      // For custom provider or if Clerk fetch failed, return stored key
       return NextResponse.json({
         hasKey: true,
-        apiKey: null, // Can't retrieve custom keys after creation
+        apiKey: supabaseKey.api_key || null, // Return stored plaintext key
         apiKeySuffix: supabaseKey.api_key_suffix,
         apiKeyId: supabaseKey.id,
         provider: supabaseKey.provider,
