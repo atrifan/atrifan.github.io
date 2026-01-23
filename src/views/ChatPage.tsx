@@ -344,6 +344,7 @@ interface ChatConnector {
   icon: string;
   icon_url?: string;
   is_enabled: boolean;
+  tool_count?: number; // Number of tools in this connector
 }
 
 interface MCPServer {
@@ -1145,11 +1146,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
     }
   };
 
-  // Fetch connectors
+  // Fetch connectors (with tool counts)
   const fetchConnectors = async () => {
     try {
       setLoadingConnectors(true);
-      const response = await fetch('/api/ai/connectors?context=chat');
+      const response = await fetch('/api/ai/connectors?context=chat&include_tool_count=true');
       if (response.ok) {
         const data = await response.json();
         setConnectors(data.connectors || []);

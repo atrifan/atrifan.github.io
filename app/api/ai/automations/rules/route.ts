@@ -32,9 +32,11 @@ interface NotificationTool {
 
 interface Connector {
   id: string;
+  user_id: string;
   display_name: string;
   connector_type: string;
   mcp_server_id?: string;
+  server_name?: string;
   external_url?: string;
 }
 
@@ -75,11 +77,14 @@ export async function GET(request: NextRequest) {
       rulesContent = '# Workflow Rules\n\nRules file not found.';
     }
 
-    // Fetch user's connectors
+    // Fetch user's connectors for automation context only
+    // Exclude external_agent and internal_agent - automations only use MCP connectors
     const { data: connectors } = await supabase
       .from('chat_connectors')
-      .select('id, display_name, connector_type, mcp_server_id, external_url')
-      .eq('user_id', userId);
+      .select('id, user_id, display_name, connector_type, mcp_server_id, server_name, external_url')
+      .eq('user_id', userId)
+      .eq('context', 'automation')
+      .in('connector_type', ['internal_mcp', 'external_mcp']);
 
     // Fetch user's automations for trigger_automation block
     const { data: automations } = await supabase
@@ -88,7 +93,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId)
       .eq('is_active', true);
 
-    // Fetch MCP servers for internal connectors
+    // Fetch MCP servers for external_mcp connectors
     const mcpServerIds = (connectors || [])
       .filter((c: Connector) => c.mcp_server_id)
       .map((c: Connector) => c.mcp_server_id);
@@ -167,10 +172,14 @@ async function buildToolsDocumentation(
 
   for (const connector of connectors) {
     const server = mcpServers.find(s => s.id === connector.mcp_server_id);
-    const serverName = server?.server_name || connector.display_name.toLowerCase().replace(/\s+/g, '-');
+    // For internal_mcp, server_name is stored on the connector
+    // For external_mcp, get from mcp_servers
+    const serverName = connector.server_name
+      || server?.server_name
+      || connector.display_name.toLowerCase().replace(/\s+/g, '-');
 
     // Fetch tools for this connector
-    const tools = await fetchToolsForConnector(connector, server, supabase);
+    const tools = await fetchToolsForConnector(connector, serverName, server, supabase);
 
     if (tools.length === 0) continue;
 
@@ -375,22 +384,45 @@ function buildNotificationSection(notificationTools: NotificationTool[]): string
 
 async function fetchToolsForConnector(
   connector: Connector,
+  serverName: string,
   server: MCPServer | undefined,
   supabase: SupabaseClient
 ): Promise<MCPTool[]> {
-  // For internal MCP connectors, fetch tools from the tools table via server_name
-  if (connector.connector_type === 'internal_mcp' && server) {
-    const { data: tools } = await supabase
-      .from('tools')
-      .select('name, description, input_schema, output_schema')
-      .eq('server_name', server.server_name);
+  // For internal MCP connectors (compositions), fetch from server_tools → tools
+  if (connector.connector_type === 'internal_mcp') {
+    if (!serverName || !connector.user_id) {
+      return [];
+    }
 
-    return (tools || []).map(t => ({
-      name: t.name,
-      description: t.description || '',
-      inputSchema: t.input_schema,
-      outputSchema: t.output_schema,
-    }));
+    // server_tools links user_id + server_name to tool_id
+    const { data: serverTools } = await supabase
+      .from('server_tools')
+      .select(`
+        is_enabled,
+        tool:tools (
+          name,
+          description,
+          input_schema,
+          output_schema
+        )
+      `)
+      .eq('user_id', connector.user_id)
+      .eq('server_name', serverName)
+      .eq('is_enabled', true);
+
+    if (serverTools && serverTools.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return serverTools.map((st: any) => {
+        const tool = Array.isArray(st.tool) ? st.tool[0] : st.tool;
+        return {
+          name: tool?.name || 'unknown',
+          description: tool?.description || '',
+          inputSchema: tool?.input_schema || {},
+          outputSchema: tool?.output_schema || {},
+        };
+      }).filter((t: MCPTool) => t.name !== 'unknown');
+    }
+    return [];
   }
 
   // For external MCP connectors, fetch tools from mcp_server_tools table

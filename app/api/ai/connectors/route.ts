@@ -7,8 +7,45 @@ export const dynamic = 'force-dynamic';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
+// Helper to get tool count for a connector
+async function getToolCountForConnector(connector: Record<string, unknown>): Promise<number> {
+  const connectorType = connector.connector_type as string;
+  const userId = connector.user_id as string | undefined;
+  const serverName = connector.server_name as string | undefined;
+  const mcpServerId = connector.mcp_server_id as string | undefined;
+
+  // For internal MCP connectors (compositions), count from server_tools table
+  if (connectorType === 'internal_mcp' && userId && serverName) {
+    const { count } = await db
+      .from('server_tools')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('server_name', serverName)
+      .eq('is_enabled', true);
+    return count || 0;
+  }
+
+  // For external MCP connectors (imports), count from mcp_server_tools table
+  if (connectorType === 'external_mcp' && mcpServerId) {
+    const { count } = await db
+      .from('mcp_server_tools')
+      .select('*', { count: 'exact', head: true })
+      .eq('mcp_server_id', mcpServerId)
+      .eq('is_enabled', true);
+    return count || 0;
+  }
+
+  // For agents, return 1 (the invoke tool)
+  if (connectorType === 'internal_agent' || connectorType === 'external_agent') {
+    return 1;
+  }
+
+  return 0;
+}
+
 // GET - List user's chat connectors
 // Query param: context=chat|automation (default: chat)
+// Query param: include_tool_count=true (optional, adds tool_count to each connector)
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -18,6 +55,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const context = searchParams.get('context') || 'chat';
+    const includeToolCount = searchParams.get('include_tool_count') === 'true';
 
     // Get all connectors for this user and context
     // Try with icon_url and context first, fall back if columns don't exist
@@ -28,10 +66,11 @@ export async function GET(request: NextRequest) {
       .from('chat_connectors')
       .select(`
         id,
+        user_id,
         connector_type,
         mcp_server_id,
         a2a_agent_id,
-        api_key_id,
+        server_name,
         external_url,
         external_auth_type,
         external_auth_config,
@@ -55,8 +94,10 @@ export async function GET(request: NextRequest) {
         .from('chat_connectors')
         .select(`
           id,
+          user_id,
           connector_type,
           mcp_server_id,
+          server_name,
           external_url,
           display_name,
           description,
@@ -80,7 +121,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch connectors' }, { status: 500 });
     }
 
-    return NextResponse.json({ connectors: connectors || [] });
+    // Add tool counts if requested
+    let connectorsWithCounts = connectors || [];
+    let totalToolCount = 0;
+
+    if (includeToolCount && connectorsWithCounts.length > 0) {
+      connectorsWithCounts = await Promise.all(
+        connectorsWithCounts.map(async (c: Record<string, unknown>) => {
+          const toolCount = await getToolCountForConnector(c);
+          totalToolCount += toolCount;
+          return { ...c, tool_count: toolCount };
+        })
+      );
+    }
+
+    return NextResponse.json({
+      connectors: connectorsWithCounts,
+      totalToolCount: includeToolCount ? totalToolCount : undefined,
+    });
   } catch (error) {
     console.error('Error in connectors API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

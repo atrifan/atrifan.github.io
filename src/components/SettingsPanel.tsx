@@ -16,6 +16,7 @@ interface Connector {
   mcp_server_id?: string | null;
   a2a_agent_id?: string | null;
   api_key_id?: string | null;
+  tool_count?: number; // Number of tools in this connector
 }
 
 interface Personality {
@@ -585,6 +586,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                             <FaviconImage iconUrl={c.icon_url || undefined} baseUrl={fallbackUrl} size={20} fallbackEmoji={c.icon || (c.connector_type === 'external_agent' ? '🤖' : c.connector_type === 'external_mcp' ? '🌐' : '🔧')} />
                             <span style={{ color: '#fff', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.display_name}</span>
                             <span style={{ background: typeConfig.badgeBg, color: '#fff', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.55rem', fontWeight: 600, flexShrink: 0 }}>{typeConfig.badge}</span>
+                            {c.tool_count !== undefined && c.tool_count > 0 && (
+                              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', flexShrink: 0 }}>🔧 {c.tool_count}</span>
+                            )}
                           </div>
                           <button onClick={() => removeConnector(c.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', flexShrink: 0 }}>✕</button>
                         </div>

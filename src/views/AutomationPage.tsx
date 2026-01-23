@@ -162,6 +162,7 @@ interface Connector {
   mcp_server_id?: string | null;
   a2a_agent_id?: string | null;
   api_key_id?: string | null;
+  tool_count?: number; // Number of tools in this connector
 }
 
 interface MCPServer {
@@ -363,6 +364,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set()); // Which servers' tools to use
+  const [totalToolsCount, setTotalToolsCount] = useState(0); // Total tools from enabled connectors
 
   // Budget
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
@@ -759,10 +761,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   };
 
-  // Fetch connectors for automation
+  // Fetch connectors for automation (with tool counts)
   const fetchConnectors = async () => {
     try {
-      const response = await fetch('/api/ai/connectors?context=automation');
+      const response = await fetch('/api/ai/connectors?context=automation&include_tool_count=true');
       if (response.ok) {
         const data = await response.json();
         // Filter out external agents for automation mode
@@ -770,6 +772,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           c.connector_type !== 'external_agent' && c.connector_type !== 'internal_agent'
         );
         setConnectors(mcpConnectors);
+        // Update total tools count
+        if (data.totalToolCount !== undefined) {
+          setTotalToolsCount(data.totalToolCount);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch connectors:', error);
@@ -3582,7 +3588,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         availableMcpServers={availableMcpServers}
         addInternalMcpConnector={addInternalMcpConnector}
         addExternalMcpConnector={addExternalMcpConnector}
-        totalToolsCount={mcpTools.length}
+        totalToolsCount={totalToolsCount}
         personalities={personalities}
         activePersonalityIds={activePersonalityIds}
         togglePersonality={togglePersonality}
