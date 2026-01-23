@@ -33,15 +33,10 @@ interface RestApiEndpoint {
   tools?: RestApiTool;
 }
 
-interface RestApiEnvironment {
-  id: string;
-  name: string;
-  host: string;
-}
-
 interface RestApiSpec {
   id: string;
   server_name: string;
+  host: string;
   api_title: string;
   api_description: string;
   api_version: string;
@@ -58,7 +53,7 @@ interface RestApiSpec {
   updated_at: string;
 }
 
-type TabType = 'overview' | 'environments' | 'tools' | 'spec';
+type TabType = 'overview' | 'tools' | 'spec';
 
 const methodColors: Record<string, string> = {
   GET: '#10b981',
@@ -86,7 +81,6 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
   // Data
   const [spec, setSpec] = useState<RestApiSpec | null>(null);
   const [endpoints, setEndpoints] = useState<RestApiEndpoint[]>([]);
-  const [environments, setEnvironments] = useState<RestApiEnvironment[]>([]);
 
   // Edit states
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -148,7 +142,6 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       const data = await response.json();
       setSpec(data.spec);
       setEndpoints(data.endpoints || []);
-      setEnvironments(data.environments || []);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -317,7 +310,6 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
 
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'overview', label: 'Overview', icon: '📋' },
-    { id: 'environments', label: 'Environments', icon: '🌍' },
     { id: 'tools', label: 'Tools', icon: '🔧' },
     { id: 'spec', label: 'Spec', icon: '📄' },
   ];
@@ -417,7 +409,6 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
       {/* Tab Content */}
       <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '1.5rem clamp(1rem, 4vw, 2rem) 2rem' }}>
         {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'environments' && renderEnvironmentsTab()}
         {activeTab === 'tools' && renderToolsTab()}
         {activeTab === 'spec' && renderSpecTab()}
       </div>
@@ -433,7 +424,7 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
           <div style={{ background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
             <h3 style={{ color: '#fff', margin: '0 0 0.5rem' }}>Delete REST API?</h3>
-            <p style={{ color: 'rgba(255,255,255,0.6)', margin: '0 0 1.5rem' }}>This will delete all endpoints, tools, and environments. This action cannot be undone.</p>
+            <p style={{ color: 'rgba(255,255,255,0.6)', margin: '0 0 1.5rem' }}>This will delete all endpoints and tools. This action cannot be undone.</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
               <button onClick={() => setShowDeleteModal(false)} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleDelete} disabled={saving} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: 'none', background: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', cursor: 'pointer' }}>{saving ? 'Deleting...' : 'Delete'}</button>
@@ -522,10 +513,23 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
           <StatCard icon="🔧" label="Tools" value={endpoints.length} />
-          <StatCard icon="🌍" label="Environments" value={environments.length} />
           <StatCard icon="📅" label="Created" value={new Date(spec.created_at).toLocaleDateString()} />
           <StatCard icon="🔄" label="Updated" value={new Date(spec.updated_at).toLocaleDateString()} />
         </div>
+
+        {/* Host */}
+        <EditableField
+          label="Host URL"
+          value={spec.host || ''}
+          field="host"
+          editingField={editingField}
+          editValue={editValue}
+          onStartEdit={startEdit}
+          onSave={saveField}
+          onCancel={cancelEdit}
+          onChange={setEditValue}
+          saving={saving}
+        />
 
         {/* Authentication */}
         <AuthenticationSection
@@ -555,29 +559,6 @@ export function RestApiEditPage({ specId, isPro, isPlus }: RestApiEditPageProps)
     );
   }
 
-
-  function renderEnvironmentsTab() {
-    return (
-      <div style={{ display: 'grid', gap: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ color: '#fff', margin: 0 }}>Environments ({environments.length})</h3>
-          <AddEnvironmentButton specId={specId} onAdd={fetchSpec} />
-        </div>
-
-        {environments.length === 0 ? (
-          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
-            No environments found. Add one to create tools for a new server.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {environments.map(env => (
-              <EnvironmentCard key={env.id} env={env} onUpdate={fetchSpec} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   function renderToolsTab() {
     return (
@@ -791,68 +772,6 @@ function StatCard({ icon, label, value }: { icon: string; label: string; value: 
       <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{icon}</div>
       <div style={{ color: '#fff', fontSize: '1.25rem', fontWeight: 600 }}>{value}</div>
       <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{label}</div>
-    </div>
-  );
-}
-
-function EnvironmentCard({ env, onUpdate }: { env: { id: string; name: string; host: string }; onUpdate: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(env.name);
-  const [host, setHost] = useState(env.host);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/swagger/environments/${env.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, host }),
-      });
-      if (response.ok) {
-        setEditing(false);
-        onUpdate();
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!confirm('Delete this environment?')) return;
-    setDeleting(true);
-    try {
-      const response = await fetch(`/api/swagger/environments/${env.id}`, { method: 'DELETE' });
-      if (response.ok) onUpdate();
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-      {editing ? (
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }} />
-          <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="Host URL" style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }} />
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', cursor: 'pointer' }}>{saving ? 'Saving...' : 'Save'}</button>
-            <button onClick={() => setEditing(false)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div>
-            <div style={{ color: '#fff', fontWeight: 600 }}>{env.name}</div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>{env.host}</div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={() => setEditing(true)} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}>✏️</button>
-            <button onClick={handleDelete} disabled={deleting} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}>{deleting ? '...' : '🗑️'}</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1237,149 +1156,4 @@ function DefaultHeadersEditor({ specId, headers, onUpdate }: { specId: string; h
   );
 }
 
-function AddEnvironmentButton({ specId, onAdd }: { specId: string; onAdd: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [createdEnvName, setCreatedEnvName] = useState('');
-  const [toolsCreated, setToolsCreated] = useState(0);
-
-  const handleSubmit = async () => {
-    if (!name.trim() || !host.trim()) {
-      setError('Name and host are required');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/swagger/environments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specId, name: name.trim(), host: host.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create environment');
-      }
-
-      // Show success modal
-      setCreatedEnvName(name.trim());
-      setToolsCreated(data.toolsCreated || 0);
-      setShowSuccess(true);
-      setIsOpen(false);
-      setName('');
-      setHost('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create environment');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      {!isOpen ? (
-        <button
-          onClick={() => setIsOpen(true)}
-          style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontSize: '0.85rem', cursor: 'pointer' }}
-        >
-          + Add Environment
-        </button>
-      ) : (
-        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Environment name (e.g., Staging)"
-              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
-            />
-            <input
-              type="text"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              placeholder="Host URL (e.g., https://staging.api.example.com)"
-              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.9rem' }}
-            />
-            {error && <div style={{ color: '#ef4444', fontSize: '0.8rem' }}>{error}</div>}
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setIsOpen(false); setName(''); setHost(''); setError(null); }} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>
-                Cancel
-              </button>
-              <button onClick={handleSubmit} disabled={saving} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>
-                {saving ? 'Creating...' : 'Create Environment'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccess && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={() => { setShowSuccess(false); onAdd(); }}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: '12px',
-              padding: '2rem',
-              maxWidth: '400px',
-              width: '100%',
-              textAlign: 'center',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
-            <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.25rem' }}>
-              Environment Created!
-            </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>
-              <strong style={{ color: '#10b981' }}>{createdEnvName}</strong> has been created successfully.
-            </p>
-            <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 1.5rem', fontSize: '0.85rem' }}>
-              {toolsCreated} tool{toolsCreated !== 1 ? 's' : ''} created for this environment.
-            </p>
-            <button
-              onClick={() => { setShowSuccess(false); onAdd(); }}
-              style={{
-                padding: '0.75rem 2rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
-                color: '#fff',
-                fontSize: '1rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Got it!
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+// Environment components removed - host is now stored directly on spec

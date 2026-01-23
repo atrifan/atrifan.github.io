@@ -72,7 +72,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { specId } = await params;
     const body = await request.json();
-    const { serverName, apiTitle, apiDescription, defaultHeaders, authType, authConfig } = body;
+    const { serverName, host, apiTitle, apiDescription, defaultHeaders, authType, authConfig } = body;
 
     // Verify ownership
     const { data: existingSpec } = await supabase
@@ -89,6 +89,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Update spec
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (serverName !== undefined) updates.server_name = serverName;
+    if (host !== undefined) updates.host = host;
     if (apiTitle !== undefined) updates.api_title = apiTitle;
     if (apiDescription !== undefined) updates.api_description = apiDescription;
     if (defaultHeaders !== undefined) updates.default_headers = defaultHeaders;

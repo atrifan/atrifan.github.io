@@ -131,10 +131,14 @@ export async function POST(request: NextRequest) {
       faviconUrl = await tryFetchFavicon(sourceUrl) || undefined;
     }
 
-    // 1. Create or update REST API spec
+    // Extract host from environments (first server URL)
+    const host = environments[0]?.host || 'https://api.example.com';
+
+    // 1. Create or update REST API spec (host is now stored directly on spec)
     const specInsert: RestApiSpecInsert = {
       user_id: userId,
       server_name: serverName,
+      host, // Store host directly on spec
       swagger_spec: spec,
       spec_format: specFormat,
       openapi_version: apiInfo.openapiVersion,

@@ -789,12 +789,14 @@ export async function getRestEndpointByToolId(
 }
 
 /**
- * Get REST API endpoint with full details (spec + environment) by tool ID
+ * Get REST API endpoint with full details by tool ID
  * Used for executing REST API calls
+ *
+ * Host is now stored directly on the spec (no more environments)
  */
 export async function getRestEndpointWithDetails(
   toolId: string,
-  environmentId?: string
+  _environmentId?: string // Deprecated, kept for backwards compat
 ): Promise<{
   endpoint: RestApiEndpointRow;
   spec: RestApiSpecRow;
@@ -815,7 +817,7 @@ export async function getRestEndpointWithDetails(
 
   const endpoint = endpointData as unknown as RestApiEndpointRow;
 
-  // Get the spec
+  // Get the spec (which now includes the host directly)
   const { data: specData, error: specError } = await supabase
     .from('rest_api_specs')
     .select('*')
@@ -829,47 +831,28 @@ export async function getRestEndpointWithDetails(
 
   const spec = specData as unknown as RestApiSpecRow;
 
-  // Get environment - either specified or first one for this user
-  let envQuery = supabase
-    .from('environments')
-    .select('id, name, host')
-    .eq('user_id', spec.user_id);
-
-  if (environmentId) {
-    envQuery = envQuery.eq('id', environmentId);
-  }
-
-  const { data: envData, error: envError } = await envQuery.limit(1).single();
-
-  if (envError) {
-    // If no environment found, use a default based on spec
-    console.warn('No environment found, using spec defaults');
-    return {
-      endpoint,
-      spec,
-      environment: {
-        id: 'default',
-        name: 'default',
-        host: 'https://api.example.com', // Will need to be configured
-      },
-    };
-  }
-
+  // Return with host from spec (environment concept removed)
   return {
     endpoint,
     spec,
-    environment: envData as { id: string; name: string; host: string },
+    environment: {
+      id: spec.id,
+      name: spec.server_name,
+      host: spec.host,
+    },
   };
 }
 
 // ============ GraphQL Operations ============
 
 /**
- * Get GraphQL operation with spec and environment details for execution
+ * Get GraphQL operation with spec details for execution
+ *
+ * Host is now stored directly on the spec (no more environments)
  */
 export async function getGraphQLOperationWithDetails(
   toolId: string,
-  environmentId?: string
+  _environmentId?: string // Deprecated, kept for backwards compat
 ): Promise<{
   operation: {
     id: string;
@@ -885,6 +868,7 @@ export async function getGraphQLOperationWithDetails(
     id: string;
     user_id: string;
     server_name: string;
+    host: string;
     default_headers: Record<string, string>;
     auth_type: string;
     auth_config: Record<string, unknown>;
@@ -903,10 +887,10 @@ export async function getGraphQLOperationWithDetails(
     return null;
   }
 
-  // Get spec
+  // Get spec (which now includes the host directly)
   const { data: spec, error: specError } = await supabase
     .from('graphql_specs')
-    .select('id, user_id, server_name, source_url, default_headers, auth_type, auth_config')
+    .select('id, user_id, server_name, host, source_url, default_headers, auth_type, auth_config')
     .eq('id', (operation as { spec_id: string }).spec_id)
     .single();
 
@@ -915,60 +899,19 @@ export async function getGraphQLOperationWithDetails(
     return null;
   }
 
-  // Get environment - either specified or from graphql_environments link
-  let envHost: string;
-  let envId: string;
-  let envName: string;
+  const typedSpec = spec as {
+    id: string;
+    user_id: string;
+    server_name: string;
+    host: string;
+    source_url: string;
+    default_headers: Record<string, string>;
+    auth_type: string;
+    auth_config: Record<string, unknown>;
+  };
 
-  if (environmentId) {
-    const { data: env } = await supabase
-      .from('environments')
-      .select('id, name, host')
-      .eq('id', environmentId)
-      .single();
-
-    if (env) {
-      envId = (env as { id: string }).id;
-      envName = (env as { name: string }).name;
-      envHost = (env as { host: string }).host;
-    } else {
-      // Fall back to source URL
-      envId = 'default';
-      envName = 'default';
-      envHost = (spec as { source_url: string }).source_url;
-    }
-  } else {
-    // Try to get first linked environment
-    const { data: envLink } = await supabase
-      .from('graphql_environments')
-      .select('environment_id')
-      .eq('spec_id', (operation as { spec_id: string }).spec_id)
-      .limit(1)
-      .single();
-
-    if (envLink) {
-      const { data: env } = await supabase
-        .from('environments')
-        .select('id, name, host')
-        .eq('id', (envLink as { environment_id: string }).environment_id)
-        .single();
-
-      if (env) {
-        envId = (env as { id: string }).id;
-        envName = (env as { name: string }).name;
-        envHost = (env as { host: string }).host;
-      } else {
-        envId = 'default';
-        envName = 'default';
-        envHost = (spec as { source_url: string }).source_url;
-      }
-    } else {
-      // Use source URL as default
-      envId = 'default';
-      envName = 'default';
-      envHost = (spec as { source_url: string }).source_url;
-    }
-  }
+  // Use host from spec, fallback to source_url for backwards compat
+  const host = typedSpec.host || typedSpec.source_url;
 
   return {
     operation: operation as {
@@ -981,15 +924,16 @@ export async function getGraphQLOperationWithDetails(
       return_type_kind: string | null;
       description: string | null;
     },
-    spec: spec as {
-      id: string;
-      user_id: string;
-      server_name: string;
-      default_headers: Record<string, string>;
-      auth_type: string;
-      auth_config: Record<string, unknown>;
+    spec: {
+      id: typedSpec.id,
+      user_id: typedSpec.user_id,
+      server_name: typedSpec.server_name,
+      host,
+      default_headers: typedSpec.default_headers,
+      auth_type: typedSpec.auth_type,
+      auth_config: typedSpec.auth_config,
     },
-    environment: { id: envId, name: envName, host: envHost },
+    environment: { id: typedSpec.id, name: typedSpec.server_name, host },
   };
 }
 

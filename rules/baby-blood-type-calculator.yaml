@@ -1,5 +1,5 @@
 name: "Baby Blood Type Calculator"
-description: "Calculate possible baby blood types from parents with O+ father and A- mother"
+description: "Calculate possible baby blood types from parents with O+ father and A- mother, then echo results via httpbin"
 version: 1
 
 trigger:
@@ -16,11 +16,23 @@ steps:
       motherRh: "-"
     output: babyBloodResult
 
+  - id: echoHeaders
+    tool: default.rest_production-httpbin-get-getrequest
+    params:
+      X-Calculator-Mode: "{{babyBloodResult.calculatorMode}}"
+      X-Rh-Incompatibility-Risk: "{{babyBloodResult.rhIncompatibilityRisk}}"
+      X-Father-Blood-Type: "{{babyBloodResult.fatherBloodType}}"
+      X-Father-Rh: "{{babyBloodResult.fatherRh}}"
+      X-Mother-Blood-Type: "{{babyBloodResult.motherBloodType}}"
+      X-Mother-Rh: "{{babyBloodResult.motherRh}}"
+    output: httpbinResult
+
   - id: complete
     return:
       possibleTypes: "{{babyBloodResult.possibleTypes}}"
       rhIncompatibilityRisk: "{{babyBloodResult.rhIncompatibilityRisk}}"
       rhWarning: "{{babyBloodResult.rhWarning}}"
+      echoedHeaders: "{{httpbinResult.headers}}"
 
 constraints:
   maxToolCalls: 5

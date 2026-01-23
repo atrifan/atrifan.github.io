@@ -48,8 +48,6 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
   // Edit states
   const [editingDisplayName, setEditingDisplayName] = useState<string | null>(null);
   const [editDisplayNameValue, setEditDisplayNameValue] = useState('');
-  const [editingEnv, setEditingEnv] = useState<string | null>(null);
-  const [editEnvValue, setEditEnvValue] = useState('');
 
   // Action states
   const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
@@ -184,39 +182,11 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
     }
   };
 
-  // Edit environment
-  const startEditEnv = (agent: A2AAgent) => {
-    setEditingEnv(agent.id);
-    setEditEnvValue(agent.environment_name);
-  };
-
-  const saveEditEnv = async (agentId: string) => {
-    try {
-      const response = await fetch(`/api/agents/${agentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environmentName: editEnvValue }),
-      });
-      if (response.ok) {
-        showNotification('success', 'Environment updated');
-        setEditingEnv(null);
-        await fetchAgents();
-        onDataChange?.();
-      } else {
-        const data = await response.json();
-        showNotification('error', data.error || 'Failed to update');
-      }
-    } catch {
-      showNotification('error', 'Failed to update');
-    }
-  };
-
   // Get tool name for an agent
   const getToolName = (agent: A2AAgent) => {
     if (agent.tool?.name) return agent.tool.name;
-    const envNorm = (agent.environment_name || 'default').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     const agentNorm = agent.agent_name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-    return `a2a_${envNorm}-${agentNorm}`;
+    return `a2a_${agentNorm}`;
   };
 
   // Handle tool selection toggle
@@ -386,10 +356,6 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                     {agent.display_name}
                   </div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 'clamp(0.75rem, 2vw, 0.8rem)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontWeight: 600 }}>
-                      {agent.environment_name || 'default'}
-                    </span>
-                    <span>•</span>
                     <span>1 tool</span>
                     <span>•</span>
                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
@@ -485,30 +451,6 @@ export function AgentToolsSection({ onToolSelect, selectedTools = [], onDataChan
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.9rem' }}>{agent.display_name}</span>
                         <button onClick={() => startEditDisplayName(agent)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit display name">✏️</button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Environment Edit */}
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Environment
-                    </div>
-                    {editingEnv === agent.id ? (
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          type="text"
-                          value={editEnvValue}
-                          onChange={(e) => setEditEnvValue(e.target.value)}
-                          style={{ flex: 1, minWidth: '150px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
-                        />
-                        <button onClick={() => saveEditEnv(agent.id)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
-                        <button onClick={() => setEditingEnv(null)} style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', cursor: 'pointer' }}>Cancel</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <span style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>{agent.environment_name}</span>
-                        <button onClick={() => startEditEnv(agent)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit environment">✏️</button>
                       </div>
                     )}
                   </div>
@@ -672,7 +614,7 @@ function ToolDocsModal({ agent, onClose }: { agent: A2AAgent; onClose: () => voi
         <div style={{ marginBottom: '1.5rem' }}>
           <h3 style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: '0 0 0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tool Name</h3>
           <code style={{ color: '#f59e0b', fontSize: '0.9rem', background: 'rgba(0,0,0,0.3)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>
-            {agent.tool?.name || `a2a_${agent.environment_name}-${agent.agent_name}`}
+            {agent.tool?.name || `a2a_${agent.agent_name}`}
           </code>
         </div>
 

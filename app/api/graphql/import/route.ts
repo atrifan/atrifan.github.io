@@ -122,10 +122,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 1. Create GraphQL spec
+    // 1. Create GraphQL spec (host is now stored directly on spec)
     const specInsert: GraphQLSpecInsert = {
       user_id: userId,
       server_name: serverName,
+      host: sourceUrl, // GraphQL endpoint URL is the host
       schema_json: schema,
       api_title: apiTitle || serverName,
       api_description: apiDescription,

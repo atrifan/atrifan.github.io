@@ -418,6 +418,8 @@ export interface RestApiSpecRow {
   user_id: string;
   /** User-defined server/API name */
   server_name: string;
+  /** Base URL for API calls (e.g., https://httpbin.org) */
+  host: string;
   /** Original swagger spec as JSON */
   swagger_spec: Record<string, unknown>;
   /** Original format: json or yaml */
@@ -456,6 +458,7 @@ export interface RestApiSpecRow {
 export interface RestApiSpecInsert {
   user_id: string;
   server_name: string;
+  host: string;
   swagger_spec: Record<string, unknown>;
   spec_format?: SpecFormat;
   openapi_version?: string;
@@ -476,6 +479,7 @@ export interface RestApiSpecInsert {
  */
 export interface RestApiSpecUpdate {
   server_name?: string;
+  host?: string;
   swagger_spec?: Record<string, unknown>;
   default_headers?: Record<string, string>;
   auth_type?: RestAuthType;
@@ -715,6 +719,8 @@ export interface GraphQLSpecRow {
   user_id: string;
   /** User-defined server/API name */
   server_name: string;
+  /** Base URL for GraphQL endpoint */
+  host: string;
   /** GraphQL introspection result as JSON */
   schema_json: Record<string, unknown>;
   /** Raw SDL if available */
@@ -723,7 +729,7 @@ export interface GraphQLSpecRow {
   api_title: string | null;
   /** API description */
   api_description: string | null;
-  /** Source URL (GraphQL endpoint) */
+  /** Source URL (GraphQL endpoint) - kept for backwards compat */
   source_url: string;
   /** Default headers for all requests */
   default_headers: Record<string, string>;
@@ -743,6 +749,7 @@ export interface GraphQLSpecRow {
 export interface GraphQLSpecInsert {
   user_id: string;
   server_name: string;
+  host: string;
   schema_json: Record<string, unknown>;
   schema_sdl?: string;
   api_title?: string;
@@ -758,6 +765,7 @@ export interface GraphQLSpecInsert {
  */
 export interface GraphQLSpecUpdate {
   server_name?: string;
+  host?: string;
   api_title?: string;
   api_description?: string;
   default_headers?: Record<string, string>;

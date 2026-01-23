@@ -21,16 +21,10 @@ interface RestApiEndpoint {
   tool?: RestApiTool;
 }
 
-interface RestApiEnvironment {
-  id: string;
-  name: string;
-  host: string;
-  tools?: RestApiTool[];
-}
-
 interface RestApiSpec {
   id: string;
   server_name: string;
+  host: string;
   api_title: string;
   api_description: string;
   api_version: string;
@@ -39,7 +33,6 @@ interface RestApiSpec {
   updated_at: string;
   endpoint_count?: number;
   endpoints?: RestApiEndpoint[];
-  environments?: RestApiEnvironment[];
   source_url?: string;
   import_method?: 'paste' | 'url';
 }
@@ -56,7 +49,7 @@ const methodColors: Record<string, string> = {
 interface RestApiToolsSectionProps {
   onToolSelect?: (toolName: string, selected: boolean) => void;
   selectedTools?: string[];
-  onDataChange?: () => void; // Called when environments/tools are added/edited/deleted
+  onDataChange?: () => void; // Called when tools are added/edited/deleted
 }
 
 export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataChange }: RestApiToolsSectionProps) {
@@ -65,19 +58,16 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
   const [expandedSpecs, setExpandedSpecs] = useState<Set<string>>(new Set());
   const [deletingSpec, setDeletingSpec] = useState<string | null>(null);
   const [deletingTool, setDeletingTool] = useState<string | null>(null);
-  const [deletingEnv, setDeletingEnv] = useState<string | null>(null);
   const [editingTool, setEditingTool] = useState<string | null>(null);
   const [editToolName, setEditToolName] = useState('');
   const [editToolWidget, setEditToolWidget] = useState(false);
   const [editingSpec, setEditingSpec] = useState<string | null>(null);
   const [editSpecServerName, setEditSpecServerName] = useState('');
-  const [editingEnv, setEditingEnv] = useState<string | null>(null);
-  const [editEnvName, setEditEnvName] = useState('');
-  const [editEnvHost, setEditEnvHost] = useState('');
+  const [editingHost, setEditingHost] = useState<string | null>(null);
+  const [editHostValue, setEditHostValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [reimportingSpec, setReimportingSpec] = useState<string | null>(null);
   const [viewingToolDocs, setViewingToolDocs] = useState<{ tool: RestApiTool; endpoint: RestApiEndpoint } | null>(null);
-  const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<{ envId: string; specId: string; envName: string } | null>(null);
   const [confirmDeleteSpec, setConfirmDeleteSpec] = useState<{ specId: string; specName: string } | null>(null);
   const [confirmDeleteTool, setConfirmDeleteTool] = useState<{ toolId: string; specId: string; toolName: string } | null>(null);
   const [confirmReimport, setConfirmReimport] = useState<RestApiSpec | null>(null);
@@ -254,62 +244,37 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
     }
   };
 
-  // Environment editing
-  const startEditEnv = (env: RestApiEnvironment) => {
-    setEditingEnv(env.id);
-    setEditEnvName(env.name);
-    setEditEnvHost(env.host);
+  // Host editing
+  const startEditHost = (spec: RestApiSpec) => {
+    setEditingHost(spec.id);
+    setEditHostValue(spec.host || '');
   };
 
-  const cancelEditEnv = () => {
-    setEditingEnv(null);
-    setEditEnvName('');
-    setEditEnvHost('');
+  const cancelEditHost = () => {
+    setEditingHost(null);
+    setEditHostValue('');
   };
 
-  const saveEditEnv = async (envId: string, specId: string) => {
+  const saveEditHost = async (specId: string) => {
     try {
-      const response = await fetch(`/api/swagger/environments/${envId}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/swagger/${specId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editEnvName, host: editEnvHost }),
+        body: JSON.stringify({ host: editHostValue }),
       });
 
       if (response.ok) {
-        cancelEditEnv();
-        // Refresh from server to get updated tool names
+        cancelEditHost();
         await refreshSpecs();
-        showNotification('success', 'Environment updated successfully');
-        onDataChange?.(); // Notify parent of data change
+        showNotification('success', 'Host updated successfully');
+        onDataChange?.();
       } else {
         const data = await response.json();
-        showNotification('error', data.error || 'Failed to update environment');
+        showNotification('error', data.error || 'Failed to update host');
       }
     } catch (err) {
-      console.error('Error updating environment:', err);
-      showNotification('error', 'Failed to update environment');
-    }
-  };
-
-  const handleDeleteEnv = async (envId: string, specId: string) => {
-    setDeletingEnv(envId);
-    try {
-      const response = await fetch(`/api/swagger/environments/${envId}`, { method: 'DELETE' });
-      if (response.ok) {
-        // Refresh to get updated tool list
-        await refreshSpecs();
-        showNotification('success', 'Environment deleted successfully');
-        onDataChange?.(); // Notify parent of data change
-      } else {
-        const data = await response.json();
-        showNotification('error', data.error || 'Failed to delete environment');
-      }
-    } catch (err) {
-      console.error('Error deleting environment:', err);
-      showNotification('error', 'Failed to delete environment');
-    } finally {
-      setDeletingEnv(null);
-      setConfirmDeleteEnv(null);
+      console.error('Error updating host:', err);
+      showNotification('error', 'Failed to update host');
     }
   };
 
@@ -496,7 +461,6 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
         {specs.map(spec => {
           const isExpanded = expandedSpecs.has(spec.id);
           const endpoints = spec.endpoints || [];
-          const environments = spec.environments || [];
 
           return (
             <div key={spec.id} style={{
@@ -556,8 +520,6 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
                     </span>
                     <span>•</span>
                     <span>{endpoints.length} tool{endpoints.length !== 1 ? 's' : ''}</span>
-                    <span>•</span>
-                    <span>{spec.environments?.length || 0} env{(spec.environments?.length || 0) !== 1 ? 's' : ''}</span>
                     <span>•</span>
                     <span>OpenAPI {spec.openapi_version}</span>
                   </div>
@@ -687,7 +649,7 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
                     )}
                   </div>
 
-                  {/* Environments */}
+                  {/* Host */}
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{
                       color: 'rgba(255,255,255,0.6)',
@@ -697,43 +659,26 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
                     }}>
-                      Environments
+                      Host URL
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {(spec.environments || []).map(env => (
-                        <div key={env.id} style={{
-                          padding: '0.5rem 0.6rem',
-                          borderRadius: '6px',
-                          background: 'rgba(102, 126, 234, 0.15)',
-                          border: '1px solid rgba(102, 126, 234, 0.3)',
-                          fontSize: '0.8rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          flexWrap: 'wrap',
-                        }}>
-                          {editingEnv === env.id ? (
-                            <>
-                              <input type="text" value={editEnvName} onChange={(e) => setEditEnvName(e.target.value)} placeholder="Name" style={{ width: '80px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-                              <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                              <input type="text" value={editEnvHost} onChange={(e) => setEditEnvHost(e.target.value)} placeholder="Host URL" style={{ flex: 1, minWidth: '150px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-                              <button onClick={() => saveEditEnv(env.id, spec.id)} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.7rem', cursor: 'pointer' }}>Save</button>
-                              <button onClick={cancelEditEnv} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', cursor: 'pointer' }}>Cancel</button>
-                            </>
-                          ) : (
-                            <>
-                              <span style={{ color: '#667eea', fontWeight: 600 }}>{env.name}</span>
-                              <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                              <span style={{ color: 'rgba(255,255,255,0.6)', flex: 1 }}>{env.host}</span>
-                              <button onClick={() => startEditEnv(env)} style={{ padding: '0.2rem 0.35rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.65rem', cursor: 'pointer' }} title="Edit">✏️</button>
-                              <button onClick={() => setConfirmDeleteEnv({ envId: env.id, specId: spec.id, envName: env.name })} disabled={deletingEnv === env.id} style={{ padding: '0.2rem 0.35rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.65rem', cursor: deletingEnv === env.id ? 'wait' : 'pointer', opacity: deletingEnv === env.id ? 0.5 : 1 }} title="Delete">🗑️</button>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      {/* Add Environment inline */}
-                      <AddEnvironmentInline specId={spec.id} onAdd={() => { refreshSpecs(); onDataChange?.(); }} />
-                    </div>
+                    {editingHost === spec.id ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          value={editHostValue}
+                          onChange={(e) => setEditHostValue(e.target.value)}
+                          placeholder="https://api.example.com"
+                          style={{ flex: 1, minWidth: '200px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.85rem' }}
+                        />
+                        <button onClick={() => saveEditHost(spec.id)} style={{ padding: '0.3rem 0.6rem', borderRadius: '4px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.75rem', cursor: 'pointer' }}>Save</button>
+                        <button onClick={cancelEditHost} style={{ padding: '0.3rem 0.6rem', borderRadius: '4px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ color: '#10b981', fontSize: '0.9rem', wordBreak: 'break-all' }}>{spec.host || 'Not set'}</span>
+                        <button onClick={() => startEditHost(spec)} style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: 'none', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontSize: '0.7rem', cursor: 'pointer' }} title="Edit host">✏️</button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Endpoints/Tools */}
@@ -1028,185 +973,6 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
                     })}
                   </div>
 
-                  {/* Environment-specific Tools */}
-                  {environments.length > 0 && (
-                    <div style={{ marginTop: '1.5rem' }}>
-                      <div style={{
-                        color: 'rgba(255,255,255,0.6)',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        marginBottom: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}>
-                        Environment Tools
-                      </div>
-                      {environments.map(env => {
-                        const envTools = env.tools || [];
-                        if (envTools.length === 0) return null;
-
-                        return (
-                          <div key={env.id} style={{ marginBottom: '1rem' }}>
-                            <div style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              marginBottom: '0.5rem',
-                              flexWrap: 'wrap',
-                              gap: '0.5rem',
-                            }}>
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                              }}>
-                                <span style={{
-                                  padding: '0.2rem 0.5rem',
-                                  borderRadius: '4px',
-                                  background: 'rgba(59, 130, 246, 0.2)',
-                                  color: '#3b82f6',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                }}>
-                                  🌐 {env.name}
-                                </span>
-                                <span style={{
-                                  color: 'rgba(255,255,255,0.4)',
-                                  fontSize: '0.7rem',
-                                }}>
-                                  {env.host}
-                                </span>
-                                <span style={{
-                                  color: 'rgba(255,255,255,0.5)',
-                                  fontSize: '0.7rem',
-                                }}>
-                                  ({envTools.length} tools)
-                                </span>
-                              </div>
-                              {onToolSelect && envTools.length > 0 && (
-                                <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      envTools.forEach(tool => {
-                                        if (!selectedTools.includes(tool.name)) {
-                                          onToolSelect(tool.name, true);
-                                        }
-                                      });
-                                    }}
-                                    style={{
-                                      padding: '0.2rem 0.5rem',
-                                      borderRadius: '4px',
-                                      border: '1px solid rgba(59, 130, 246, 0.4)',
-                                      background: 'transparent',
-                                      color: '#3b82f6',
-                                      fontSize: '0.7rem',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    Select All
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      envTools.forEach(tool => {
-                                        if (selectedTools.includes(tool.name)) {
-                                          onToolSelect(tool.name, false);
-                                        }
-                                      });
-                                    }}
-                                    style={{
-                                      padding: '0.2rem 0.5rem',
-                                      borderRadius: '4px',
-                                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                                      background: 'transparent',
-                                      color: '#ef4444',
-                                      fontSize: '0.7rem',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    Deselect All
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                              {envTools.map(tool => {
-                                const isSelected = selectedTools.includes(tool.name);
-                                return (
-                                  <div
-                                    key={tool.id}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 'clamp(0.4rem, 2vw, 0.75rem)',
-                                      padding: 'clamp(0.4rem, 2vw, 0.5rem) clamp(0.5rem, 2vw, 0.75rem)',
-                                      background: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255,255,255,0.02)',
-                                      border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.06)'}`,
-                                      borderRadius: '6px',
-                                      cursor: onToolSelect ? 'pointer' : 'default',
-                                      flexWrap: 'wrap',
-                                    }}
-                                    onClick={() => {
-                                      if (onToolSelect) {
-                                        onToolSelect(tool.name, !isSelected);
-                                      }
-                                    }}
-                                  >
-                                    {/* Checkbox */}
-                                    {onToolSelect && (
-                                      <div style={{
-                                        width: '16px',
-                                        height: '16px',
-                                        borderRadius: '4px',
-                                        border: `2px solid ${isSelected ? '#3b82f6' : 'rgba(255,255,255,0.3)'}`,
-                                        background: isSelected ? '#3b82f6' : 'transparent',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                      }}>
-                                        {isSelected && (
-                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
-                                            <polyline points="20 6 9 17 4 12" />
-                                          </svg>
-                                        )}
-                                      </div>
-                                    )}
-                                    {/* Tool Name */}
-                                    <span style={{
-                                      color: '#fff',
-                                      fontSize: '0.8rem',
-                                      fontWeight: 500,
-                                      fontFamily: 'monospace',
-                                      flex: 1,
-                                      minWidth: '150px',
-                                    }}>
-                                      {tool.name}
-                                    </span>
-                                    {/* Widget Badge */}
-                                    {tool.has_widget && (
-                                      <span style={{
-                                        padding: '0.1rem 0.35rem',
-                                        borderRadius: '4px',
-                                        background: 'rgba(139, 92, 246, 0.2)',
-                                        color: '#8b5cf6',
-                                        fontSize: '0.65rem',
-                                        fontWeight: 600,
-                                      }}>
-                                        🎨 Widget
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
                   {/* Actions */}
                   <div style={{
                     display: 'flex',
@@ -1361,88 +1127,11 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
         </div>
       )}
 
-      {/* Delete Environment Confirmation Modal */}
-      {confirmDeleteEnv && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onClick={() => setConfirmDeleteEnv(null)}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(30,30,40,0.98), rgba(20,20,30,0.98))',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '400px',
-              width: '100%',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗑️</div>
-              <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.1rem' }}>Delete Environment?</h3>
-              <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0, fontSize: '0.9rem' }}>
-                Are you sure you want to delete <strong style={{ color: '#ef4444' }}>{confirmDeleteEnv.envName}</strong>?
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.5)', margin: '0.5rem 0 0', fontSize: '0.8rem' }}>
-                This will also delete all tools associated with this environment.
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => setConfirmDeleteEnv(null)}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteEnv(confirmDeleteEnv.envId, confirmDeleteEnv.specId)}
-                disabled={deletingEnv === confirmDeleteEnv.envId}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: deletingEnv === confirmDeleteEnv.envId ? 'wait' : 'pointer',
-                  opacity: deletingEnv === confirmDeleteEnv.envId ? 0.7 : 1,
-                }}
-              >
-                {deletingEnv === confirmDeleteEnv.envId ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Confirmation Modals */}
       {confirmDeleteSpec && (
         <ConfirmModal
           title="Delete REST API"
-          message={`Are you sure you want to delete "${confirmDeleteSpec.specName}"? This will remove all associated tools and environments.`}
+          message={`Are you sure you want to delete "${confirmDeleteSpec.specName}"? This will remove all associated tools.`}
           onConfirm={() => handleDeleteSpec(confirmDeleteSpec.specId)}
           onCancel={() => setConfirmDeleteSpec(null)}
           confirmText="Delete"
@@ -1456,17 +1145,6 @@ export function RestApiToolsSection({ onToolSelect, selectedTools = [], onDataCh
           message={`Are you sure you want to delete the tool "${confirmDeleteTool.toolName}"?`}
           onConfirm={() => handleDeleteTool(confirmDeleteTool.toolId, confirmDeleteTool.specId)}
           onCancel={() => setConfirmDeleteTool(null)}
-          confirmText="Delete"
-          confirmColor="#ef4444"
-        />
-      )}
-
-      {confirmDeleteEnv && (
-        <ConfirmModal
-          title="Delete Environment"
-          message={`Are you sure you want to delete the "${confirmDeleteEnv.envName}" environment? This will remove all associated tools.`}
-          onConfirm={() => handleDeleteEnv(confirmDeleteEnv.envId, confirmDeleteEnv.specId)}
-          onCancel={() => setConfirmDeleteEnv(null)}
           confirmText="Delete"
           confirmColor="#ef4444"
         />
@@ -1628,116 +1306,4 @@ function ToolDocsDetails({ toolId, endpointId }: { toolId: string; endpointId: s
   );
 }
 
-function AddEnvironmentInline({ specId, onAdd }: { specId: string; onAdd: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!name.trim() || !host.trim()) {
-      setError('Name and host are required');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/swagger/environments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specId, name: name.trim(), host: host.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create environment');
-      }
-
-      // Show brief success state
-      setSuccess(true);
-      setTimeout(() => {
-        setIsOpen(false);
-        setName('');
-        setHost('');
-        setSuccess(false);
-        onAdd();
-      }, 500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create environment');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        style={{
-          padding: '0.5rem 0.6rem',
-          borderRadius: '6px',
-          border: '1px dashed rgba(16, 185, 129, 0.4)',
-          background: 'transparent',
-          color: '#10b981',
-          fontSize: '0.8rem',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-        }}
-      >
-        + Add Environment
-      </button>
-    );
-  }
-
-  return (
-    <div style={{
-      padding: '0.5rem 0.6rem',
-      borderRadius: '6px',
-      background: 'rgba(16, 185, 129, 0.1)',
-      border: '1px solid rgba(16, 185, 129, 0.3)',
-      fontSize: '0.8rem',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-      flexWrap: 'wrap',
-    }}>
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name (e.g., Staging)"
-        style={{ width: '100px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}
-      />
-      <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-      <input
-        type="text"
-        value={host}
-        onChange={(e) => setHost(e.target.value)}
-        placeholder="Host URL"
-        style={{ flex: 1, minWidth: '150px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }}
-      />
-      {error && <span style={{ color: '#ef4444', fontSize: '0.7rem', width: '100%' }}>{error}</span>}
-      {success && <span style={{ color: '#10b981', fontSize: '0.7rem', width: '100%' }}>✓ Environment created!</span>}
-      <button
-        onClick={handleSubmit}
-        disabled={saving || success}
-        style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: success ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.7rem', cursor: saving || success ? 'wait' : 'pointer' }}
-      >
-        {success ? '✓' : saving ? '...' : 'Create'}
-      </button>
-      <button
-        onClick={() => { setIsOpen(false); setName(''); setHost(''); setError(null); }}
-        style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', cursor: 'pointer' }}
-      >
-        Cancel
-      </button>
-    </div>
-  );
-}

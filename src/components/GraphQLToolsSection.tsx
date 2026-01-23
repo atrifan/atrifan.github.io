@@ -22,16 +22,10 @@ interface GraphQLOperation {
   tool?: GraphQLTool;
 }
 
-interface GraphQLEnvironment {
-  id: string;
-  name: string;
-  host: string;
-  tools?: GraphQLTool[];
-}
-
 interface GraphQLSpec {
   id: string;
   server_name: string;
+  host: string;
   api_title: string | null;
   api_description: string | null;
   source_url: string;
@@ -39,7 +33,6 @@ interface GraphQLSpec {
   updated_at: string;
   operation_count?: number;
   operations?: GraphQLOperation[];
-  environments?: GraphQLEnvironment[];
 }
 
 interface GraphQLToolsSectionProps {
@@ -58,22 +51,17 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
   // Edit states
   const [editingSpec, setEditingSpec] = useState<string | null>(null);
   const [editSpecServerName, setEditSpecServerName] = useState('');
-  const [editingEnv, setEditingEnv] = useState<string | null>(null);
-  const [editEnvName, setEditEnvName] = useState('');
-  const [editEnvHost, setEditEnvHost] = useState('');
   const [editingTool, setEditingTool] = useState<string | null>(null);
   const [editToolName, setEditToolName] = useState('');
   const [editToolWidget, setEditToolWidget] = useState(false);
 
   // Action states
   const [deletingSpec, setDeletingSpec] = useState<string | null>(null);
-  const [deletingEnv, setDeletingEnv] = useState<string | null>(null);
   const [deletingTool, setDeletingTool] = useState<string | null>(null);
   const [refreshingSpec, setRefreshingSpec] = useState<string | null>(null);
 
   // Confirmation modals
   const [confirmDeleteSpec, setConfirmDeleteSpec] = useState<{ specId: string; specName: string } | null>(null);
-  const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<{ envId: string; specId: string; envName: string } | null>(null);
   const [confirmDeleteTool, setConfirmDeleteTool] = useState<{ toolId: string; specId: string; toolName: string } | null>(null);
   const [confirmRefresh, setConfirmRefresh] = useState<GraphQLSpec | null>(null);
 
@@ -221,62 +209,6 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
     } finally {
       setRefreshingSpec(null);
       setConfirmRefresh(null);
-    }
-  };
-
-  // Environment actions
-  const startEditEnv = (env: GraphQLEnvironment) => {
-    setEditingEnv(env.id);
-    setEditEnvName(env.name);
-    setEditEnvHost(env.host);
-  };
-
-  const cancelEditEnv = () => {
-    setEditingEnv(null);
-    setEditEnvName('');
-    setEditEnvHost('');
-  };
-
-  const saveEditEnv = async (envId: string) => {
-    try {
-      const response = await fetch(`/api/graphql/environments/${envId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editEnvName, host: editEnvHost }),
-      });
-      if (response.ok) {
-        await refreshSpecs();
-        cancelEditEnv();
-        showNotification('success', 'Environment updated');
-        onDataChange?.();
-      } else {
-        const data = await response.json();
-        showNotification('error', data.error || 'Failed to update');
-      }
-    } catch (err) {
-      console.error('Error updating environment:', err);
-      showNotification('error', 'Failed to update environment');
-    }
-  };
-
-  const handleDeleteEnv = async (envId: string) => {
-    setDeletingEnv(envId);
-    try {
-      const response = await fetch(`/api/graphql/environments/${envId}`, { method: 'DELETE' });
-      if (response.ok) {
-        await refreshSpecs();
-        showNotification('success', 'Environment deleted');
-        onDataChange?.();
-      } else {
-        const data = await response.json();
-        showNotification('error', data.error || 'Failed to delete');
-      }
-    } catch (err) {
-      console.error('Error deleting environment:', err);
-      showNotification('error', 'Failed to delete environment');
-    } finally {
-      setDeletingEnv(null);
-      setConfirmDeleteEnv(null);
     }
   };
 
@@ -457,7 +389,6 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
         {specs.map(spec => {
           const isExpanded = expandedSpecs.has(spec.id);
           const ops = operations(spec);
-          const environments = spec.environments || [];
 
           return (
             <div
@@ -502,8 +433,6 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
                     </span>
                     <span>•</span>
                     <span>{ops.length} operation{ops.length !== 1 ? 's' : ''}</span>
-                    <span>•</span>
-                    <span>{environments.length} env{environments.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '1.25rem', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
@@ -598,35 +527,12 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
                     )}
                   </div>
 
-                  {/* Environments */}
+                  {/* Host - read-only for GraphQL (set during import) */}
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Environments
+                      Host URL
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {environments.map(env => (
-                        <div key={env.id} style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: 'rgba(102, 126, 234, 0.15)', border: '1px solid rgba(102, 126, 234, 0.3)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          {editingEnv === env.id ? (
-                            <>
-                              <input type="text" value={editEnvName} onChange={(e) => setEditEnvName(e.target.value)} placeholder="Name" style={{ width: '80px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-                              <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                              <input type="text" value={editEnvHost} onChange={(e) => setEditEnvHost(e.target.value)} placeholder="Host URL" style={{ flex: 1, minWidth: '150px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-                              <button onClick={() => saveEditEnv(env.id)} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.7rem', cursor: 'pointer' }}>Save</button>
-                              <button onClick={cancelEditEnv} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', cursor: 'pointer' }}>Cancel</button>
-                            </>
-                          ) : (
-                            <>
-                              <span style={{ color: '#667eea', fontWeight: 600 }}>{env.name}</span>
-                              <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-                              <span style={{ color: 'rgba(255,255,255,0.6)', flex: 1 }}>{env.host}</span>
-                              <button onClick={() => startEditEnv(env)} style={{ padding: '0.2rem 0.35rem', borderRadius: '4px', border: 'none', background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', fontSize: '0.65rem', cursor: 'pointer' }} title="Edit">✏️</button>
-                              <button onClick={() => setConfirmDeleteEnv({ envId: env.id, specId: spec.id, envName: env.name })} disabled={deletingEnv === env.id} style={{ padding: '0.2rem 0.35rem', borderRadius: '4px', border: 'none', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontSize: '0.65rem', cursor: deletingEnv === env.id ? 'wait' : 'pointer', opacity: deletingEnv === env.id ? 0.5 : 1 }} title="Delete">🗑️</button>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      <AddEnvironmentInline specId={spec.id} onAdd={() => { refreshSpecs(); onDataChange?.(); }} />
-                    </div>
+                    <span style={{ color: '#667eea', fontSize: '0.9rem', wordBreak: 'break-all' }}>{spec.host || spec.source_url || 'Not set'}</span>
                   </div>
 
                   {/* Operations/Tools */}
@@ -759,17 +665,6 @@ export function GraphQLToolsSection({ onToolSelect, selectedTools = [], onDataCh
           message={`Are you sure you want to delete "${confirmDeleteSpec.specName}"? This will remove all associated tools and environments.`}
           onConfirm={() => handleDeleteSpec(confirmDeleteSpec.specId)}
           onCancel={() => setConfirmDeleteSpec(null)}
-          confirmText="Delete"
-          confirmColor="#ef4444"
-        />
-      )}
-
-      {confirmDeleteEnv && (
-        <ConfirmModal
-          title="Delete Environment"
-          message={`Are you sure you want to delete the "${confirmDeleteEnv.envName}" environment? This will remove all associated tools.`}
-          onConfirm={() => handleDeleteEnv(confirmDeleteEnv.envId)}
-          onCancel={() => setConfirmDeleteEnv(null)}
           confirmText="Delete"
           confirmColor="#ef4444"
         />
@@ -908,74 +803,5 @@ function ToolDocsModal({ tool, operation, onClose }: { tool: GraphQLTool; operat
   );
 }
 
-// Add Environment Inline Component
-function AddEnvironmentInline({ specId, onAdd }: { specId: string; onAdd: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!name.trim() || !host.trim()) {
-      setError('Name and host are required');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/graphql/environments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specId, name: name.trim(), host: host.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create environment');
-      }
-
-      setSuccess(true);
-      setTimeout(() => {
-        setIsOpen(false);
-        setName('');
-        setHost('');
-        setSuccess(false);
-        onAdd();
-      }, 500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create environment');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!isOpen) {
-    return (
-      <button onClick={() => setIsOpen(true)} style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', border: '1px dashed rgba(102, 126, 234, 0.4)', background: 'transparent', color: '#667eea', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        + Add Environment
-      </button>
-    );
-  }
-
-  return (
-    <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: 'rgba(102, 126, 234, 0.1)', border: '1px solid rgba(102, 126, 234, 0.3)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-      <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g., Staging)" style={{ width: '100px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-      <span style={{ color: 'rgba(255,255,255,0.4)' }}>→</span>
-      <input type="text" value={host} onChange={(e) => setHost(e.target.value)} placeholder="Host URL" style={{ flex: 1, minWidth: '150px', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(102, 126, 234, 0.5)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: '0.8rem' }} />
-      {error && <span style={{ color: '#ef4444', fontSize: '0.7rem', width: '100%' }}>{error}</span>}
-      {success && <span style={{ color: '#10b981', fontSize: '0.7rem', width: '100%' }}>✓ Environment created!</span>}
-      <button onClick={handleSubmit} disabled={saving || success} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: success ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.7rem', cursor: saving || success ? 'wait' : 'pointer' }}>
-        {success ? '✓' : saving ? '...' : 'Create'}
-      </button>
-      <button onClick={() => { setIsOpen(false); setName(''); setHost(''); setError(null); }} style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: 'none', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', cursor: 'pointer' }}>
-        Cancel
-      </button>
-    </div>
-  );
-}
 

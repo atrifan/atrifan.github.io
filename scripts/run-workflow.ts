@@ -7,13 +7,17 @@
  *   npx tsx scripts/run-workflow.ts <workflow.yaml> [options]
  *   npx tsx scripts/run-workflow.ts rules/baby-blood-type-calculator.yaml
  *   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --inputs '{"query": "test"}'
- *   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --user-id user_xxx --live
+ *   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --live
  *
  * Options:
  *   --inputs '{"key": "value"}'   Provide inputs as JSON
- *   --user-id <id>                User ID to load connectors for (required for --live)
+ *   --user-id <id>                User ID (or set TEST_USER_ID in .env.local)
  *   --live                        Use real MCP servers instead of mocks
  *   --dry-run                     Parse and validate only, don't execute
+ *
+ * Environment:
+ *   TEST_USER_ID                  Default user ID for --live mode
+ *   NEXT_PUBLIC_APP_URL           Base URL for internal MCP calls (default: http://localhost:3000)
  */
 
 import * as fs from 'fs';
@@ -125,6 +129,30 @@ async function createSimpleMCPClient(
   };
 }
 
+// Load user's API key from Supabase
+async function loadUserApiKey(userId: string, serverName: string = 'default'): Promise<string | null> {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase credentials not configured. Set STORAGE_SUPABASE_URL and STORAGE_SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data, error } = await supabase
+    .from('api_keys')
+    .select('api_key')
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
+    .eq('is_active', true)
+    .single();
+
+  if (error) {
+    console.warn(`No API key found for user ${userId}, server ${serverName}`);
+    return null;
+  }
+
+  return data?.api_key || null;
+}
+
 // Load user's connectors from Supabase
 async function loadUserConnectors(userId: string): Promise<Connector[]> {
   if (!supabaseUrl || !supabaseKey) {
@@ -162,20 +190,89 @@ async function loadMCPServer(serverId: string): Promise<MCPServer | null> {
   return data as MCPServer;
 }
 
-// Create internal MCP client (calls /api/mcp with X-User-Id header)
-function createInternalMCPClient(baseUrl: string, userId: string, serverName?: string): SimpleMCPClient {
+// MCP response structure:
+// {
+//   result: {
+//     content: [{ type: "text", text: "Plain text answer" }, ...],
+//     structuredContent: { query, result, display: { type: "html", content: "..." } }
+//   }
+// }
+interface MCPExtractedResult {
+  text: string | null;      // content[0].text - plain text answer for display
+  data: unknown;            // structuredContent.result - structured data for workflow
+}
+
+// Extract text and structured result from MCP response
+function extractMCPResult(mcpResponse: unknown): MCPExtractedResult {
+  const extracted: MCPExtractedResult = { text: null, data: null };
+
+  if (!mcpResponse || typeof mcpResponse !== 'object') {
+    extracted.data = mcpResponse;
+    return extracted;
+  }
+
+  const response = mcpResponse as Record<string, unknown>;
+
+  // Navigate to result (may be wrapped in JSON-RPC)
+  let resultObj = response;
+  if (response.result && typeof response.result === 'object') {
+    resultObj = response.result as Record<string, unknown>;
+  }
+
+  // Extract text from content[0].text
+  if (Array.isArray(resultObj.content) && resultObj.content.length > 0) {
+    const firstContent = resultObj.content[0] as Record<string, unknown>;
+    if (firstContent.type === 'text' && typeof firstContent.text === 'string') {
+      extracted.text = firstContent.text;
+    }
+  }
+
+  // Extract structured data from structuredContent.result
+  if (resultObj.structuredContent && typeof resultObj.structuredContent === 'object') {
+    const structured = resultObj.structuredContent as Record<string, unknown>;
+    if ('result' in structured) {
+      extracted.data = structured.result;
+    }
+  }
+
+  // Fallback: if no structuredContent, try to parse text as JSON
+  if (extracted.data === null && extracted.text) {
+    try {
+      extracted.data = JSON.parse(extracted.text);
+    } catch {
+      extracted.data = extracted.text;
+    }
+  }
+
+  return extracted;
+}
+
+// Create internal MCP client
+// If apiKey is provided, uses path-based auth: /api/mcp/{apiKey}/{serverName}
+// Otherwise falls back to header-based auth with X-User-Id
+function createInternalMCPClient(baseUrl: string, userId: string, serverName?: string, apiKey?: string | null): SimpleMCPClient {
   return {
     async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-      const url = `${baseUrl}/api/mcp`;
+      let url: string;
+      let headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      if (apiKey) {
+        // Use path-based auth with API key (proper auth flow)
+        url = `${baseUrl}/api/mcp/${encodeURIComponent(apiKey)}/${encodeURIComponent(serverName || 'default')}`;
+      } else {
+        // Fallback to header-based internal auth
+        url = `${baseUrl}/api/mcp`;
+        headers = {
+          ...headers,
           'X-User-Id': userId,
           'X-Auth-Method': 'internal',
           'X-Server-Name': serverName || 'default',
-        },
+        };
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: Date.now(),
@@ -188,12 +285,13 @@ function createInternalMCPClient(baseUrl: string, userId: string, serverName?: s
         throw new Error(`Internal MCP call failed: ${response.status} ${response.statusText}`);
       }
 
-      const result = await response.json();
-      if (result.error) {
-        throw new Error(result.error.message || 'MCP call failed');
+      const jsonRpcResponse = await response.json();
+      if (jsonRpcResponse.error) {
+        throw new Error(jsonRpcResponse.error.message || 'MCP call failed');
       }
 
-      return result.result;
+      // Return raw response - extraction happens in the tool executor
+      return jsonRpcResponse;
     },
 
     async close(): Promise<void> {
@@ -201,6 +299,9 @@ function createInternalMCPClient(baseUrl: string, userId: string, serverName?: s
     },
   };
 }
+
+// Cache for API keys per server
+const apiKeyCache: Map<string, string | null> = new Map();
 
 // Create live tool executor that uses real MCP servers
 function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl: string): ToolExecutor {
@@ -240,9 +341,26 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
 
       if (!client) {
         if (connector.connector_type === 'internal_mcp') {
-          // For internal MCP, use HTTP calls to /api/mcp with X-User-Id header
-          console.log(`   Using internal MCP endpoint: ${baseUrl}/api/mcp`);
-          client = createInternalMCPClient(baseUrl, userId, connector.server_name);
+          // For internal MCP, get API key and use path-based auth
+          const serverName = connector.server_name || 'default';
+
+          // Check cache first
+          let apiKey = apiKeyCache.get(serverName);
+          if (apiKey === undefined) {
+            apiKey = await loadUserApiKey(userId, serverName);
+            apiKeyCache.set(serverName, apiKey);
+            if (apiKey) {
+              console.log(`   ✓ Loaded API key for server: ${serverName}`);
+            } else {
+              console.log(`   ⚠ No API key found, using header auth`);
+            }
+          }
+
+          const endpoint = apiKey
+            ? `${baseUrl}/api/mcp/{key}/${serverName}`
+            : `${baseUrl}/api/mcp`;
+          console.log(`   Using internal MCP endpoint: ${endpoint}`);
+          client = createInternalMCPClient(baseUrl, userId, serverName, apiKey);
           mcpClients.set(connector.id, client);
           console.log(`   ✓ Ready (internal)`);
         } else if (connector.connector_type === 'external_mcp' && connector.external_url) {
@@ -278,8 +396,21 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
 
       // Call the tool
       console.log(`   Calling: ${actualToolName}`);
-      const result = await client.callTool(actualToolName, params);
-      return result;
+      const rawResult = await client.callTool(actualToolName, params);
+
+      // Extract text (for display) and data (for workflow)
+      const { text, data } = extractMCPResult(rawResult);
+
+      // Display the text answer
+      if (text) {
+        console.log(`\n   📝 Answer:\n   ${text.split('\n').join('\n   ')}`);
+      }
+
+      // Log the structured data (for debugging)
+      console.log(`\n   📊 Data:`, JSON.stringify(data, null, 2));
+
+      // Return structured data for workflow variable binding
+      return data;
     },
 
     async getToolSchema(toolName: string) {
@@ -358,10 +489,14 @@ Usage:
 
 Options:
   --inputs '{"key": "value"}'   Provide inputs as JSON
-  --user-id <id>                User ID to load connectors for (required for --live)
+  --user-id <id>                User ID (or set TEST_USER_ID in .env.local)
   --live                        Use real MCP servers instead of mocks
   --dry-run                     Parse and validate only, don't execute
   --help, -h                    Show this help
+
+Environment:
+  TEST_USER_ID                  Default user ID for --live mode
+  NEXT_PUBLIC_APP_URL           Base URL for internal MCP (default: http://localhost:3000)
 
 Examples:
   # Mock mode (default) - simulates tool calls
@@ -370,8 +505,8 @@ Examples:
   # With inputs
   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --inputs '{"query": "test"}'
 
-  # Live mode - uses real MCP servers with user's connectors
-  npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --user-id user_xxx --live
+  # Live mode - uses real MCP servers (requires TEST_USER_ID in .env.local)
+  npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --live
 
   # Dry run - just validate the YAML
   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --dry-run
@@ -398,12 +533,15 @@ Examples:
   let userId: string | undefined;
   if (userIdIndex !== -1 && args[userIdIndex + 1]) {
     userId = args[userIdIndex + 1];
+  } else if (process.env.TEST_USER_ID) {
+    userId = process.env.TEST_USER_ID;
   }
 
   // Validate live mode requirements
   if (liveMode && !userId) {
-    console.error('❌ --live mode requires --user-id <id>');
+    console.error('❌ --live mode requires --user-id <id> or TEST_USER_ID in .env.local');
     console.error('   Example: --user-id user_2abc123xyz --live');
+    console.error('   Or set TEST_USER_ID=user_xxx in .env.local');
     process.exit(1);
   }
 
