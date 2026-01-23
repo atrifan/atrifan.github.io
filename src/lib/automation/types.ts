@@ -382,6 +382,7 @@ export interface MermaidNode {
   prompt?: string;
   condition?: string;
   output?: string;
+  outputs?: Array<{ key: string; value: string }>;  // For return nodes with multiple outputs
 }
 
 export interface MermaidEdge {

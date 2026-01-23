@@ -18,6 +18,7 @@ import {
   ReturnStep,
   NotifyStep,
   TriggerConfig,
+  WorkflowInput,
 } from './types';
 
 // Node shape mappings for different step types
@@ -74,12 +75,12 @@ export function workflowToMermaid(workflow: WorkflowDefinition): string {
   const lines: string[] = ['flowchart TD'];
   const styles: string[] = [];
   const connections: string[] = [];
-  
-  // Add trigger node
-  const triggerNode = generateTriggerNode(workflow.trigger);
+
+  // Add trigger node (with inputs if any)
+  const triggerNode = generateTriggerNode(workflow.trigger, workflow.inputs);
   lines.push(`    ${triggerNode.id}${triggerNode.shape}"${triggerNode.label}"${triggerNode.shapeClose}`);
   styles.push(`    style ${triggerNode.id} fill:${TYPE_COLORS.trigger.fill},color:${TYPE_COLORS.trigger.color}`);
-  
+
   // Track previous node for connections
   let prevNodeId = triggerNode.id;
   
@@ -121,15 +122,15 @@ export function workflowToMermaid(workflow: WorkflowDefinition): string {
 }
 
 /**
- * Generate trigger node
+ * Generate trigger node (includes inputs if any)
  */
-function generateTriggerNode(trigger: TriggerConfig): { id: string; shape: string; shapeClose: string; label: string } {
+function generateTriggerNode(trigger: TriggerConfig, inputs?: WorkflowInput[]): { id: string; shape: string; shapeClose: string; label: string } {
   const id = 'trigger';
   const shape = NODE_SHAPES.trigger.open;
   const shapeClose = NODE_SHAPES.trigger.close;
-  
+
   let label = `${TYPE_EMOJIS.trigger} trigger: ${trigger.type}`;
-  
+
   if (trigger.type === 'cron') {
     label += `\\n${SEPARATOR}\\n⏰ ${trigger.schedule}`;
     if (trigger.timezone) {
@@ -138,7 +139,20 @@ function generateTriggerNode(trigger: TriggerConfig): { id: string; shape: strin
   } else if (trigger.type === 'webhook') {
     label += `\\n${SEPARATOR}\\n🔗 ${trigger.webhook.method || 'POST'}`;
   }
-  
+
+  // Add inputs section if any
+  if (inputs && inputs.length > 0) {
+    label += `\\n${SEPARATOR}`;
+    for (const input of inputs.slice(0, 5)) { // Limit to 5 inputs for readability
+      const required = input.required ? '*' : '';
+      const defaultVal = input.default !== undefined ? ` = ${formatValue(input.default)}` : '';
+      label += `\\n📥 ${input.name}${required}: ${input.type}${defaultVal}`;
+    }
+    if (inputs.length > 5) {
+      label += `\\n📥 ... +${inputs.length - 5} more`;
+    }
+  }
+
   return { id, shape, shapeClose, label };
 }
 
@@ -180,16 +194,20 @@ function generateStepNode(step: Step): { id: string; shape: string; shapeClose: 
 
 function generateToolNode(step: ToolCallStep) {
   const [connector, toolName] = step.tool.split('.');
-  const paramsPreview = Object.entries(step.params)
-    .slice(0, 3)
-    .map(([k, v]) => `⚙️ ${k}: ${formatValue(v)}`)
-    .join('\\n');
+  const entries = Object.entries(step.params);
+  const paramsLines = entries
+    .slice(0, 10)  // Show up to 10 params for bidirectional sync
+    .map(([k, v]) => `⚙️ ${k}: ${formatValue(v)}`);
+
+  if (entries.length > 10) {
+    paramsLines.push(`⚙️ ... +${entries.length - 10} more`);
+  }
 
   const label = [
     `${TYPE_EMOJIS.tool} tool: ${step.id}`,
     SEPARATOR,
     `🔌 ${connector}.${toolName}`,
-    paramsPreview,
+    ...paramsLines,
     SEPARATOR,
     `📤 ${step.output}`,
   ].join('\\n');
@@ -286,17 +304,25 @@ function generateNotifyNode(step: NotifyStep) {
 }
 
 function generateReturnNode(step: ReturnStep) {
-  const returnPreview = typeof step.return === 'string'
-    ? step.return.substring(0, 30)
-    : JSON.stringify(step.return).substring(0, 30);
-
-  const label = [
+  const labelParts = [
     `${TYPE_EMOJIS.return} return: ${step.id}`,
     SEPARATOR,
-    `📤 ${returnPreview}`,
-  ].join('\\n');
+  ];
 
-  return { id: step.id, shape: NODE_SHAPES.return.open, shapeClose: NODE_SHAPES.return.close, label, ...TYPE_COLORS.return };
+  // Show return values
+  if (typeof step.return === 'object' && step.return !== null) {
+    const entries = Object.entries(step.return).slice(0, 5);
+    for (const [key, value] of entries) {
+      labelParts.push(`📤 ${key}: ${formatValue(value)}`);
+    }
+    if (Object.keys(step.return).length > 5) {
+      labelParts.push(`📤 ... +${Object.keys(step.return).length - 5} more`);
+    }
+  } else {
+    labelParts.push(`📤 ${String(step.return).substring(0, 30)}`);
+  }
+
+  return { id: step.id, shape: NODE_SHAPES.return.open, shapeClose: NODE_SHAPES.return.close, label: labelParts.join('\\n'), ...TYPE_COLORS.return };
 }
 
 // Process if step branches
@@ -390,7 +416,9 @@ function processLoopStep(
 function formatValue(value: unknown): string {
   if (typeof value === 'string') {
     if (value.startsWith('{{') && value.endsWith('}}')) {
-      return value;  // Variable reference
+      // Variable reference - escape curly braces for Mermaid
+      // Use #123; and #125; HTML entities for { and }
+      return value.replace(/\{/g, '#123;').replace(/\}/g, '#125;');
     }
     return `'${value.substring(0, 20)}${value.length > 20 ? '...' : ''}'`;
   }

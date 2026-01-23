@@ -16,7 +16,9 @@ import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, History
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
 import { parseMermaid, mermaidToWorkflow, workflowToYamlString, ScheduleConfig } from '../lib/automation/mermaid-to-yaml';
+import { workflowToMermaid } from '../lib/automation/yaml-to-mermaid';
 import { WorkflowDefinition } from '../lib/automation/types';
+import * as yaml from 'yaml';
 
 // Supabase client for realtime subscriptions
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -1411,12 +1413,52 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // Apply pasted YAML and Mermaid content
   const applyPastedContent = () => {
+    let mermaidGenerated = false;
+
     if (pasteYaml.trim()) {
-      setExportedYaml(pasteYaml.trim());
+      const yamlContent = pasteYaml.trim();
+      setExportedYaml(yamlContent);
+
+      // Parse YAML and generate Mermaid diagram
+      try {
+        const workflow = yaml.parse(yamlContent) as WorkflowDefinition;
+        if (workflow && typeof workflow === 'object') {
+          // Ensure required fields
+          if (!workflow.trigger) {
+            workflow.trigger = { type: 'manual' };
+          }
+          if (!workflow.steps) {
+            workflow.steps = [];
+          }
+
+          // Generate Mermaid from workflow
+          const mermaid = workflowToMermaid(workflow);
+          setMermaidDiagram(mermaid);
+          mermaidGenerated = true;
+
+          // Update workflow definition
+          setWorkflowDef(workflow);
+
+          // Update automation name/description from YAML
+          if (workflow.name) {
+            setAutomationName(workflow.name);
+            setAutomationDisplayName(workflow.name);
+          }
+          if (workflow.description) {
+            setAutomationDescription(workflow.description);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to parse YAML:', error);
+        // Still set the YAML even if parsing fails
+      }
     }
-    if (pasteMermaid.trim()) {
+
+    // Only apply pasted Mermaid if we didn't generate one from YAML
+    if (pasteMermaid.trim() && !mermaidGenerated) {
       setMermaidDiagram(pasteMermaid.trim());
     }
+
     setShowPasteModal(false);
     setPasteYaml('');
     setPasteMermaid('');
@@ -1543,86 +1585,30 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     try {
       if (!exportedYaml.trim()) return;
 
-      // Parse YAML to workflow definition
-      const lines = exportedYaml.split('\n');
-      const steps: Array<{ id: string; name: string; type: string; next?: string[] }> = [];
-      let currentStep: { id: string; name: string; type: string; next?: string[] } | null = null;
-      let inSteps = false;
-      let inTrigger = false;
-      let workflowName = automationDisplayName;
-      let triggerType = 'manual';
-      let triggerSchedule = '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-
-        // Get workflow name
-        if (trimmed.startsWith('name:')) {
-          workflowName = trimmed.split(':')[1]?.trim().replace(/['"]/g, '') || workflowName;
-        }
-
-        // Check if we're in trigger section
-        if (trimmed === 'trigger:') {
-          inTrigger = true;
-          inSteps = false;
-          continue;
-        }
-
-        // Parse trigger
-        if (inTrigger && !trimmed.startsWith('-')) {
-          if (trimmed.startsWith('type:')) {
-            triggerType = trimmed.replace('type:', '').trim().replace(/['"]/g, '');
-          } else if (trimmed.startsWith('schedule:')) {
-            triggerSchedule = trimmed.replace('schedule:', '').trim().replace(/['"]/g, '');
-          } else if (trimmed.startsWith('method:')) {
-            // Webhook trigger
-            triggerType = 'webhook';
-          }
-        }
-
-        // Check if we're in steps section
-        if (trimmed === 'steps:') {
-          inSteps = true;
-          inTrigger = false;
-          continue;
-        }
-
-        if (inSteps) {
-          // New step starts with "- id:"
-          if (trimmed.startsWith('- id:')) {
-            if (currentStep) steps.push(currentStep);
-            currentStep = {
-              id: trimmed.replace('- id:', '').trim().replace(/['"]/g, ''),
-              name: '',
-              type: 'action',
-            };
-          } else if (currentStep) {
-            if (trimmed.startsWith('name:')) {
-              currentStep.name = trimmed.replace('name:', '').trim().replace(/['"]/g, '');
-            } else if (trimmed.startsWith('type:')) {
-              currentStep.type = trimmed.replace('type:', '').trim().replace(/['"]/g, '');
-            } else if (trimmed.startsWith('next:')) {
-              const nextVal = trimmed.replace('next:', '').trim();
-              if (nextVal.startsWith('[')) {
-                // Array format
-                currentStep.next = nextVal.replace(/[\[\]'"]/g, '').split(',').map(s => s.trim());
-              } else {
-                currentStep.next = [nextVal.replace(/['"]/g, '')];
-              }
-            }
-          }
-        }
+      // Parse YAML using proper YAML parser
+      const workflow = yaml.parse(exportedYaml) as WorkflowDefinition;
+      if (!workflow || typeof workflow !== 'object') {
+        console.error('Invalid YAML: must be an object');
+        return;
       }
-      if (currentStep) steps.push(currentStep);
+
+      // Ensure required fields
+      if (!workflow.trigger) {
+        workflow.trigger = { type: 'manual' };
+      }
+      if (!workflow.steps) {
+        workflow.steps = [];
+      }
 
       // Update schedule settings from parsed trigger
-      if (triggerType === 'manual') {
+      const trigger = workflow.trigger;
+      if (trigger.type === 'manual') {
         setSelectedSchedule('manual');
-      } else if (triggerType === 'webhook') {
+      } else if (trigger.type === 'webhook') {
         setSelectedSchedule('webhook');
-      } else if (triggerType === 'cron' && triggerSchedule) {
+      } else if (trigger.type === 'cron' && trigger.schedule) {
         // Parse cron expression to determine schedule type
-        const cronParts = triggerSchedule.split(/\s+/);
+        const cronParts = trigger.schedule.split(/\s+/);
         if (cronParts.length === 5) {
           const [minute, hour, day, month, weekday] = cronParts;
 
@@ -1632,68 +1618,44 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
           // Determine schedule type
           if (day === '*' && month === '*' && weekday === '*') {
-            // Daily
             setSelectedSchedule('daily');
           } else if (day === '*' && month === '*' && weekday !== '*') {
-            // Weekly
             setSelectedSchedule('weekly');
             const days = weekday.split(',').map(d => parseInt(d)).filter(d => !isNaN(d));
             if (days.length > 0) setScheduleDays(days);
           } else if (day !== '*' && month === '*' && weekday === '*') {
-            // Monthly
             setSelectedSchedule('monthly');
             const monthDays = day.split(',').map(d => parseInt(d)).filter(d => !isNaN(d));
             if (monthDays.length > 0) setScheduleMonthDays(monthDays);
           } else {
-            // Complex cron - use cron mode
             setSelectedSchedule('cron');
-            setCronExpression(triggerSchedule);
+            setCronExpression(trigger.schedule);
           }
         } else {
           setSelectedSchedule('cron');
-          setCronExpression(triggerSchedule);
+          setCronExpression(trigger.schedule);
         }
       }
 
-      // Generate Mermaid from steps
-      if (steps.length > 0) {
-        let mermaid = 'flowchart TD\n';
-        mermaid += '  start([Start])\n';
+      // Generate Mermaid from workflow using proper converter
+      const mermaid = workflowToMermaid(workflow);
+      setMermaidDiagram(mermaid);
 
-        for (const step of steps) {
-          const shape = step.type === 'condition' ? `{${step.name || step.id}}` : `[${step.name || step.id}]`;
-          mermaid += `  ${step.id}${shape}\n`;
-        }
+      // Update workflow definition
+      setWorkflowDef(workflow);
 
-        mermaid += '  end_node([End])\n\n';
-
-        // Add connections
-        if (steps.length > 0) {
-          mermaid += `  start --> ${steps[0].id}\n`;
-        }
-
-        for (let i = 0; i < steps.length; i++) {
-          const step = steps[i];
-          if (step.next && step.next.length > 0) {
-            for (const nextId of step.next) {
-              if (nextId && nextId !== 'null') {
-                mermaid += `  ${step.id} --> ${nextId}\n`;
-              }
-            }
-          } else if (i < steps.length - 1) {
-            mermaid += `  ${step.id} --> ${steps[i + 1].id}\n`;
-          } else {
-            mermaid += `  ${step.id} --> end_node\n`;
-          }
-        }
-
-        setMermaidDiagram(mermaid);
-        if (workflowName) setAutomationDisplayName(workflowName);
+      // Update name and description
+      if (workflow.name) {
+        setAutomationName(workflow.name);
+        setAutomationDisplayName(workflow.name);
+      }
+      if (workflow.description) {
+        setAutomationDescription(workflow.description);
       }
     } catch (error) {
       console.error('Failed to regenerate Mermaid from YAML:', error);
     }
-  }, [exportedYaml, automationDisplayName]);
+  }, [exportedYaml]);
 
   // Auto-update YAML when schedule settings change (if YAML exists)
   useEffect(() => {

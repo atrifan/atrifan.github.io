@@ -1,0 +1,1992 @@
+# Workflow YAML Rules
+
+> This document defines the YAML schema for automation workflows.
+> Use this as a system prompt or IDE rules file for AI-assisted workflow creation.
+
+## Overview
+
+Workflows are defined in YAML format. The YAML is the **source of truth** - Mermaid diagrams are generated from it for visualization.
+
+## Basic Structure
+
+```yaml
+name: "My Workflow"
+description: "What this workflow does"
+version: 1
+
+trigger:
+  type: manual  # or cron, webhook, event
+
+inputs:
+  - name: query
+    type: string
+    required: true
+    description: "Search query"
+
+steps:
+  - id: step1
+    tool: connector.tool_name
+    params:
+      param1: "value"
+      param2: "{{query}}"
+    output: result
+
+constraints:
+  maxToolCalls: 50
+  timeout: "5m"
+```
+
+## Trigger Types
+
+### Manual Trigger
+```yaml
+trigger:
+  type: manual
+```
+
+### Cron Trigger
+```yaml
+trigger:
+  type: cron
+  schedule: "0 9 * * *"  # 9 AM daily
+  timezone: "America/New_York"
+```
+
+**Cron Format:** `minute hour day-of-month month day-of-week`
+- `*` = any value
+- `*/5` = every 5 units
+- `1,15` = specific values
+- `1-5` = range
+
+**Common Schedules:**
+| Schedule | Cron Expression |
+|----------|-----------------|
+| Every minute | `* * * * *` |
+| Every 5 minutes | `*/5 * * * *` |
+| Hourly | `0 * * * *` |
+| Daily at 9 AM | `0 9 * * *` |
+| Weekly (Monday 9 AM) | `0 9 * * 1` |
+| Monthly (1st at midnight) | `0 0 1 * *` |
+| Yearly (Jan 1 at midnight) | `0 0 1 1 *` |
+
+### Webhook Trigger
+```yaml
+trigger:
+  type: webhook
+  webhook:
+    method: POST
+    auth:
+      type: api_key
+      apiKey:
+        header: X-API-Key
+    inputSchema:
+      type: object
+      properties:
+        orderId:
+          type: string
+      required: [orderId]
+```
+
+### Event Trigger
+```yaml
+trigger:
+  type: event
+  event:
+    name: "order.created"
+    filter: "event.data.amount > 100"
+```
+
+### Automation Trigger
+Triggered when another automation completes or reaches a specific step.
+
+```yaml
+trigger:
+  type: automation
+  from: "Order Processing"  # Name of triggering automation
+  on: complete  # or step
+  # step: processPayment  # If on: step
+```
+
+## Required Inputs
+
+Pre-configure required input values. Fields can be:
+- **Pre-filled** with actual values
+- **Marked sensitive** for vault storage
+- **Set to human_input** for runtime collection
+
+```yaml
+required_inputs:
+  api_key:
+    value: "sk-..."
+    sensitive: true  # Stored in vault, masked in UI
+
+  customer_email:
+    human_input: true  # Requested at runtime
+    description: "Customer email for notification"
+    type: string
+
+  threshold:
+    value: 100
+    type: number
+```
+
+**Missing Required Inputs:** If a tool step requires an input that isn't available in context or pre-configured, the workflow pauses and sends a notification (email/slack) requesting the input. This is automatic human-in-the-loop error handling.
+
+## Outputs
+
+Workflows deliver results via notifications, not JSON returns. Configure outputs:
+
+```yaml
+outputs:
+  - type: email
+    to: "{{customer_email}}"
+    subject: "Order {{orderId}} Processed"
+    body: "Your order has been processed. Summary: {{summary}}"
+
+  - type: slack
+    channel: "#orders"
+    message: "Order {{orderId}} completed: {{summary}}"
+
+  - type: webhook
+    url: "https://api.example.com/callback"
+    method: POST
+    body:
+      orderId: "{{orderId}}"
+      status: "completed"
+
+  - type: automation
+    name: "Send Invoice"  # Trigger another automation
+    inputs:
+      orderId: "{{orderId}}"
+      amount: "{{total}}"
+```
+
+## Step Types
+
+### Tool Call Step
+Calls an MCP tool from a connector.
+
+```yaml
+- id: search
+  tool: brave-search.web_search
+  params:
+    query: "{{userQuery}}"
+    count: 10
+  output: searchResults
+  onError: continue  # or fail, retry
+```
+
+### Code Step
+Inline JavaScript/TypeScript expression.
+
+```yaml
+- id: filter
+  code: |
+    searchResults.filter(r => r.score > 0.7).slice(0, 5)
+  output: topResults
+```
+
+### LLM Step
+Calls an AI model.
+
+```yaml
+- id: summarize
+  llm:
+    model: "openai/gpt-4o-mini"
+    system: "You are a helpful assistant"
+    prompt: "Summarize these results: {{topResults}}"
+    format: text  # or json
+  output: summary
+```
+
+For structured output:
+```yaml
+- id: extract
+  llm:
+    prompt: "Extract entities from: {{text}}"
+    format: json
+    schema:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string }
+  output: entities
+```
+
+### Conditional Step
+```yaml
+- id: checkEmpty
+  if: topResults.length === 0
+  then:
+    - id: noResults
+      return: { status: "empty", message: "No results found" }
+  else:
+    - id: processResults
+      code: topResults.map(r => r.title)
+      output: titles
+```
+
+### For Loop Step
+```yaml
+- id: processEach
+  for: item in items
+  do:
+    - id: processItem
+      tool: processor.process
+      params:
+        data: "{{item}}"
+      output: processed
+```
+
+### While Loop Step
+```yaml
+- id: pollUntilReady
+  while: status !== 'ready'
+  maxIterations: 10
+  do:
+    - id: checkStatus
+      tool: api.get_status
+      params:
+        id: "{{jobId}}"
+      output: status
+    - id: wait
+      code: await new Promise(r => setTimeout(r, 1000))
+      output: _
+```
+
+### Human-in-the-Loop Step
+```yaml
+- id: approval
+  human:
+    message: "Approve this action? Amount: ${{amount}}"
+    type: confirm  # or text, choice
+    choices: ["Approve", "Reject", "Escalate"]
+    timeout: 3600  # seconds
+    notify: [email, slack]
+  output: decision
+```
+
+### Notify Step
+```yaml
+- id: alert
+  notify:
+    channels: [email, slack, push]
+    message: "Order {{orderId}} processed successfully"
+    priority: high  # or low, normal
+```
+
+### Return Step
+```yaml
+- id: done
+  return:
+    status: "success"
+    data: "{{processedData}}"
+    timestamp: "{{new Date().toISOString()}}"
+```
+
+### Trigger Automation Step
+Trigger another automation from within a workflow.
+
+```yaml
+- id: startInvoicing
+  trigger_automation:
+    name: "Generate Invoice"
+    inputs:
+      orderId: "{{orderId}}"
+      amount: "{{total}}"
+    wait: false  # Don't wait for completion (default)
+  output: invoiceExecution  # Execution ID if wait=false
+```
+
+With wait (synchronous):
+```yaml
+- id: getApproval
+  trigger_automation:
+    name: "Manager Approval"
+    inputs:
+      request: "{{request}}"
+    wait: true  # Wait for completion
+  output: approvalResult
+```
+
+## Variable References
+
+Use `{{variable}}` syntax to reference variables:
+
+```yaml
+params:
+  # Simple variable
+  query: "{{userInput}}"
+
+  # Nested property
+  name: "{{user.profile.name}}"
+
+  # Array access
+  first: "{{items[0]}}"
+
+  # Expression
+  count: "{{items.length}}"
+
+  # Template string
+  message: "Hello {{user.name}}, you have {{items.length}} items"
+```
+
+## Inputs
+
+Define workflow inputs for webhooks and manual triggers:
+
+```yaml
+inputs:
+  - name: query
+    type: string
+    required: true
+    description: "Search query"
+
+  - name: limit
+    type: number
+    required: false
+    default: 10
+
+  - name: options
+    type: object
+    required: false
+    default: { includeMetadata: true }
+```
+
+**Types:** `string`, `number`, `boolean`, `object`, `array`
+
+## Constraints
+
+```yaml
+constraints:
+  # Maximum tool calls per execution
+  maxToolCalls: 50
+
+  # Execution timeout
+  timeout: "5m"  # or "60s", "1h"
+
+  # Tools requiring human approval
+  requireApprovalFor:
+    - "payment.charge"
+    - "email.send_bulk"
+```
+
+## Error Handling
+
+Each step can specify error behavior:
+
+```yaml
+- id: riskyStep
+  tool: external.api_call
+  params: { ... }
+  output: result
+  onError: continue  # continue to next step
+
+- id: criticalStep
+  tool: payment.charge
+  params: { ... }
+  output: receipt
+  onError: fail  # stop workflow (default)
+
+- id: flakeyStep
+  tool: network.request
+  params: { ... }
+  output: response
+  onError: retry  # retry with backoff
+```
+
+## Complete Example
+
+```yaml
+name: "Daily News Digest"
+description: "Fetches news, summarizes, and sends email digest"
+version: 1
+
+trigger:
+  type: cron
+  schedule: "0 8 * * *"
+  timezone: "America/New_York"
+
+inputs:
+  - name: topics
+    type: array
+    default: ["AI", "Technology", "Business"]
+
+steps:
+  - id: fetchNews
+    tool: brave-search.web_search
+    params:
+      query: "{{topics.join(' OR ')}} news today"
+      count: 20
+    output: articles
+
+  - id: filterRecent
+    code: |
+      articles.filter(a => {
+        const date = new Date(a.publishedAt);
+        const yesterday = new Date(Date.now() - 86400000);
+        return date > yesterday;
+      })
+    output: recentArticles
+
+  - id: checkEmpty
+    if: recentArticles.length === 0
+    then:
+      - id: noNews
+        notify:
+          channels: [slack]
+          message: "No recent news found for topics: {{topics}}"
+
+      - id: exitEarly
+        return: { status: "no_news" }
+
+  - id: summarize
+    llm:
+      model: "openai/gpt-4o-mini"
+      prompt: |
+        Create a brief digest of these news articles:
+        {{JSON.stringify(recentArticles, null, 2)}}
+
+        Format as HTML email with sections per topic.
+      format: text
+    output: digest
+
+  - id: sendEmail
+    tool: email.send
+    params:
+      to: "{{process.env.DIGEST_EMAIL}}"
+      subject: "Daily News Digest - {{new Date().toLocaleDateString()}}"
+      html: "{{digest}}"
+    output: emailResult
+
+  - id: complete
+    return:
+      status: "success"
+      articleCount: "{{recentArticles.length}}"
+      sentTo: "{{process.env.DIGEST_EMAIL}}"
+
+constraints:
+  maxToolCalls: 30
+  timeout: "2m"
+```
+
+---
+
+## Webhook Trigger Endpoint
+
+Every automation has a webhook endpoint that can be used to trigger it:
+
+```
+POST /api/ai/automations/{automation_id}/hook/{api_key}
+```
+
+**Path Parameters:**
+- `automation_id`: UUID of the automation to trigger
+- `api_key`: Your API key for authentication (validates ownership)
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "inputs": {
+    "field1": "value1",
+    "field2": "value2"
+  }
+}
+```
+
+**Response (success):**
+```json
+{
+  "execution_id": "run-uuid",
+  "status": "running",
+  "message": "Automation triggered successfully"
+}
+```
+
+**Response (waiting for input):**
+```json
+{
+  "execution_id": "run-uuid",
+  "status": "waiting_input",
+  "message": "Automation requires input before proceeding",
+  "input_url": "/automation/{id}/running/{runId}/input",
+  "missing_inputs": [
+    {"name": "customer_email", "type": "string", "description": "Customer email"}
+  ]
+}
+```
+
+### Internal Calls (Automation-to-Automation)
+
+When triggering from within another automation, use the `x-internal-call: true` header to bypass API key validation:
+
+```yaml
+# In trigger_automation block, the system automatically:
+# 1. Adds x-internal-call: true header
+# 2. Uses the execution context's user_id for ownership validation
+```
+
+### Cron Calls
+
+Vercel Cron jobs use `x-cron-secret` header with `CRON_SECRET` env var for authentication.
+
+---
+
+## Human-in-the-Loop & Input Exceptions
+
+When an automation requires input that isn't available:
+
+1. **Execution pauses** with status `waiting_input`
+2. **Notifications sent** via all detected notification tools (email, Slack, push)
+3. **User receives link** to `/automation/{id}/running/{runId}/input`
+4. **User provides input** via the web form
+5. **Execution resumes** automatically
+
+### Notification Message Format
+
+```
+🤖 Automation "{name}" requires your input
+
+The following fields are needed to continue:
+- {field1}: {description}
+- {field2}: {description}
+
+Click here to provide input: {input_url}
+
+Run ID: {execution_id}
+```
+
+### Configuring Input Requirements
+
+```yaml
+required_inputs:
+  # Pre-filled value (no prompt needed)
+  api_key:
+    value: "sk-..."
+    sensitive: true
+
+  # Always prompt user at runtime
+  customer_email:
+    human_input: true
+    description: "Customer email for notification"
+    type: string
+
+  # Optional with default
+  threshold:
+    value: 100
+    type: number
+```
+
+---
+
+## Notification Tools
+
+Notification tools are **auto-detected** from your connectors based on tool names and descriptions containing keywords like:
+- **Email**: `email`, `mail`, `send_email`
+- **Slack**: `slack`, `post_message`, `channel`
+- **Push**: `push`, `notification`, `mobile`
+- **SMS**: `sms`, `text_message`
+- **Webhook**: `webhook`, `http_post`, `callback`
+
+These tools are automatically used for:
+- Human-in-the-loop input requests
+- Error notifications
+- Workflow output delivery
+
+### Using Notifications in Workflows
+
+```yaml
+# In outputs section
+outputs:
+  - type: email
+    tool: email-connector.send_email
+    to: "{{customer_email}}"
+    subject: "Order {{orderId}} Processed"
+    body: "{{summary}}"
+
+  - type: slack
+    tool: slack-connector.post_message
+    channel: "#orders"
+    message: "Order {{orderId}} completed"
+
+# In notify step
+steps:
+  - id: alert
+    notify:
+      channels: [email, slack]  # Uses detected tools
+      message: "Urgent: {{alert_message}}"
+      priority: high
+```
+
+---
+
+## Execution States
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Execution created, not yet started |
+| `running` | Actively executing steps |
+| `waiting_input` | Paused, waiting for human input |
+| `paused` | Manually paused by user |
+| `completed` | Successfully finished |
+| `failed` | Error occurred |
+| `cancelled` | Cancelled by user |
+
+---
+
+## Cron Scheduling
+
+> **Note:** Cron triggers are implemented via Vercel Cron Jobs. The cron expression is stored in the automation and Vercel handles the scheduling.
+
+Common cron expressions:
+| Schedule | Expression |
+|----------|------------|
+| Every minute | `* * * * *` |
+| Every 5 minutes | `*/5 * * * *` |
+| Hourly | `0 * * * *` |
+| Daily at 9 AM | `0 9 * * *` |
+| Weekly Monday 9 AM | `0 9 * * 1` |
+| Monthly 1st at midnight | `0 0 1 * *` |
+
+---
+
+## Available Tools
+
+> The following tools are available from your active connectors.
+> Use the format `connector.tool_name` in your workflow steps.
+
+<!-- TOOLS_SECTION_START -->
+## Available Tools
+
+The following tools are available from your active connectors. Use the full tool name (server.tool_name) in your workflow steps.
+
+**Total Connectors:** 1 | **Total Tools:** 12
+
+### Default Key
+- **Server Name:** `default`
+- **Type:** Internal MCP
+- **Tools:** 12
+
+#### `default.find_next_eclipse`
+
+**Description:** Find the next upcoming solar or lunar eclipse with visibility info, countdown, and best viewing locations. Supports filtering by eclipse type and checking visibility from a specific location.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "type": {
+      "enum": [
+        "solar",
+        "lunar",
+        "any"
+      ],
+      "type": "string",
+      "description": "Type of eclipse to find: solar (sun blocked by moon), lunar (moon in Earth shadow), or any"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "User latitude for visibility check (-90 to 90). Provide with longitude for personalized visibility info."
+    },
+    "longitude": {
+      "type": "number",
+      "description": "User longitude for visibility check (-180 to 180). Provide with latitude for personalized visibility info."
+    }
+  }
+}
+```
+
+**Parameters:**
+- `type` (string): Type of eclipse to find: solar (sun blocked by moon), lunar (moon in Earth shadow), or any
+- `latitude` (number): User latitude for visibility check (-90 to 90). Provide with longitude for personalized visibility info.
+- `longitude` (number): User longitude for visibility check (-180 to 180). Provide with latitude for personalized visibility info.
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "Eclipse date in YYYY-MM-DD format"
+    },
+    "type": {
+      "enum": [
+        "solar",
+        "lunar"
+      ],
+      "type": "string",
+      "description": "Eclipse type"
+    },
+    "subtype": {
+      "enum": [
+        "total",
+        "partial",
+        "annular",
+        "penumbral",
+        "hybrid"
+      ],
+      "type": "string",
+      "description": "Eclipse subtype"
+    },
+    "duration": {
+      "type": "string",
+      "description": "Duration of totality/maximum phase"
+    },
+    "daysUntil": {
+      "type": "number",
+      "description": "Days until the eclipse"
+    },
+    "magnitude": {
+      "type": "number",
+      "description": "Eclipse magnitude (0-1+)"
+    },
+    "coordinates": {
+      "type": "object",
+      "description": "Greatest eclipse point coordinates {lat, lon}"
+    },
+    "peakTimeUTC": {
+      "type": "string",
+      "description": "Peak time in UTC (HH:MM)"
+    },
+    "visibleRegions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of regions where eclipse is visible"
+    },
+    "bestVisibleFrom": {
+      "type": "string",
+      "description": "Best viewing location description"
+    },
+    "visibilityScore": {
+      "type": "string",
+      "description": "Visibility quality from provided location"
+    },
+    "visibleFromLocation": {
+      "type": "boolean",
+      "description": "Whether visible from provided coordinates"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_find_next_eclipse
+    type: action
+    name: "Use find_next_eclipse"
+    tool: "default.find_next_eclipse"
+    input:
+      type: "example"
+      latitude: 123
+      longitude: 123
+```
+
+---
+
+#### `default.calculate_compound_interest`
+
+**Description:** Calculate compound interest growth over time
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "principal",
+    "rate",
+    "time"
+  ],
+  "properties": {
+    "rate": {
+      "type": "number",
+      "description": "Annual interest rate (percentage)"
+    },
+    "time": {
+      "type": "number",
+      "description": "Time period in years"
+    },
+    "principal": {
+      "type": "number",
+      "description": "Initial investment amount"
+    },
+    "monthlyContribution": {
+      "type": "number",
+      "description": "Monthly contribution (optional)"
+    },
+    "compoundingFrequency": {
+      "enum": [
+        "annually",
+        "semi-annually",
+        "quarterly",
+        "monthly",
+        "daily"
+      ],
+      "type": "string"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `rate` (number, required): Annual interest rate (percentage)
+- `time` (number, required): Time period in years
+- `principal` (number, required): Initial investment amount
+- `monthlyContribution` (number): Monthly contribution (optional)
+- `compoundingFrequency` (string): 
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "finalAmount": {
+      "type": "number"
+    },
+    "effectiveRate": {
+      "type": "number"
+    },
+    "totalInterest": {
+      "type": "number"
+    },
+    "totalContributions": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_compound_interest
+    type: action
+    name: "Use calculate_compound_interest"
+    tool: "default.calculate_compound_interest"
+    input:
+      rate: 123
+      time: 123
+      principal: 123
+      monthlyContribution: 123
+      compoundingFrequency: "example"
+```
+
+---
+
+#### `default.calculate_age`
+
+**Description:** Calculate age from birthdate with detailed breakdown
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "birthDate"
+  ],
+  "properties": {
+    "birthDate": {
+      "type": "string",
+      "description": "Birth date in YYYY-MM-DD format"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `birthDate` (string, required): Birth date in YYYY-MM-DD format
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "days": {
+      "type": "number"
+    },
+    "years": {
+      "type": "number"
+    },
+    "months": {
+      "type": "number"
+    },
+    "totalDays": {
+      "type": "number"
+    },
+    "nextBirthday": {
+      "type": "string"
+    },
+    "daysUntilBirthday": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_age
+    type: action
+    name: "Use calculate_age"
+    tool: "default.calculate_age"
+    input:
+      birthDate: "example"
+```
+
+---
+
+#### `default.when_date_info`
+
+**Description:** Get comprehensive information about a date including day of week, zodiac sign, time calculations from today (days, hours, minutes, weeks), and calendar info (day of year, week number, quarter, leap year).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "date"
+  ],
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "Date in YYYY-MM-DD format (required)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `date` (string, required): Date in YYYY-MM-DD format (required)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "Input date in YYYY-MM-DD format"
+    },
+    "weeks": {
+      "type": "number",
+      "description": "Weeks from today (rounded to 1 decimal)"
+    },
+    "isPast": {
+      "type": "boolean"
+    },
+    "isToday": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": "string",
+      "description": "Contextual message about the date"
+    },
+    "quarter": {
+      "type": "number",
+      "description": "Quarter of year (1-4)"
+    },
+    "isFuture": {
+      "type": "boolean"
+    },
+    "dayOfWeek": {
+      "type": "string",
+      "description": "Full day name (e.g., Monday)"
+    },
+    "dayOfYear": {
+      "type": "number",
+      "description": "Day of year (1-366)"
+    },
+    "isLeapYear": {
+      "type": "boolean"
+    },
+    "totalHours": {
+      "type": "number",
+      "description": "Total hours from today"
+    },
+    "weekOfYear": {
+      "type": "number",
+      "description": "Week of year (1-53)"
+    },
+    "zodiacSign": {
+      "type": "string",
+      "description": "Zodiac sign for the date"
+    },
+    "totalMinutes": {
+      "type": "number",
+      "description": "Total minutes from today"
+    },
+    "daysFromToday": {
+      "type": "number",
+      "description": "Days from today (negative = past, positive = future)"
+    },
+    "formattedDate": {
+      "type": "string",
+      "description": "Human-readable date (e.g., January 15th, 2026)"
+    },
+    "dayOfWeekShort": {
+      "type": "string",
+      "description": "Short day name (e.g., Mon)"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_when_date_info
+    type: action
+    name: "Use when_date_info"
+    tool: "default.when_date_info"
+    input:
+      date: "example"
+```
+
+---
+
+#### `default.list_upcoming_eclipses`
+
+**Description:** List upcoming solar and lunar eclipses with dates, visibility info, and countdown. Returns multiple eclipses with filtering options.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "type": {
+      "enum": [
+        "solar",
+        "lunar",
+        "any"
+      ],
+      "type": "string",
+      "description": "Filter by eclipse type: solar, lunar, or any (default)"
+    },
+    "count": {
+      "type": "number",
+      "description": "Number of eclipses to return (1-10, default 5)"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "User latitude for visibility check (-90 to 90)"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "User longitude for visibility check (-180 to 180)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `type` (string): Filter by eclipse type: solar, lunar, or any (default)
+- `count` (number): Number of eclipses to return (1-10, default 5)
+- `latitude` (number): User latitude for visibility check (-90 to 90)
+- `longitude` (number): User longitude for visibility check (-180 to 180)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "eclipses": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "List of upcoming eclipses with details (date, type, subtype, peakTimeUTC, duration, magnitude, bestVisibleFrom, visibleRegions, daysUntil, visibleFromLocation, visibilityScore)"
+    },
+    "totalCount": {
+      "type": "number",
+      "description": "Total number of eclipses returned"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_list_upcoming_eclipses
+    type: action
+    name: "Use list_upcoming_eclipses"
+    tool: "default.list_upcoming_eclipses"
+    input:
+      type: "example"
+      count: 123
+      latitude: 123
+      longitude: 123
+```
+
+---
+
+#### `default.rest_production-httpbin-get-getrequest`
+
+**Description:** Returns GET data including args, headers, origin and url
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "param1": {
+      "type": "string",
+      "description": "Test parameter 1"
+    },
+    "param2": {
+      "type": "string",
+      "description": "Test parameter 2"
+    }
+  },
+  "additionalProperties": true
+}
+```
+
+**Parameters:**
+- `param1` (string): Test parameter 1
+- `param2` (string): Test parameter 2
+
+**Output Schema:**
+```json
+{
+  "type": "object"
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_rest_production_httpbin_get_getrequest
+    type: action
+    name: "Use rest_production-httpbin-get-getrequest"
+    tool: "default.rest_production-httpbin-get-getrequest"
+    input:
+      param1: "example"
+      param2: "example"
+```
+
+---
+
+#### `default.convert_units`
+
+**Description:** Convert between different units of measurement. Supports weight (kg, lbs, oz, g), length (cm, in, m, ft, km, mi, mm), and temperature (c, f, k).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "value",
+    "from",
+    "to"
+  ],
+  "properties": {
+    "to": {
+      "enum": [
+        "kg",
+        "lbs",
+        "oz",
+        "g",
+        "cm",
+        "in",
+        "m",
+        "ft",
+        "km",
+        "mi",
+        "mm",
+        "c",
+        "f",
+        "k"
+      ],
+      "type": "string",
+      "description": "Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
+    },
+    "from": {
+      "enum": [
+        "kg",
+        "lbs",
+        "oz",
+        "g",
+        "cm",
+        "in",
+        "m",
+        "ft",
+        "km",
+        "mi",
+        "mm",
+        "c",
+        "f",
+        "k"
+      ],
+      "type": "string",
+      "description": "Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
+    },
+    "value": {
+      "type": "number",
+      "description": "Value to convert"
+    },
+    "category": {
+      "enum": [
+        "weight",
+        "length",
+        "temperature"
+      ],
+      "type": "string",
+      "description": "Optional: category hint for the conversion"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `to` (string, required): Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
+- `from` (string, required): Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
+- `value` (number, required): Value to convert
+- `category` (string): Optional: category hint for the conversion
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "to": {
+      "type": "string",
+      "description": "Target unit"
+    },
+    "from": {
+      "type": "string",
+      "description": "Source unit"
+    },
+    "value": {
+      "type": "number",
+      "description": "Original value"
+    },
+    "result": {
+      "type": "number",
+      "description": "Converted value"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_convert_units
+    type: action
+    name: "Use convert_units"
+    tool: "default.convert_units"
+    input:
+      to: "example"
+      from: "example"
+      value: 123
+      category: "example"
+```
+
+---
+
+#### `default.calculate_uniqueness`
+
+**Description:** Calculate how unique/rare a person is based on physical characteristics
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "age": {
+      "type": "number",
+      "description": "Age in years"
+    },
+    "gender": {
+      "enum": [
+        "male",
+        "female"
+      ],
+      "type": "string"
+    },
+    "eyeColor": {
+      "enum": [
+        "brown",
+        "blue",
+        "hazel",
+        "green",
+        "gray",
+        "amber"
+      ],
+      "type": "string"
+    },
+    "heightCm": {
+      "type": "number",
+      "description": "Height in centimeters"
+    },
+    "weightKg": {
+      "type": "number",
+      "description": "Weight in kilograms"
+    },
+    "ageMonths": {
+      "type": "number",
+      "description": "Age in months for babies (0-24)"
+    },
+    "bloodType": {
+      "enum": [
+        "O+",
+        "O-",
+        "A+",
+        "A-",
+        "B+",
+        "B-",
+        "AB+",
+        "AB-"
+      ],
+      "type": "string"
+    },
+    "hairColor": {
+      "enum": [
+        "black",
+        "brown",
+        "blonde",
+        "red",
+        "gray",
+        "auburn"
+      ],
+      "type": "string"
+    },
+    "handedness": {
+      "enum": [
+        "right",
+        "left",
+        "ambidextrous"
+      ],
+      "type": "string"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `age` (number): Age in years
+- `gender` (string): 
+- `eyeColor` (string): 
+- `heightCm` (number): Height in centimeters
+- `weightKg` (number): Weight in kilograms
+- `ageMonths` (number): Age in months for babies (0-24)
+- `bloodType` (string): 
+- `hairColor` (string): 
+- `handedness` (string): 
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "rarity": {
+      "type": "string"
+    },
+    "isBabyMode": {
+      "type": "boolean"
+    },
+    "matchingPeople": {
+      "type": "number"
+    },
+    "worldPopulation": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_uniqueness
+    type: action
+    name: "Use calculate_uniqueness"
+    tool: "default.calculate_uniqueness"
+    input:
+      age: 123
+      gender: "example"
+      eyeColor: "example"
+      heightCm: 123
+      weightKg: 123
+      ageMonths: 123
+      bloodType: "example"
+      hairColor: "example"
+      handedness: "example"
+```
+
+---
+
+#### `default.zodiac_compatibility`
+
+**Description:** Check zodiac compatibility between two people. Provide either sign names or birth dates for each person.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "date1": {
+      "type": "string",
+      "description": "First person birth date (YYYY-MM-DD) - alternative to sign1"
+    },
+    "date2": {
+      "type": "string",
+      "description": "Second person birth date (YYYY-MM-DD) - alternative to sign2"
+    },
+    "sign1": {
+      "enum": [
+        "aries",
+        "taurus",
+        "gemini",
+        "cancer",
+        "leo",
+        "virgo",
+        "libra",
+        "scorpio",
+        "sagittarius",
+        "capricorn",
+        "aquarius",
+        "pisces"
+      ],
+      "type": "string",
+      "description": "First zodiac sign name"
+    },
+    "sign2": {
+      "enum": [
+        "aries",
+        "taurus",
+        "gemini",
+        "cancer",
+        "leo",
+        "virgo",
+        "libra",
+        "scorpio",
+        "sagittarius",
+        "capricorn",
+        "aquarius",
+        "pisces"
+      ],
+      "type": "string",
+      "description": "Second zodiac sign name"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `date1` (string): First person birth date (YYYY-MM-DD) - alternative to sign1
+- `date2` (string): Second person birth date (YYYY-MM-DD) - alternative to sign2
+- `sign1` (string): First zodiac sign name
+- `sign2` (string): Second zodiac sign name
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "level": {
+      "type": "string"
+    },
+    "person1": {
+      "type": "object"
+    },
+    "person2": {
+      "type": "object"
+    },
+    "compatibility": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_zodiac_compatibility
+    type: action
+    name: "Use zodiac_compatibility"
+    tool: "default.zodiac_compatibility"
+    input:
+      date1: "example"
+      date2: "example"
+      sign1: "example"
+      sign2: "example"
+```
+
+---
+
+#### `default.generate_weight_loss_plan`
+
+**Description:** Generate a complete weight loss plan with calorie targets and fasting recommendations
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "age",
+    "sex",
+    "height",
+    "currentWeight",
+    "desiredWeight"
+  ],
+  "properties": {
+    "age": {
+      "type": "number",
+      "description": "Age in years"
+    },
+    "sex": {
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ],
+      "type": "string"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height in centimeters"
+    },
+    "timeToWeight": {
+      "type": "number",
+      "description": "Weeks to reach goal (optional)"
+    },
+    "activityLevel": {
+      "enum": [
+        "sedentary",
+        "light",
+        "moderate",
+        "active",
+        "veryActive"
+      ],
+      "type": "string"
+    },
+    "currentWeight": {
+      "type": "number",
+      "description": "Current weight in kg"
+    },
+    "desiredWeight": {
+      "type": "number",
+      "description": "Target weight in kg"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `age` (number, required): Age in years
+- `sex` (string, required): 
+- `height` (number, required): Height in centimeters
+- `timeToWeight` (number): Weeks to reach goal (optional)
+- `activityLevel` (string): 
+- `currentWeight` (number, required): Current weight in kg
+- `desiredWeight` (number, required): Target weight in kg
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "bmr": {
+      "type": "number"
+    },
+    "tdee": {
+      "type": "number"
+    },
+    "weeksToGoal": {
+      "type": "number"
+    },
+    "targetWeight": {
+      "type": "number"
+    },
+    "currentWeight": {
+      "type": "number"
+    },
+    "dailyCalories": {
+      "type": "number"
+    },
+    "weeklyWeightLoss": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_generate_weight_loss_plan
+    type: action
+    name: "Use generate_weight_loss_plan"
+    tool: "default.generate_weight_loss_plan"
+    input:
+      age: 123
+      sex: "example"
+      height: 123
+      timeToWeight: 123
+      activityLevel: "example"
+      currentWeight: 123
+      desiredWeight: 123
+```
+
+---
+
+#### `default.blood_calculator`
+
+**Description:** Blood calculator with three modes: "donation" (check donation eligibility), "compatibility" (blood type transfusion compatibility), "baby" (predict baby blood type from parents). Mode determines required fields - tool will error with missing fields for each mode.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "calculatorMode"
+  ],
+  "properties": {
+    "age": {
+      "type": "number",
+      "description": "Age in years (donation mode)"
+    },
+    "gender": {
+      "enum": [
+        "male",
+        "female"
+      ],
+      "type": "string",
+      "description": "Gender for blood volume calculation (donation mode)"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height in cm (metric only) (donation mode)"
+    },
+    "weight": {
+      "type": "number",
+      "description": "Weight in kg (metric) or lbs (imperial) (donation mode)"
+    },
+    "fatherRh": {
+      "enum": [
+        "+",
+        "-"
+      ],
+      "type": "string",
+      "description": "Father's Rh factor (baby mode)"
+    },
+    "motherRh": {
+      "enum": [
+        "+",
+        "-"
+      ],
+      "type": "string",
+      "description": "Mother's Rh factor (baby mode)"
+    },
+    "rhFactor": {
+      "enum": [
+        "+",
+        "-"
+      ],
+      "type": "string",
+      "description": "Rh factor positive or negative (compatibility mode)"
+    },
+    "bloodType": {
+      "enum": [
+        "A",
+        "B",
+        "AB",
+        "O"
+      ],
+      "type": "string",
+      "description": "ABO blood type (compatibility mode)"
+    },
+    "heightFeet": {
+      "type": "number",
+      "description": "Height feet component (imperial only) (donation mode)"
+    },
+    "unitSystem": {
+      "enum": [
+        "metric",
+        "imperial"
+      ],
+      "type": "string",
+      "description": "Unit system. Default: metric (donation mode)"
+    },
+    "heightInches": {
+      "type": "number",
+      "description": "Height inches component (imperial only) (donation mode)"
+    },
+    "calculatorMode": {
+      "enum": [
+        "donation",
+        "compatibility",
+        "baby"
+      ],
+      "type": "string",
+      "description": "Calculator mode: \"donation\" for eligibility, \"compatibility\" for transfusion matching, \"baby\" for predicting baby blood type"
+    },
+    "fatherBloodType": {
+      "enum": [
+        "A",
+        "B",
+        "AB",
+        "O"
+      ],
+      "type": "string",
+      "description": "Father's ABO blood type (baby mode)"
+    },
+    "motherBloodType": {
+      "enum": [
+        "A",
+        "B",
+        "AB",
+        "O"
+      ],
+      "type": "string",
+      "description": "Mother's ABO blood type (baby mode)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `age` (number): Age in years (donation mode)
+- `gender` (string): Gender for blood volume calculation (donation mode)
+- `height` (number): Height in cm (metric only) (donation mode)
+- `weight` (number): Weight in kg (metric) or lbs (imperial) (donation mode)
+- `fatherRh` (string): Father's Rh factor (baby mode)
+- `motherRh` (string): Mother's Rh factor (baby mode)
+- `rhFactor` (string): Rh factor positive or negative (compatibility mode)
+- `bloodType` (string): ABO blood type (compatibility mode)
+- `heightFeet` (number): Height feet component (imperial only) (donation mode)
+- `unitSystem` (string): Unit system. Default: metric (donation mode)
+- `heightInches` (number): Height inches component (imperial only) (donation mode)
+- `calculatorMode` (string, required): Calculator mode: "donation" for eligibility, "compatibility" for transfusion matching, "baby" for predicting baby blood type
+- `fatherBloodType` (string): Father's ABO blood type (baby mode)
+- `motherBloodType` (string): Mother's ABO blood type (baby mode)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "tips": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "amount": {
+      "type": "number"
+    },
+    "eligible": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rhWarning": {
+      "type": "string"
+    },
+    "bloodVolume": {
+      "type": "number"
+    },
+    "canDonateTo": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fullBloodType": {
+      "type": "string"
+    },
+    "maxSafeAmount": {
+      "type": "number"
+    },
+    "possibleTypes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "calculatorMode": {
+      "type": "string"
+    },
+    "canReceiveFrom": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "isUniversalDonor": {
+      "type": "boolean"
+    },
+    "isUniversalRecipient": {
+      "type": "boolean"
+    },
+    "rhIncompatibilityRisk": {
+      "type": "boolean"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_blood_calculator
+    type: action
+    name: "Use blood_calculator"
+    tool: "default.blood_calculator"
+    input:
+      age: 123
+      gender: "example"
+      height: 123
+      weight: 123
+      fatherRh: "example"
+      motherRh: "example"
+      rhFactor: "example"
+      bloodType: "example"
+      heightFeet: 123
+      unitSystem: "example"
+      heightInches: 123
+      calculatorMode: "example"
+      fatherBloodType: "example"
+      motherBloodType: "example"
+```
+
+---
+
+#### `default.calculate_percentage`
+
+**Description:** Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "operation",
+    "value1",
+    "value2"
+  ],
+  "properties": {
+    "value1": {
+      "type": "number",
+      "description": "First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange"
+    },
+    "value2": {
+      "type": "number",
+      "description": "Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange"
+    },
+    "operation": {
+      "enum": [
+        "whatIsXPercentOfY",
+        "xIsWhatPercentOfY",
+        "increaseByPercent",
+        "decreaseByPercent",
+        "percentChange"
+      ],
+      "type": "string",
+      "description": "Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `value1` (number, required): First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange
+- `value2` (number, required): Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange
+- `operation` (string, required): Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "result": {
+      "type": "number",
+      "description": "The calculated result"
+    },
+    "value1": {
+      "type": "number",
+      "description": "First input value"
+    },
+    "value2": {
+      "type": "number",
+      "description": "Second input value"
+    },
+    "operation": {
+      "type": "string",
+      "description": "The operation performed"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Human-readable explanation of the calculation"
+    },
+    "resultIsPercent": {
+      "type": "boolean",
+      "description": "Whether the result is a percentage"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_percentage
+    type: action
+    name: "Use calculate_percentage"
+    tool: "default.calculate_percentage"
+    input:
+      value1: 123
+      value2: 123
+      operation: "example"
+```
+
+---
+
+
+## Detected Notification Tools
+
+*No notification tools detected. Add connectors with email, Slack, or push notification capabilities to enable notifications.*
+
+> **Note:** Notification tools are auto-detected based on tool names and descriptions containing keywords like "email", "slack", "push", "sms", etc.
+
+## Available Automations (for trigger_automation)
+
+Use the `trigger_automation` block to trigger other automations from within a workflow.
+The `{api_key}` placeholder will be automatically replaced with the user's API key at runtime.
+
+*No automations available yet. Create automations to enable chaining.*
+<!-- TOOLS_SECTION_END -->
+

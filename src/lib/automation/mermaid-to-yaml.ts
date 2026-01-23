@@ -18,6 +18,7 @@ import {
   ReturnStep,
   NotifyStep,
   TriggerConfig,
+  WorkflowInput,
   MermaidNode,
   MermaidEdge,
   ParsedMermaid,
@@ -47,12 +48,12 @@ const SEPARATOR = '━━━━━━━━━━━━━━━━━━';
 export function parseMermaid(mermaidCode: string): ParsedMermaid {
   const nodes: MermaidNode[] = [];
   const edges: MermaidEdge[] = [];
-  
+
   // Remove flowchart directive and clean up
   const lines = mermaidCode.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('flowchart') && !l.startsWith('style'));
-  
+
   for (const line of lines) {
-    // Try to parse as edge first
+    // Try to parse as edge first (nodeA --> nodeB or nodeA -->|label| nodeB)
     const edgeMatch = line.match(/^(\w+)\s*(?:-->|-.->)\s*(?:\|([^|]+)\|\s*)?(\w+)$/);
     if (edgeMatch) {
       edges.push({
@@ -62,19 +63,55 @@ export function parseMermaid(mermaidCode: string): ParsedMermaid {
       });
       continue;
     }
-    
-    // Try to parse as node
-    const nodeMatch = line.match(/^(\w+)(?:\[\["|{"|(\(\[")|\[\/"|(\(\(\(")|\[")(.+?)(?:"\]\]|"}|"\]\)|"\/\]|"\)\)\)|"\])$/s);
-    if (nodeMatch) {
-      const id = nodeMatch[1];
-      const content = nodeMatch[4] || nodeMatch[5] || '';
-      const node = parseNodeContent(id, content);
-      if (node) {
-        nodes.push(node);
+
+    // Try to parse as node - handle all Mermaid shapes
+    // Shapes: [/"/], ([""]), [[""]], {""}, {{""}}, (((""))), [""]
+    const nodePatterns = [
+      // Parallelogram (tool): nodeId[/"content"/]
+      /^(\w+)\[\/\"(.+?)\"\/\]$/s,
+      // Stadium (trigger/notify/return): nodeId(["content"])
+      /^(\w+)\(\[\"(.+?)\"\]\)$/s,
+      // Subroutine (llm): nodeId[["content"]]
+      /^(\w+)\[\[\"(.+?)\"\]\]$/s,
+      // Diamond (if): nodeId{"content"}
+      /^(\w+)\{\"(.+?)\"\}$/s,
+      // Hexagon (for/while): nodeId{{"content"}}
+      /^(\w+)\{\{\"(.+?)\"\}\}$/s,
+      // Circle (human): nodeId((("content")))
+      /^(\w+)\(\(\(\"(.+?)\"\)\)\)$/s,
+      // Rectangle (code/default): nodeId["content"]
+      /^(\w+)\[\"(.+?)\"\]$/s,
+    ];
+
+    let matched = false;
+    for (const pattern of nodePatterns) {
+      const nodeMatch = line.match(pattern);
+      if (nodeMatch) {
+        const id = nodeMatch[1];
+        const content = nodeMatch[2];
+        const node = parseNodeContent(id, content);
+        if (node) {
+          nodes.push(node);
+        }
+        matched = true;
+        break;
+      }
+    }
+
+    // If no pattern matched, try a more lenient approach for malformed nodes
+    if (!matched && line.includes('"')) {
+      const lenientMatch = line.match(/^(\w+)[\[\(\{]+[\/\[]*\"(.+?)\"[\]\/\)\}]+$/s);
+      if (lenientMatch) {
+        const id = lenientMatch[1];
+        const content = lenientMatch[2];
+        const node = parseNodeContent(id, content);
+        if (node) {
+          nodes.push(node);
+        }
       }
     }
   }
-  
+
   return { nodes, edges };
 }
 
@@ -104,13 +141,14 @@ function parseNodeContent(id: string, content: string): MermaidNode | null {
     label: content,
     inputs: [],
     params: {},
+    outputs: [],
   };
-  
+
   // Parse body lines based on type
   for (const line of lines.slice(1)) {
     if (line.startsWith('📥')) {
       // Input reference
-      const input = line.replace('📥', '').trim();
+      const input = decodeMermaidEscapes(line.replace('📥', '').trim());
       node.inputs.push(input);
     } else if (line.startsWith('⚙️')) {
       // Parameter
@@ -120,19 +158,29 @@ function parseNodeContent(id: string, content: string): MermaidNode | null {
       }
     } else if (line.startsWith('💻')) {
       // Code
-      node.code = (node.code || '') + line.replace('💻', '').trim() + '\n';
+      node.code = (node.code || '') + decodeMermaidEscapes(line.replace('💻', '').trim()) + '\n';
     } else if (line.startsWith('📝')) {
       // Prompt
-      node.prompt = line.replace('📝', '').trim();
+      node.prompt = decodeMermaidEscapes(line.replace('📝', '').trim());
     } else if (line.startsWith('📤')) {
-      // Output
-      node.output = line.replace('📤', '').trim();
+      // Output - may contain variable references
+      const outputStr = decodeMermaidEscapes(line.replace('📤', '').trim());
+      // For return nodes, parse as key: value pairs
+      if (type === 'return') {
+        const match = outputStr.match(/^(\w+):\s*(.+)$/);
+        if (match) {
+          node.outputs!.push({ key: match[1], value: match[2] });
+        }
+      } else {
+        // For other nodes, just store the output variable name
+        node.output = outputStr;
+      }
     } else if (line.startsWith('🔌')) {
       // Tool reference (for tool nodes)
       node.params['_tool'] = line.replace('🔌', '').trim();
     } else if (line.startsWith('🔄')) {
       // For loop expression
-      node.condition = line.replace('🔄', '').trim();
+      node.condition = decodeMermaidEscapes(line.replace('🔄', '').trim());
     } else if (line.startsWith('⏰')) {
       // Cron schedule
       node.params['schedule'] = line.replace('⏰', '').trim();
@@ -144,7 +192,7 @@ function parseNodeContent(id: string, content: string): MermaidNode | null {
       node.params['channels'] = line.replace('📢', '').trim().split(',').map(s => s.trim());
     } else if (line.startsWith('💬')) {
       // Message
-      node.params['message'] = line.replace('💬', '').trim();
+      node.params['message'] = decodeMermaidEscapes(line.replace('💬', '').trim());
     } else if (line.startsWith('📋')) {
       // Human input type
       node.params['inputType'] = line.replace('📋', '').trim();
@@ -163,10 +211,19 @@ function parseNodeContent(id: string, content: string): MermaidNode | null {
 }
 
 /**
+ * Decode Mermaid-escaped special characters back to original
+ * Curly braces are escaped as #123; and #125; to avoid Mermaid parsing issues
+ */
+function decodeMermaidEscapes(str: string): string {
+  return str.replace(/#123;/g, '{').replace(/#125;/g, '}');
+}
+
+/**
  * Parse a value string into appropriate type
  */
 function parseValue(valueStr: string): unknown {
-  const trimmed = valueStr.trim();
+  // First, decode escaped curly braces from Mermaid
+  const trimmed = decodeMermaidEscapes(valueStr).trim();
 
   // Variable reference
   if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
@@ -245,6 +302,12 @@ export function mermaidToWorkflow(
     trigger = { type: 'manual' as const };
   }
 
+  // Parse inputs from trigger node
+  let inputs = existingWorkflow?.inputs;
+  if (triggerNode && triggerNode.inputs && triggerNode.inputs.length > 0) {
+    inputs = parseInputsFromTriggerNode(triggerNode);
+  }
+
   // Build adjacency list for ordering
   const adjacency = new Map<string, string[]>();
   for (const edge of edges) {
@@ -287,11 +350,37 @@ export function mermaidToWorkflow(
     description: existingWorkflow?.description,
     version: existingWorkflow?.version || 1,
     trigger,
-    inputs: existingWorkflow?.inputs,
+    inputs,
     steps: orderedSteps,
     constraints: existingWorkflow?.constraints,
     tools: existingWorkflow?.tools,
   };
+}
+
+/**
+ * Parse inputs from trigger node
+ * Format: "name*: type = default" or "name: type"
+ */
+function parseInputsFromTriggerNode(node: MermaidNode): WorkflowInput[] {
+  const inputs: WorkflowInput[] = [];
+
+  for (const inputStr of node.inputs) {
+    // Parse format: "name*: type = default" or "name: type"
+    const match = inputStr.match(/^(\w+)(\*)?:\s*(\w+)(?:\s*=\s*(.+))?$/);
+    if (match) {
+      const input: WorkflowInput = {
+        name: match[1],
+        type: match[3] as 'string' | 'number' | 'boolean' | 'object' | 'array',
+        required: match[2] === '*',
+      };
+      if (match[4]) {
+        input.default = parseValue(match[4]);
+      }
+      inputs.push(input);
+    }
+  }
+
+  return inputs;
 }
 
 /**
@@ -480,6 +569,19 @@ function nodeToNotifyStep(node: MermaidNode): NotifyStep {
 }
 
 function nodeToReturnStep(node: MermaidNode): ReturnStep {
+  // Build return object from outputs array
+  if (node.outputs && node.outputs.length > 0) {
+    const returnObj: Record<string, unknown> = {};
+    for (const { key, value } of node.outputs) {
+      returnObj[key] = value;
+    }
+    return {
+      id: node.id,
+      return: returnObj,
+    };
+  }
+
+  // Fallback to single output
   return {
     id: node.id,
     return: node.output || {},
