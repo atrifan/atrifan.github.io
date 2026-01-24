@@ -509,7 +509,9 @@ function AutomationItem({
   FileIcon: React.FC<{ status: string }>;
   ChevronIcon: React.FC<{ expanded: boolean }>;
 }) {
-  const hasExecutions = executions.length > 0 || isLoading;
+  // Always show chevron so users can expand to check for executions
+  // (executions are fetched on first expand, not upfront)
+  const hasExecutions = true;
 
   return (
     <div>
