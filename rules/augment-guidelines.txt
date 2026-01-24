@@ -38,11 +38,27 @@ constraints:
 
 ## Trigger Types
 
+There are only 3 trigger types. The UI may show "pretty" schedule options (daily, weekly, etc.) but these all convert to cron expressions.
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `manual` | Triggered by user action in UI | On-demand tasks |
+| `cron` | Scheduled execution | Recurring tasks (daily, weekly, etc.) |
+| `webhook` | Triggered by external HTTP POST | External integrations, callbacks |
+
 ### Manual Trigger
 ```yaml
 trigger:
   type: manual
 ```
+Executed when user clicks "Run" in the UI or via API.
+
+### Webhook Trigger
+```yaml
+trigger:
+  type: webhook
+```
+Triggered via POST to `/api/ai/automations/{automation_id}/hook/{api_key}`.
 
 ### Cron Trigger
 ```yaml
@@ -52,22 +68,63 @@ trigger:
   timezone: "America/New_York"
 ```
 
+**Trigger Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"cron"` |
+| `schedule` | string | Yes | Cron expression (5 fields) |
+| `timezone` | string | No | IANA timezone (default: UTC) |
+
 **Cron Format:** `minute hour day-of-month month day-of-week`
+
+| Position | Field | Values | Special Characters |
+|----------|-------|--------|-------------------|
+| 1 | Minute | 0-59 | `*` `,` `-` `/` |
+| 2 | Hour | 0-23 | `*` `,` `-` `/` |
+| 3 | Day of Month | 1-31 | `*` `,` `-` `/` |
+| 4 | Month | 1-12 | `*` `,` `-` `/` |
+| 5 | Day of Week | 0-6 (Sun=0) | `*` `,` `-` `/` |
+
+**Special Characters:**
 - `*` = any value
-- `*/5` = every 5 units
-- `1,15` = specific values
-- `1-5` = range
+- `*/n` = every n units (e.g., `*/5` = every 5)
+- `n,m` = specific values (e.g., `1,15` = 1st and 15th)
+- `n-m` = range (e.g., `1-5` = Monday to Friday)
 
 **Common Schedules:**
 | Schedule | Cron Expression |
 |----------|-----------------|
 | Every minute | `* * * * *` |
 | Every 5 minutes | `*/5 * * * *` |
+| Every 15 minutes | `*/15 * * * *` |
+| Every 30 minutes | `*/30 * * * *` |
 | Hourly | `0 * * * *` |
+| Every 2 hours | `0 */2 * * *` |
+| Daily at midnight | `0 0 * * *` |
 | Daily at 9 AM | `0 9 * * *` |
+| Daily at 6 PM | `0 18 * * *` |
+| Weekdays at 9 AM | `0 9 * * 1-5` |
+| Weekends at 10 AM | `0 10 * * 0,6` |
 | Weekly (Monday 9 AM) | `0 9 * * 1` |
+| Bi-weekly (Mon/Thu 9 AM) | `0 9 * * 1,4` |
 | Monthly (1st at midnight) | `0 0 1 * *` |
+| Monthly (15th at noon) | `0 12 15 * *` |
+| Quarterly (1st of Jan/Apr/Jul/Oct) | `0 0 1 1,4,7,10 *` |
 | Yearly (Jan 1 at midnight) | `0 0 1 1 *` |
+
+**Common Timezones:**
+| Region | Timezone |
+|--------|----------|
+| US Eastern | `America/New_York` |
+| US Central | `America/Chicago` |
+| US Mountain | `America/Denver` |
+| US Pacific | `America/Los_Angeles` |
+| UK | `Europe/London` |
+| Central Europe | `Europe/Paris` |
+| India | `Asia/Kolkata` |
+| Japan | `Asia/Tokyo` |
+| Australia | `Australia/Sydney` |
+| UTC | `UTC` |
 
 ### Webhook Trigger
 ```yaml
@@ -314,6 +371,92 @@ With wait (synchronous):
   output: approvalResult
 ```
 
+### Delay Step
+Pause execution for a specified number of seconds.
+
+```yaml
+- id: waitBeforeRetry
+  delay: 5  # Wait 5 seconds
+```
+
+Use cases:
+- Rate limiting between API calls
+- Waiting for external processes
+- Polling intervals
+
+### Set Variable Step
+Explicitly set a variable value. Useful for initializing counters, flags, or computed values.
+
+```yaml
+- id: initCounter
+  set: counter
+  value: 0
+
+- id: setFlag
+  set: isProcessed
+  value: true
+
+- id: computeValue
+  set: fullName
+  value: "{{firstName}} {{lastName}}"
+```
+
+### Stop Step
+Stop execution immediately. Can be triggered programmatically or used to handle cancellation.
+
+```yaml
+- id: cancelExecution
+  stop:
+    reason: "User requested cancellation"
+    status: cancelled  # or completed (default: cancelled)
+```
+
+Use cases:
+- Graceful cancellation from external hooks
+- Early termination on critical errors
+- User-initiated stops
+
+### Wait For Variable Step
+Pause execution until a variable is set via external PUT request. Useful for waiting on external callbacks, approvals, or long-running processes.
+
+```yaml
+- id: waitForApproval
+  wait_for:
+    variable: approvalStatus  # Variable to wait for
+    timeout: 3600  # Timeout in seconds (default: 3600 = 1 hour)
+    pollInterval: 5  # Poll interval in seconds (default: 5)
+    condition: "approvalStatus === 'approved'"  # Optional condition
+  output: approvalResult
+```
+
+**Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `variable` | string | Yes | Variable name to wait for |
+| `timeout` | number | No | Timeout in seconds (default: 3600) |
+| `pollInterval` | number | No | Poll interval in seconds (default: 5) |
+| `condition` | string | No | JS condition to check (e.g., `"status === 'done'"`) |
+
+**External Variable Update:**
+External systems can set variables via PUT request:
+```
+PUT /api/ai/automations/{automation_id}/executions/{run_id}/variables
+Content-Type: application/json
+
+{
+  "variables": {
+    "approvalStatus": "approved",
+    "approvedBy": "manager@example.com"
+  }
+}
+```
+
+Use cases:
+- Waiting for external webhook callbacks
+- Human approval workflows
+- Long-running external process completion
+- Polling for third-party API status changes
+
 ## Variable References
 
 Use `{{variable}}` syntax to reference variables:
@@ -477,23 +620,39 @@ constraints:
 
 ---
 
-## Webhook Trigger Endpoint
+## Automation Execution API
 
-Every automation has a webhook endpoint that can be used to trigger it:
+### Authentication
+
+All execution endpoints support two authentication methods:
+
+1. **Clerk Session** (for UI/browser calls) - Automatic via cookies
+2. **API Key** (for external/programmatic calls):
+   - `Authorization: Bearer <api_key>` header
+   - `X-API-Key: <api_key>` header
+
+The API key is validated by hashing and looking up in the `api_keys` table, then verifying the user owns the automation.
+
+### API Endpoints Overview
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/ai/automations/{id}/hook/{api_key}` | API key in path | Start automation (webhook) |
+| GET | `/api/ai/automations/{id}/executions` | Session/API key | List all executions |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}` | Session/API key | Get execution status |
+| DELETE | `/api/ai/automations/{id}/executions/{instance_id}` | Session/API key | Stop/cancel execution |
+| DELETE | `/api/ai/automations/{id}/executions/{instance_id}?hard=true` | Session/API key | Delete execution |
+| POST | `/api/ai/automations/{id}/executions/{instance_id}/input` | Session/API key | Submit input to unblock |
+| PUT | `/api/ai/automations/{id}/executions/{instance_id}/variables` | Session/API key | Update variables |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}/variables` | Session/API key | Get current variables |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}/logs` | Session/API key | Get execution logs |
+
+### Start Automation (Webhook)
 
 ```
 POST /api/ai/automations/{automation_id}/hook/{api_key}
-```
+Content-Type: application/json
 
-**Path Parameters:**
-- `automation_id`: UUID of the automation to trigger
-- `api_key`: Your API key for authentication (validates ownership)
-
-**Headers:**
-- `Content-Type: application/json`
-
-**Body:**
-```json
 {
   "inputs": {
     "field1": "value1",
@@ -505,7 +664,7 @@ POST /api/ai/automations/{automation_id}/hook/{api_key}
 **Response (success):**
 ```json
 {
-  "execution_id": "run-uuid",
+  "execution_id": "instance-uuid",
   "status": "running",
   "message": "Automation triggered successfully"
 }
@@ -514,25 +673,108 @@ POST /api/ai/automations/{automation_id}/hook/{api_key}
 **Response (waiting for input):**
 ```json
 {
-  "execution_id": "run-uuid",
+  "execution_id": "instance-uuid",
   "status": "waiting_input",
   "message": "Automation requires input before proceeding",
-  "input_url": "/automation/{id}/running/{runId}/input",
+  "input_url": "/automation/{automation_id}/running/{instance_id}/input",
   "missing_inputs": [
     {"name": "customer_email", "type": "string", "description": "Customer email"}
   ]
 }
 ```
 
+### Stop Execution
+
+```
+DELETE /api/ai/automations/{automation_id}/executions/{instance_id}
+```
+
+Sets status to `cancelled`. The executor polls for this and stops processing.
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "cancelled" }
+}
+```
+
+### Submit Input (Unblock waiting_input)
+
+When an execution is in `waiting_input` status, submit the required inputs to resume:
+
+```bash
+curl -X POST "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/input" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "customer_email": "user@example.com",
+      "approved": true
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "running" },
+  "message": "Inputs received, execution resumed"
+}
+```
+
+### Update Variables (for wait_for step)
+
+When an execution is polling for a variable (via `wait_for` step), set the variable externally:
+
+```bash
+curl -X PUT "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/variables" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "approvalStatus": "approved",
+      "approvedBy": "manager@example.com"
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "running" },
+  "variables": { "approvalStatus": "approved", "approvedBy": "manager@example.com" }
+}
+```
+
+### Get Current Variables
+
+Check current execution variables:
+
+```bash
+curl -X GET "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/variables" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### UI Input Page
+
+Users can provide input via web form at:
+```
+/automation/{automation_id}/running/{instance_id}/input
+```
+
+This page shows:
+- Automation name and status
+- List of required inputs with descriptions
+- Form fields for each input
+- Timeout countdown (5 minutes)
+- Submit button
+
 ### Internal Calls (Automation-to-Automation)
 
-When triggering from within another automation, use the `x-internal-call: true` header to bypass API key validation:
-
-```yaml
-# In trigger_automation block, the system automatically:
-# 1. Adds x-internal-call: true header
-# 2. Uses the execution context's user_id for ownership validation
-```
+When triggering from within another automation, use the `x-internal-call: true` header to bypass API key validation.
 
 ### Cron Calls
 
@@ -545,23 +787,118 @@ Vercel Cron jobs use `x-cron-secret` header with `CRON_SECRET` env var for authe
 When an automation requires input that isn't available:
 
 1. **Execution pauses** with status `waiting_input`
-2. **Notifications sent** via all detected notification tools (email, Slack, push)
-3. **User receives link** to `/automation/{id}/running/{runId}/input`
-4. **User provides input** via the web form
+2. **Notifications sent** via configured channels (email, Slack, push)
+3. **User receives link** to `/automation/{automation_id}/running/{instance_id}/input`
+4. **User provides input** via web form or API
 5. **Execution resumes** automatically
 
-### Notification Message Format
+### ⏱️ Timeout Behavior
+
+**IMPORTANT:** Executions waiting for user input have a **5-minute timeout**.
+
+| Wait Type | Timeout | Behavior |
+|-----------|---------|----------|
+| `waiting_input` (missing inputs) | 5 minutes | Exits with `timeout_user_input` error |
+| `wait_for` (variable polling) | 5 minutes (default) | Exits with `timeout_wait_for` error |
+| `human` step (approval) | 5 minutes | Exits with `timeout_approval` error |
+
+After timeout, the execution status changes to `failed` with an appropriate error message.
+
+### Notification Message Templates
+
+#### Input Required Notification
 
 ```
-🤖 Automation "{name}" requires your input
-
-The following fields are needed to continue:
-- {field1}: {description}
-- {field2}: {description}
-
-Click here to provide input: {input_url}
+🤖 Automation "{automation_name}" requires your input
 
 Run ID: {execution_id}
+Status: Waiting for input
+
+The following fields are needed to continue:
+{missing_inputs_list}
+
+⏱️ This request will timeout in 5 minutes.
+
+📝 Provide input via UI:
+{input_url}
+
+🔧 Or via API (curl):
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "{field_name}": "{value}"
+    }
+  }'
+```
+
+#### Wait For Variable Notification
+
+```
+⏳ Automation "{automation_name}" is waiting for external event
+
+Run ID: {execution_id}
+Status: Waiting for variable "{variable_name}"
+
+The automation is polling for variable "{variable_name}" to be set.
+
+⏱️ This will timeout in {timeout_seconds} seconds.
+
+🔧 Set the variable via API:
+curl -X PUT "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/variables" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "{variable_name}": {value}
+    }
+  }'
+```
+
+#### Human Approval Notification
+
+```
+👤 Automation "{automation_name}" requires your approval
+
+Run ID: {execution_id}
+Step: {step_id}
+
+{approval_message}
+
+⏱️ This request will timeout in 5 minutes.
+
+📝 Respond via UI:
+{approval_url}
+
+🔧 Or via API:
+# Approve
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"approved": true}}'
+
+# Reject
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"approved": false, "reason": "Rejected by user"}}'
+```
+
+#### Timeout Notification
+
+```
+⚠️ Automation "{automation_name}" timed out
+
+Run ID: {execution_id}
+Status: Failed
+Error: {timeout_type}
+
+The automation was waiting for {wait_description} but no response was received within 5 minutes.
+
+The execution has been marked as failed. You can:
+- View logs: {logs_url}
+- Retry: {retry_url}
 ```
 
 ### Configuring Input Requirements
@@ -668,12 +1005,12 @@ Common cron expressions:
 
 The following tools are available from your active connectors. Use the full tool name (server.tool_name) in your workflow steps.
 
-**Total Connectors:** 1 | **Total Tools:** 12
+**Total Connectors:** 1 | **Total Tools:** 23
 
 ### Default Key
 - **Server Name:** `default`
 - **Type:** Internal MCP
-- **Tools:** 12
+- **Tools:** 23
 
 #### `default.find_next_eclipse`
 
@@ -793,6 +1130,535 @@ steps:
       type: "example"
       latitude: 123
       longitude: 123
+```
+
+---
+
+#### `default.calculate_savings_plan`
+
+**Description:** Calculate a budget and savings plan. Supports two modes: (1) Goal mode - save until you reach a target amount, (2) Duration mode - save for a specific number of months. Optionally include compound interest from a savings account.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "monthlyIncome",
+    "monthlyFixedExpenses",
+    "currentSavings",
+    "intensity",
+    "currency"
+  ],
+  "properties": {
+    "currency": {
+      "enum": [
+        "USD",
+        "EUR",
+        "GBP",
+        "JPY",
+        "RON"
+      ],
+      "type": "string"
+    },
+    "intensity": {
+      "enum": [
+        "light",
+        "medium",
+        "aggressive"
+      ],
+      "type": "string",
+      "description": "Savings intensity: light (10%), medium (25%), aggressive (40%) of disposable income"
+    },
+    "savingsGoal": {
+      "type": "number",
+      "description": "Target savings amount (required if savingsMode is \"goal\")"
+    },
+    "savingsMode": {
+      "enum": [
+        "goal",
+        "duration"
+      ],
+      "type": "string",
+      "description": "Mode: \"goal\" to reach a target amount, \"duration\" to save for X months"
+    },
+    "interestRate": {
+      "type": "number",
+      "description": "Annual interest rate as percentage, e.g., 5 for 5% (optional, requires interestEnabled)"
+    },
+    "monthlyTaxes": {
+      "type": "number",
+      "description": "Monthly taxes (set to 0 if using net income)"
+    },
+    "monthlyIncome": {
+      "type": "number",
+      "description": "Monthly net income (after taxes)"
+    },
+    "currentSavings": {
+      "type": "number",
+      "description": "Current savings amount"
+    },
+    "interestEnabled": {
+      "type": "boolean",
+      "description": "Enable compound interest from savings account (optional)"
+    },
+    "compoundingFrequency": {
+      "enum": [
+        "yearly",
+        "monthly",
+        "daily"
+      ],
+      "type": "string",
+      "description": "How often interest compounds (optional, default: yearly)"
+    },
+    "monthlyFixedExpenses": {
+      "type": "number",
+      "description": "Fixed monthly expenses (rent, utilities, subscriptions)"
+    },
+    "savingsDurationMonths": {
+      "type": "number",
+      "description": "Number of months to save (required if savingsMode is \"duration\")"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `currency` (string, required): 
+- `intensity` (string, required): Savings intensity: light (10%), medium (25%), aggressive (40%) of disposable income
+- `savingsGoal` (number): Target savings amount (required if savingsMode is "goal")
+- `savingsMode` (string): Mode: "goal" to reach a target amount, "duration" to save for X months
+- `interestRate` (number): Annual interest rate as percentage, e.g., 5 for 5% (optional, requires interestEnabled)
+- `monthlyTaxes` (number): Monthly taxes (set to 0 if using net income)
+- `monthlyIncome` (number, required): Monthly net income (after taxes)
+- `currentSavings` (number, required): Current savings amount
+- `interestEnabled` (boolean): Enable compound interest from savings account (optional)
+- `compoundingFrequency` (string): How often interest compounds (optional, default: yearly)
+- `monthlyFixedExpenses` (number, required): Fixed monthly expenses (rent, utilities, subscriptions)
+- `savingsDurationMonths` (number): Number of months to save (required if savingsMode is "duration")
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "savingsMode": {
+      "type": "string",
+      "description": "The savings mode used (goal or duration)"
+    },
+    "savingsRate": {
+      "type": "number",
+      "description": "Percentage of disposable income being saved"
+    },
+    "finalBalance": {
+      "type": "number",
+      "description": "Final savings balance at end of plan"
+    },
+    "monthsToGoal": {
+      "type": "number",
+      "description": "Number of months in the plan"
+    },
+    "monthlySavings": {
+      "type": "number",
+      "description": "Amount to save each month"
+    },
+    "disposableIncome": {
+      "type": "number",
+      "description": "Monthly disposable income after fixed expenses"
+    },
+    "totalInterestEarned": {
+      "type": "number",
+      "description": "Total interest earned (if interest enabled)"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_savings_plan
+    type: action
+    name: "Use calculate_savings_plan"
+    tool: "default.calculate_savings_plan"
+    input:
+      currency: "example"
+      intensity: "example"
+      savingsGoal: 123
+      savingsMode: "example"
+      interestRate: 123
+      monthlyTaxes: 123
+      monthlyIncome: 123
+      currentSavings: 123
+      interestEnabled: true
+      compoundingFrequency: "example"
+      monthlyFixedExpenses: 123
+      savingsDurationMonths: 123
+```
+
+---
+
+#### `default.calculate_position_size`
+
+**Description:** Calculate trading position size based on risk management. Supports 4 modes: riskOnly (get suggestions), riskAndSL (calculate quantity), riskAndQty (calculate stop loss), slAndQty (calculate risk %). Direction can be long (buy) or short (sell).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "mode",
+    "capital",
+    "entryPrice",
+    "direction"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "riskOnly",
+        "riskAndSL",
+        "riskAndQty",
+        "slAndQty"
+      ],
+      "type": "string",
+      "description": "Calculation mode: riskOnly (suggest SL/Qty combos from risk%), riskAndSL (calc quantity from risk% + SL), riskAndQty (calc SL from risk% + quantity), slAndQty (calc risk% from SL + quantity)"
+    },
+    "capital": {
+      "type": "number",
+      "description": "Total trading capital in currency"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Number of units/shares. Required for riskAndQty, slAndQty modes"
+    },
+    "direction": {
+      "enum": [
+        "long",
+        "short"
+      ],
+      "type": "string",
+      "description": "Trade direction: long (buy, expecting price to rise) or short (sell, expecting price to fall)"
+    },
+    "entryPrice": {
+      "type": "number",
+      "description": "Entry price of the asset"
+    },
+    "riskPercent": {
+      "type": "number",
+      "description": "Risk percentage of capital (0-100). Required for riskOnly, riskAndSL, riskAndQty modes. Recommended: 1-2%"
+    },
+    "stopLossPrice": {
+      "type": "number",
+      "description": "Stop loss price. Required for riskAndSL, slAndQty modes. Must be below entry for long, above entry for short"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `mode` (string, required): Calculation mode: riskOnly (suggest SL/Qty combos from risk%), riskAndSL (calc quantity from risk% + SL), riskAndQty (calc SL from risk% + quantity), slAndQty (calc risk% from SL + quantity)
+- `capital` (number, required): Total trading capital in currency
+- `quantity` (number): Number of units/shares. Required for riskAndQty, slAndQty modes
+- `direction` (string, required): Trade direction: long (buy, expecting price to rise) or short (sell, expecting price to fall)
+- `entryPrice` (number, required): Entry price of the asset
+- `riskPercent` (number): Risk percentage of capital (0-100). Required for riskOnly, riskAndSL, riskAndQty modes. Recommended: 1-2%
+- `stopLossPrice` (number): Stop loss price. Required for riskAndSL, slAndQty modes. Must be below entry for long, above entry for short
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "description": "Calculation mode used"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Position quantity/units"
+    },
+    "stopLoss": {
+      "type": "number",
+      "description": "Stop loss price"
+    },
+    "direction": {
+      "type": "string",
+      "description": "Trade direction"
+    },
+    "riskLabel": {
+      "type": "string",
+      "description": "Risk assessment: Low Risk, Moderate Risk, or High Risk"
+    },
+    "riskAmount": {
+      "type": "number",
+      "description": "Risk amount in currency"
+    },
+    "slDistance": {
+      "type": "number",
+      "description": "Stop loss distance from entry in price"
+    },
+    "riskPercent": {
+      "type": "number",
+      "description": "Risk percentage of capital"
+    },
+    "suggestions": {
+      "type": "array",
+      "description": "Suggested positions (only in riskOnly mode)"
+    },
+    "takeProfits": {
+      "type": "array",
+      "description": "Take profit levels at 1.5:1, 2:1, 3:1 risk:reward ratios"
+    },
+    "positionValue": {
+      "type": "number",
+      "description": "Total position value (quantity * entryPrice)"
+    },
+    "calculatedField": {
+      "type": "string",
+      "description": "Which field was calculated: suggestions, quantity, stopLoss, or riskPercent"
+    },
+    "slDistancePercent": {
+      "type": "number",
+      "description": "Stop loss distance as percentage"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_position_size
+    type: action
+    name: "Use calculate_position_size"
+    tool: "default.calculate_position_size"
+    input:
+      mode: "example"
+      capital: 123
+      quantity: 123
+      direction: "example"
+      entryPrice: 123
+      riskPercent: 123
+      stopLossPrice: 123
+```
+
+---
+
+#### `default.zone_calculator`
+
+**Description:** Convert time between timezones. Supports UTC offsets (e.g., UTC+5, UTC-8) and major city timezones (e.g., America/New_York, Europe/London, Asia/Tokyo). Returns converted times with day change indicators.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "time",
+    "fromTimezone",
+    "toTimezones"
+  ],
+  "properties": {
+    "time": {
+      "type": "string",
+      "description": "Time in HH:MM format (24-hour), e.g., \"14:30\""
+    },
+    "toTimezones": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "UTC",
+          "UTC-12",
+          "UTC-11",
+          "UTC-10",
+          "UTC-9",
+          "UTC-8",
+          "UTC-7",
+          "UTC-6",
+          "UTC-5",
+          "UTC-4",
+          "UTC-3",
+          "UTC-2",
+          "UTC-1",
+          "UTC+1",
+          "UTC+2",
+          "UTC+3",
+          "UTC+4",
+          "UTC+5",
+          "UTC+5:30",
+          "UTC+5.5",
+          "UTC+6",
+          "UTC+7",
+          "UTC+8",
+          "UTC+9",
+          "UTC+10",
+          "UTC+11",
+          "UTC+12",
+          "America/New_York",
+          "America/Los_Angeles",
+          "America/Chicago",
+          "America/Denver",
+          "America/Toronto",
+          "America/Vancouver",
+          "America/Mexico_City",
+          "America/Sao_Paulo",
+          "Europe/London",
+          "Europe/Paris",
+          "Europe/Berlin",
+          "Europe/Rome",
+          "Europe/Madrid",
+          "Europe/Amsterdam",
+          "Europe/Bucharest",
+          "Europe/Moscow",
+          "Europe/Istanbul",
+          "Asia/Dubai",
+          "Asia/Kolkata",
+          "Asia/Bangkok",
+          "Asia/Singapore",
+          "Asia/Hong_Kong",
+          "Asia/Shanghai",
+          "Asia/Tokyo",
+          "Asia/Seoul",
+          "Australia/Sydney",
+          "Australia/Melbourne",
+          "Pacific/Auckland"
+        ],
+        "type": "string"
+      },
+      "description": "Target timezones to convert to. Use UTC offsets or IANA timezone IDs"
+    },
+    "fromTimezone": {
+      "enum": [
+        "UTC",
+        "UTC-12",
+        "UTC-11",
+        "UTC-10",
+        "UTC-9",
+        "UTC-8",
+        "UTC-7",
+        "UTC-6",
+        "UTC-5",
+        "UTC-4",
+        "UTC-3",
+        "UTC-2",
+        "UTC-1",
+        "UTC+1",
+        "UTC+2",
+        "UTC+3",
+        "UTC+4",
+        "UTC+5",
+        "UTC+5:30",
+        "UTC+5.5",
+        "UTC+6",
+        "UTC+7",
+        "UTC+8",
+        "UTC+9",
+        "UTC+10",
+        "UTC+11",
+        "UTC+12",
+        "America/New_York",
+        "America/Los_Angeles",
+        "America/Chicago",
+        "America/Denver",
+        "America/Toronto",
+        "America/Vancouver",
+        "America/Mexico_City",
+        "America/Sao_Paulo",
+        "Europe/London",
+        "Europe/Paris",
+        "Europe/Berlin",
+        "Europe/Rome",
+        "Europe/Madrid",
+        "Europe/Amsterdam",
+        "Europe/Bucharest",
+        "Europe/Moscow",
+        "Europe/Istanbul",
+        "Asia/Dubai",
+        "Asia/Kolkata",
+        "Asia/Bangkok",
+        "Asia/Singapore",
+        "Asia/Hong_Kong",
+        "Asia/Shanghai",
+        "Asia/Tokyo",
+        "Asia/Seoul",
+        "Australia/Sydney",
+        "Australia/Melbourne",
+        "Pacific/Auckland"
+      ],
+      "type": "string",
+      "description": "Source timezone. Use UTC offsets (UTC-5, UTC+8) or IANA timezone IDs (America/New_York, Europe/London, Asia/Tokyo)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `time` (string, required): Time in HH:MM format (24-hour), e.g., "14:30"
+- `toTimezones` (array, required): Target timezones to convert to. Use UTC offsets or IANA timezone IDs
+- `fromTimezone` (string, required): Source timezone. Use UTC offsets (UTC-5, UTC+8) or IANA timezone IDs (America/New_York, Europe/London, Asia/Tokyo)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "sourceCity": {
+      "type": "string",
+      "description": "Source city name"
+    },
+    "sourceTime": {
+      "type": "string",
+      "description": "Original time in HH:MM format"
+    },
+    "conversions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "Target city name"
+          },
+          "time": {
+            "type": "string",
+            "description": "Converted time in HH:MM format"
+          },
+          "offset": {
+            "type": "number",
+            "description": "UTC offset of target timezone"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Target timezone ID"
+          },
+          "dayChange": {
+            "type": "string",
+            "description": "Day change indicator (+1 day, -1 day, or empty)"
+          },
+          "offsetDiff": {
+            "type": "number",
+            "description": "Offset difference from source"
+          }
+        }
+      }
+    },
+    "sourceTimezone": {
+      "type": "string",
+      "description": "Source timezone ID"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_zone_calculator
+    type: action
+    name: "Use zone_calculator"
+    tool: "default.zone_calculator"
+    input:
+      time: "example"
+      toTimezones: []
+      fromTimezone: "example"
 ```
 
 ---
@@ -1058,6 +1924,136 @@ steps:
 
 ---
 
+#### `default.calculate_tip`
+
+**Description:** Calculate tip amount and total bill. Supports two modes: "static" (provide tipPercentage directly) or "mood" (compute tip from serviceQuality, mood, and budgetSituation). If tipPercentage is not provided, mood mode is used automatically.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "billAmount"
+  ],
+  "properties": {
+    "mood": {
+      "enum": [
+        "awful",
+        "meh",
+        "neutral",
+        "happy",
+        "great"
+      ],
+      "type": "string",
+      "description": "How are you feeling? Used in mood mode. Default: \"neutral\"."
+    },
+    "billAmount": {
+      "type": "number",
+      "description": "Bill amount before tip (required)"
+    },
+    "splitBetween": {
+      "type": "number",
+      "description": "Number of people to split between (default: 1)"
+    },
+    "tipPercentage": {
+      "type": "number",
+      "description": "Tip percentage (e.g., 15, 18, 20). Required for static mode, ignored in mood mode."
+    },
+    "calculatorMode": {
+      "enum": [
+        "static",
+        "mood"
+      ],
+      "type": "string",
+      "description": "Calculator mode: \"static\" uses tipPercentage directly, \"mood\" computes from feelings. Default: \"static\" if tipPercentage provided, else \"mood\"."
+    },
+    "serviceQuality": {
+      "enum": [
+        "terrible",
+        "poor",
+        "okay",
+        "good",
+        "amazing"
+      ],
+      "type": "string",
+      "description": "How was the service? Used in mood mode. Default: \"okay\"."
+    },
+    "budgetSituation": {
+      "enum": [
+        "very_tight",
+        "tight",
+        "normal",
+        "comfortable",
+        "generous"
+      ],
+      "type": "string",
+      "description": "Budget situation. Used in mood mode. Default: \"normal\"."
+    }
+  }
+}
+```
+
+**Parameters:**
+- `mood` (string): How are you feeling? Used in mood mode. Default: "neutral".
+- `billAmount` (number, required): Bill amount before tip (required)
+- `splitBetween` (number): Number of people to split between (default: 1)
+- `tipPercentage` (number): Tip percentage (e.g., 15, 18, 20). Required for static mode, ignored in mood mode.
+- `calculatorMode` (string): Calculator mode: "static" uses tipPercentage directly, "mood" computes from feelings. Default: "static" if tipPercentage provided, else "mood".
+- `serviceQuality` (string): How was the service? Used in mood mode. Default: "okay".
+- `budgetSituation` (string): Budget situation. Used in mood mode. Default: "normal".
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "total": {
+      "type": "number"
+    },
+    "perPerson": {
+      "type": "number"
+    },
+    "suggested": {
+      "type": "boolean"
+    },
+    "tipAmount": {
+      "type": "number"
+    },
+    "billAmount": {
+      "type": "number"
+    },
+    "splitBetween": {
+      "type": "number"
+    },
+    "tipPercentage": {
+      "type": "number"
+    },
+    "calculatorMode": {
+      "type": "string"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_tip
+    type: action
+    name: "Use calculate_tip"
+    tool: "default.calculate_tip"
+    input:
+      mood: "example"
+      billAmount: 123
+      splitBetween: 123
+      tipPercentage: 123
+      calculatorMode: "example"
+      serviceQuality: "example"
+      budgetSituation: "example"
+```
+
+---
+
 #### `default.list_upcoming_eclipses`
 
 **Description:** List upcoming solar and lunar eclipses with dates, visibility info, and countdown. Returns multiple eclipses with filtering options.
@@ -1135,6 +2131,97 @@ steps:
 
 ---
 
+#### `default.calculate_countdown`
+
+**Description:** Calculate the number of days, weeks, and months until or since a specific date. Perfect for tracking upcoming events, anniversaries, deadlines, or calculating how long ago something happened.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "eventDate"
+  ],
+  "properties": {
+    "eventDate": {
+      "type": "string",
+      "description": "Target date in YYYY-MM-DD format. Example: \"2026-12-25\" for Christmas 2026"
+    },
+    "eventName": {
+      "type": "string",
+      "description": "Name of the event for display. Example: \"Christmas\", \"My Birthday\", \"Project Deadline\""
+    }
+  }
+}
+```
+
+**Parameters:**
+- `eventDate` (string, required): Target date in YYYY-MM-DD format. Example: "2026-12-25" for Christmas 2026
+- `eventName` (string): Name of the event for display. Example: "Christmas", "My Birthday", "Project Deadline"
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "days": {
+      "type": "number",
+      "description": "Days until/since event (negative if past)"
+    },
+    "weeks": {
+      "type": "number",
+      "description": "Number of complete weeks"
+    },
+    "isPast": {
+      "type": "boolean",
+      "description": "Whether the event is in the past"
+    },
+    "months": {
+      "type": "number",
+      "description": "Approximate number of months"
+    },
+    "isToday": {
+      "type": "boolean",
+      "description": "Whether the event is today"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable summary text"
+    },
+    "direction": {
+      "type": "string",
+      "description": "\"until\", \"since\", or \"today\""
+    },
+    "eventDate": {
+      "type": "string",
+      "description": "Target date in YYYY-MM-DD format"
+    },
+    "eventName": {
+      "type": "string",
+      "description": "Name of the event"
+    },
+    "absoluteDays": {
+      "type": "number",
+      "description": "Absolute number of days (always positive)"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_countdown
+    type: action
+    name: "Use calculate_countdown"
+    tool: "default.calculate_countdown"
+    input:
+      eventDate: "example"
+      eventName: "example"
+```
+
+---
+
 #### `default.rest_production-httpbin-get-getrequest`
 
 **Description:** Returns GET data including args, headers, origin and url
@@ -1183,103 +2270,68 @@ steps:
 
 ---
 
-#### `default.convert_units`
+#### `default.lucky_number`
 
-**Description:** Convert between different units of measurement. Supports weight (kg, lbs, oz, g), length (cm, in, m, ft, km, mi, mm), and temperature (c, f, k).
+**Description:** Generate random lucky number(s) within a range. Default range is 1 to 2,147,483,647. Can generate multiple numbers at once (up to 10).
 
 **Input Schema:**
 ```json
 {
   "type": "object",
-  "required": [
-    "value",
-    "from",
-    "to"
-  ],
+  "required": [],
   "properties": {
-    "to": {
-      "enum": [
-        "kg",
-        "lbs",
-        "oz",
-        "g",
-        "cm",
-        "in",
-        "m",
-        "ft",
-        "km",
-        "mi",
-        "mm",
-        "c",
-        "f",
-        "k"
-      ],
-      "type": "string",
-      "description": "Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
-    },
-    "from": {
-      "enum": [
-        "kg",
-        "lbs",
-        "oz",
-        "g",
-        "cm",
-        "in",
-        "m",
-        "ft",
-        "km",
-        "mi",
-        "mm",
-        "c",
-        "f",
-        "k"
-      ],
-      "type": "string",
-      "description": "Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
-    },
-    "value": {
+    "max": {
       "type": "number",
-      "description": "Value to convert"
+      "description": "Maximum value (default: 2147483647)"
     },
-    "category": {
-      "enum": [
-        "weight",
-        "length",
-        "temperature"
-      ],
-      "type": "string",
-      "description": "Optional: category hint for the conversion"
+    "min": {
+      "type": "number",
+      "description": "Minimum value (default: 1)"
+    },
+    "count": {
+      "type": "number",
+      "description": "Number of lucky numbers to generate (1-10, default: 1)"
     }
   }
 }
 ```
 
 **Parameters:**
-- `to` (string, required): Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
-- `from` (string, required): Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
-- `value` (number, required): Value to convert
-- `category` (string): Optional: category hint for the conversion
+- `max` (number): Maximum value (default: 2147483647)
+- `min` (number): Minimum value (default: 1)
+- `count` (number): Number of lucky numbers to generate (1-10, default: 1)
 
 **Output Schema:**
 ```json
 {
   "type": "object",
   "properties": {
-    "to": {
-      "type": "string",
-      "description": "Target unit"
-    },
-    "from": {
-      "type": "string",
-      "description": "Source unit"
-    },
-    "value": {
+    "max": {
       "type": "number",
-      "description": "Original value"
+      "description": "Maximum value used"
     },
-    "result": {
+    "min": {
       "type": "number",
-      "description": "Converted value"
+      "description": "Minimum value used"
+    },
+    "count": {
+      "type": "number",
+      "description": "Number of numbers generated"
+    },
+    "range": {
+      "type": "string",
+      "description": "Human-readable range description"
+    },
+    "numbers": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "All generated lucky numbers"
+    },
+    "luckyNumber": {
+      "type": "number",
+      "description": "The primary lucky number"
     }
   }
 }
@@ -1288,15 +2340,14 @@ steps:
 **Usage Example:**
 ```yaml
 steps:
-  - id: use_convert_units
+  - id: use_lucky_number
     type: action
-    name: "Use convert_units"
-    tool: "default.convert_units"
+    name: "Use lucky_number"
+    tool: "default.lucky_number"
     input:
-      to: "example"
-      from: "example"
-      value: 123
-      category: "example"
+      max: 123
+      min: 123
+      count: 123
 ```
 
 ---
@@ -1434,6 +2485,102 @@ steps:
 
 ---
 
+#### `default.vibe_quiz`
+
+**Description:** Cat vs Dog personality quiz. Present these 10 questions to the user one by one, collect all answers, then call this tool with the answers array.
+
+QUESTIONS (A=cat-leaning, B=dog-leaning):
+1. How do you prefer to spend a Saturday? A: Cozy at home with a book or movie 📚 | B: Out and about, exploring or socializing 🎉
+2. When meeting new people, you are: A: Reserved at first, warm up slowly 🤔 | B: Friendly and open right away 😄
+3. Your ideal living space is: A: Clean, organized, minimal ✨ | B: Lived-in, cozy, a bit messy is fine 🏠
+4. How do you handle stress? A: Need alone time to recharge 🧘 | B: Talk it out with friends/family 💬
+5. Your approach to exercise: A: Solo activities (yoga, gym, walks) 🚶 | B: Team sports or group activities ⚽
+6. When it comes to routines: A: I like flexibility and doing things my way 🎨 | B: I thrive on consistent schedules 📅
+7. Your communication style: A: Subtle hints and body language 👀 | B: Direct and expressive 🗣️
+8. How do you show affection? A: Quality time, being present 💝 | B: Physical touch, hugs, enthusiasm 🤗
+9. Your sleep preference: A: Night owl, love late nights 🌙 | B: Early bird, up with the sun 🌅
+10. When someone annoys you: A: Give them the cold shoulder ❄️ | B: Confront them directly 🔥
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "answers"
+  ],
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "A",
+          "B"
+        ],
+        "type": "string"
+      },
+      "description": "Array of exactly 10 answers (A or B) corresponding to each question above"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `answers` (array, required): Array of exactly 10 answers (A or B) corresponding to each question above
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "type": {
+      "enum": [
+        "cat",
+        "dog"
+      ],
+      "type": "string",
+      "description": "Personality type result"
+    },
+    "emoji": {
+      "type": "string",
+      "description": "Result emoji"
+    },
+    "title": {
+      "type": "string",
+      "description": "Result title (e.g., \"Total Cat Person!\")"
+    },
+    "catScore": {
+      "type": "number",
+      "description": "Number of cat-leaning answers"
+    },
+    "dogScore": {
+      "type": "number",
+      "description": "Number of dog-leaning answers"
+    },
+    "percentage": {
+      "type": "number",
+      "description": "Match percentage (0-100)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed personality description"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_vibe_quiz
+    type: action
+    name: "Use vibe_quiz"
+    tool: "default.vibe_quiz"
+    input:
+      answers: []
+```
+
+---
+
 #### `default.zodiac_compatibility`
 
 **Description:** Check zodiac compatibility between two people. Provide either sign names or birth dates for each person.
@@ -1535,98 +2682,157 @@ steps:
 
 ---
 
-#### `default.generate_weight_loss_plan`
+#### `default.generate_names`
 
-**Description:** Generate a complete weight loss plan with calorie targets and fasting recommendations
+**Description:** Generate random names or numbers. Supports two modes: "names" for generating human names (first, full, or fantasy) and pet names (dog, cat, or other), or "numbers" for generating random numbers within a range.
 
 **Input Schema:**
 ```json
 {
   "type": "object",
   "required": [
-    "age",
-    "sex",
-    "height",
-    "currentWeight",
-    "desiredWeight"
+    "mode"
   ],
   "properties": {
-    "age": {
+    "max": {
       "type": "number",
-      "description": "Age in years"
+      "description": "Maximum value for random numbers (only for numbers mode, default: 100)"
     },
-    "sex": {
+    "min": {
+      "type": "number",
+      "description": "Minimum value for random numbers (only for numbers mode, default: 1)"
+    },
+    "mode": {
       "enum": [
+        "names",
+        "numbers"
+      ],
+      "type": "string",
+      "description": "Generation mode: \"names\" for name generation, \"numbers\" for random number generation"
+    },
+    "count": {
+      "type": "number",
+      "description": "Number of names or numbers to generate (1-100, default: 5)"
+    },
+    "gender": {
+      "enum": [
+        "any",
         "male",
-        "female",
+        "female"
+      ],
+      "type": "string",
+      "description": "Gender preference for names. \"any\" = random mix, \"male\" = masculine names, \"female\" = feminine names. For pets: male=boy, female=girl"
+    },
+    "petType": {
+      "enum": [
+        "dog",
+        "cat",
         "other"
       ],
-      "type": "string"
+      "type": "string",
+      "description": "Type of pet (only when nameCategory is \"pet\"). \"dog\" = dog names, \"cat\" = cat names, \"other\" = hamster/rabbit/etc names"
     },
-    "height": {
-      "type": "number",
-      "description": "Height in centimeters"
-    },
-    "timeToWeight": {
-      "type": "number",
-      "description": "Weeks to reach goal (optional)"
-    },
-    "activityLevel": {
+    "nameCategory": {
       "enum": [
-        "sedentary",
-        "light",
-        "moderate",
-        "active",
-        "veryActive"
+        "human",
+        "pet"
       ],
-      "type": "string"
+      "type": "string",
+      "description": "Category of names to generate (only for names mode). \"human\" for people names, \"pet\" for animal names"
     },
-    "currentWeight": {
-      "type": "number",
-      "description": "Current weight in kg"
-    },
-    "desiredWeight": {
-      "type": "number",
-      "description": "Target weight in kg"
+    "humanNameType": {
+      "enum": [
+        "first",
+        "full",
+        "fantasy"
+      ],
+      "type": "string",
+      "description": "Type of human name (only when nameCategory is \"human\"). \"first\" = first name only, \"full\" = first + last name, \"fantasy\" = fantasy/fictional names"
     }
   }
 }
 ```
 
 **Parameters:**
-- `age` (number, required): Age in years
-- `sex` (string, required): 
-- `height` (number, required): Height in centimeters
-- `timeToWeight` (number): Weeks to reach goal (optional)
-- `activityLevel` (string): 
-- `currentWeight` (number, required): Current weight in kg
-- `desiredWeight` (number, required): Target weight in kg
+- `max` (number): Maximum value for random numbers (only for numbers mode, default: 100)
+- `min` (number): Minimum value for random numbers (only for numbers mode, default: 1)
+- `mode` (string, required): Generation mode: "names" for name generation, "numbers" for random number generation
+- `count` (number): Number of names or numbers to generate (1-100, default: 5)
+- `gender` (string): Gender preference for names. "any" = random mix, "male" = masculine names, "female" = feminine names. For pets: male=boy, female=girl
+- `petType` (string): Type of pet (only when nameCategory is "pet"). "dog" = dog names, "cat" = cat names, "other" = hamster/rabbit/etc names
+- `nameCategory` (string): Category of names to generate (only for names mode). "human" for people names, "pet" for animal names
+- `humanNameType` (string): Type of human name (only when nameCategory is "human"). "first" = first name only, "full" = first + last name, "fantasy" = fantasy/fictional names
 
 **Output Schema:**
 ```json
 {
   "type": "object",
   "properties": {
-    "bmr": {
-      "type": "number"
+    "max": {
+      "type": "number",
+      "description": "Maximum value (numbers mode only)"
     },
-    "tdee": {
-      "type": "number"
+    "min": {
+      "type": "number",
+      "description": "Minimum value (numbers mode only)"
     },
-    "weeksToGoal": {
-      "type": "number"
+    "mode": {
+      "enum": [
+        "names",
+        "numbers"
+      ],
+      "type": "string",
+      "description": "The generation mode used"
     },
-    "targetWeight": {
-      "type": "number"
+    "count": {
+      "type": "number",
+      "description": "Number of results generated"
     },
-    "currentWeight": {
-      "type": "number"
+    "range": {
+      "type": "string",
+      "description": "Range string like \"1 - 100\" (numbers mode only)"
     },
-    "dailyCalories": {
-      "type": "number"
+    "gender": {
+      "enum": [
+        "any",
+        "male",
+        "female"
+      ],
+      "type": "string",
+      "description": "Gender used for generation"
     },
-    "weeklyWeightLoss": {
-      "type": "number"
+    "petType": {
+      "enum": [
+        "dog",
+        "cat",
+        "other"
+      ],
+      "type": "string",
+      "description": "Type of pet (names mode, pet category only)"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of generated names or numbers"
+    },
+    "nameCategory": {
+      "enum": [
+        "human",
+        "pet"
+      ],
+      "type": "string",
+      "description": "Category of names (names mode only)"
+    },
+    "humanNameType": {
+      "enum": [
+        "first",
+        "full",
+        "fantasy"
+      ],
+      "type": "string",
+      "description": "Type of human name (names mode, human category only)"
     }
   }
 }
@@ -1635,18 +2841,19 @@ steps:
 **Usage Example:**
 ```yaml
 steps:
-  - id: use_generate_weight_loss_plan
+  - id: use_generate_names
     type: action
-    name: "Use generate_weight_loss_plan"
-    tool: "default.generate_weight_loss_plan"
+    name: "Use generate_names"
+    tool: "default.generate_names"
     input:
-      age: 123
-      sex: "example"
-      height: 123
-      timeToWeight: 123
-      activityLevel: "example"
-      currentWeight: 123
-      desiredWeight: 123
+      max: 123
+      min: 123
+      mode: "example"
+      count: 123
+      gender: "example"
+      petType: "example"
+      nameCategory: "example"
+      humanNameType: "example"
 ```
 
 ---
@@ -1885,76 +3092,63 @@ steps:
 
 ---
 
-#### `default.calculate_percentage`
+#### `default.spin_wheel`
 
-**Description:** Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).
+**Description:** Spin a wheel to randomly select from custom options. Great for making decisions, picking winners, or choosing randomly between choices. Requires at least 2 options.
 
 **Input Schema:**
 ```json
 {
   "type": "object",
   "required": [
-    "operation",
-    "value1",
-    "value2"
+    "options"
   ],
   "properties": {
-    "value1": {
-      "type": "number",
-      "description": "First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange"
-    },
-    "value2": {
-      "type": "number",
-      "description": "Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange"
-    },
-    "operation": {
-      "enum": [
-        "whatIsXPercentOfY",
-        "xIsWhatPercentOfY",
-        "increaseByPercent",
-        "decreaseByPercent",
-        "percentChange"
-      ],
-      "type": "string",
-      "description": "Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)"
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of options to spin between (minimum 2 required). Examples: [\"Pizza\", \"Burger\", \"Sushi\"] or [\"Yes\", \"No\", \"Maybe\"]"
     }
   }
 }
 ```
 
 **Parameters:**
-- `value1` (number, required): First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange
-- `value2` (number, required): Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange
-- `operation` (string, required): Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)
+- `options` (array, required): List of options to spin between (minimum 2 required). Examples: ["Pizza", "Burger", "Sushi"] or ["Yes", "No", "Maybe"]
 
 **Output Schema:**
 ```json
 {
   "type": "object",
   "properties": {
+    "index": {
+      "type": "number",
+      "description": "Index of the winning option (0-based)"
+    },
     "result": {
-      "type": "number",
-      "description": "The calculated result"
-    },
-    "value1": {
-      "type": "number",
-      "description": "First input value"
-    },
-    "value2": {
-      "type": "number",
-      "description": "Second input value"
-    },
-    "operation": {
       "type": "string",
-      "description": "The operation performed"
+      "description": "The winning option selected by the wheel"
     },
-    "explanation": {
-      "type": "string",
-      "description": "Human-readable explanation of the calculation"
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All options that were in the wheel"
     },
-    "resultIsPercent": {
-      "type": "boolean",
-      "description": "Whether the result is a percentage"
+    "segmentAngle": {
+      "type": "number",
+      "description": "Angle of each segment in degrees"
+    },
+    "totalOptions": {
+      "type": "number",
+      "description": "Total number of options in the wheel"
+    },
+    "finalRotation": {
+      "type": "number",
+      "description": "Final rotation angle in degrees (for animation)"
     }
   }
 }
@@ -1963,14 +3157,517 @@ steps:
 **Usage Example:**
 ```yaml
 steps:
-  - id: use_calculate_percentage
+  - id: use_spin_wheel
     type: action
-    name: "Use calculate_percentage"
-    tool: "default.calculate_percentage"
+    name: "Use spin_wheel"
+    tool: "default.spin_wheel"
     input:
-      value1: 123
-      value2: 123
-      operation: "example"
+      options: []
+```
+
+---
+
+#### `default.make_decision`
+
+**Description:** Help make a decision. Supports three modes: "yesNo" for yes/no questions (no options needed), "pickOne" for random selection from options, and "weighted" for weighted random selection. Great for making choices, answering questions, or picking randomly.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "mode"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "yesNo",
+        "pickOne",
+        "weighted"
+      ],
+      "type": "string",
+      "description": "Decision mode: \"yesNo\" for yes/no questions, \"pickOne\" for random selection, \"weighted\" for weighted selection"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Options to choose from (required for pickOne and weighted modes). Example: [\"Pizza\", \"Burger\", \"Sushi\"]"
+    },
+    "weights": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Optional weights for each option (only used in weighted mode). Higher weight = higher chance. Example: [3, 2, 1]"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `mode` (string, required): Decision mode: "yesNo" for yes/no questions, "pickOne" for random selection, "weighted" for weighted selection
+- `options` (array): Options to choose from (required for pickOne and weighted modes). Example: ["Pizza", "Burger", "Sushi"]
+- `weights` (array): Optional weights for each option (only used in weighted mode). Higher weight = higher chance. Example: [3, 2, 1]
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "icon": {
+      "type": "string",
+      "description": "Emoji icon for the result"
+    },
+    "mode": {
+      "type": "string",
+      "description": "The mode used for the decision"
+    },
+    "index": {
+      "type": "number",
+      "description": "Index of selected option (for pickOne/weighted modes)"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All options that were considered"
+    },
+    "decision": {
+      "type": "string",
+      "description": "The decision result"
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Confidence level (0-100)"
+    },
+    "totalOptions": {
+      "type": "number",
+      "description": "Total number of options considered"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_make_decision
+    type: action
+    name: "Use make_decision"
+    tool: "default.make_decision"
+    input:
+      mode: "example"
+      options: []
+      weights: []
+```
+
+---
+
+#### `default.flip_tool`
+
+**Description:** Flip coins or roll dice. Use flipMode to select: "coin" for coin flips (heads/tails), "dice" for dice rolls.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [],
+  "properties": {
+    "count": {
+      "type": "number",
+      "description": "Number of coins to flip or dice to roll (default: 1, max: 6 for dice, 100 for coins)"
+    },
+    "sides": {
+      "type": "number",
+      "description": "Number of sides on dice (default: 6, only used in dice mode)"
+    },
+    "flipMode": {
+      "enum": [
+        "coin",
+        "dice"
+      ],
+      "type": "string",
+      "description": "Mode: \"coin\" for coin flip, \"dice\" for dice roll (default: coin)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `count` (number): Number of coins to flip or dice to roll (default: 1, max: 6 for dice, 100 for coins)
+- `sides` (number): Number of sides on dice (default: 6, only used in dice mode)
+- `flipMode` (string): Mode: "coin" for coin flip, "dice" for dice roll (default: coin)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "count": {
+      "type": "number",
+      "description": "Number of coins/dice used"
+    },
+    "rolls": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "All dice roll results"
+    },
+    "sides": {
+      "type": "number",
+      "description": "Number of sides on dice"
+    },
+    "total": {
+      "type": "number",
+      "description": "Sum of all dice rolls"
+    },
+    "result": {
+      "type": "string",
+      "description": "Single coin result (heads/tails)"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All coin flip results"
+    },
+    "flipMode": {
+      "type": "string",
+      "description": "Mode used: coin or dice"
+    },
+    "headsCount": {
+      "type": "number",
+      "description": "Number of heads (coin mode)"
+    },
+    "tailsCount": {
+      "type": "number",
+      "description": "Number of tails (coin mode)"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_flip_tool
+    type: action
+    name: "Use flip_tool"
+    tool: "default.flip_tool"
+    input:
+      count: 123
+      sides: 123
+      flipMode: "example"
+```
+
+---
+
+#### `default.calculate_cycle`
+
+**Description:** Calculate menstrual cycle predictions including next period date, fertile window, ovulation date, and current cycle phase. Supports both simplified mode (average 28-day cycle) and advanced mode with custom cycle/period lengths.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "date"
+  ],
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "Date of period in YYYY-MM-DD format. Example: \"2026-01-01\""
+    },
+    "isFirstDay": {
+      "type": "boolean",
+      "description": "If true (default), date is first day of period. If false, date is last day of bleeding."
+    },
+    "simplified": {
+      "type": "boolean",
+      "description": "If true, use simplified mode with average 28-day cycle and 5-day period. Ignores cycleLength and periodLength."
+    },
+    "cycleLength": {
+      "type": "number",
+      "description": "Average cycle length in days (default: 28). Only used when simplified is false."
+    },
+    "periodLength": {
+      "type": "number",
+      "description": "Average period length in days (default: 5). Only used when simplified is false."
+    }
+  }
+}
+```
+
+**Parameters:**
+- `date` (string, required): Date of period in YYYY-MM-DD format. Example: "2026-01-01"
+- `isFirstDay` (boolean): If true (default), date is first day of period. If false, date is last day of bleeding.
+- `simplified` (boolean): If true, use simplified mode with average 28-day cycle and 5-day period. Ignores cycleLength and periodLength.
+- `cycleLength` (number): Average cycle length in days (default: 28). Only used when simplified is false.
+- `periodLength` (number): Average period length in days (default: 5). Only used when simplified is false.
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "description": "\"simplified\" or \"advanced\""
+    },
+    "phase": {
+      "type": "string",
+      "description": "Current phase: menstrual, follicular, ovulation, or luteal"
+    },
+    "phaseInfo": {
+      "type": "object",
+      "description": "Phase details with name, emoji, color, and description"
+    },
+    "currentDay": {
+      "type": "number",
+      "description": "Current day in the cycle (1-based)"
+    },
+    "cycleLength": {
+      "type": "number",
+      "description": "Cycle length used for calculation"
+    },
+    "periodLength": {
+      "type": "number",
+      "description": "Period length used for calculation"
+    },
+    "nextPeriodEnd": {
+      "type": "string",
+      "description": "Next period end date (YYYY-MM-DD)"
+    },
+    "ovulationDate": {
+      "type": "string",
+      "description": "Predicted ovulation date (YYYY-MM-DD)"
+    },
+    "nextPeriodStart": {
+      "type": "string",
+      "description": "Next period start date (YYYY-MM-DD)"
+    },
+    "fertileWindowEnd": {
+      "type": "string",
+      "description": "Fertile window end date (YYYY-MM-DD)"
+    },
+    "fertileWindowStart": {
+      "type": "string",
+      "description": "Fertile window start date (YYYY-MM-DD)"
+    },
+    "daysUntilNextPeriod": {
+      "type": "number",
+      "description": "Days until next period starts"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_cycle
+    type: action
+    name: "Use calculate_cycle"
+    tool: "default.calculate_cycle"
+    input:
+      date: "example"
+      isFirstDay: true
+      simplified: true
+      cycleLength: 123
+      periodLength: 123
+```
+
+---
+
+#### `default.calculate_iq_score`
+
+**Description:** IQ assessment quiz. Present questions to user one by one, collect all answers (0-3 index), then call with answers array.
+
+TEST MODES:
+- quick: 15 questions (~5 min) - Questions 1-15 below
+- standard: 30 questions (~12 min) - Questions 1-30 below
+- comprehensive: 50 questions (~20 min) - All 50 questions
+
+QUESTIONS (answer index 0-3 for options A-D):
+
+PATTERN: 1. 2,4,8,16,? [24|32|30|20] 2. 3,6,11,18,? [25|27|26|24] 3. 1,1,2,3,5,8,? [11|12|13|15] 4. 81,27,9,3,? [0|1|2|6] 5. If 2=6,3=12,4=20, 5=? [25|30|35|40] 6. 1,4,9,16,25,? [30|36|49|35] 7. 2,6,12,20,30,? [40|42|44|38] 8. 1,2,4,7,11,16,? [20|21|22|23] 9. 3,5,9,17,33,? [49|57|65|66] 10. 1,3,6,10,15,21,? [25|27|28|30]
+
+LOGIC: 11. All Bloops are Razzies, all Razzies are Lazzies. All Bloops are Lazzies? [True|False|Cannot determine|Sometimes] 12. 5 machines make 5 widgets in 5 min. 100 machines for 100 widgets? [100min|5min|20min|1min] 13. Bat+ball=$1.10, bat costs $1 more. Ball cost? [$0.10|$0.05|$0.15|$0.20] 14. Mary's father has 5 daughters: Nana,Nene,Nini,Nono. 5th name? [Nunu|Mary|Nana|None] 15. Some cats are dogs, some dogs are birds. Can cats be birds? [Yes|No|Possibly|Sometimes] 16. Farmer has 17 sheep, all but 9 die. Left? [8|9|17|0] 17. 3 people dig 3 holes in 3 hours. 1 person dig half hole? [1hr|1.5hr|3hr|Impossible] 18. Take pill every 30min, 3 pills. How long? [1.5hr|1hr|2hr|30min] 19. Subtract 5 from 25 how many times? [5|1|4|Infinite] 20. 6 apples, take 4. How many do you have? [2|4|6|0]
+
+MATH: 21. 15% of 200? [25|30|35|40] 22. x+5=12, x=? [5|6|7|8] 23. 144÷12? [10|11|12|14] 24. √169? [11|12|13|14] 25. 3x-7=14, x=? [5|6|7|8] 26. 25% of 80? [15|20|25|30] 27. 7×8+6÷2? [56|59|31|62] 28. 120km in 2hr, speed? [50|55|60|65] 29. 2³+3²? [13|15|17|19] 30. Boys:girls=3:5, 24 boys. Girls? [30|35|40|45]
+
+SPATIAL: 31. ○□△○□? [○|□|△|◇] 32. Fold square twice, cut corner. Holes? [1|2|4|8] 33. Cube faces? [4|6|8|12] 34. Rotate N 180°? [Z|N|M|W] 35. Cube edges? [6|8|10|12] 36. Most sides: hexagon/pentagon/octagon? [Hexagon|Pentagon|Octagon|Equal] 37. 3:15 clock angle? [0°|7.5°|15°|22.5°] 38. Triangles in Star of David? [2|6|8|12] 39. AMBULANCE mirror image? [AMBULANCE|ECNALUBMA|Reversed|Upside down] 40. Tetrahedron vertices? [3|4|5|6]
+
+VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [City|Animal|Ocean|Country] 43. BOOK:READING as FORK:? [Drawing|Eating|Writing|Cooking] 44. Doesn't belong: Apple,Banana,Carrot,Orange? [Apple|Banana|Carrot|Orange] 45. DOCTOR:HOSPITAL as TEACHER:? [Student|School|Book|Classroom] 46. Opposite of BENEVOLENT? [Kind|Malevolent|Generous|Helpful] 47. BIRD:NEST as BEE:? [Honey|Flower|Hive|Sting] 48. EALGER rearranged=? [Bird|Color|Country|Fruit] 49. EPHEMERAL means? [Eternal|Temporary|Solid|Ancient] 50. WATER:THIRST as FOOD:? [Eat|Hunger|Cook|Taste]
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "testMode",
+    "answers"
+  ],
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Array of answer indices (0-3) for each question. Length must match testMode: 15 for quick, 30 for standard, 50 for comprehensive."
+    },
+    "testMode": {
+      "enum": [
+        "quick",
+        "standard",
+        "comprehensive"
+      ],
+      "type": "string",
+      "description": "Test mode determining which questions to use. quick=Q1-15, standard=Q1-30, comprehensive=Q1-50"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `answers` (array, required): Array of answer indices (0-3) for each question. Length must match testMode: 15 for quick, 30 for standard, 50 for comprehensive.
+- `testMode` (string, required): Test mode determining which questions to use. quick=Q1-15, standard=Q1-30, comprehensive=Q1-50
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "emoji": {
+      "type": "string",
+      "description": "Result emoji"
+    },
+    "iqScore": {
+      "type": "number",
+      "description": "Estimated IQ score"
+    },
+    "accuracy": {
+      "type": "number",
+      "description": "Accuracy percentage"
+    },
+    "category": {
+      "type": "string",
+      "description": "IQ category (e.g., \"Superior\", \"Average\")"
+    },
+    "testInfo": {
+      "type": "object",
+      "description": "Test configuration (name, questionCount, estimatedMinutes)"
+    },
+    "testMode": {
+      "type": "string",
+      "description": "Test mode used"
+    },
+    "percentile": {
+      "type": "number",
+      "description": "Percentile ranking (0-100)"
+    },
+    "categoryScores": {
+      "type": "object",
+      "description": "Breakdown by category (pattern, logic, math, spatial, verbal)"
+    },
+    "correctAnswers": {
+      "type": "number",
+      "description": "Number of correct answers"
+    },
+    "totalQuestions": {
+      "type": "number",
+      "description": "Total questions in test"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_iq_score
+    type: action
+    name: "Use calculate_iq_score"
+    tool: "default.calculate_iq_score"
+    input:
+      answers: []
+      testMode: "example"
+```
+
+---
+
+#### `default.calculate_ideal_weight`
+
+**Description:** Calculate ideal weight using the Devine formula
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "height",
+    "sex"
+  ],
+  "properties": {
+    "sex": {
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ],
+      "type": "string",
+      "description": "Biological sex"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height in centimeters"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `sex` (string, required): Biological sex
+- `height` (number, required): Height in centimeters
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "gender": {
+      "type": "string"
+    },
+    "height": {
+      "type": "number"
+    },
+    "formula": {
+      "type": "string",
+      "description": "Formula used (Devine)"
+    },
+    "idealWeight": {
+      "type": "number",
+      "description": "Ideal weight in kg"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_ideal_weight
+    type: action
+    name: "Use calculate_ideal_weight"
+    tool: "default.calculate_ideal_weight"
+    input:
+      sex: "example"
+      height: 123
 ```
 
 ---
