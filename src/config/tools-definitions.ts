@@ -28,6 +28,7 @@ export const TOOL_CATEGORIES = {
   FUN: 'Fun & Games',
   UTILITIES: 'Utilities',
   ASTRONOMY: 'Astronomy',
+  NOTIFICATIONS: 'Notifications',
 } as const;
 
 export type ToolCategory = typeof TOOL_CATEGORIES[keyof typeof TOOL_CATEGORIES];
@@ -1067,6 +1068,74 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
         level: { type: 'string' },
         person1: { type: 'object' },
         person2: { type: 'object' },
+      },
+    },
+  },
+
+  // ============ NOTIFICATIONS ============
+  {
+    name: 'send_push_notification',
+    description: 'Send a push notification to the user\'s registered devices (browser/mobile). Use this to alert users about automation status, required inputs, errors, or any important updates. The notification will appear in the browser or on mobile devices that have enabled push notifications.',
+    category: TOOL_CATEGORIES.NOTIFICATIONS,
+    type: TOOL_TYPES.NATIVE,
+    hasWidget: false,
+    invocationMessages: { invoking: 'Sending push notification...', invoked: 'Push notification sent' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Notification title (required, max 50 chars)' },
+        body: { type: 'string', description: 'Notification body message (required, max 200 chars)' },
+        url: { type: 'string', description: 'URL to open when notification is clicked (optional)' },
+        tag: { type: 'string', description: 'Tag for grouping notifications - same tag replaces previous (optional)' },
+        type: {
+          type: 'string',
+          enum: ['automation', 'input_required', 'error', 'success', 'info'],
+          description: 'Notification type - determines icon and behavior (default: info)'
+        },
+        requireInteraction: { type: 'boolean', description: 'Keep notification visible until user interacts (default: false)' },
+        automationId: { type: 'string', description: 'Associated automation ID for deep linking (optional)' },
+        executionId: { type: 'string', description: 'Associated execution ID for deep linking (optional)' },
+      },
+      required: ['title', 'body'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether notification was sent successfully' },
+        sent: { type: 'number', description: 'Number of devices notification was sent to' },
+        failed: { type: 'number', description: 'Number of failed deliveries' },
+        message: { type: 'string', description: 'Status message' },
+      },
+    },
+  },
+
+  {
+    name: 'send_gmail',
+    description: 'Send an email using the user\'s Gmail account. Requires the user to have logged in with Google and granted Gmail permissions. The email is sent FROM the user\'s own Gmail address. Perfect for self-notifications, reminders, or sending reports to yourself.',
+    category: TOOL_CATEGORIES.NOTIFICATIONS,
+    type: TOOL_TYPES.NATIVE,
+    hasWidget: false,
+    invocationMessages: { invoking: 'Sending email via Gmail...', invoked: 'Email sent' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'Recipient email address. Use "me" or leave empty to send to yourself.' },
+        subject: { type: 'string', description: 'Email subject line (required)' },
+        body: { type: 'string', description: 'Email body - plain text or HTML (required)' },
+        isHtml: { type: 'boolean', description: 'Whether body is HTML (default: false, plain text)' },
+        cc: { type: 'string', description: 'CC recipients (comma-separated emails, optional)' },
+        bcc: { type: 'string', description: 'BCC recipients (comma-separated emails, optional)' },
+      },
+      required: ['subject', 'body'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether email was sent successfully' },
+        messageId: { type: 'string', description: 'Gmail message ID of sent email' },
+        threadId: { type: 'string', description: 'Gmail thread ID' },
+        to: { type: 'string', description: 'Recipient email address' },
+        error: { type: 'string', description: 'Error message if failed' },
       },
     },
   },

@@ -22,6 +22,7 @@
   ],
   "categories": ["utilities", "productivity", "lifestyle"],
   "lang": "en",
-  "dir": "ltr"
+  "dir": "ltr",
+  "permissions": ["notifications"]
 }
 

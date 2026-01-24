@@ -1,5 +1,5 @@
 -- Auto-generated tool definitions from tools-definitions.ts
--- Generated at: 2026-01-06T22:36:53.246Z
+-- Generated at: 2026-01-24T05:56:21.357Z
 
 INSERT INTO tools (name, description, category, tool_type, has_widget, invoking_message, invoked_message, input_schema, output_schema, user_id) VALUES
   (
@@ -24,18 +24,6 @@ INSERT INTO tools (name, description, category, tool_type, has_widget, invoking_
     'Plan generated',
     '{"type":"object","properties":{"age":{"type":"number","description":"Age in years"},"sex":{"type":"string","enum":["male","female","other"]},"height":{"type":"number","description":"Height in centimeters"},"currentWeight":{"type":"number","description":"Current weight in kg"},"desiredWeight":{"type":"number","description":"Target weight in kg"},"timeToWeight":{"type":"number","description":"Weeks to reach goal (optional)"},"activityLevel":{"type":"string","enum":["sedentary","light","moderate","active","veryActive"]}},"required":["age","sex","height","currentWeight","desiredWeight"]}'::jsonb,
     '{"type":"object","properties":{"currentWeight":{"type":"number"},"targetWeight":{"type":"number"},"weeksToGoal":{"type":"number"},"dailyCalories":{"type":"number"},"weeklyWeightLoss":{"type":"number"},"bmr":{"type":"number"},"tdee":{"type":"number"}}}'::jsonb,
-    NULL
-  ),
-  (
-    'calculate_sleep',
-    'Calculate optimal sleep and wake times based on sleep cycles',
-    'Health & Fitness',
-    'NATIVE',
-    true,
-    'Calculating sleep times...',
-    'Sleep times ready',
-    '{"type":"object","properties":{"mode":{"type":"string","enum":["wakeAt","sleepAt","sleepNow"],"description":"Calculation mode"},"time":{"type":"string","description":"Time in HH:MM format (24-hour)"}},"required":["mode"]}'::jsonb,
-    '{"type":"object","properties":{"mode":{"type":"string"},"inputTime":{"type":"string"},"times":{"type":"array","items":{"type":"object"}}}}'::jsonb,
     NULL
   ),
   (
@@ -195,18 +183,6 @@ INSERT INTO tools (name, description, category, tool_type, has_widget, invoking_
     NULL
   ),
   (
-    'generate_password',
-    'Generate a secure random password',
-    'Utilities',
-    'NATIVE',
-    true,
-    'Generating password...',
-    'Password generated',
-    '{"type":"object","properties":{"length":{"type":"number","description":"Password length (8-128)"},"includeUppercase":{"type":"boolean","description":"Include uppercase letters"},"includeLowercase":{"type":"boolean","description":"Include lowercase letters"},"includeNumbers":{"type":"boolean","description":"Include numbers"},"includeSymbols":{"type":"boolean","description":"Include symbols"}},"required":["length"]}'::jsonb,
-    '{"type":"object","properties":{"password":{"type":"string"},"length":{"type":"number"},"strength":{"type":"string"}}}'::jsonb,
-    NULL
-  ),
-  (
     'calculate_percentage',
     'Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).',
     'Utilities',
@@ -240,18 +216,6 @@ INSERT INTO tools (name, description, category, tool_type, has_widget, invoking_
     'Uniqueness calculated',
     '{"type":"object","properties":{"age":{"type":"number","description":"Age in years"},"ageMonths":{"type":"number","description":"Age in months for babies (0-24)"},"gender":{"type":"string","enum":["male","female"]},"heightCm":{"type":"number","description":"Height in centimeters"},"weightKg":{"type":"number","description":"Weight in kilograms"},"eyeColor":{"type":"string","enum":["brown","blue","hazel","green","gray","amber"]},"hairColor":{"type":"string","enum":["black","brown","blonde","red","gray","auburn"]},"bloodType":{"type":"string","enum":["O+","O-","A+","A-","B+","B-","AB+","AB-"]},"handedness":{"type":"string","enum":["right","left","ambidextrous"]}},"required":[]}'::jsonb,
     '{"type":"object","properties":{"worldPopulation":{"type":"number"},"matchingPeople":{"type":"number"},"rarity":{"type":"string"},"isBabyMode":{"type":"boolean"}}}'::jsonb,
-    NULL
-  ),
-  (
-    'calculate_risk',
-    'Calculate risk score for various activities or decisions',
-    'Utilities',
-    'NATIVE',
-    true,
-    'Calculating risk...',
-    'Risk calculated',
-    '{"type":"object","properties":{"activity":{"type":"string","description":"Activity or decision to assess"},"factors":{"type":"array","items":{"type":"object"},"description":"Risk factors with severity and likelihood"}},"required":["activity"]}'::jsonb,
-    '{"type":"object","properties":{"riskScore":{"type":"number"},"riskLevel":{"type":"string"},"factors":{"type":"array","items":{"type":"object"}},"recommendations":{"type":"array","items":{"type":"string"}}}}'::jsonb,
     NULL
   ),
   (
@@ -378,6 +342,30 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
     '{"type":"object","properties":{"sign1":{"type":"string","description":"First zodiac sign name","enum":["aries","taurus","gemini","cancer","leo","virgo","libra","scorpio","sagittarius","capricorn","aquarius","pisces"]},"sign2":{"type":"string","description":"Second zodiac sign name","enum":["aries","taurus","gemini","cancer","leo","virgo","libra","scorpio","sagittarius","capricorn","aquarius","pisces"]},"date1":{"type":"string","description":"First person birth date (YYYY-MM-DD) - alternative to sign1"},"date2":{"type":"string","description":"Second person birth date (YYYY-MM-DD) - alternative to sign2"}},"required":[]}'::jsonb,
     '{"type":"object","properties":{"compatibility":{"type":"number"},"level":{"type":"string"},"person1":{"type":"object"},"person2":{"type":"object"}}}'::jsonb,
     NULL
+  ),
+  (
+    'send_push_notification',
+    'Send a push notification to the user''s registered devices (browser/mobile). Use this to alert users about automation status, required inputs, errors, or any important updates. The notification will appear in the browser or on mobile devices that have enabled push notifications.',
+    'Notifications',
+    'NATIVE',
+    false,
+    'Sending push notification...',
+    'Push notification sent',
+    '{"type":"object","properties":{"title":{"type":"string","description":"Notification title (required, max 50 chars)"},"body":{"type":"string","description":"Notification body message (required, max 200 chars)"},"url":{"type":"string","description":"URL to open when notification is clicked (optional)"},"tag":{"type":"string","description":"Tag for grouping notifications - same tag replaces previous (optional)"},"type":{"type":"string","enum":["automation","input_required","error","success","info"],"description":"Notification type - determines icon and behavior (default: info)"},"requireInteraction":{"type":"boolean","description":"Keep notification visible until user interacts (default: false)"},"automationId":{"type":"string","description":"Associated automation ID for deep linking (optional)"},"executionId":{"type":"string","description":"Associated execution ID for deep linking (optional)"}},"required":["title","body"]}'::jsonb,
+    '{"type":"object","properties":{"success":{"type":"boolean","description":"Whether notification was sent successfully"},"sent":{"type":"number","description":"Number of devices notification was sent to"},"failed":{"type":"number","description":"Number of failed deliveries"},"message":{"type":"string","description":"Status message"}}}'::jsonb,
+    NULL
+  ),
+  (
+    'send_gmail',
+    'Send an email using the user''s Gmail account. Requires the user to have logged in with Google and granted Gmail permissions. The email is sent FROM the user''s own Gmail address. Perfect for self-notifications, reminders, or sending reports to yourself.',
+    'Notifications',
+    'NATIVE',
+    false,
+    'Sending email via Gmail...',
+    'Email sent',
+    '{"type":"object","properties":{"to":{"type":"string","description":"Recipient email address. Use \"me\" or leave empty to send to yourself."},"subject":{"type":"string","description":"Email subject line (required)"},"body":{"type":"string","description":"Email body - plain text or HTML (required)"},"isHtml":{"type":"boolean","description":"Whether body is HTML (default: false, plain text)"},"cc":{"type":"string","description":"CC recipients (comma-separated emails, optional)"},"bcc":{"type":"string","description":"BCC recipients (comma-separated emails, optional)"}},"required":["subject","body"]}'::jsonb,
+    '{"type":"object","properties":{"success":{"type":"boolean","description":"Whether email was sent successfully"},"messageId":{"type":"string","description":"Gmail message ID of sent email"},"threadId":{"type":"string","description":"Gmail thread ID"},"to":{"type":"string","description":"Recipient email address"},"error":{"type":"string","description":"Error message if failed"}}}'::jsonb,
+    NULL
   )
 ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,
@@ -393,19 +381,16 @@ ON CONFLICT (name) DO UPDATE SET
 -- Link all NATIVE tools to the default server
 DO $$
 DECLARE
-  v_api_key_id UUID;
+  v_user_id TEXT := 'user_37inOsUBpoqj1Nv5ZyeZ7rBOUKo';
+  v_server_name TEXT := 'default';
   v_tool_id UUID;
   v_tool_name TEXT;
 BEGIN
-  SELECT id INTO v_api_key_id FROM api_keys
-  WHERE user_id = 'user_37inOsUBpoqj1Nv5ZyeZ7rBOUKo' AND server_name = 'default';
-
-  IF v_api_key_id IS NOT NULL THEN
-    FOR v_tool_id, v_tool_name IN SELECT id, name FROM tools WHERE tool_type = 'NATIVE'
-    LOOP
-      INSERT INTO server_tools (api_key_id, tool_id, is_enabled)
-      VALUES (v_api_key_id, v_tool_id, true)
-      ON CONFLICT (api_key_id, tool_id) DO NOTHING;
-    END LOOP;
-  END IF;
+  -- Link each NATIVE tool to the user's default server
+  FOR v_tool_id, v_tool_name IN SELECT id, name FROM tools WHERE tool_type = 'NATIVE'
+  LOOP
+    INSERT INTO server_tools (user_id, server_name, tool_id, is_enabled)
+    VALUES (v_user_id, v_server_name, v_tool_id, true)
+    ON CONFLICT (user_id, server_name, tool_id) DO NOTHING;
+  END LOOP;
 END $$;

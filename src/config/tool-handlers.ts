@@ -567,6 +567,91 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       steps,
     };
   },
+
+  // ============ NOTIFICATIONS ============
+  send_push_notification: async (args, context) => {
+    if (!context?.userId) {
+      return { success: false, sent: 0, failed: 0, message: 'User not authenticated' };
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/push/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+        },
+        body: JSON.stringify({
+          userId: context.userId,
+          title: args.title as string,
+          body: args.body as string,
+          data: {
+            url: args.url as string,
+            type: args.type as string || 'info',
+            automationId: args.automationId as string,
+            executionId: args.executionId as string,
+          },
+          tag: args.tag as string,
+          requireInteraction: args.requireInteraction as boolean,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, sent: 0, failed: 0, message: error.error || 'Failed to send notification' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      return {
+        success: false,
+        sent: 0,
+        failed: 0,
+        message: error instanceof Error ? error.message : 'Failed to send notification'
+      };
+    }
+  },
+
+  send_gmail: async (args, context) => {
+    if (!context?.userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/gmail/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+          'X-User-Id': context.userId,
+        },
+        body: JSON.stringify({
+          to: args.to as string || 'me',
+          subject: args.subject as string,
+          body: args.body as string,
+          isHtml: args.isHtml as boolean,
+          cc: args.cc as string,
+          bcc: args.bcc as string,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.error || 'Failed to send email' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to send email'
+      };
+    }
+  },
 };
 
 // ============================================================================
