@@ -14,6 +14,7 @@
 // ============ WORKFLOW DEFINITION ============
 
 export interface WorkflowDefinition {
+  id?: string;  // Auto-generated from name if not provided (snake_case)
   name: string;
   description?: string;
   version?: number;
@@ -177,7 +178,11 @@ export type Step =
   | HumanInLoopStep
   | ReturnStep
   | NotifyStep
-  | TriggerAutomationStep;
+  | TriggerAutomationStep
+  | DelayStep
+  | SetVariableStep
+  | StopStep
+  | WaitForVariableStep;
 
 // Base properties shared by all steps
 interface BaseStep {
@@ -230,6 +235,36 @@ export interface WhileStep extends BaseStep {
   maxIterations?: number;
 }
 
+// Delay step - pause execution for specified seconds
+export interface DelayStep extends BaseStep {
+  delay: number;  // Seconds to wait
+}
+
+// Set variable step - explicitly set a variable value
+export interface SetVariableStep extends BaseStep {
+  set: string;  // Variable name
+  value: ParameterValue;  // Value or expression (can use {{variable}})
+}
+
+// Stop step - stop execution (can be triggered by external hook)
+export interface StopStep extends BaseStep {
+  stop: {
+    reason?: string;  // Optional reason for stopping
+    status?: 'completed' | 'cancelled';  // Final status (default: cancelled)
+  };
+}
+
+// Wait for variable step - pauses until a variable is set via external PUT
+export interface WaitForVariableStep extends BaseStep {
+  wait_for: {
+    variable: string;  // Variable name to wait for
+    timeout?: number;  // Timeout in seconds (default: 3600 = 1 hour)
+    pollInterval?: number;  // Poll interval in seconds (default: 5)
+    condition?: string;  // Optional JS condition to check (e.g., "status === 'approved'")
+  };
+  output?: string;  // Variable to store the result
+}
+
 // Human-in-the-loop step
 export interface HumanInLoopStep extends BaseStep {
   human: {
@@ -274,7 +309,7 @@ export type ParameterValue =
 
 // ============ EXECUTION TYPES ============
 
-export type ExecutionStatus = 'pending' | 'waiting_input' | 'running' | 'paused' | 'completed' | 'failed';
+export type ExecutionStatus = 'pending' | 'waiting_input' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface ExecutionState {
   id: string;

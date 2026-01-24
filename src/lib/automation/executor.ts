@@ -24,6 +24,10 @@ import {
   ReturnStep,
   NotifyStep,
   TriggerAutomationStep,
+  DelayStep,
+  SetVariableStep,
+  StopStep,
+  WaitForVariableStep,
   ExecutionState,
   ExecutionResult,
   ExecutionLogEntry,
@@ -33,6 +37,7 @@ import {
   OutputConfig,
   RequiredInputsConfig,
 } from './types';
+import { WAIT_TIMEOUT_SECONDS } from './notification-templates';
 
 // Tool executor interface - to be implemented by the caller
 export interface ToolExecutor {
@@ -61,7 +66,7 @@ export interface HumanInputHandler {
     message: string;
     type: 'confirm' | 'text' | 'choice';
     choices?: string[];
-    timeout?: number;
+    timeout?: number;  // Defaults to WAIT_TIMEOUT_SECONDS (300s / 5 min)
     notify?: string[];
   }): Promise<{ value: unknown; timedOut: boolean }>;
 
@@ -73,6 +78,7 @@ export interface HumanInputHandler {
     description?: string;
     type?: string;
     channels?: string[];
+    timeoutSeconds?: number;  // Included in notification message
   }): Promise<void>;
 }
 
@@ -134,6 +140,12 @@ export interface ExecutorOptions {
 
   // Pre-collected inputs (from required_inputs or previous collection)
   collectedInputs?: Record<string, unknown>;
+
+  // Variable poller for wait_for steps - fetches latest variables from DB
+  variablePoller?: (executionId: string) => Promise<Record<string, unknown> | null>;
+
+  // Status poller for checking if execution was cancelled externally
+  statusPoller?: (executionId: string) => Promise<ExecutionStatus | null>;
 
   // Callbacks
   onStepStart?: (stepId: string, stepType: string) => void;
@@ -370,10 +382,16 @@ async function executeSteps(
         const missingInputs = await checkMissingInputs(step, state, options, workflow);
         if (missingInputs.length > 0) {
           // Add to pending inputs and pause
+          // NOTE: The runtime service will enforce a 5-minute timeout (WAIT_TIMEOUT_SECONDS)
+          // for waiting_input status. If no input is received, execution will fail with
+          // timeout_user_input error.
           state.pendingInputs.push(...missingInputs);
           state.status = 'waiting_input';
           state.pauseReason = 'missing_input';
           state.pauseMessage = `Missing required inputs: ${missingInputs.map(i => i.fieldName).join(', ')}`;
+          // Track when we started waiting for timeout enforcement
+          state.variables['__waiting_since'] = Date.now();
+          state.variables['__waiting_timeout_seconds'] = WAIT_TIMEOUT_SECONDS;
 
           // Send notifications for missing inputs
           for (const pending of missingInputs) {
@@ -385,6 +403,7 @@ async function executeSteps(
                 description: pending.description,
                 type: pending.type,
                 channels: ['email'],
+                timeoutSeconds: WAIT_TIMEOUT_SECONDS,
               });
               pending.notificationSent = true;
             }
@@ -392,7 +411,7 @@ async function executeSteps(
           }
 
           logEntry.status = 'completed';
-          logEntry.message = 'Waiting for missing inputs';
+          logEntry.message = `Waiting for missing inputs (timeout: ${WAIT_TIMEOUT_SECONDS}s)`;
           state.log.push(logEntry);
 
           return {
@@ -518,6 +537,14 @@ async function executeStep(
     return executeReturn(step, state);
   } else if (isTriggerAutomationStep(step)) {
     return executeTriggerAutomation(step, state, options);
+  } else if (isDelayStep(step)) {
+    return executeDelay(step, state);
+  } else if (isSetVariableStep(step)) {
+    return executeSetVariable(step, state);
+  } else if (isStopStep(step)) {
+    return executeStop(step, state);
+  } else if (isWaitForVariableStep(step)) {
+    return executeWaitForVariable(step, state, options);
   }
 
   return { status: 'completed' };
@@ -635,6 +662,20 @@ async function executeFor(
 
   const results: unknown[] = [];
   for (let i = 0; i < iterable.length; i++) {
+    // Check if execution was cancelled
+    if (state.status === 'cancelled') {
+      return { status: 'cancelled', output: { results, cancelled: true, index: i } };
+    }
+
+    // If statusPoller is provided, check latest status from DB
+    if (options.statusPoller) {
+      const latestStatus = await options.statusPoller(state.id);
+      if (latestStatus === 'cancelled') {
+        state.status = 'cancelled';
+        return { status: 'cancelled', output: { results, cancelled: true, index: i } };
+      }
+    }
+
     state.variables[itemVar] = iterable[i];
     state.variables[`${itemVar}_index`] = i;
 
@@ -645,7 +686,7 @@ async function executeFor(
     if (result.status === 'completed' && result.output !== state.variables) {
       return result;
     }
-    if (result.status === 'paused' || result.status === 'waiting_input') {
+    if (result.status === 'paused' || result.status === 'waiting_input' || result.status === 'cancelled') {
       return result;
     }
   }
@@ -666,6 +707,20 @@ async function executeWhile(
   let iterations = 0;
 
   while (iterations < maxIterations) {
+    // Check if execution was cancelled (via DELETE or external stop)
+    if (state.status === 'cancelled') {
+      return { status: 'cancelled', output: { iterations, cancelled: true } };
+    }
+
+    // If statusPoller is provided, check latest status from DB
+    if (options.statusPoller) {
+      const latestStatus = await options.statusPoller(state.id);
+      if (latestStatus === 'cancelled') {
+        state.status = 'cancelled';
+        return { status: 'cancelled', output: { iterations, cancelled: true } };
+      }
+    }
+
     // Evaluate condition
     const fn = new Function(...Object.keys(state.variables), `return (${step.while})`);
     const condition = fn(...Object.values(state.variables));
@@ -678,7 +733,7 @@ async function executeWhile(
     if (result.status === 'completed' && result.output !== state.variables) {
       return result;
     }
-    if (result.status === 'paused' || result.status === 'waiting_input') {
+    if (result.status === 'paused' || result.status === 'waiting_input' || result.status === 'cancelled') {
       return result;
     }
 
@@ -701,19 +756,30 @@ async function executeHuman(
   }
 
   const resolvedMessage = resolveTemplate(step.human.message, state.variables);
+  // Default timeout is 5 minutes (WAIT_TIMEOUT_SECONDS)
+  const timeout = step.human.timeout ?? WAIT_TIMEOUT_SECONDS;
 
   const { value, timedOut } = await options.humanInputHandler.requestInput({
     message: resolvedMessage,
     type: step.human.type,
     choices: step.human.choices,
-    timeout: step.human.timeout,
+    timeout,
   });
 
   if (timedOut) {
-    state.status = 'paused';
-    state.pauseReason = 'human_step';
-    state.pauseMessage = `Timed out waiting for input: ${resolvedMessage}`;
-    return { status: 'paused', currentStepId: step.id };
+    // Timeout - fail the execution (not pause)
+    state.status = 'failed';
+    state.error = `timeout_approval: Timeout waiting for human approval after ${timeout} seconds`;
+    return {
+      status: 'failed',
+      currentStepId: step.id,
+      output: {
+        timedOut: true,
+        timeoutType: 'timeout_approval',
+        timeoutSeconds: timeout,
+        message: resolvedMessage
+      }
+    };
   }
 
   state.variables[step.output] = value;
@@ -842,6 +908,149 @@ async function executeTriggerAutomation(
 }
 
 /**
+ * Execute a delay step - pause execution for specified seconds
+ */
+async function executeDelay(
+  step: DelayStep,
+  state: ExecutionState
+): Promise<ExecutionResult> {
+  const seconds = step.delay;
+
+  if (seconds <= 0) {
+    return { status: 'completed', output: 0 };
+  }
+
+  // Wait for the specified duration
+  await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+
+  return { status: 'completed', output: seconds };
+}
+
+/**
+ * Execute a set variable step - explicitly set a variable value
+ */
+async function executeSetVariable(
+  step: SetVariableStep,
+  state: ExecutionState
+): Promise<ExecutionResult> {
+  const variableName = step.set;
+  const value = resolveValue(step.value, state.variables);
+
+  state.variables[variableName] = value;
+
+  return { status: 'completed', output: value };
+}
+
+/**
+ * Execute a stop step - stop execution immediately
+ */
+async function executeStop(
+  step: StopStep,
+  state: ExecutionState
+): Promise<ExecutionResult> {
+  const reason = step.stop.reason || 'Execution stopped';
+  const finalStatus = step.stop.status || 'cancelled';
+
+  state.status = finalStatus;
+  state.completedAt = new Date();
+
+  return {
+    status: finalStatus,
+    output: { stopped: true, reason }
+  };
+}
+
+/**
+ * Execute a wait for variable step - polls until variable is set or condition is met
+ *
+ * This step pauses execution and polls the state for a variable to be set.
+ * External systems can set the variable via PUT /api/ai/automations/[id]/executions/[runId]/variables
+ *
+ * The executor should be called with a variablePoller option that fetches current variables
+ * from the database, allowing external updates to be detected.
+ */
+async function executeWaitForVariable(
+  step: WaitForVariableStep,
+  state: ExecutionState,
+  options: ExecutorOptions
+): Promise<ExecutionResult> {
+  // Default timeout is 5 minutes (WAIT_TIMEOUT_SECONDS) for user-facing waits
+  const { variable, timeout = WAIT_TIMEOUT_SECONDS, pollInterval = 5, condition } = step.wait_for;
+  const startTime = Date.now();
+  const timeoutMs = timeout * 1000;
+  const pollIntervalMs = pollInterval * 1000;
+
+  // If variable already exists and condition is met, return immediately
+  if (variable in state.variables) {
+    if (!condition || evaluateCondition(condition, state.variables)) {
+      const value = state.variables[variable];
+      if (step.output) {
+        state.variables[step.output] = value;
+      }
+      return { status: 'completed', output: value };
+    }
+  }
+
+  // Poll for variable changes
+  while (Date.now() - startTime < timeoutMs) {
+    // If a variable poller is provided, fetch latest variables from DB
+    if (options.variablePoller) {
+      const latestVariables = await options.variablePoller(state.id);
+      if (latestVariables) {
+        // Merge with current state
+        Object.assign(state.variables, latestVariables);
+      }
+    }
+
+    // Check if variable exists and condition is met
+    if (variable in state.variables) {
+      if (!condition || evaluateCondition(condition, state.variables)) {
+        const value = state.variables[variable];
+        if (step.output) {
+          state.variables[step.output] = value;
+        }
+        return { status: 'completed', output: value };
+      }
+    }
+
+    // Check if execution was cancelled
+    if (state.status === 'cancelled') {
+      return { status: 'cancelled', output: { timedOut: false, cancelled: true } };
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
+  // Timeout reached - fail the execution (not pause)
+  state.status = 'failed';
+  state.error = `timeout_wait_for: Timeout waiting for variable "${variable}" after ${timeout} seconds`;
+
+  return {
+    status: 'failed',
+    currentStepId: step.id,
+    output: {
+      timedOut: true,
+      variable,
+      timeoutType: 'timeout_wait_for',
+      timeoutSeconds: timeout
+    }
+  };
+}
+
+/**
+ * Evaluate a JavaScript condition against variables
+ */
+function evaluateCondition(condition: string, variables: Record<string, unknown>): boolean {
+  try {
+    const fn = new Function(...Object.keys(variables), `return (${condition})`);
+    return Boolean(fn(...Object.values(variables)));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get the type of a step
  */
 function getStepType(step: Step): string {
@@ -855,6 +1064,10 @@ function getStepType(step: Step): string {
   if ('notify' in step) return 'notify';
   if ('return' in step) return 'return';
   if ('trigger_automation' in step) return 'trigger_automation';
+  if ('delay' in step) return 'delay';
+  if ('set' in step) return 'set';
+  if ('stop' in step) return 'stop';
+  if ('wait_for' in step) return 'wait_for';
   return 'unknown';
 }
 
@@ -898,4 +1111,20 @@ function isReturnStep(step: Step): step is ReturnStep {
 
 function isTriggerAutomationStep(step: Step): step is TriggerAutomationStep {
   return 'trigger_automation' in step;
+}
+
+function isDelayStep(step: Step): step is DelayStep {
+  return 'delay' in step && typeof (step as DelayStep).delay === 'number';
+}
+
+function isSetVariableStep(step: Step): step is SetVariableStep {
+  return 'set' in step && 'value' in step;
+}
+
+function isStopStep(step: Step): step is StopStep {
+  return 'stop' in step;
+}
+
+function isWaitForVariableStep(step: Step): step is WaitForVariableStep {
+  return 'wait_for' in step;
 }

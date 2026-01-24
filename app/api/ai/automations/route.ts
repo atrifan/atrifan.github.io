@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { embedAutomation, deleteAutomationEmbedding, isAutomationEmbeddingsConfigured } from '@/src/lib/automation-embeddings';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, display_name, description, category, model_id, personality_ids } = body;
+    const {
+      name, display_name, description, category, model_id, personality_ids,
+      mermaid_diagram, yaml_definition, schedule_type, schedule_config, cron_expression
+    } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -73,7 +77,11 @@ export async function POST(request: NextRequest) {
         model_id: model_id || 'meta-llama/llama-3.1-8b-instruct:free',
         personality_ids: personality_ids || [],
         flow_definition: { nodes: [], edges: [] },
-        mermaid_diagram: 'flowchart TD\n  start([Start]) --> end_node([End])',
+        mermaid_diagram: mermaid_diagram || 'flowchart TD\n  start([Start]) --> end_node([End])',
+        yaml_definition: yaml_definition || null,
+        schedule_type: schedule_type || 'manual',
+        schedule_config: schedule_config || null,
+        cron_expression: cron_expression || null,
         status: 'draft',
       })
       .select()
@@ -82,6 +90,20 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Failed to create automation:', error);
       return NextResponse.json({ error: 'Failed to create automation' }, { status: 500 });
+    }
+
+    // Embed automation for search (async, don't block response)
+    if (isAutomationEmbeddingsConfigured() && yaml_definition) {
+      embedAutomation({
+        userId,
+        automationId: automation.id,
+        name: automation.name,
+        displayName: automation.display_name || automation.name,
+        category: automation.category || 'general',
+        description: automation.description,
+        yamlContent: yaml_definition,
+        baseUrl: process.env.NEXT_PUBLIC_APP_URL || '',
+      }).catch(err => console.error('Failed to embed automation:', err));
     }
 
     return NextResponse.json({ automation });
@@ -140,6 +162,20 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update automation' }, { status: 500 });
     }
 
+    // Re-embed automation for search (async, don't block response)
+    if (isAutomationEmbeddingsConfigured() && automation.yaml_definition) {
+      embedAutomation({
+        userId,
+        automationId: automation.id,
+        name: automation.name,
+        displayName: automation.display_name || automation.name,
+        category: automation.category || 'general',
+        description: automation.description,
+        yamlContent: automation.yaml_definition,
+        baseUrl: process.env.NEXT_PUBLIC_APP_URL || '',
+      }).catch(err => console.error('Failed to embed automation:', err));
+    }
+
     return NextResponse.json({ automation });
   } catch (error) {
     console.error('Automations PUT error:', error);
@@ -176,6 +212,12 @@ export async function DELETE(request: NextRequest) {
     if (error) {
       console.error('Failed to delete automation:', error);
       return NextResponse.json({ error: 'Failed to delete automation' }, { status: 500 });
+    }
+
+    // Delete embedding (async, don't block response)
+    if (isAutomationEmbeddingsConfigured()) {
+      deleteAutomationEmbedding({ userId, automationId: id })
+        .catch(err => console.error('Failed to delete automation embedding:', err));
     }
 
     return NextResponse.json({ success: true });

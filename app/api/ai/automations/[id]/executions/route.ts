@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { auth } from '@clerk/nextjs/server';
+import { validateAutomationAccess } from '@/src/lib/automation/auth';
 
 const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
@@ -8,7 +8,9 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 /**
  * GET /api/ai/automations/[id]/executions
  * List all executions for an automation with status, logs count, etc.
- * 
+ *
+ * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
+ *
  * Query params:
  * - limit: number (default: 20)
  * - offset: number (default: 0)
@@ -19,12 +21,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id: automationId } = await params;
+
+    // Validate access
+    const authResult = await validateAutomationAccess(request, automationId);
+    if (authResult.error) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
-    const { id: automationId } = await params;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse query params
@@ -33,15 +37,14 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const statusFilter = searchParams.get('status');
 
-    // Verify automation ownership
-    const { data: automation, error: authError } = await supabase
+    // Get automation name
+    const { data: automation } = await supabase
       .from('automations')
       .select('id, name, display_name')
       .eq('id', automationId)
-      .eq('user_id', userId)
       .single();
 
-    if (authError || !automation) {
+    if (!automation) {
       return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
     }
 

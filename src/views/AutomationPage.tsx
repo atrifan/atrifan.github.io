@@ -15,9 +15,10 @@ import { SettingsPanel, SettingsPanelMode } from '../components/SettingsPanel';
 import { RetrievalEventsDisplay, RetrievalEventsData, RAGRetrievalEvent, HistoryMatchEvent } from '../components/RetrievalEventsDisplay';
 import { applySEO } from '../utils/seo';
 import { AI_MODELS, TOKEN_QUOTAS, formatCurrency, formatTokenCount, DEFAULT_MONTHLY_BUDGET } from '../config/ai-tokens.config';
-import { parseMermaid, mermaidToWorkflow, workflowToYamlString, ScheduleConfig } from '../lib/automation/mermaid-to-yaml';
+import { parseMermaid, mermaidToWorkflow, workflowToYamlString, ScheduleConfig, normalizeNameToId } from '../lib/automation/mermaid-to-yaml';
 import { workflowToMermaid } from '../lib/automation/yaml-to-mermaid';
 import { WorkflowDefinition } from '../lib/automation/types';
+import { AutomationFinder, Automation as FinderAutomation, Execution as FinderExecution } from '../components/AutomationFinder';
 import * as yaml from 'yaml';
 
 // Supabase client for realtime subscriptions
@@ -311,14 +312,7 @@ const DEFAULT_CATEGORY_OPTIONS = [
 ];
 
 // Helper to generate snake_case ID from display name
-const toSnakeCase = (str: string): string => {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-};
+const toSnakeCase = normalizeNameToId;
 
 // Generate a simple UUID v4
 const generateUUID = (): string => {
@@ -1224,17 +1218,41 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         break;
     }
 
+    // Ensure YAML has the correct id (snake_case) and name
+    let finalYaml = exportedYaml;
+    const normalizedId = normalizeNameToId(automationName);
+    if (exportedYaml) {
+      try {
+        const parsed = yaml.parse(exportedYaml);
+        // Update id (snake_case) and name (display name) in the parsed YAML
+        parsed.id = normalizedId;
+        parsed.name = automationDisplayName || automationName;
+        if (automationDescription) {
+          parsed.description = automationDescription;
+        }
+        if (automationCategory) {
+          parsed.category = automationCategory;
+        }
+        finalYaml = yaml.stringify(parsed);
+      } catch {
+        // If parsing fails, prepend id to the YAML
+        if (!exportedYaml.startsWith('id:')) {
+          finalYaml = `id: ${normalizedId}\nname: "${automationDisplayName || automationName}"\n${exportedYaml}`;
+        }
+      }
+    }
+
     try {
       const method = currentAutomation ? 'PUT' : 'POST';
       const body = currentAutomation
         ? {
             id: currentAutomation.id,
-            name: automationName,
+            name: normalizedId, // snake_case id for database
             display_name: automationDisplayName || automationName,
             description: automationDescription,
             category: automationCategory,
             mermaid_diagram: mermaidDiagram,
-            yaml_definition: exportedYaml || null,
+            yaml_definition: finalYaml || null,
             model_id: selectedModel,
             personality_ids: activePersonalityIds,
             schedule_type: selectedSchedule,
@@ -1243,10 +1261,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             workflow_version: 1,
           }
         : {
-            name: automationName,
+            name: normalizedId, // snake_case id for database
             display_name: automationDisplayName || automationName,
             description: automationDescription,
             category: automationCategory,
+            mermaid_diagram: mermaidDiagram,
+            yaml_definition: finalYaml || null,
             model_id: selectedModel,
             personality_ids: activePersonalityIds,
             schedule_type: selectedSchedule,
@@ -1264,6 +1284,8 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         const data = await response.json();
         setCurrentAutomation(data.automation);
         setShowSaveModal(false);
+        // Update URL with the new automation ID
+        window.history.pushState({}, '', `/automation?id=${data.automation.id}`);
         fetchAutomations();
       }
     } catch (error) {
@@ -1417,7 +1439,6 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
     if (pasteYaml.trim()) {
       const yamlContent = pasteYaml.trim();
-      setExportedYaml(yamlContent);
 
       // Parse YAML and generate Mermaid diagram
       try {
@@ -1431,6 +1452,20 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             workflow.steps = [];
           }
 
+          // Normalize id to snake_case
+          const displayName = workflow.name || workflow.id || 'Untitled Workflow';
+          const normalizedId = normalizeNameToId(workflow.id || displayName);
+
+          // Update workflow with normalized id
+          workflow.id = normalizedId;
+          if (!workflow.name) {
+            workflow.name = displayName;
+          }
+
+          // Generate updated YAML with normalized id
+          const updatedYaml = yaml.stringify(workflow);
+          setExportedYaml(updatedYaml);
+
           // Generate Mermaid from workflow
           const mermaid = workflowToMermaid(workflow);
           setMermaidDiagram(mermaid);
@@ -1440,17 +1475,22 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           setWorkflowDef(workflow);
 
           // Update automation name/description from YAML
-          if (workflow.name) {
-            setAutomationName(workflow.name);
-            setAutomationDisplayName(workflow.name);
-          }
+          // automationName is the snake_case id, displayName is human-readable
+          setAutomationName(normalizedId);
+          setAutomationDisplayName(displayName);
           if (workflow.description) {
             setAutomationDescription(workflow.description);
+          }
+
+          // Extract category from YAML if present
+          if ((workflow as unknown as { category?: string }).category) {
+            setAutomationCategory((workflow as unknown as { category: string }).category);
           }
         }
       } catch (error) {
         console.error('Failed to parse YAML:', error);
         // Still set the YAML even if parsing fails
+        setExportedYaml(yamlContent);
       }
     }
 
@@ -1645,8 +1685,13 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       setWorkflowDef(workflow);
 
       // Update name and description
+      // automationName should be snake_case id, displayName is human-readable
+      if (workflow.id) {
+        setAutomationName(normalizeNameToId(workflow.id));
+      } else if (workflow.name) {
+        setAutomationName(normalizeNameToId(workflow.name));
+      }
       if (workflow.name) {
-        setAutomationName(workflow.name);
         setAutomationDisplayName(workflow.name);
       }
       if (workflow.description) {
@@ -2085,113 +2130,88 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           <button onClick={startNew} style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}>+ New Automation</button>
         </div>
 
-        {/* LIST VIEW */}
+        {/* LIST VIEW - File Manager Style */}
         {view === 'list' && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <h2 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 1rem' }}>📁 Your Automations</h2>
-            {automations.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.5)' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>⚡</div>
-                <p>No automations yet. Click "New Automation" to get started!</p>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                {automations.map(auto => {
-                  const executions = runningExecutions[auto.id] || [];
-                  const hasRunning = executions.some(e => e.status === 'running');
-                  const hasWaiting = executions.some(e => e.status === 'waiting_input');
-
-                  return (
-                    <div key={auto.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', border: hasWaiting ? '1px solid rgba(245, 158, 11, 0.4)' : hasRunning ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                        <h3 style={{ color: '#fff', fontSize: '1rem', margin: 0, fontWeight: 600 }}>{auto.name}</h3>
-                        <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-                          {hasRunning && <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem', animation: 'pulse 2s infinite' }}>⚡ Running</span>}
-                          {hasWaiting && <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem' }}>⏳ Input</span>}
-                          <span style={{ background: auto.status === 'active' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.1)', color: auto.status === 'active' ? '#10b981' : 'rgba(255,255,255,0.5)', padding: '0.15rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem' }}>{auto.status}</span>
-                        </div>
-                      </div>
-                      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 0.5rem' }}>{auto.description || 'No description'}</p>
-
-                      {/* Running instances */}
-                      {executions.length > 0 && (
-                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Active Runs:</div>
-                          {executions.slice(0, 3).map(exec => (
-                            <div key={exec.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', padding: '0.25rem 0' }}>
-                              <span style={{ color: exec.status === 'waiting_input' ? '#f59e0b' : exec.status === 'running' ? '#3b82f6' : 'rgba(255,255,255,0.6)' }}>
-                                {exec.status === 'waiting_input' ? '⏳' : exec.status === 'running' ? '⚡' : '⏸️'} {exec.status}
-                              </span>
-                              {exec.status === 'waiting_input' && (
-                                <a
-                                  href={`/automation/${auto.id}/running/${exec.id}/input`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ color: '#f59e0b', textDecoration: 'underline', fontSize: '0.65rem' }}
-                                >
-                                  Provide Input →
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                          {executions.length > 3 && (
-                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.25rem' }}>
-                              +{executions.length - 3} more
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
-                        <span>⏰ {auto.schedule_type}</span>
-                        <span>•</span>
-                        <span>{auto.total_runs} runs</span>
-                        {auto.last_run_status && (
-                          <>
-                            <span>•</span>
-                            <span>{getStatusIcon(auto.last_run_status)}</span>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {auto.yaml_definition && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Check if automation has human inputs
-                              const hasInputs = auto.yaml_definition && auto.yaml_definition.includes('inputs:');
-                              if (hasInputs) {
-                                setCurrentAutomation(auto);
-                                setShowRunModal(true);
-                              } else {
-                                runAutomation(auto);
-                              }
-                            }}
-                            disabled={isExecuting}
-                            style={{
-                              background: isExecuting ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #10b981, #059669)',
-                              border: 'none',
-                              borderRadius: '8px',
-                              padding: '0.5rem 0.75rem',
-                              color: '#fff',
-                              cursor: isExecuting ? 'not-allowed' : 'pointer',
-                              fontSize: '0.8rem',
-                              opacity: isExecuting ? 0.5 : 1,
-                            }}
-                            title="Run automation"
-                          >
-                            ▶️
-                          </button>
-                        )}
-                        <button onClick={() => loadAutomation(auto)} style={{ flex: 1, background: 'linear-gradient(135deg, #f59e0b, #ea580c)', border: 'none', borderRadius: '8px', padding: '0.5rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Edit</button>
-                        <button onClick={() => deleteAutomation(auto.id)} style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}>🗑️</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <AutomationFinder
+            automations={automations.map(auto => ({
+              id: auto.id,
+              name: auto.name,
+              display_name: auto.display_name || undefined,
+              description: auto.description,
+              category: auto.category,
+              status: auto.status as 'draft' | 'active' | 'paused' | 'archived',
+              schedule_type: auto.schedule_type,
+              cron_expression: auto.cron_expression || undefined,
+              yaml_definition: auto.yaml_definition || undefined,
+              total_runs: auto.total_runs,
+              created_at: auto.created_at,
+              updated_at: auto.updated_at,
+            }))}
+            categories={categories}
+            onSelectAutomation={(auto) => {
+              const fullAuto = automations.find(a => a.id === auto.id);
+              if (fullAuto) setCurrentAutomation(fullAuto);
+            }}
+            onRunAutomation={(auto) => {
+              const fullAuto = automations.find(a => a.id === auto.id);
+              if (fullAuto) {
+                const hasInputs = fullAuto.yaml_definition && fullAuto.yaml_definition.includes('inputs:');
+                if (hasInputs) {
+                  setCurrentAutomation(fullAuto);
+                  setShowRunModal(true);
+                } else {
+                  runAutomation(fullAuto);
+                }
+              }
+            }}
+            onEditAutomation={(auto) => {
+              const fullAuto = automations.find(a => a.id === auto.id);
+              if (fullAuto) loadAutomation(fullAuto);
+            }}
+            onDeleteAutomation={(auto) => deleteAutomation(auto.id)}
+            onViewExecution={(exec, auto) => {
+              const fullAuto = automations.find(a => a.id === auto.id);
+              if (fullAuto) {
+                setCurrentAutomation(fullAuto);
+                fetchLogs(fullAuto.id);
+                setView('logs');
+              }
+            }}
+            onViewLogs={(exec) => {
+              const auto = automations.find(a => a.id === exec.automation_id);
+              if (auto) {
+                setCurrentAutomation(auto);
+                fetchLogs(auto.id);
+                setView('logs');
+              }
+            }}
+            onProvideInput={(exec) => {
+              window.open(`/automation/${exec.automation_id}/running/${exec.id}/input`, '_blank');
+            }}
+            onStopExecution={async (exec) => {
+              try {
+                await fetch(`/api/ai/automations/${exec.automation_id}/executions/${exec.id}`, {
+                  method: 'DELETE',
+                });
+                fetchAutomations();
+              } catch (err) {
+                console.error('Failed to stop execution:', err);
+              }
+            }}
+            onDeleteExecution={async (exec) => {
+              try {
+                await fetch(`/api/ai/automations/${exec.automation_id}/executions/${exec.id}`, {
+                  method: 'DELETE',
+                });
+                fetchAutomations();
+              } catch (err) {
+                console.error('Failed to delete execution:', err);
+              }
+            }}
+            selectedAutomationId={currentAutomation?.id}
+            onCreateNew={startNew}
+            onRefresh={fetchAutomations}
+          />
         )}
 
         {/* HISTORY VIEW */}
@@ -2586,133 +2606,6 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                   </div>
                 ))
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Save Modal */}
-        {showSaveModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '450px', width: '90%' }}>
-              <h3 style={{ color: '#fff', margin: '0 0 1rem' }}>💾 Save Automation</h3>
-
-              {/* Display Name */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Display Name</label>
-                <input
-                  type="text"
-                  value={automationDisplayName}
-                  onChange={(e) => handleDisplayNameChange(e.target.value)}
-                  placeholder="My Awesome Automation"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
-                />
-              </div>
-
-              {/* ID (auto-generated from display name) */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>ID (snake_case)</label>
-                <input
-                  type="text"
-                  value={automationName}
-                  onChange={(e) => setAutomationName(e.target.value)}
-                  placeholder="my_awesome_automation"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontFamily: 'monospace' }}
-                />
-              </div>
-
-              {/* Category with create new option */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Category</label>
-                {!showNewCategoryInput ? (
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <select
-                      value={automationCategory}
-                      onChange={(e) => {
-                        if (e.target.value === '__new__') {
-                          setShowNewCategoryInput(true);
-                        } else {
-                          setAutomationCategory(e.target.value);
-                        }
-                      }}
-                      style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'white\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
-                      ))}
-                      <option value="__new__">➕ Create New Category...</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={newCategoryIcon}
-                      onChange={(e) => setNewCategoryIcon(e.target.value)}
-                      style={{ width: '50px', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', textAlign: 'center', fontSize: '1.1rem' }}
-                      placeholder="📦"
-                    />
-                    <input
-                      type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="Category name..."
-                      style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!newCategoryName.trim()) return;
-                        try {
-                          const response = await fetch('/api/categories', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: newCategoryName.trim(), icon: newCategoryIcon || '📦' }),
-                          });
-                          if (response.ok) {
-                            const data = await response.json();
-                            const newCat = { id: data.category.name.toLowerCase().replace(/\s+/g, '_'), label: data.category.name, icon: data.category.icon };
-                            setCategories(prev => [...prev, newCat]);
-                            setAutomationCategory(newCat.id);
-                            setShowNewCategoryInput(false);
-                            setNewCategoryName('');
-                            setNewCategoryIcon('📦');
-                          }
-                        } catch (err) {
-                          console.error('Failed to create category:', err);
-                        }
-                      }}
-                      style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}
-                    >
-                      ✓
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNewCategoryInput(false);
-                        setNewCategoryName('');
-                        setNewCategoryIcon('📦');
-                      }}
-                      style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Description */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Description (optional)</label>
-                <textarea
-                  value={automationDescription}
-                  onChange={(e) => setAutomationDescription(e.target.value)}
-                  placeholder="What does this automation do?"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', minHeight: '80px', resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowSaveModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
-                <button onClick={saveAutomation} disabled={!automationName.trim()} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', opacity: !automationName.trim() ? 0.5 : 1 }}>Save</button>
-              </div>
             </div>
           </div>
         )}
@@ -3720,6 +3613,133 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             </div>
 
             <button onClick={() => setViewingPersona(null)} style={{ width: '100%', padding: '0.75rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Save Modal - Global so it works from both list and builder views */}
+      {showSaveModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#1a1a2e', borderRadius: '16px', padding: '1.5rem', maxWidth: '450px', width: '90%' }}>
+            <h3 style={{ color: '#fff', margin: '0 0 1rem' }}>💾 Save Automation</h3>
+
+            {/* Display Name */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Display Name</label>
+              <input
+                type="text"
+                value={automationDisplayName}
+                onChange={(e) => handleDisplayNameChange(e.target.value)}
+                placeholder="My Awesome Automation"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+              />
+            </div>
+
+            {/* ID (auto-generated from display name) */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>ID (snake_case)</label>
+              <input
+                type="text"
+                value={automationName}
+                onChange={(e) => setAutomationName(e.target.value)}
+                placeholder="my_awesome_automation"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontFamily: 'monospace' }}
+              />
+            </div>
+
+            {/* Category with create new option */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Category</label>
+              {!showNewCategoryInput ? (
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select
+                    value={automationCategory}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setShowNewCategoryInput(true);
+                      } else {
+                        setAutomationCategory(e.target.value);
+                      }
+                    }}
+                    style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'white\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
+                    ))}
+                    <option value="__new__">➕ Create New Category...</option>
+                  </select>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={newCategoryIcon}
+                    onChange={(e) => setNewCategoryIcon(e.target.value)}
+                    style={{ width: '50px', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', textAlign: 'center', fontSize: '1.1rem' }}
+                    placeholder="📦"
+                  />
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Category name..."
+                    style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!newCategoryName.trim()) return;
+                      try {
+                        const response = await fetch('/api/categories', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: newCategoryName.trim(), icon: newCategoryIcon || '📦' }),
+                        });
+                        if (response.ok) {
+                          const data = await response.json();
+                          const newCat = { id: data.category.name.toLowerCase().replace(/\s+/g, '_'), label: data.category.name, icon: data.category.icon };
+                          setCategories(prev => [...prev, newCat]);
+                          setAutomationCategory(newCat.id);
+                          setShowNewCategoryInput(false);
+                          setNewCategoryName('');
+                          setNewCategoryIcon('📦');
+                        }
+                      } catch (err) {
+                        console.error('Failed to create category:', err);
+                      }
+                    }}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', fontWeight: 500 }}
+                  >
+                    ✓
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNewCategoryInput(false);
+                      setNewCategoryName('');
+                      setNewCategoryIcon('📦');
+                    }}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Description */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>Description (optional)</label>
+              <textarea
+                value={automationDescription}
+                onChange={(e) => setAutomationDescription(e.target.value)}
+                placeholder="What does this automation do?"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', minHeight: '80px', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowSaveModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveAutomation} disabled={!automationName.trim()} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', cursor: 'pointer', opacity: !automationName.trim() ? 0.5 : 1 }}>Save</button>
+            </div>
           </div>
         </div>
       )}

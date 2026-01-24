@@ -358,6 +358,52 @@ export async function getEnabledServerTools(
 }
 
 /**
+ * Validate that a tool is enabled for a user's server
+ * Returns the tool details if valid, null if not authorized
+ *
+ * This prevents tool call spoofing - users can only call tools enabled for their server.
+ */
+export async function validateToolForServer(
+  toolName: string,
+  userId: string,
+  serverName: string = 'default'
+): Promise<ServerToolWithDetails | null> {
+  // First get the tool by name
+  const { data: toolData, error: toolError } = await supabase
+    .from('tools')
+    .select('id')
+    .eq('name', toolName)
+    .single();
+
+  if (toolError || !toolData) {
+    return null;
+  }
+
+  const toolId = (toolData as { id: string }).id;
+
+  // Now check if this tool is enabled for the user's server
+  const { data: serverTool, error: stError } = await supabase
+    .from('server_tools')
+    .select(`
+      *,
+      tool:tools(*),
+      environment:environments(name, host)
+    `)
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
+    .eq('tool_id', toolId)
+    .eq('is_enabled', true)
+    .single();
+
+  if (stError || !serverTool) {
+    // Tool exists but not enabled for this user's server
+    return null;
+  }
+
+  return serverTool as unknown as ServerToolWithDetails;
+}
+
+/**
  * Link a tool to a server (uses upsert to handle existing links)
  */
 export async function linkToolToServer(

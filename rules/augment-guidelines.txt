@@ -10,6 +10,7 @@ Workflows are defined in YAML format. The YAML is the **source of truth** - Merm
 ## Basic Structure
 
 ```yaml
+id: my_workflow              # Auto-generated from name if not provided
 name: "My Workflow"
 description: "What this workflow does"
 version: 1
@@ -34,6 +35,39 @@ steps:
 constraints:
   maxToolCalls: 50
   timeout: "5m"
+```
+
+## Workflow ID
+
+The `id` field is a unique identifier for the workflow in snake_case format.
+
+### Naming Convention
+
+| Name | Generated ID |
+|------|--------------|
+| `"Birthday Checker"` | `birthday_checker` |
+| `"My Awesome Workflow!"` | `my_awesome_workflow` |
+| `"Send Email - Daily Report"` | `send_email_daily_report` |
+| `"API v2 Integration"` | `api_v2_integration` |
+
+### Rules
+
+1. **Auto-generated**: If `id` is not provided, it's generated from `name`
+2. **Lowercase**: All characters are lowercased
+3. **Snake case**: Spaces and hyphens become underscores
+4. **Alphanumeric only**: Special characters are removed
+5. **No leading/trailing underscores**: Trimmed automatically
+
+### Example
+
+```yaml
+# These are equivalent:
+id: birthday_checker
+name: "Birthday Checker"
+
+# Or just provide name (id auto-generated):
+name: "Birthday Checker"
+# id will be: birthday_checker
 ```
 
 ## Trigger Types

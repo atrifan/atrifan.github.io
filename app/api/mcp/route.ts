@@ -19,6 +19,7 @@ import {
   getMCPServerToolDetails,
   getA2AAgentByToolName,
   getRAGByToolName,
+  validateToolForServer,
 } from '@/src/lib/supabase-services';
 import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
@@ -2021,6 +2022,29 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
       case 'tools/call': {
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
+
+        // Validate tool access - prevent tool call spoofing
+        // For non-NATIVE tools, verify the tool is enabled for this user's server
+        const toolDef = getToolDefinition(toolName);
+        if (!toolDef || toolDef.type !== TOOL_TYPES.NATIVE) {
+          // Non-NATIVE tool - must validate ownership
+          if (!context.isAuthenticated || !context.userId) {
+            return {
+              jsonrpc: '2.0',
+              id,
+              error: { code: -32001, message: 'Authentication required to call this tool' }
+            };
+          }
+
+          const serverTool = await validateToolForServer(toolName, context.userId, context.serverName);
+          if (!serverTool) {
+            return {
+              jsonrpc: '2.0',
+              id,
+              error: { code: -32002, message: `Tool '${toolName}' is not enabled for your server` }
+            };
+          }
+        }
 
         // Execute tool (async to support REST tools)
         const execContext: ExtendedToolContext = {

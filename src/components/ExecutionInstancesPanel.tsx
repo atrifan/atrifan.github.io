@@ -163,3 +163,113 @@ export function ExecutionInstancesPanel({ automationId, automationName, onClose 
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
         </div>
 
+        {/* Content */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Executions List */}
+          <div style={{ width: '350px', borderRight: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto' }}>
+            {loading ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>Loading...</div>
+            ) : executions.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>No executions yet</div>
+            ) : (
+              executions.map(exec => (
+                <div
+                  key={exec.id}
+                  onClick={() => setSelectedExecution(exec.id)}
+                  style={{
+                    padding: '0.75rem 1rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    cursor: 'pointer',
+                    background: selectedExecution === exec.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <span style={{ color: STATUS_COLORS[exec.status] || '#fff', fontSize: '0.85rem', fontWeight: 600 }}>
+                      {STATUS_ICONS[exec.status] || '•'} {exec.status}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>{exec.trigger_type}</span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.5rem' }}>
+                    {formatTime(exec.started_at)}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {exec.status === 'waiting_input' && (
+                      <a
+                        href={`/automation/${automationId}/running/${exec.id}/input`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', textDecoration: 'none' }}
+                      >
+                        📝 Provide Input
+                      </a>
+                    )}
+                    {['running', 'pending', 'waiting_input', 'paused'].includes(exec.status) && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleStop(exec.id); }}
+                        disabled={actionLoading === exec.id}
+                        style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', border: 'none', cursor: 'pointer' }}
+                      >
+                        🛑 Stop
+                      </button>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDelete(exec.id); }}
+                      disabled={actionLoading === exec.id}
+                      style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.65rem', border: 'none', cursor: 'pointer' }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                  {exec.error && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#ef4444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {exec.error}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Logs Panel */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {!selectedExecution ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>
+                Select an execution to view logs
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
+                    Instance ID: <code style={{ color: '#3b82f6' }}>{selectedExecution}</code>
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  {logsLoading ? (
+                    <div style={{ color: 'rgba(255,255,255,0.5)' }}>Loading logs...</div>
+                  ) : logs.length === 0 ? (
+                    <div style={{ color: 'rgba(255,255,255,0.5)' }}>No logs for this execution</div>
+                  ) : (
+                    logs.map(log => (
+                      <div key={log.id} style={{ marginBottom: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '80px' }}>
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span style={{ color: log.level === 'error' ? '#ef4444' : log.level === 'warn' ? '#f59e0b' : '#10b981', minWidth: '50px' }}>
+                          [{log.level}]
+                        </span>
+                        {log.step_name && <span style={{ color: '#3b82f6' }}>[{log.step_name}]</span>}
+                        <span style={{ color: '#fff' }}>{log.message}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

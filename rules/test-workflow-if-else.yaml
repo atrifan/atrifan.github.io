@@ -1,4 +1,5 @@
 name: "Birthday Checker"
+id: "birthday_checker"
 description: "Check if a person is an adult and calculate days until their next birthday"
 version: 1
 

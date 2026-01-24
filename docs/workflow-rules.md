@@ -10,6 +10,7 @@ Workflows are defined in YAML format. The YAML is the **source of truth** - Merm
 ## Basic Structure
 
 ```yaml
+id: my_workflow              # Auto-generated from name if not provided
 name: "My Workflow"
 description: "What this workflow does"
 version: 1
@@ -36,13 +37,62 @@ constraints:
   timeout: "5m"
 ```
 
+## Workflow ID
+
+The `id` field is a unique identifier for the workflow in snake_case format.
+
+### Naming Convention
+
+| Name | Generated ID |
+|------|--------------|
+| `"Birthday Checker"` | `birthday_checker` |
+| `"My Awesome Workflow!"` | `my_awesome_workflow` |
+| `"Send Email - Daily Report"` | `send_email_daily_report` |
+| `"API v2 Integration"` | `api_v2_integration` |
+
+### Rules
+
+1. **Auto-generated**: If `id` is not provided, it's generated from `name`
+2. **Lowercase**: All characters are lowercased
+3. **Snake case**: Spaces and hyphens become underscores
+4. **Alphanumeric only**: Special characters are removed
+5. **No leading/trailing underscores**: Trimmed automatically
+
+### Example
+
+```yaml
+# These are equivalent:
+id: birthday_checker
+name: "Birthday Checker"
+
+# Or just provide name (id auto-generated):
+name: "Birthday Checker"
+# id will be: birthday_checker
+```
+
 ## Trigger Types
+
+There are only 3 trigger types. The UI may show "pretty" schedule options (daily, weekly, etc.) but these all convert to cron expressions.
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `manual` | Triggered by user action in UI | On-demand tasks |
+| `cron` | Scheduled execution | Recurring tasks (daily, weekly, etc.) |
+| `webhook` | Triggered by external HTTP POST | External integrations, callbacks |
 
 ### Manual Trigger
 ```yaml
 trigger:
   type: manual
 ```
+Executed when user clicks "Run" in the UI or via API.
+
+### Webhook Trigger
+```yaml
+trigger:
+  type: webhook
+```
+Triggered via POST to `/api/ai/automations/{automation_id}/hook/{api_key}`.
 
 ### Cron Trigger
 ```yaml
@@ -52,22 +102,63 @@ trigger:
   timezone: "America/New_York"
 ```
 
+**Trigger Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"cron"` |
+| `schedule` | string | Yes | Cron expression (5 fields) |
+| `timezone` | string | No | IANA timezone (default: UTC) |
+
 **Cron Format:** `minute hour day-of-month month day-of-week`
+
+| Position | Field | Values | Special Characters |
+|----------|-------|--------|-------------------|
+| 1 | Minute | 0-59 | `*` `,` `-` `/` |
+| 2 | Hour | 0-23 | `*` `,` `-` `/` |
+| 3 | Day of Month | 1-31 | `*` `,` `-` `/` |
+| 4 | Month | 1-12 | `*` `,` `-` `/` |
+| 5 | Day of Week | 0-6 (Sun=0) | `*` `,` `-` `/` |
+
+**Special Characters:**
 - `*` = any value
-- `*/5` = every 5 units
-- `1,15` = specific values
-- `1-5` = range
+- `*/n` = every n units (e.g., `*/5` = every 5)
+- `n,m` = specific values (e.g., `1,15` = 1st and 15th)
+- `n-m` = range (e.g., `1-5` = Monday to Friday)
 
 **Common Schedules:**
 | Schedule | Cron Expression |
 |----------|-----------------|
 | Every minute | `* * * * *` |
 | Every 5 minutes | `*/5 * * * *` |
+| Every 15 minutes | `*/15 * * * *` |
+| Every 30 minutes | `*/30 * * * *` |
 | Hourly | `0 * * * *` |
+| Every 2 hours | `0 */2 * * *` |
+| Daily at midnight | `0 0 * * *` |
 | Daily at 9 AM | `0 9 * * *` |
+| Daily at 6 PM | `0 18 * * *` |
+| Weekdays at 9 AM | `0 9 * * 1-5` |
+| Weekends at 10 AM | `0 10 * * 0,6` |
 | Weekly (Monday 9 AM) | `0 9 * * 1` |
+| Bi-weekly (Mon/Thu 9 AM) | `0 9 * * 1,4` |
 | Monthly (1st at midnight) | `0 0 1 * *` |
+| Monthly (15th at noon) | `0 12 15 * *` |
+| Quarterly (1st of Jan/Apr/Jul/Oct) | `0 0 1 1,4,7,10 *` |
 | Yearly (Jan 1 at midnight) | `0 0 1 1 *` |
+
+**Common Timezones:**
+| Region | Timezone |
+|--------|----------|
+| US Eastern | `America/New_York` |
+| US Central | `America/Chicago` |
+| US Mountain | `America/Denver` |
+| US Pacific | `America/Los_Angeles` |
+| UK | `Europe/London` |
+| Central Europe | `Europe/Paris` |
+| India | `Asia/Kolkata` |
+| Japan | `Asia/Tokyo` |
+| Australia | `Australia/Sydney` |
+| UTC | `UTC` |
 
 ### Webhook Trigger
 ```yaml
@@ -314,6 +405,92 @@ With wait (synchronous):
   output: approvalResult
 ```
 
+### Delay Step
+Pause execution for a specified number of seconds.
+
+```yaml
+- id: waitBeforeRetry
+  delay: 5  # Wait 5 seconds
+```
+
+Use cases:
+- Rate limiting between API calls
+- Waiting for external processes
+- Polling intervals
+
+### Set Variable Step
+Explicitly set a variable value. Useful for initializing counters, flags, or computed values.
+
+```yaml
+- id: initCounter
+  set: counter
+  value: 0
+
+- id: setFlag
+  set: isProcessed
+  value: true
+
+- id: computeValue
+  set: fullName
+  value: "{{firstName}} {{lastName}}"
+```
+
+### Stop Step
+Stop execution immediately. Can be triggered programmatically or used to handle cancellation.
+
+```yaml
+- id: cancelExecution
+  stop:
+    reason: "User requested cancellation"
+    status: cancelled  # or completed (default: cancelled)
+```
+
+Use cases:
+- Graceful cancellation from external hooks
+- Early termination on critical errors
+- User-initiated stops
+
+### Wait For Variable Step
+Pause execution until a variable is set via external PUT request. Useful for waiting on external callbacks, approvals, or long-running processes.
+
+```yaml
+- id: waitForApproval
+  wait_for:
+    variable: approvalStatus  # Variable to wait for
+    timeout: 3600  # Timeout in seconds (default: 3600 = 1 hour)
+    pollInterval: 5  # Poll interval in seconds (default: 5)
+    condition: "approvalStatus === 'approved'"  # Optional condition
+  output: approvalResult
+```
+
+**Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `variable` | string | Yes | Variable name to wait for |
+| `timeout` | number | No | Timeout in seconds (default: 3600) |
+| `pollInterval` | number | No | Poll interval in seconds (default: 5) |
+| `condition` | string | No | JS condition to check (e.g., `"status === 'done'"`) |
+
+**External Variable Update:**
+External systems can set variables via PUT request:
+```
+PUT /api/ai/automations/{automation_id}/executions/{run_id}/variables
+Content-Type: application/json
+
+{
+  "variables": {
+    "approvalStatus": "approved",
+    "approvedBy": "manager@example.com"
+  }
+}
+```
+
+Use cases:
+- Waiting for external webhook callbacks
+- Human approval workflows
+- Long-running external process completion
+- Polling for third-party API status changes
+
 ## Variable References
 
 Use `{{variable}}` syntax to reference variables:
@@ -477,23 +654,39 @@ constraints:
 
 ---
 
-## Webhook Trigger Endpoint
+## Automation Execution API
 
-Every automation has a webhook endpoint that can be used to trigger it:
+### Authentication
+
+All execution endpoints support two authentication methods:
+
+1. **Clerk Session** (for UI/browser calls) - Automatic via cookies
+2. **API Key** (for external/programmatic calls):
+   - `Authorization: Bearer <api_key>` header
+   - `X-API-Key: <api_key>` header
+
+The API key is validated by hashing and looking up in the `api_keys` table, then verifying the user owns the automation.
+
+### API Endpoints Overview
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/ai/automations/{id}/hook/{api_key}` | API key in path | Start automation (webhook) |
+| GET | `/api/ai/automations/{id}/executions` | Session/API key | List all executions |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}` | Session/API key | Get execution status |
+| DELETE | `/api/ai/automations/{id}/executions/{instance_id}` | Session/API key | Stop/cancel execution |
+| DELETE | `/api/ai/automations/{id}/executions/{instance_id}?hard=true` | Session/API key | Delete execution |
+| POST | `/api/ai/automations/{id}/executions/{instance_id}/input` | Session/API key | Submit input to unblock |
+| PUT | `/api/ai/automations/{id}/executions/{instance_id}/variables` | Session/API key | Update variables |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}/variables` | Session/API key | Get current variables |
+| GET | `/api/ai/automations/{id}/executions/{instance_id}/logs` | Session/API key | Get execution logs |
+
+### Start Automation (Webhook)
 
 ```
 POST /api/ai/automations/{automation_id}/hook/{api_key}
-```
+Content-Type: application/json
 
-**Path Parameters:**
-- `automation_id`: UUID of the automation to trigger
-- `api_key`: Your API key for authentication (validates ownership)
-
-**Headers:**
-- `Content-Type: application/json`
-
-**Body:**
-```json
 {
   "inputs": {
     "field1": "value1",
@@ -505,7 +698,7 @@ POST /api/ai/automations/{automation_id}/hook/{api_key}
 **Response (success):**
 ```json
 {
-  "execution_id": "run-uuid",
+  "execution_id": "instance-uuid",
   "status": "running",
   "message": "Automation triggered successfully"
 }
@@ -514,25 +707,108 @@ POST /api/ai/automations/{automation_id}/hook/{api_key}
 **Response (waiting for input):**
 ```json
 {
-  "execution_id": "run-uuid",
+  "execution_id": "instance-uuid",
   "status": "waiting_input",
   "message": "Automation requires input before proceeding",
-  "input_url": "/automation/{id}/running/{runId}/input",
+  "input_url": "/automation/{automation_id}/running/{instance_id}/input",
   "missing_inputs": [
     {"name": "customer_email", "type": "string", "description": "Customer email"}
   ]
 }
 ```
 
+### Stop Execution
+
+```
+DELETE /api/ai/automations/{automation_id}/executions/{instance_id}
+```
+
+Sets status to `cancelled`. The executor polls for this and stops processing.
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "cancelled" }
+}
+```
+
+### Submit Input (Unblock waiting_input)
+
+When an execution is in `waiting_input` status, submit the required inputs to resume:
+
+```bash
+curl -X POST "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/input" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "customer_email": "user@example.com",
+      "approved": true
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "running" },
+  "message": "Inputs received, execution resumed"
+}
+```
+
+### Update Variables (for wait_for step)
+
+When an execution is polling for a variable (via `wait_for` step), set the variable externally:
+
+```bash
+curl -X PUT "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/variables" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "approvalStatus": "approved",
+      "approvedBy": "manager@example.com"
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "execution": { "id": "instance-uuid", "status": "running" },
+  "variables": { "approvalStatus": "approved", "approvedBy": "manager@example.com" }
+}
+```
+
+### Get Current Variables
+
+Check current execution variables:
+
+```bash
+curl -X GET "https://yourapp.com/api/ai/automations/{automation_id}/executions/{instance_id}/variables" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### UI Input Page
+
+Users can provide input via web form at:
+```
+/automation/{automation_id}/running/{instance_id}/input
+```
+
+This page shows:
+- Automation name and status
+- List of required inputs with descriptions
+- Form fields for each input
+- Timeout countdown (5 minutes)
+- Submit button
+
 ### Internal Calls (Automation-to-Automation)
 
-When triggering from within another automation, use the `x-internal-call: true` header to bypass API key validation:
-
-```yaml
-# In trigger_automation block, the system automatically:
-# 1. Adds x-internal-call: true header
-# 2. Uses the execution context's user_id for ownership validation
-```
+When triggering from within another automation, use the `x-internal-call: true` header to bypass API key validation.
 
 ### Cron Calls
 
@@ -545,23 +821,118 @@ Vercel Cron jobs use `x-cron-secret` header with `CRON_SECRET` env var for authe
 When an automation requires input that isn't available:
 
 1. **Execution pauses** with status `waiting_input`
-2. **Notifications sent** via all detected notification tools (email, Slack, push)
-3. **User receives link** to `/automation/{id}/running/{runId}/input`
-4. **User provides input** via the web form
+2. **Notifications sent** via configured channels (email, Slack, push)
+3. **User receives link** to `/automation/{automation_id}/running/{instance_id}/input`
+4. **User provides input** via web form or API
 5. **Execution resumes** automatically
 
-### Notification Message Format
+### ⏱️ Timeout Behavior
+
+**IMPORTANT:** Executions waiting for user input have a **5-minute timeout**.
+
+| Wait Type | Timeout | Behavior |
+|-----------|---------|----------|
+| `waiting_input` (missing inputs) | 5 minutes | Exits with `timeout_user_input` error |
+| `wait_for` (variable polling) | 5 minutes (default) | Exits with `timeout_wait_for` error |
+| `human` step (approval) | 5 minutes | Exits with `timeout_approval` error |
+
+After timeout, the execution status changes to `failed` with an appropriate error message.
+
+### Notification Message Templates
+
+#### Input Required Notification
 
 ```
-🤖 Automation "{name}" requires your input
-
-The following fields are needed to continue:
-- {field1}: {description}
-- {field2}: {description}
-
-Click here to provide input: {input_url}
+🤖 Automation "{automation_name}" requires your input
 
 Run ID: {execution_id}
+Status: Waiting for input
+
+The following fields are needed to continue:
+{missing_inputs_list}
+
+⏱️ This request will timeout in 5 minutes.
+
+📝 Provide input via UI:
+{input_url}
+
+🔧 Or via API (curl):
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "{field_name}": "{value}"
+    }
+  }'
+```
+
+#### Wait For Variable Notification
+
+```
+⏳ Automation "{automation_name}" is waiting for external event
+
+Run ID: {execution_id}
+Status: Waiting for variable "{variable_name}"
+
+The automation is polling for variable "{variable_name}" to be set.
+
+⏱️ This will timeout in {timeout_seconds} seconds.
+
+🔧 Set the variable via API:
+curl -X PUT "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/variables" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "{variable_name}": {value}
+    }
+  }'
+```
+
+#### Human Approval Notification
+
+```
+👤 Automation "{automation_name}" requires your approval
+
+Run ID: {execution_id}
+Step: {step_id}
+
+{approval_message}
+
+⏱️ This request will timeout in 5 minutes.
+
+📝 Respond via UI:
+{approval_url}
+
+🔧 Or via API:
+# Approve
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"approved": true}}'
+
+# Reject
+curl -X POST "{api_base_url}/api/ai/automations/{automation_id}/executions/{execution_id}/input" \
+  -H "Authorization: Bearer {api_key}" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"approved": false, "reason": "Rejected by user"}}'
+```
+
+#### Timeout Notification
+
+```
+⚠️ Automation "{automation_name}" timed out
+
+Run ID: {execution_id}
+Status: Failed
+Error: {timeout_type}
+
+The automation was waiting for {wait_description} but no response was received within 5 minutes.
+
+The execution has been marked as failed. You can:
+- View logs: {logs_url}
+- Retry: {retry_url}
 ```
 
 ### Configuring Input Requirements

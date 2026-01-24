@@ -491,6 +491,8 @@ Options:
   --inputs '{"key": "value"}'   Provide inputs as JSON
   --user-id <id>                User ID (or set TEST_USER_ID in .env.local)
   --live                        Use real MCP servers instead of mocks
+  --db                          Create execution record in database (requires --user-id)
+  --automation-id <id>          Automation UUID to link execution to (for --db mode)
   --dry-run                     Parse and validate only, don't execute
   --help, -h                    Show this help
 
@@ -508,6 +510,9 @@ Examples:
   # Live mode - uses real MCP servers (requires TEST_USER_ID in .env.local)
   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --live
 
+  # With database logging (creates execution record you can see in UI)
+  npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --live --db
+
   # Dry run - just validate the YAML
   npx tsx scripts/run-workflow.ts rules/my-workflow.yaml --dry-run
 `);
@@ -517,8 +522,10 @@ Examples:
   const yamlPath = args[0];
   const inputsIndex = args.indexOf('--inputs');
   const userIdIndex = args.indexOf('--user-id');
+  const automationIdIndex = args.indexOf('--automation-id');
   const dryRun = args.includes('--dry-run');
   const liveMode = args.includes('--live');
+  const dbMode = args.includes('--db');
 
   let inputs: Record<string, unknown> = {};
   if (inputsIndex !== -1 && args[inputsIndex + 1]) {
@@ -537,11 +544,27 @@ Examples:
     userId = process.env.TEST_USER_ID;
   }
 
+  let automationId: string | undefined;
+  if (automationIdIndex !== -1 && args[automationIdIndex + 1]) {
+    automationId = args[automationIdIndex + 1];
+  }
+
   // Validate live mode requirements
   if (liveMode && !userId) {
     console.error('❌ --live mode requires --user-id <id> or TEST_USER_ID in .env.local');
     console.error('   Example: --user-id user_2abc123xyz --live');
     console.error('   Or set TEST_USER_ID=user_xxx in .env.local');
+    process.exit(1);
+  }
+
+  // Validate db mode requirements
+  if (dbMode && !userId) {
+    console.error('❌ --db mode requires --user-id <id> or TEST_USER_ID in .env.local');
+    process.exit(1);
+  }
+
+  if (dbMode && (!supabaseUrl || !supabaseKey)) {
+    console.error('❌ --db mode requires STORAGE_SUPABASE_URL and STORAGE_SUPABASE_SERVICE_ROLE_KEY in .env.local');
     process.exit(1);
   }
 
@@ -586,9 +609,122 @@ Examples:
     }
     toolExecutor = createLiveToolExecutor(connectors, userId, baseUrl);
   }
-  
+
+  // Create Supabase client for DB mode
+  const supabase = dbMode && supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
+
+  // Create execution record in DB if --db flag is set
+  let executionId: string | undefined;
+  let dbAutomationId: string | undefined = automationId;
+
+  if (dbMode && supabase && userId) {
+    console.log('\n💾 Creating execution record in database...');
+
+    // If no automation ID provided, try to find or create one based on workflow id
+    if (!dbAutomationId && workflow.id) {
+      const { data: existingAuto } = await supabase
+        .from('automations')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', workflow.id)
+        .single();
+
+      if (existingAuto) {
+        dbAutomationId = existingAuto.id;
+        console.log(`   Found existing automation: ${dbAutomationId}`);
+      } else {
+        // Create a new automation record
+        const { data: newAuto, error: autoError } = await supabase
+          .from('automations')
+          .insert({
+            user_id: userId,
+            name: workflow.id,
+            display_name: workflow.name,
+            description: workflow.description || '',
+            category: 'general',
+            yaml_definition: yamlContent,
+            schedule_type: workflow.trigger?.type || 'manual',
+            status: 'active',
+          })
+          .select('id')
+          .single();
+
+        if (autoError) {
+          console.error('   ❌ Failed to create automation:', autoError.message);
+        } else if (newAuto) {
+          dbAutomationId = newAuto.id;
+          console.log(`   Created new automation: ${dbAutomationId}`);
+        }
+      }
+    }
+
+    if (dbAutomationId) {
+      // Create execution record
+      const { data: execution, error: execError } = await supabase
+        .from('automation_executions')
+        .insert({
+          automation_id: dbAutomationId,
+          status: 'running',
+          trigger_type: 'cli',
+          current_step: 'starting',
+          variables: inputs,
+        })
+        .select('id')
+        .single();
+
+      if (execError) {
+        console.error('   ❌ Failed to create execution:', execError.message);
+      } else if (execution) {
+        executionId = execution.id;
+        console.log(`   Execution ID: ${executionId}`);
+      }
+    }
+  }
+
+  // Helper to log to DB
+  const logToDb = async (level: string, stepName: string, message: string, status: string, durationMs?: number) => {
+    if (!supabase || !executionId || !dbAutomationId) return;
+    try {
+      await supabase.from('automation_logs').insert({
+        execution_id: executionId,
+        automation_id: dbAutomationId,
+        level,
+        step_name: stepName,
+        message,
+        status,
+        duration_ms: durationMs,
+      });
+    } catch (err) {
+      console.error('   Failed to log to DB:', err);
+    }
+  };
+
+  // Helper to update execution status
+  const updateExecutionStatus = async (status: string, error?: string, currentStep?: string) => {
+    if (!supabase || !executionId) return;
+    try {
+      const update: Record<string, unknown> = { status, current_step: currentStep };
+      if (status === 'completed' || status === 'failed') {
+        update.completed_at = new Date().toISOString();
+      }
+      if (error) {
+        update.error = error;
+      }
+      await supabase
+        .from('automation_executions')
+        .update(update)
+        .eq('id', executionId);
+    } catch (err) {
+      console.error('   Failed to update execution status:', err);
+    }
+  };
+
   console.log('\n🚀 Executing workflow...\n');
   console.log('─'.repeat(50));
+
+  const stepStartTimes: Record<string, number> = {};
 
   const options: ExecutorOptions = {
     toolExecutor,
@@ -596,13 +732,26 @@ Examples:
     collectedInputs: inputs,
     onStepStart: (stepId, stepType) => {
       console.log(`\n▶️  Step: ${stepId} (${stepType})`);
+      stepStartTimes[stepId] = Date.now();
+      if (dbMode) {
+        updateExecutionStatus('running', undefined, stepId);
+        logToDb('info', stepId, `Starting step: ${stepType}`, 'started');
+      }
     },
     onStepComplete: (stepId, result) => {
+      const duration = stepStartTimes[stepId] ? Date.now() - stepStartTimes[stepId] : undefined;
       console.log(`✅ Completed: ${stepId}`);
       console.log('   Result:', JSON.stringify(result, null, 2));
+      if (dbMode) {
+        logToDb('info', stepId, JSON.stringify(result).slice(0, 1000), 'completed', duration);
+      }
     },
     onStepError: (stepId, error) => {
+      const duration = stepStartTimes[stepId] ? Date.now() - stepStartTimes[stepId] : undefined;
       console.log(`❌ Error in ${stepId}: ${error.message}`);
+      if (dbMode) {
+        logToDb('error', stepId, error.message, 'failed', duration);
+      }
     },
   };
 
@@ -618,6 +767,20 @@ Examples:
     if (result.error) {
       console.log(`   Error: ${result.error}`);
     }
+
+    // Update final status in DB
+    if (dbMode) {
+      await updateExecutionStatus(result.status, result.error, 'finished');
+      await logToDb('info', 'workflow', `Workflow ${result.status}`, result.status);
+      console.log(`\n💾 Execution record updated: ${executionId}`);
+    }
+  } catch (err) {
+    if (dbMode) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await updateExecutionStatus('failed', errorMsg, 'error');
+      await logToDb('error', 'workflow', errorMsg, 'failed');
+    }
+    throw err;
   } finally {
     // Clean up MCP clients
     for (const [id, client] of mcpClients) {

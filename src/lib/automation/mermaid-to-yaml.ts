@@ -1,6 +1,6 @@
 /**
  * Mermaid to YAML Parser
- * 
+ *
  * Parses structured Mermaid diagrams back to WorkflowDefinition.
  * This enables bidirectional sync between visual editor and YAML.
  */
@@ -24,6 +24,20 @@ import {
   ParsedMermaid,
   MermaidNodeType,
 } from './types';
+
+/**
+ * Normalize a name to snake_case ID
+ * "Birthday Checker" -> "birthday_checker"
+ * "My Awesome Workflow!" -> "my_awesome_workflow"
+ */
+export function normalizeNameToId(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s_-]/g, '') // Remove special chars except spaces, underscores, hyphens
+    .replace(/[\s-]+/g, '_')        // Replace spaces and hyphens with underscores
+    .replace(/_+/g, '_')            // Collapse multiple underscores
+    .replace(/^_|_$/g, '');         // Trim leading/trailing underscores
+}
 
 // Emoji to type mapping
 const EMOJI_TO_TYPE: Record<string, MermaidNodeType> = {
@@ -345,8 +359,11 @@ export function mermaidToWorkflow(
     traverse(triggerNode.id);
   }
 
+  const name = existingWorkflow?.name || 'Untitled Workflow';
+
   return {
-    name: existingWorkflow?.name || 'Untitled Workflow',
+    id: existingWorkflow?.id || normalizeNameToId(name),
+    name,
     description: existingWorkflow?.description,
     version: existingWorkflow?.version || 1,
     trigger,
@@ -645,6 +662,10 @@ function describeCron(cron: string): string {
 export function workflowToYamlString(workflow: WorkflowDefinition): string {
   const lines: string[] = [];
 
+  // Auto-generate id from name if not provided
+  const id = workflow.id || normalizeNameToId(workflow.name);
+
+  lines.push(`id: ${id}`);
   lines.push(`name: "${workflow.name}"`);
   if (workflow.description) {
     lines.push(`description: "${workflow.description}"`);

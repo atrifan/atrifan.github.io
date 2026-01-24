@@ -2,7 +2,7 @@
   "user_id": "tulzo",
   "rag_name": "website",
   "description": "Tulzo website pages for smart search - Free tier accessible pages",
-  "updated": "2026-01-19",
+  "updated": "2026-01-24",
   "entries": [
     {
       "id": "page-home",
@@ -225,6 +225,42 @@
       "title": "MCP Composer",
       "link": "/dashboard/mcp-composer",
       "content": "MCP Creator - Create Custom MCP Servers. Create custom MCP servers with only the tools you need. Build focused tool sets for better AI performance and fewer collisions. Select specific tools and generate unique MCP endpoint."
+    },
+    {
+      "id": "page-automation",
+      "title": "Automation Builder",
+      "link": "/automation",
+      "content": "Automation Builder - Create AI-Powered Workflows. Build automated workflows using YAML or visual chat interface. Chain tools together with conditions, loops, and human-in-the-loop steps. Schedule automations with cron expressions or trigger via webhooks. Monitor running instances, view logs, and manage executions."
+    },
+    {
+      "id": "feature-automation-yaml",
+      "title": "Automation YAML Syntax",
+      "link": "/automation",
+      "content": "Automation YAML Workflow Definition. Define workflows with: id (snake_case identifier), name (display name), description, version, trigger (manual/cron/webhook), inputs (parameters), steps (tool calls, code, LLM, conditions, loops), constraints (timeout, max tool calls). Steps support: tool calls, code execution, LLM prompts, if/else conditions, for/while loops, human approval, notifications, return values."
+    },
+    {
+      "id": "feature-automation-triggers",
+      "title": "Automation Triggers",
+      "link": "/automation",
+      "content": "Automation Trigger Types. Manual: Run on demand from UI or API. Cron: Schedule with cron expressions (daily, weekly, monthly). Webhook: Trigger via HTTP POST with API key. Event: React to external events. All triggers support input parameters and can be monitored in real-time."
+    },
+    {
+      "id": "feature-automation-steps",
+      "title": "Automation Step Types",
+      "link": "/automation",
+      "content": "Automation Workflow Steps. Tool Call: Execute any MCP tool with parameters. Code: Run JavaScript/TypeScript code. LLM: Generate text with AI models. If/Else: Conditional branching. For/While: Loop constructs. Human: Request approval or input. Notify: Send notifications. Wait For: Poll for external events. Return: End workflow with output."
+    },
+    {
+      "id": "feature-automation-api",
+      "title": "Automation Execution API",
+      "link": "/automation",
+      "content": "Automation Execution API. Start automation: POST /api/ai/automations/{id}/hook/{api_key}. Get status: GET /api/ai/automations/{id}/executions/{run_id}. Submit input: POST /api/ai/automations/{id}/executions/{run_id}/input. Update variables: PUT /api/ai/automations/{id}/executions/{run_id}/variables. View logs: GET /api/ai/automations/{id}/executions/{run_id}/logs. Stop execution: DELETE /api/ai/automations/{id}/executions/{run_id}."
+    },
+    {
+      "id": "feature-automation-hitl",
+      "title": "Human-in-the-Loop Automation",
+      "link": "/automation",
+      "content": "Human-in-the-Loop Automation. Pause workflows for human approval or input. 5-minute timeout for waiting states. Notifications via email, Slack, or push. Provide input via UI form or API curl command. Resume automatically after input received. Timeout results in failed execution with error message."
     }
   ]
 }

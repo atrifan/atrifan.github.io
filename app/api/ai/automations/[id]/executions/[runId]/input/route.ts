@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateExecutionAccess } from '@/src/lib/automation/auth';
 
 const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
@@ -7,6 +8,11 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 /**
  * POST /api/ai/automations/[id]/executions/[runId]/input
  * Submit required inputs for a waiting execution
+ *
+ * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
+ *
+ * Note: The input page (/automation/[id]/running/[runId]/input) uses Clerk session.
+ * External systems can use API key in Authorization header.
  */
 export async function POST(
   request: NextRequest,
@@ -14,6 +20,13 @@ export async function POST(
 ) {
   try {
     const { id: automationId, runId } = await params;
+
+    // Validate access
+    const authResult = await validateExecutionAccess(request, automationId, runId);
+    if (authResult.error) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse body
