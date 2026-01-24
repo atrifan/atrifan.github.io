@@ -1,5 +1,5 @@
 -- Auto-generated tool definitions from tools-definitions.ts
--- Generated at: 2026-01-24T05:56:21.357Z
+-- Generated at: 2026-01-24T14:55:08.376Z
 
 INSERT INTO tools (name, description, category, tool_type, has_widget, invoking_message, invoked_message, input_schema, output_schema, user_id) VALUES
   (
@@ -356,15 +356,15 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
     NULL
   ),
   (
-    'send_gmail',
-    'Send an email using the user''s Gmail account. Requires the user to have logged in with Google and granted Gmail permissions. The email is sent FROM the user''s own Gmail address. Perfect for self-notifications, reminders, or sending reports to yourself.',
+    'send_email',
+    'Send an email notification using Resend. Emails are sent from a verified domain. Perfect for notifications, reminders, alerts, or sending reports.',
     'Notifications',
     'NATIVE',
     false,
-    'Sending email via Gmail...',
+    'Sending email...',
     'Email sent',
-    '{"type":"object","properties":{"to":{"type":"string","description":"Recipient email address. Use \"me\" or leave empty to send to yourself."},"subject":{"type":"string","description":"Email subject line (required)"},"body":{"type":"string","description":"Email body - plain text or HTML (required)"},"isHtml":{"type":"boolean","description":"Whether body is HTML (default: false, plain text)"},"cc":{"type":"string","description":"CC recipients (comma-separated emails, optional)"},"bcc":{"type":"string","description":"BCC recipients (comma-separated emails, optional)"}},"required":["subject","body"]}'::jsonb,
-    '{"type":"object","properties":{"success":{"type":"boolean","description":"Whether email was sent successfully"},"messageId":{"type":"string","description":"Gmail message ID of sent email"},"threadId":{"type":"string","description":"Gmail thread ID"},"to":{"type":"string","description":"Recipient email address"},"error":{"type":"string","description":"Error message if failed"}}}'::jsonb,
+    '{"type":"object","properties":{"to":{"type":"string","description":"Recipient email address (required)"},"subject":{"type":"string","description":"Email subject line (required)"},"body":{"type":"string","description":"Email body - plain text or HTML (required)"},"isHtml":{"type":"boolean","description":"Whether body is HTML (default: false, plain text)"}},"required":["to","subject","body"]}'::jsonb,
+    '{"type":"object","properties":{"success":{"type":"boolean","description":"Whether email was sent successfully"},"id":{"type":"string","description":"Resend email ID"},"to":{"type":"string","description":"Recipient email address"},"error":{"type":"string","description":"Error message if failed"}}}'::jsonb,
     NULL
   )
 ON CONFLICT (name) DO UPDATE SET

@@ -1,97 +1,98 @@
-name: "Birthday Checker"
-id: "birthday_checker"
-description: "Check if a person is an adult and calculate days until their next birthday"
+name: "Notification Tester"
+id: "notification_tester"
+description: "Test push notifications and email notifications"
 version: 1
 
 trigger:
   type: manual
 
 inputs:
-  - name: birthDate
-    type: string
-    required: true
-    description: "Birth date in YYYY-MM-DD format"
   - name: notifyEmail
     type: string
+    required: true
+    description: "Email address to send test notification"
+  - name: testMessage
+    type: string
     required: false
-    description: "Email to send notification (optional)"
+    default: "This is a test notification from Tulzo!"
+    description: "Custom message for the notification"
 
 steps:
-  # Step 1: Calculate age from birthdate
-  - id: getAge
-    tool: default.calculate_age
+  # Step 1: Send push notification
+  - id: sendPush
+    tool: default.send_push_notification
     params:
-      birthDate: "{{birthDate}}"
-    output: ageResult
+      title: "🔔 Test Notification"
+      body: "{{testMessage}}"
+      type: "automation"
+      requireInteraction: true
+    output: pushResult
 
-  # Step 2: Get date info for today
-  - id: getTodayInfo
-    tool: default.when_date_info
-    params:
-      date: "{{new Date().toISOString().split('T')[0]}}"
-    output: todayInfo
-
-  # Step 3: Check if adult (18+) with if/else
-  - id: checkAdult
-    if: ageResult.years >= 18
+  # Step 2: Check push result and send email
+  - id: checkPushResult
+    if: pushResult.success === true
     then:
-      # Adult path
-      - id: setAdultStatus
-        set: status
-        value: "adult"
-      
-      - id: setMessage
-        set: message
-        value: "You are {{ageResult.years}} years old - an adult! 🎉"
-      
-      # Check if birthday is coming soon (within 30 days)
-      - id: checkBirthdaySoon
-        if: ageResult.daysUntilBirthday <= 30
-        then:
-          - id: setBirthdayMessage
-            set: birthdayAlert
-            value: "🎂 Your birthday is in {{ageResult.daysUntilBirthday}} days!"
-        else:
-          - id: setNoBirthdayAlert
-            set: birthdayAlert
-            value: "Your next birthday is on {{ageResult.nextBirthday}}"
-    
+      - id: setPushStatus
+        set: pushStatus
+        value: "✅ Push notification sent to {{pushResult.sent}} device(s)"
     else:
-      # Minor path
-      - id: setMinorStatus
-        set: status
-        value: "minor"
-      
-      - id: setMinorMessage
-        set: message
-        value: "You are {{ageResult.years}} years old - a minor. You'll be an adult in {{18 - ageResult.years}} years."
-      
-      - id: setMinorBirthdayAlert
-        set: birthdayAlert
-        value: "Your next birthday is on {{ageResult.nextBirthday}} ({{ageResult.daysUntilBirthday}} days away)"
+      - id: setPushFailed
+        set: pushStatus
+        value: "❌ Push notification failed: {{pushResult.message}}"
 
-  # Step 4: Build summary
+  # Step 3: Send email notification via Resend
+  - id: sendEmail
+    tool: default.send_email
+    params:
+      to: "{{notifyEmail}}"
+      subject: "🧪 Test Email from Tulzo Automation"
+      body: |
+        <h1>Test Email Notification</h1>
+        <p>{{testMessage}}</p>
+        <hr>
+        <p><strong>Push Notification Status:</strong> {{pushStatus}}</p>
+        <p><em>Sent at: {{new Date().toISOString()}}</em></p>
+      isHtml: true
+    output: emailResult
+
+  # Step 4: Check email result
+  - id: checkEmailResult
+    if: emailResult.success === true
+    then:
+      - id: setEmailStatus
+        set: emailStatus
+        value: "✅ Email sent successfully to {{notifyEmail}}"
+    else:
+      - id: setEmailFailed
+        set: emailStatus
+        value: "❌ Email failed: {{emailResult.error}}"
+
+  # Step 5: Build summary
   - id: buildSummary
     code: |
       ({
-        status: status,
-        age: ageResult.years,
-        totalDaysLived: ageResult.totalDays,
-        message: message,
-        birthdayAlert: birthdayAlert,
-        todayIs: todayInfo.dayOfWeek,
-        zodiacSign: todayInfo.zodiacSign
+        pushNotification: {
+          success: pushResult.success,
+          devicesSent: pushResult.sent || 0,
+          status: pushStatus
+        },
+        emailNotification: {
+          success: emailResult.success,
+          recipient: notifyEmail,
+          status: emailStatus
+        },
+        testMessage: testMessage,
+        timestamp: new Date().toISOString()
       })
     output: summary
 
-  # Step 5: Return the result
+  # Step 6: Return the result
   - id: done
     return:
       success: true
       data: "{{summary}}"
-      checkedAt: "{{new Date().toISOString()}}"
+      message: "Notification test complete"
 
 constraints:
   maxToolCalls: 10
   timeout: "1m"
-

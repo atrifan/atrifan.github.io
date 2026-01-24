@@ -614,7 +614,7 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
     }
   },
 
-  send_gmail: async (args, context) => {
+  send_email: async (args, context) => {
     if (!context?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
@@ -622,7 +622,7 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
 
     try {
-      const response = await fetch(`${baseUrl}/api/gmail/send`, {
+      const response = await fetch(`${baseUrl}/api/email/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -630,12 +630,10 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
           'X-User-Id': context.userId,
         },
         body: JSON.stringify({
-          to: args.to as string || 'me',
+          to: args.to as string,
           subject: args.subject as string,
           body: args.body as string,
           isHtml: args.isHtml as boolean,
-          cc: args.cc as string,
-          bcc: args.bcc as string,
         }),
       });
 

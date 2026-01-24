@@ -88,11 +88,15 @@ export function usePushNotifications() {
       const permission = Notification.permission;
       
       // Check if already subscribed
+      // Note: We use getRegistration() instead of .ready because .ready never resolves
+      // if no service worker is registered yet (which is the case on first visit)
       let isSubscribed = false;
       try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        isSubscribed = !!subscription;
+        const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+        if (registration) {
+          const subscription = await registration.pushManager.getSubscription();
+          isSubscribed = !!subscription;
+        }
       } catch {
         // Ignore errors
       }

@@ -1110,30 +1110,27 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
   },
 
   {
-    name: 'send_gmail',
-    description: 'Send an email using the user\'s Gmail account. Requires the user to have logged in with Google and granted Gmail permissions. The email is sent FROM the user\'s own Gmail address. Perfect for self-notifications, reminders, or sending reports to yourself.',
+    name: 'send_email',
+    description: 'Send an email notification using Resend. Emails are sent from a verified domain. Perfect for notifications, reminders, alerts, or sending reports.',
     category: TOOL_CATEGORIES.NOTIFICATIONS,
     type: TOOL_TYPES.NATIVE,
     hasWidget: false,
-    invocationMessages: { invoking: 'Sending email via Gmail...', invoked: 'Email sent' },
+    invocationMessages: { invoking: 'Sending email...', invoked: 'Email sent' },
     inputSchema: {
       type: 'object',
       properties: {
-        to: { type: 'string', description: 'Recipient email address. Use "me" or leave empty to send to yourself.' },
+        to: { type: 'string', description: 'Recipient email address (required)' },
         subject: { type: 'string', description: 'Email subject line (required)' },
         body: { type: 'string', description: 'Email body - plain text or HTML (required)' },
         isHtml: { type: 'boolean', description: 'Whether body is HTML (default: false, plain text)' },
-        cc: { type: 'string', description: 'CC recipients (comma-separated emails, optional)' },
-        bcc: { type: 'string', description: 'BCC recipients (comma-separated emails, optional)' },
       },
-      required: ['subject', 'body'],
+      required: ['to', 'subject', 'body'],
     },
     outputSchema: {
       type: 'object',
       properties: {
         success: { type: 'boolean', description: 'Whether email was sent successfully' },
-        messageId: { type: 'string', description: 'Gmail message ID of sent email' },
-        threadId: { type: 'string', description: 'Gmail thread ID' },
+        id: { type: 'string', description: 'Resend email ID' },
         to: { type: 'string', description: 'Recipient email address' },
         error: { type: 'string', description: 'Error message if failed' },
       },

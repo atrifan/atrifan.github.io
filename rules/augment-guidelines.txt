@@ -1039,12 +1039,12 @@ Common cron expressions:
 
 The following tools are available from your active connectors. Use the full tool name (server.tool_name) in your workflow steps.
 
-**Total Connectors:** 1 | **Total Tools:** 23
+**Total Connectors:** 1 | **Total Tools:** 29
 
 ### Default Key
 - **Server Name:** `default`
 - **Type:** Internal MCP
-- **Tools:** 23
+- **Tools:** 29
 
 #### `default.find_next_eclipse`
 
@@ -1327,6 +1327,117 @@ steps:
       compoundingFrequency: "example"
       monthlyFixedExpenses: 123
       savingsDurationMonths: 123
+```
+
+---
+
+#### `default.send_push_notification`
+
+**Description:** Send a push notification to the user's registered devices (browser/mobile). Use this to alert users about automation status, required inputs, errors, or any important updates. The notification will appear in the browser or on mobile devices that have enabled push notifications.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "title",
+    "body"
+  ],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "description": "Tag for grouping notifications - same tag replaces previous (optional)"
+    },
+    "url": {
+      "type": "string",
+      "description": "URL to open when notification is clicked (optional)"
+    },
+    "body": {
+      "type": "string",
+      "description": "Notification body message (required, max 200 chars)"
+    },
+    "type": {
+      "enum": [
+        "automation",
+        "input_required",
+        "error",
+        "success",
+        "info"
+      ],
+      "type": "string",
+      "description": "Notification type - determines icon and behavior (default: info)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Notification title (required, max 50 chars)"
+    },
+    "executionId": {
+      "type": "string",
+      "description": "Associated execution ID for deep linking (optional)"
+    },
+    "automationId": {
+      "type": "string",
+      "description": "Associated automation ID for deep linking (optional)"
+    },
+    "requireInteraction": {
+      "type": "boolean",
+      "description": "Keep notification visible until user interacts (default: false)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `tag` (string): Tag for grouping notifications - same tag replaces previous (optional)
+- `url` (string): URL to open when notification is clicked (optional)
+- `body` (string, required): Notification body message (required, max 200 chars)
+- `type` (string): Notification type - determines icon and behavior (default: info)
+- `title` (string, required): Notification title (required, max 50 chars)
+- `executionId` (string): Associated execution ID for deep linking (optional)
+- `automationId` (string): Associated automation ID for deep linking (optional)
+- `requireInteraction` (boolean): Keep notification visible until user interacts (default: false)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "sent": {
+      "type": "number",
+      "description": "Number of devices notification was sent to"
+    },
+    "failed": {
+      "type": "number",
+      "description": "Number of failed deliveries"
+    },
+    "message": {
+      "type": "string",
+      "description": "Status message"
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Whether notification was sent successfully"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_send_push_notification
+    type: action
+    name: "Use send_push_notification"
+    tool: "default.send_push_notification"
+    input:
+      tag: "example"
+      url: "example"
+      body: "example"
+      type: "example"
+      title: "example"
+      executionId: "example"
+      automationId: "example"
+      requireInteraction: true
 ```
 
 ---
@@ -2256,6 +2367,87 @@ steps:
 
 ---
 
+#### `default.send_email`
+
+**Description:** Send an email notification using Resend. Emails are sent from a verified domain. Perfect for notifications, reminders, alerts, or sending reports.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "to",
+    "subject",
+    "body"
+  ],
+  "properties": {
+    "to": {
+      "type": "string",
+      "description": "Recipient email address (required)"
+    },
+    "body": {
+      "type": "string",
+      "description": "Email body - plain text or HTML (required)"
+    },
+    "isHtml": {
+      "type": "boolean",
+      "description": "Whether body is HTML (default: false, plain text)"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject line (required)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `to` (string, required): Recipient email address (required)
+- `body` (string, required): Email body - plain text or HTML (required)
+- `isHtml` (boolean): Whether body is HTML (default: false, plain text)
+- `subject` (string, required): Email subject line (required)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resend email ID"
+    },
+    "to": {
+      "type": "string",
+      "description": "Recipient email address"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message if failed"
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Whether email was sent successfully"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_send_email
+    type: action
+    name: "Use send_email"
+    tool: "default.send_email"
+    input:
+      to: "example"
+      body: "example"
+      isHtml: true
+      subject: "example"
+```
+
+---
+
 #### `default.rest_production-httpbin-get-getrequest`
 
 **Description:** Returns GET data including args, headers, origin and url
@@ -2300,6 +2492,216 @@ steps:
     input:
       param1: "example"
       param2: "example"
+```
+
+---
+
+#### `default.convert_units`
+
+**Description:** Convert between different units of measurement. Supports weight (kg, lbs, oz, g), length (cm, in, m, ft, km, mi, mm), and temperature (c, f, k).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "value",
+    "from",
+    "to"
+  ],
+  "properties": {
+    "to": {
+      "enum": [
+        "kg",
+        "lbs",
+        "oz",
+        "g",
+        "cm",
+        "in",
+        "m",
+        "ft",
+        "km",
+        "mi",
+        "mm",
+        "c",
+        "f",
+        "k"
+      ],
+      "type": "string",
+      "description": "Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
+    },
+    "from": {
+      "enum": [
+        "kg",
+        "lbs",
+        "oz",
+        "g",
+        "cm",
+        "in",
+        "m",
+        "ft",
+        "km",
+        "mi",
+        "mm",
+        "c",
+        "f",
+        "k"
+      ],
+      "type": "string",
+      "description": "Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)"
+    },
+    "value": {
+      "type": "number",
+      "description": "Value to convert"
+    },
+    "category": {
+      "enum": [
+        "weight",
+        "length",
+        "temperature"
+      ],
+      "type": "string",
+      "description": "Optional: category hint for the conversion"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `to` (string, required): Target unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
+- `from` (string, required): Source unit (kg, lbs, oz, g, cm, in, m, ft, km, mi, mm, c, f, k)
+- `value` (number, required): Value to convert
+- `category` (string): Optional: category hint for the conversion
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "to": {
+      "type": "string",
+      "description": "Target unit"
+    },
+    "from": {
+      "type": "string",
+      "description": "Source unit"
+    },
+    "value": {
+      "type": "number",
+      "description": "Original value"
+    },
+    "result": {
+      "type": "number",
+      "description": "Converted value"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_convert_units
+    type: action
+    name: "Use convert_units"
+    tool: "default.convert_units"
+    input:
+      to: "example"
+      from: "example"
+      value: 123
+      category: "example"
+```
+
+---
+
+#### `default.sleep_calculator`
+
+**Description:** Calculate optimal sleep and wake times based on sleep cycles. Supports three modes: sleepNow (when to wake if sleeping now), wakeAt (when to sleep for target wake time), sleepAt (when to wake for target sleep time). Adjusts for different age groups.
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "calculatorMode"
+  ],
+  "properties": {
+    "ageGroup": {
+      "enum": [
+        "adult",
+        "teen",
+        "child",
+        "toddler",
+        "infant"
+      ],
+      "type": "string",
+      "description": "Age group for sleep recommendations (default: adult)"
+    },
+    "targetTime": {
+      "type": "string",
+      "description": "Target time in HH:MM format (required for wakeAt and sleepAt modes)"
+    },
+    "calculatorMode": {
+      "enum": [
+        "sleepNow",
+        "wakeAt",
+        "sleepAt"
+      ],
+      "type": "string",
+      "description": "sleepNow: calculate wake times from now. wakeAt: calculate sleep times for target wake. sleepAt: calculate wake times for target sleep."
+    }
+  }
+}
+```
+
+**Parameters:**
+- `ageGroup` (string): Age group for sleep recommendations (default: adult)
+- `targetTime` (string): Target time in HH:MM format (required for wakeAt and sleepAt modes)
+- `calculatorMode` (string, required): sleepNow: calculate wake times from now. wakeAt: calculate sleep times for target wake. sleepAt: calculate wake times for target sleep.
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "description": "Calculator mode used"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of sleep/wake time options with cycles and quality"
+    },
+    "ageGroup": {
+      "type": "string",
+      "description": "Age group used"
+    },
+    "inputTime": {
+      "type": "string",
+      "description": "Input time if provided"
+    },
+    "recommendation": {
+      "type": "object",
+      "description": "Sleep recommendation for age group (min, max, optimal hours)"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_sleep_calculator
+    type: action
+    name: "Use sleep_calculator"
+    tool: "default.sleep_calculator"
+    input:
+      ageGroup: "example"
+      targetTime: "example"
+      calculatorMode: "example"
 ```
 
 ---
@@ -2892,6 +3294,122 @@ steps:
 
 ---
 
+#### `default.generate_weight_loss_plan`
+
+**Description:** Generate a complete weight loss plan with calorie targets and fasting recommendations
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "age",
+    "sex",
+    "height",
+    "currentWeight",
+    "desiredWeight"
+  ],
+  "properties": {
+    "age": {
+      "type": "number",
+      "description": "Age in years"
+    },
+    "sex": {
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ],
+      "type": "string"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height in centimeters"
+    },
+    "timeToWeight": {
+      "type": "number",
+      "description": "Weeks to reach goal (optional)"
+    },
+    "activityLevel": {
+      "enum": [
+        "sedentary",
+        "light",
+        "moderate",
+        "active",
+        "veryActive"
+      ],
+      "type": "string"
+    },
+    "currentWeight": {
+      "type": "number",
+      "description": "Current weight in kg"
+    },
+    "desiredWeight": {
+      "type": "number",
+      "description": "Target weight in kg"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `age` (number, required): Age in years
+- `sex` (string, required): 
+- `height` (number, required): Height in centimeters
+- `timeToWeight` (number): Weeks to reach goal (optional)
+- `activityLevel` (string): 
+- `currentWeight` (number, required): Current weight in kg
+- `desiredWeight` (number, required): Target weight in kg
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "bmr": {
+      "type": "number"
+    },
+    "tdee": {
+      "type": "number"
+    },
+    "weeksToGoal": {
+      "type": "number"
+    },
+    "targetWeight": {
+      "type": "number"
+    },
+    "currentWeight": {
+      "type": "number"
+    },
+    "dailyCalories": {
+      "type": "number"
+    },
+    "weeklyWeightLoss": {
+      "type": "number"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_generate_weight_loss_plan
+    type: action
+    name: "Use generate_weight_loss_plan"
+    tool: "default.generate_weight_loss_plan"
+    input:
+      age: 123
+      sex: "example"
+      height: 123
+      timeToWeight: 123
+      activityLevel: "example"
+      currentWeight: 123
+      desiredWeight: 123
+```
+
+---
+
 #### `default.blood_calculator`
 
 **Description:** Blood calculator with three modes: "donation" (check donation eligibility), "compatibility" (blood type transfusion compatibility), "baby" (predict baby blood type from parents). Mode determines required fields - tool will error with missing fields for each mode.
@@ -3122,6 +3640,96 @@ steps:
       calculatorMode: "example"
       fatherBloodType: "example"
       motherBloodType: "example"
+```
+
+---
+
+#### `default.calculate_percentage`
+
+**Description:** Calculate percentages with 5 operations: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y + X%), decreaseByPercent (Y - X%), percentChange (change from X to Y as %).
+
+**Input Schema:**
+```json
+{
+  "type": "object",
+  "required": [
+    "operation",
+    "value1",
+    "value2"
+  ],
+  "properties": {
+    "value1": {
+      "type": "number",
+      "description": "First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange"
+    },
+    "value2": {
+      "type": "number",
+      "description": "Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange"
+    },
+    "operation": {
+      "enum": [
+        "whatIsXPercentOfY",
+        "xIsWhatPercentOfY",
+        "increaseByPercent",
+        "decreaseByPercent",
+        "percentChange"
+      ],
+      "type": "string",
+      "description": "Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `value1` (number, required): First value: percentage for whatIs/increase/decrease, or base value for percentOf/percentChange
+- `value2` (number, required): Second value: base value for whatIs/increase/decrease, or total for percentOf, or new value for percentChange
+- `operation` (string, required): Operation: whatIsXPercentOfY (X% of Y), xIsWhatPercentOfY (X is what % of Y), increaseByPercent (Y increased by X%), decreaseByPercent (Y decreased by X%), percentChange (% change from X to Y)
+
+**Output Schema:**
+```json
+{
+  "type": "object",
+  "properties": {
+    "result": {
+      "type": "number",
+      "description": "The calculated result"
+    },
+    "value1": {
+      "type": "number",
+      "description": "First input value"
+    },
+    "value2": {
+      "type": "number",
+      "description": "Second input value"
+    },
+    "operation": {
+      "type": "string",
+      "description": "The operation performed"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Human-readable explanation of the calculation"
+    },
+    "resultIsPercent": {
+      "type": "boolean",
+      "description": "Whether the result is a percentage"
+    }
+  }
+}
+```
+
+**Usage Example:**
+```yaml
+steps:
+  - id: use_calculate_percentage
+    type: action
+    name: "Use calculate_percentage"
+    tool: "default.calculate_percentage"
+    input:
+      value1: 123
+      value2: 123
+      operation: "example"
 ```
 
 ---
@@ -3709,9 +4317,34 @@ steps:
 
 ## Detected Notification Tools
 
-*No notification tools detected. Add connectors with email, Slack, or push notification capabilities to enable notifications.*
+The following notification tools were auto-detected from your connectors:
 
-> **Note:** Notification tools are auto-detected based on tool names and descriptions containing keywords like "email", "slack", "push", "sms", etc.
+### 🔔 Push
+
+- `default.send_push_notification` - Send a push notification to the user's registered devices (browser/mobile). Use this to alert users about automation status, required inputs, errors, or any important updates. The notification will appear in the browser or on mobile devices that have enabled push notifications.
+
+### 📧 Email
+
+- `default.send_email` - Send an email notification using Resend. Emails are sent from a verified domain. Perfect for notifications, reminders, alerts, or sending reports.
+
+### Using Notification Tools
+
+These tools are automatically used for:
+- **Human-in-the-loop requests**: When an automation needs user input
+- **Error notifications**: When an automation fails or requires attention
+- **Output delivery**: When configured in the `outputs` section
+
+Example usage in workflow:
+```yaml
+outputs:
+  - type: push
+    tool: default.send_push_notification
+  - type: email
+    tool: default.send_email
+    to: "{{user_email}}"
+    subject: "Automation Complete"
+    body: "{{summary}}"
+```
 
 ## Available Automations (for trigger_automation)
 

@@ -35,6 +35,7 @@ import { usePreferences } from '../contexts/PreferencesContext';
 import { TIME_FORMAT_LABELS, MEASUREMENT_SYSTEM_LABELS, CURRENCY_LABELS, TimeFormat, MeasurementSystem, Currency } from '../types/preferences';
 import { AI_MODELS, TOKEN_QUOTAS, formatTokenCount, formatCurrency, DEFAULT_MONTHLY_BUDGET, calculateSafeTokensForBudget } from '../config/ai-tokens.config';
 import { BudgetHistoryViewer } from '../components/BudgetHistoryViewer';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 
 // Budget types
 interface ModelBudgetInfo {
@@ -351,6 +352,35 @@ export const DashboardPage: React.FC = () => {
   // Confirmation modals for OAuth token revocation
   const [confirmRevokeToken, setConfirmRevokeToken] = useState<{ tokenId: string; providerHash: string } | null>(null);
   const [confirmRevokeAllTokens, setConfirmRevokeAllTokens] = useState<{ providerHash: string; providerName: string } | null>(null);
+
+  // Push notifications
+  const pushNotifications = usePushNotifications();
+  const [pushBannerDismissed, setPushBannerDismissed] = useState(false);
+  const [pushSubscribing, setPushSubscribing] = useState(false);
+
+  // Check localStorage for dismissed state on mount
+  useEffect(() => {
+    const dismissed = localStorage.getItem('pushBannerDismissed');
+    if (dismissed === 'true') {
+      setPushBannerDismissed(true);
+    }
+  }, []);
+
+  // Handle push notification subscribe
+  const handleEnablePush = async () => {
+    setPushSubscribing(true);
+    const result = await pushNotifications.subscribe();
+    setPushSubscribing(false);
+    if (result.success) {
+      // Banner will auto-hide since isSubscribed becomes true
+    }
+  };
+
+  // Handle dismiss push banner
+  const handleDismissPushBanner = () => {
+    setPushBannerDismissed(true);
+    localStorage.setItem('pushBannerDismissed', 'true');
+  };
 
   // Get default server and custom servers from the servers list
   const defaultServer = servers.find(s => s.serverName === 'default');
@@ -1032,6 +1062,138 @@ export const DashboardPage: React.FC = () => {
                 Get Pro Now
               </button>
             </Link>
+          </div>
+        )}
+
+        {/* Push Notifications Banner - Show if supported, not subscribed, not dismissed, and permission not denied */}
+        {pushNotifications.isSupported &&
+         !pushNotifications.isSubscribed &&
+         !pushBannerDismissed &&
+         pushNotifications.permission !== 'denied' &&
+         !pushNotifications.isLoading && (
+          <div style={{
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+            borderRadius: '16px',
+            padding: '1.25rem 1.5rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)',
+            position: 'relative',
+          }}>
+            {/* Dismiss button */}
+            <button
+              onClick={handleDismissPushBanner}
+              style={{
+                position: 'absolute',
+                top: '0.5rem',
+                right: '0.5rem',
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#fff',
+                fontSize: '0.9rem',
+                transition: 'background 0.2s',
+              }}
+              title="Dismiss"
+            >
+              ×
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ fontSize: '2rem' }}>🔔</span>
+              <div>
+                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>
+                  Enable Push Notifications
+                </h3>
+                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', margin: 0 }}>
+                  Get notified when automations need your input or complete
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleEnablePush}
+              disabled={pushSubscribing}
+              style={{
+                background: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '0.75rem 1.5rem',
+                color: '#059669',
+                fontWeight: 700,
+                cursor: pushSubscribing ? 'wait' : 'pointer',
+                fontSize: '0.95rem',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                transition: 'transform 0.2s ease, opacity 0.2s',
+                opacity: pushSubscribing ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              {pushSubscribing ? (
+                <>
+                  <span style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #059669',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Enabling...
+                </>
+              ) : (
+                'Enable Notifications'
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Show message if notifications are blocked */}
+        {pushNotifications.isSupported &&
+         pushNotifications.permission === 'denied' &&
+         !pushBannerDismissed && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '12px',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            position: 'relative',
+          }}>
+            <button
+              onClick={handleDismissPushBanner}
+              style={{
+                position: 'absolute',
+                top: '0.5rem',
+                right: '0.5rem',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: '1rem',
+              }}
+            >
+              ×
+            </button>
+            <span style={{ fontSize: '1.25rem' }}>🔕</span>
+            <div>
+              <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', margin: 0 }}>
+                <strong>Notifications are blocked.</strong> To enable, click the lock icon in your browser&apos;s address bar and allow notifications.
+              </p>
+            </div>
           </div>
         )}
 
