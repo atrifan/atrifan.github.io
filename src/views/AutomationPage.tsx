@@ -2584,18 +2584,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               ) : (
                 executionLogs.map((log, i) => (
                   <div key={log.id || i} style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '70px' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '70px', flexShrink: 0 }}>
                       {new Date(log.timestamp).toLocaleTimeString()}
                     </span>
-                    <span style={{ color: getLogLevelColor(log.level), minWidth: '50px' }}>
+                    <span style={{ color: getLogLevelColor(log.level), minWidth: '50px', flexShrink: 0 }}>
                       [{log.level}]
                     </span>
                     {log.step_name && (
-                      <span style={{ color: '#3b82f6', minWidth: '100px' }}>
+                      <span style={{ color: '#3b82f6', minWidth: '100px', flexShrink: 0 }}>
                         [{log.step_name}]
                       </span>
                     )}
-                    <span style={{ color: '#fff', flex: 1 }}>
+                    <span style={{ color: '#fff', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
                       {log.message}
                       {log.status === 'completed' && log.duration_ms && (
                         <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '0.5rem' }}>

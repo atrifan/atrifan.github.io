@@ -32,15 +32,21 @@ export default function AutomationInputPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Get dynamic message from query params
+  const dynamicMessage = searchParams.get('message');
+
   useEffect(() => {
     fetchExecution();
   }, [automationId, runId]);
 
-  // Pre-fill from query params
+  // Pre-fill from query params (exclude reserved params like 'message')
   useEffect(() => {
     const prefilled: Record<string, string> = {};
+    const reservedParams = ['message'];
     searchParams.forEach((value, key) => {
-      prefilled[key] = value;
+      if (!reservedParams.includes(key)) {
+        prefilled[key] = value;
+      }
     });
     if (Object.keys(prefilled).length > 0) {
       setInputs(prev => ({ ...prev, ...prefilled }));
@@ -154,17 +160,30 @@ export default function AutomationInputPage() {
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤖</div>
           <h1 style={{ color: '#fff', fontSize: '1.5rem', margin: '0 0 0.5rem' }}>
-            Input Required
+            {pendingInputs.length > 0 ? 'Input Required' : 'Action Required'}
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0 }}>
-            Automation <strong style={{ color: '#f59e0b' }}>{execution?.automation_name || 'Unknown'}</strong> needs your input to continue
+            Automation <strong style={{ color: '#f59e0b' }}>{execution?.automation_name || 'Unknown'}</strong> {pendingInputs.length > 0 ? 'needs your input to continue' : 'is waiting for your confirmation'}
           </p>
         </div>
 
+        {/* Dynamic Message from notification */}
+        {dynamicMessage && (
+          <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>💬</span>
+              <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: 1.5 }}>
+                {dynamicMessage}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-            {pendingInputs.map((field, idx) => (
+          {pendingInputs.length > 0 ? (
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+              {pendingInputs.map((field, idx) => (
               <div key={field.name} style={{ marginBottom: idx < pendingInputs.length - 1 ? '1.25rem' : 0 }}>
                 <label style={{ display: 'block', color: '#fff', fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>
                   {field.name}
@@ -206,6 +225,13 @@ export default function AutomationInputPage() {
               </div>
             ))}
           </div>
+        ) : (
+          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+            <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+              Click the button below to continue the automation.
+            </p>
+          </div>
+        )}
 
           {error && (
             <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem' }}>
@@ -235,7 +261,7 @@ export default function AutomationInputPage() {
             {submitting ? (
               <>⏳ Submitting...</>
             ) : (
-              <>▶️ Submit & Continue Automation</>
+              <>▶️ {pendingInputs.length > 0 ? 'Submit & Continue Automation' : 'Continue Automation'}</>
             )}
           </button>
         </form>

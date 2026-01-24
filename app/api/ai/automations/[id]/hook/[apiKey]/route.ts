@@ -163,8 +163,89 @@ export async function POST(
         notification_channels: automation.notification_config?.channels || ['email'],
       });
 
-      // TODO: Send notification via configured channels
-      // This would call notification tools (email, slack, push, etc.)
+      // Send notification via configured channels
+      const channels = automation.notification_config?.channels || ['email'];
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const notificationMessage = `Automation "${automation.display_name || automation.name}" requires your input`;
+
+      // Build full URL with query params
+      const fullInputUrl = new URL(inputUrl, baseUrl);
+      fullInputUrl.searchParams.set('message', notificationMessage);
+
+      // Get user email for email notifications
+      let userEmail: string | null = null;
+      if (channels.includes('email')) {
+        try {
+          const clerk = await clerkClient();
+          const user = await clerk.users.getUser(userId);
+          userEmail = user.emailAddresses?.[0]?.emailAddress || null;
+        } catch (e) {
+          console.error('Failed to get user email:', e);
+        }
+      }
+
+      // Send push notification
+      if (channels.includes('push')) {
+        try {
+          await fetch(`${baseUrl}/api/push/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({
+              userId,
+              title: '🤖 Input Required',
+              body: notificationMessage,
+              data: {
+                url: fullInputUrl.toString(),
+                type: 'automation',
+                automationId,
+                executionId: execution.id,
+              },
+              requireInteraction: true,
+            }),
+          });
+        } catch (e) {
+          console.error('Failed to send push notification:', e);
+        }
+      }
+
+      // Send email notification
+      if (channels.includes('email') && userEmail) {
+        try {
+          const fieldList = missingInputs.map((f: string) => `• ${f}`).join('\n');
+          const emailBody = `
+Hello,
+
+${notificationMessage}
+
+Required inputs:
+${fieldList}
+
+Click here to provide input:
+${fullInputUrl.toString()}
+
+- Tulzo Automation
+          `.trim();
+
+          await fetch(`${baseUrl}/api/email/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+              'X-User-Id': userId,
+            },
+            body: JSON.stringify({
+              to: userEmail,
+              subject: `🤖 Input Required: ${automation.display_name || automation.name}`,
+              body: emailBody,
+            }),
+          });
+        } catch (e) {
+          console.error('Failed to send email notification:', e);
+        }
+      }
 
       return NextResponse.json({
         execution_id: execution.id,

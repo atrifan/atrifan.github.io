@@ -251,15 +251,15 @@ export function ExecutionInstancesPanel({ automationId, automationName, onClose 
                     <div style={{ color: 'rgba(255,255,255,0.5)' }}>No logs for this execution</div>
                   ) : (
                     logs.map(log => (
-                      <div key={log.id} style={{ marginBottom: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '80px' }}>
+                      <div key={log.id} style={{ marginBottom: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '80px', flexShrink: 0 }}>
                           {new Date(log.timestamp).toLocaleTimeString()}
                         </span>
-                        <span style={{ color: log.level === 'error' ? '#ef4444' : log.level === 'warn' ? '#f59e0b' : '#10b981', minWidth: '50px' }}>
+                        <span style={{ color: log.level === 'error' ? '#ef4444' : log.level === 'warn' ? '#f59e0b' : '#10b981', minWidth: '50px', flexShrink: 0 }}>
                           [{log.level}]
                         </span>
-                        {log.step_name && <span style={{ color: '#3b82f6' }}>[{log.step_name}]</span>}
-                        <span style={{ color: '#fff' }}>{log.message}</span>
+                        {log.step_name && <span style={{ color: '#3b82f6', minWidth: '100px', flexShrink: 0 }}>[{log.step_name}]</span>}
+                        <span style={{ color: '#fff', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>{log.message}</span>
                       </div>
                     ))
                   )}

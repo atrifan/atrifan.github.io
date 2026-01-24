@@ -22,18 +22,23 @@ async function getVerifiedDomain(): Promise<string> {
       return 'resend.dev'; // Fallback to Resend's default domain
     }
 
+    // Log available domains for debugging
+    console.log('Resend domains:', data.data.map(d => ({ name: d.name, status: d.status })));
+
     // Find a verified domain with sending capability
     const verifiedDomain = data.data.find(
-      (d) => d.status === 'verified' || d.status === 'not_started'
+      (d) => d.status === 'verified'
     );
 
     if (verifiedDomain) {
       cachedDomain = verifiedDomain.name;
       domainCacheTime = Date.now();
+      console.log('Using verified domain:', cachedDomain);
       return cachedDomain;
     }
 
-    // If no verified domain, use the first available
+    // If no verified domain, use the first available (may not work for sending)
+    console.warn('No verified domain found, using first available:', data.data[0].name);
     cachedDomain = data.data[0].name;
     domainCacheTime = Date.now();
     return cachedDomain;

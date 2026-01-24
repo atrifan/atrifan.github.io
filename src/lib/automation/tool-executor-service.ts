@@ -319,7 +319,10 @@ function createInternalMCPClient(
         throw new Error(result.error.message || 'MCP call failed');
       }
 
-      return result.result;
+      // Extract the actual tool result from structuredContent if available
+      // The MCP server wraps results in: { content, structuredContent: { query, result, display }, _meta }
+      const mcpResult = result.result;
+      return mcpResult?.structuredContent?.result ?? mcpResult;
     },
 
     async close(): Promise<void> {
