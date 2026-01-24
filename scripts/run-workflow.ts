@@ -568,6 +568,38 @@ Examples:
     process.exit(1);
   }
 
+  // Fetch user email from Clerk if userId is available
+  let userEmail: string | undefined;
+  if (userId) {
+    const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+    if (clerkSecretKey) {
+      try {
+        const response = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+          headers: { Authorization: `Bearer ${clerkSecretKey}` }
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          userEmail = userData.email_addresses?.find((e: { id: string }) => e.id === userData.primary_email_address_id)?.email_address
+            || userData.email_addresses?.[0]?.email_address;
+          if (userEmail) {
+            console.log(`   User email: ${userEmail}`);
+          }
+        }
+      } catch (e) {
+        console.warn('   ⚠️ Could not fetch user email from Clerk');
+      }
+    }
+  }
+
+  // Inject user data into inputs so workflows can access {{user.id}} and {{user.email}}
+  if (userId || userEmail) {
+    inputs.user = {
+      id: userId,
+      email: userEmail,
+    };
+    console.log(`   User injected into inputs: { id: ${userId}, email: ${userEmail} }`);
+  }
+
   // Resolve path
   const fullPath = path.resolve(process.cwd(), yamlPath);
 
@@ -666,10 +698,11 @@ Examples:
         .from('automation_executions')
         .insert({
           automation_id: dbAutomationId,
+          user_id: userId,
           status: 'running',
           trigger_type: 'cli',
           current_step: 'starting',
-          variables: inputs,
+          collected_inputs: inputs,
         })
         .select('id')
         .single();

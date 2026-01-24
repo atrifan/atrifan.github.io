@@ -7,10 +7,6 @@ trigger:
   type: manual
 
 inputs:
-  - name: notifyEmail
-    type: string
-    required: true
-    description: "Email address to send test notification"
   - name: testMessage
     type: string
     required: false
@@ -44,7 +40,7 @@ steps:
   - id: sendEmail
     tool: default.send_email
     params:
-      to: "{{notifyEmail}}"
+      to: "{{user.email}}"
       subject: "🧪 Test Email from Tulzo Automation"
       body: |
         <h1>Test Email Notification</h1>
@@ -61,7 +57,7 @@ steps:
     then:
       - id: setEmailStatus
         set: emailStatus
-        value: "✅ Email sent successfully to {{notifyEmail}}"
+        value: "✅ Email sent successfully to {{user.email}}"
     else:
       - id: setEmailFailed
         set: emailStatus
@@ -78,7 +74,7 @@ steps:
         },
         emailNotification: {
           success: emailResult.success,
-          recipient: notifyEmail,
+          recipient: user.email,
           status: emailStatus
         },
         testMessage: testMessage,
