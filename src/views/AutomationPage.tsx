@@ -367,6 +367,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // UI state
   const [view, setView] = useState<'list' | 'builder' | 'history' | 'code' | 'yaml' | 'logs'>('list');
+  const [previousView, setPreviousView] = useState<'list' | 'builder' | 'history' | 'code' | 'yaml'>('builder');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [automationName, setAutomationName] = useState('');
@@ -1323,6 +1324,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
       const data = await response.json();
       setCurrentExecution(data.execution);
+      setPreviousView(view === 'logs' ? previousView : view);
       setView('logs');
 
       // Subscribe to realtime updates
@@ -2032,7 +2034,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {exportedCode && <button onClick={() => setView('code')} style={{ background: view === 'code' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>💻 Code</button>}
           {currentAutomation && (
             <button
-              onClick={() => { fetchLogs(currentAutomation.id); setView('logs'); }}
+              onClick={() => { fetchLogs(currentAutomation.id); setPreviousView(view === 'logs' ? previousView : view); setView('logs'); }}
               style={{
                 background: view === 'logs' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
                 border: view === 'logs' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.2)',
@@ -2188,6 +2190,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               if (fullAuto) {
                 setCurrentAutomation(fullAuto);
                 fetchExecutionLogs(fullAuto.id, exec.id);
+                setPreviousView('list');
                 setView('logs');
               }
             }}
@@ -2196,6 +2199,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               if (auto) {
                 setCurrentAutomation(auto);
                 fetchExecutionLogs(auto.id, exec.id);
+                setPreviousView('list');
                 setView('logs');
               }
             }}
@@ -2538,7 +2542,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                   </button>
                 )}
                 <button
-                  onClick={() => setView('builder')}
+                  onClick={() => setView(previousView)}
                   style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.4rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
                 >
                   ← Back

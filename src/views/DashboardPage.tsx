@@ -1158,6 +1158,49 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
+        {/* Show disable option if notifications are enabled */}
+        {pushNotifications.isSupported &&
+         pushNotifications.isSubscribed &&
+         !pushBannerDismissed && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '12px',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>🔔</span>
+              <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', margin: 0 }}>
+                Push notifications are <strong>enabled</strong>
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                await pushNotifications.unsubscribe();
+              }}
+              disabled={pushNotifications.isLoading}
+              style={{
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '8px',
+                padding: '0.5rem 1rem',
+                color: '#ef4444',
+                cursor: pushNotifications.isLoading ? 'not-allowed' : 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+                opacity: pushNotifications.isLoading ? 0.6 : 1,
+              }}
+            >
+              {pushNotifications.isLoading ? 'Disabling...' : 'Disable'}
+            </button>
+          </div>
+        )}
+
         {/* Show message if notifications are blocked */}
         {pushNotifications.isSupported &&
          pushNotifications.permission === 'denied' &&

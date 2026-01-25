@@ -62,8 +62,8 @@ const ModelCard = ({ model, userTier }: { model: AIModel; userTier: string }) =>
         <div style={{ color: '#3b82f6', fontWeight: 600 }}>{formatContext(model.contextWindow)}</div>
       </div>
       <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px' }}>
-        <div style={{ color: '#9ca3af' }}>Capabilities</div>
-        <div style={{ color: '#a78bfa', fontWeight: 500, fontSize: '0.65rem' }}>{model.capabilities.join(', ')}</div>
+        <div style={{ color: '#9ca3af' }}>Max Output</div>
+        <div style={{ color: '#a78bfa', fontWeight: 600 }}>{model.maxOutput ? formatContext(model.maxOutput) : 'N/A'}</div>
       </div>
     </div>
   </div>

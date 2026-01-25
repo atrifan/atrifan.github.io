@@ -140,7 +140,8 @@ export async function POST(request: NextRequest) {
 
     // Simulate execution (for demo purposes)
     // In production, this would be replaced with actual workflow execution
-    simulateExecution(supabase, execution.id, dbAutomationId, automation.yaml_definition);
+    // NOTE: We await this to ensure it completes before Vercel terminates the function
+    await simulateExecution(supabase, execution.id, dbAutomationId, automation.yaml_definition);
 
     return NextResponse.json({
       success: true,
