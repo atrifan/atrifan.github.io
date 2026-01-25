@@ -449,6 +449,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // Retrieval events state (RAG + history context for current prompt)
   const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
+  const [userApiKey, setUserApiKey] = useState<string | null>(null);
 
   // Check screen size for responsive layout
   useEffect(() => {
@@ -550,6 +551,24 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   useEffect(() => {
     saveAutomationSetting('sendRecentHistory', sendRecentHistory);
   }, [sendRecentHistory]);
+
+  // Fetch user's API key for webhook URLs
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        const response = await fetch('/api/keys/list');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.hasKey && data.apiKey) {
+            setUserApiKey(data.apiKey);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching API key:', error);
+      }
+    };
+    fetchApiKey();
+  }, []);
 
   // Save selected model when it changes (but not when loading an automation)
   useEffect(() => {
@@ -1085,11 +1104,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
       setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
-      // Build recent history for context (last 2 prompts) if enabled
+      // Build recent history for context (last 10 prompts) if enabled
       // Helps with references like "undo that", "make it faster", etc.
-      // Note: promptHistory is ordered descending (newest first), so we take first 2 and reverse
+      // Note: promptHistory is ordered descending (newest first), so we take first 20 and reverse
       const recentHistoryData = sendRecentHistory && promptHistory.length > 0
-        ? promptHistory.slice(0, 2).reverse().map(h => ({
+        ? promptHistory.slice(0, 20).reverse().map(h => ({
             prompt: h.prompt,
             // Include a brief note about what the mermaid result was
             response: h.response_mermaid ? '(flow updated)' : undefined,
@@ -2096,7 +2115,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {/* Send Recent History toggle */}
           <button
             onClick={() => setSendRecentHistory(!sendRecentHistory)}
-            title={sendRecentHistory ? "Recent history enabled - last 2 exchanges sent for context. Click to disable." : "Recent history disabled - only current message sent. Click to enable."}
+            title={sendRecentHistory ? "Recent history enabled - last 20 exchanges sent for context. Click to disable." : "Recent history disabled - only current message sent. Click to enable."}
             style={{ background: sendRecentHistory ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)', border: sendRecentHistory ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: sendRecentHistory ? '#3b82f6' : '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
           >
             💬
@@ -2229,6 +2248,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             selectedAutomationId={currentAutomation?.id}
             onCreateNew={startNew}
             onRefresh={fetchAutomations}
+            userApiKey={userApiKey || undefined}
           />
         )}
 

@@ -213,6 +213,14 @@ export interface SettingsPanelProps {
   automationId?: string;
   webhookInputs?: Array<{ name: string; type: string; required: boolean }>;
   userApiKey?: string; // User's API key for webhook URL display
+
+  // AI model parameters (chat mode, internal models only)
+  maxOutputTokens?: number;
+  setMaxOutputTokens?: (tokens: number) => void;
+  temperature?: number;
+  setTemperature?: (temp: number) => void;
+  maxRetries?: number;
+  setMaxRetries?: (retries: number) => void;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
@@ -290,6 +298,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     automationId,
     webhookInputs = [],
     userApiKey,
+    maxOutputTokens = 512,
+    setMaxOutputTokens,
+    temperature = 0.3,
+    setTemperature,
+    maxRetries = 5,
+    setMaxRetries,
   } = props;
 
   // Model dropdown state
@@ -424,6 +438,76 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                   )}
                 </div>
               </div>
+
+              {/* Model Parameters - Chat mode, internal models only */}
+              {mode === 'chat' && !isExternalAgentSelected && setMaxOutputTokens && setTemperature && setMaxRetries && (
+                <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>⚙️ Model Parameters</div>
+
+                  {/* Max Output Tokens */}
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem' }}>Max Output Tokens</span>
+                      <span style={{ color: '#a78bfa', fontSize: '0.75rem', fontWeight: 600 }}>{maxOutputTokens}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="256"
+                      max="4096"
+                      step="256"
+                      value={maxOutputTokens}
+                      onChange={(e) => setMaxOutputTokens(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)' }}>
+                      <span>256</span>
+                      <span>4096</span>
+                    </div>
+                  </div>
+
+                  {/* Temperature */}
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem' }}>Temperature</span>
+                      <span style={{ color: '#a78bfa', fontSize: '0.75rem', fontWeight: 600 }}>{temperature.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={temperature}
+                      onChange={(e) => setTemperature(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)' }}>
+                      <span>0 (precise)</span>
+                      <span>2 (creative)</span>
+                    </div>
+                  </div>
+
+                  {/* Max Retries */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem' }}>Max Retries</span>
+                      <span style={{ color: '#a78bfa', fontSize: '0.75rem', fontWeight: 600 }}>{maxRetries}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={maxRetries}
+                      onChange={(e) => setMaxRetries(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)' }}>
+                      <span>1</span>
+                      <span>10</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Usage Statistics Collapsible */}
               {budgetData && budgetData.models.length > 0 && (
@@ -691,7 +775,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                           <span style={{ fontSize: '1rem' }}>💬</span>
                           <div>
                             <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>Recent History</span>
-                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Send last 2 exchanges for context</div>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>Send last 20 exchanges for context</div>
                           </div>
                         </div>
                         <button

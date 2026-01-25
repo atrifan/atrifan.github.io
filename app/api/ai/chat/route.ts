@@ -56,6 +56,10 @@ export async function POST(request: NextRequest) {
       historyTokens,
       recentHistoryTokens,
       personaTokens,
+      // Model parameters (with defaults)
+      maxOutputTokens = 512,
+      temperature = 0.3,
+      maxRetries = 5,
     } = body;
     const userMessage = messages[messages.length - 1]?.content || '';
 
@@ -115,7 +119,9 @@ export async function POST(request: NextRequest) {
           role: m.role as 'user' | 'assistant',
           content: m.content,
         })),
-        maxOutputTokens: 4096,
+        maxOutputTokens: maxOutputTokens || 512,
+        temperature: temperature ?? 0.3,
+        maxRetries: maxRetries || 5,
       });
 
       assistantMessage = result.text;

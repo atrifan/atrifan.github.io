@@ -547,6 +547,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   // Ad collapsed state
   const [adCollapsed, setAdCollapsed] = useState(false);
 
+  // AI model parameters (for internal models only)
+  const [maxOutputTokens, setMaxOutputTokens] = useState(512);
+  const [temperature, setTemperature] = useState(0.3);
+  const [maxRetries, setMaxRetries] = useState(5);
+
   // Model selector dropdown state (for sidebar/overlay)
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
@@ -1702,11 +1707,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           })
           .filter((item): item is PersonaItem => item !== null);
 
-        // Extract last 4 messages (2 exchanges) for immediate context (if enabled)
+        // Extract last 20 messages (10 exchanges) for immediate context (if enabled)
         // This handles "do that again", "as I said before", etc.
         // Can be disabled for agents that don't support multiple text parts
         const recentMessages: RecentMessage[] = sendRecentHistory
-          ? messages.slice(-4).map(m => ({ role: m.role, content: m.content }))
+          ? messages.slice(-40).map(m => ({ role: m.role, content: m.content }))
           : [];
 
         setRetrievalEvents(prev => ({ ...prev, isSending: true }));
@@ -1956,12 +1961,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
 
         setRetrievalEvents(prev => ({ ...prev, isSending: true }));
 
-        // Extract last 4 messages (2 exchanges) + current user message for immediate context (if enabled)
+        // Extract last 20 messages (10 exchanges) + current user message for immediate context (if enabled)
         // Semantic history context is already in systemPrompt via historyContextString
         // When sendRecentHistory is disabled, only send the current message
         const recentMessagesForAI = sendRecentHistory
           ? [
-              ...messages.slice(-4).map(m => ({ role: m.role, content: m.content })),
+              ...messages.slice(-40).map(m => ({ role: m.role, content: m.content })),
               { role: userMessage.role, content: userMessage.content },
             ]
           : [{ role: userMessage.role, content: userMessage.content }];
@@ -1970,7 +1975,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         const ragTokensEstimate = ragContextString ? estimateTokens(ragContextString) : 0;
         const historyTokensEstimate = historyContextString ? estimateTokens(historyContextString) : 0;
         const recentHistoryTokensEstimate = sendRecentHistory
-          ? messages.slice(-4).reduce((sum, m) => sum + estimateTokens(m.content), 0)
+          ? messages.slice(-40).reduce((sum, m) => sum + estimateTokens(m.content), 0)
           : 0;
         const personaTokensEstimate = activePersonalities.reduce(
           (sum, p) => sum + estimateTokens(p.system_prompt), 0
@@ -2000,6 +2005,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             historyTokens: historyTokensEstimate,
             recentHistoryTokens: recentHistoryTokensEstimate,
             personaTokens: personaTokensEstimate,
+            // Model parameters
+            maxOutputTokens,
+            temperature,
+            maxRetries,
           }),
           signal: abortController.signal,
         });
@@ -3227,7 +3236,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
               {/* Send Recent History toggle */}
               <button
                 onClick={() => setSendRecentHistory(!sendRecentHistory)}
-                title={sendRecentHistory ? "Recent history enabled - last 2 exchanges sent for context. Click to disable for agents that don't support it." : "Recent history disabled - only current message sent. Click to enable for better context."}
+                title={sendRecentHistory ? "Recent history enabled - last 20 exchanges (40 messages) sent for context. Click to disable for agents that don't support it." : "Recent history disabled - only current message sent. Click to enable for better context."}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -3310,6 +3319,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         isSearchingHistory={isSearchingHistory}
         onNewItem={startNewChat}
         newItemLabel="New Chat"
+        maxOutputTokens={maxOutputTokens}
+        setMaxOutputTokens={setMaxOutputTokens}
+        temperature={temperature}
+        setTemperature={setTemperature}
+        maxRetries={maxRetries}
+        setMaxRetries={setMaxRetries}
       />
 
       {/* Connector Info Modal */}
