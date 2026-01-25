@@ -174,7 +174,7 @@ export async function POST(
 
       // Get user email for email notifications
       let userEmail: string | null = null;
-      if (channels.includes('email')) {
+      if (channels.includes('email') && userId) {
         try {
           const clerk = await clerkClient();
           const user = await clerk.users.getUser(userId);
@@ -214,7 +214,7 @@ export async function POST(
       // Send email notification
       if (channels.includes('email') && userEmail) {
         try {
-          const fieldList = missingInputs.map((f: string) => `• ${f}`).join('\n');
+          const fieldList = missingInputs.map((f) => `• ${f.name}`).join('\n');
           const emailBody = `
 Hello,
 
@@ -234,7 +234,7 @@ ${fullInputUrl.toString()}
             headers: {
               'Content-Type': 'application/json',
               'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
-              'X-User-Id': userId,
+              ...(userId && { 'X-User-Id': userId }),
             },
             body: JSON.stringify({
               to: userEmail,

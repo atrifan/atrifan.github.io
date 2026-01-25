@@ -1414,6 +1414,20 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
     }
   };
 
+  // Fetch logs for a specific execution
+  const fetchExecutionLogs = async (automationId: string, executionId: string) => {
+    try {
+      const response = await fetch(`/api/ai/automations/${automationId}/executions/${executionId}/logs`);
+      if (response.ok) {
+        const data = await response.json();
+        setExecutionLogs(data.logs || []);
+        setCurrentExecution(data.execution || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch execution logs:', error);
+    }
+  };
+
   // Fetch workflow rules documentation
   const fetchWorkflowRules = async () => {
     setIsLoadingRules(true);
@@ -2173,7 +2187,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               const fullAuto = automations.find(a => a.id === auto.id);
               if (fullAuto) {
                 setCurrentAutomation(fullAuto);
-                fetchLogs(fullAuto.id);
+                fetchExecutionLogs(fullAuto.id, exec.id);
                 setView('logs');
               }
             }}
@@ -2181,7 +2195,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               const auto = automations.find(a => a.id === exec.automation_id);
               if (auto) {
                 setCurrentAutomation(auto);
-                fetchLogs(auto.id);
+                fetchExecutionLogs(auto.id, exec.id);
                 setView('logs');
               }
             }}
