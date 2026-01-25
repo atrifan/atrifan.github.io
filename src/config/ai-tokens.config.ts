@@ -52,7 +52,6 @@ export const AI_MODELS: AIModel[] = [
     inputCostPer1M: 0.02,
     outputCostPer1M: 0.05,
     contextWindow: 131000,
-    maxOutput: 131000,
     description: 'Free open-source model with excellent performance',
     capabilities: ['chat', 'reasoning', 'coding'],
   },
