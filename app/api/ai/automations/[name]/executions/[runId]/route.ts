@@ -6,24 +6,25 @@ const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * GET /api/ai/automations/[id]/executions/[runId]
+ * GET /api/ai/automations/[name]/executions/[runId]
  * Fetch a specific execution with its details
  *
  * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; runId: string }> }
+  { params }: { params: Promise<{ name: string; runId: string }> }
 ) {
   try {
-    const { id: automationId, runId } = await params;
+    const { name: automationName, runId } = await params;
 
-    // Validate access
-    const authResult = await validateExecutionAccess(request, automationId, runId);
+    // Validate access and get automation ID
+    const authResult = await validateExecutionAccess(request, automationName, runId);
     if (authResult.error) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
+    const automationId = authResult.automationId!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch execution with automation details
@@ -71,7 +72,7 @@ export async function GET(
 }
 
 /**
- * DELETE /api/ai/automations/[id]/executions/[runId]
+ * DELETE /api/ai/automations/[name]/executions/[runId]
  * Stop/cancel a running execution, optionally delete from DB
  *
  * Query params:
@@ -81,17 +82,18 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; runId: string }> }
+  { params }: { params: Promise<{ name: string; runId: string }> }
 ) {
   try {
-    const { id: automationId, runId } = await params;
+    const { name: automationName, runId } = await params;
 
-    // Validate access
-    const authResult = await validateExecutionAccess(request, automationId, runId);
+    // Validate access and get automation ID
+    const authResult = await validateExecutionAccess(request, automationName, runId);
     if (authResult.error) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
+    const automationId = authResult.automationId!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check for hard delete

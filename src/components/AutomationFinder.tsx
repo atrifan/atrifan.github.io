@@ -22,6 +22,7 @@ export interface Automation {
 export interface Execution {
   id: string;
   automation_id: string;
+  automation_name?: string;
   status: 'pending' | 'running' | 'waiting_input' | 'completed' | 'failed' | 'cancelled';
   trigger_type: string;
   current_step?: string;
@@ -171,34 +172,34 @@ export function AutomationFinder({
   };
 
   // Toggle automation expansion (show executions)
-  const toggleAutomation = async (automationId: string) => {
-    const isExpanding = !expandedAutomations.has(automationId);
+  const toggleAutomation = async (automationName: string) => {
+    const isExpanding = !expandedAutomations.has(automationName);
     setExpandedAutomations(prev => {
       const next = new Set(prev);
-      if (next.has(automationId)) next.delete(automationId);
-      else next.add(automationId);
+      if (next.has(automationName)) next.delete(automationName);
+      else next.add(automationName);
       return next;
     });
-    if (isExpanding && !executions[automationId]) {
-      await fetchExecutions(automationId);
+    if (isExpanding && !executions[automationName]) {
+      await fetchExecutions(automationName);
     }
   };
 
   // Fetch executions for an automation
-  const fetchExecutions = async (automationId: string) => {
-    setLoadingExecutions(prev => new Set(prev).add(automationId));
+  const fetchExecutions = async (automationName: string) => {
+    setLoadingExecutions(prev => new Set(prev).add(automationName));
     try {
-      const res = await fetch(`/api/ai/automations/${automationId}/executions?limit=10`);
+      const res = await fetch(`/api/ai/automations/${automationName}/executions?limit=10`);
       if (res.ok) {
         const data = await res.json();
-        setExecutions(prev => ({ ...prev, [automationId]: data.executions || [] }));
+        setExecutions(prev => ({ ...prev, [automationName]: data.executions || [] }));
       }
     } catch (err) {
       console.error('Failed to fetch executions:', err);
     } finally {
       setLoadingExecutions(prev => {
         const next = new Set(prev);
-        next.delete(automationId);
+        next.delete(automationName);
         return next;
       });
     }
@@ -406,7 +407,7 @@ export function AutomationFinder({
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Webhook URL</label>
               <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', color: '#10b981', wordBreak: 'break-all' }}>
-                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/{userApiKey || 'YOUR_API_KEY'}
+                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.name}/hook/{userApiKey || 'YOUR_API_KEY'}
               </div>
               {!userApiKey && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>}
             </div>
@@ -425,7 +426,7 @@ export function AutomationFinder({
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>cURL Example</label>
               <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/${userApiKey || 'YOUR_API_KEY'}" \\
+{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.name}/hook/${userApiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{"inputs": {}}'`}
               </pre>
@@ -434,7 +435,7 @@ export function AutomationFinder({
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => {
-                  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY`;
+                  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.name}/hook/${userApiKey || 'YOUR_API_KEY'}`;
                   navigator.clipboard.writeText(url);
                 }}
                 style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', padding: '0.5rem 1rem', color: '#10b981', cursor: 'pointer', fontSize: '12px' }}
@@ -458,9 +459,9 @@ export function AutomationFinder({
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Webhook URL</label>
               <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', color: '#10b981', wordBreak: 'break-all' }}>
-                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/YOUR_API_KEY
+                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.name}/hook/{userApiKey || 'YOUR_API_KEY'}
               </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>
+              {!userApiKey && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>}
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Required Payload (JSON)</label>
@@ -470,12 +471,12 @@ export function AutomationFinder({
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>cURL Example</label>
-              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY" \\
+              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.name}/hook/${userApiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{"inputs": {}}'`}</pre>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY`); }} style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', padding: '0.5rem 1rem', color: '#10b981', cursor: 'pointer', fontSize: '12px' }}>📋 Copy URL</button>
+              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/${webhookAutomation.name}/hook/${userApiKey || 'YOUR_API_KEY'}`); }} style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', padding: '0.5rem 1rem', color: '#10b981', cursor: 'pointer', fontSize: '12px' }}>📋 Copy URL</button>
               <button onClick={() => setWebhookAutomation(null)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '12px' }}>Close</button>
             </div>
           </div>
@@ -535,11 +536,11 @@ function AutomationList({
         <AutomationItem
           key={auto.id}
           automation={auto}
-          executions={executions[auto.id] || []}
-          isLoading={loadingExecutions.has(auto.id)}
-          isExpanded={expandedAutomations.has(auto.id)}
+          executions={executions[auto.name] || []}
+          isLoading={loadingExecutions.has(auto.name)}
+          isExpanded={expandedAutomations.has(auto.name)}
           isSelected={selectedAutomationId === auto.id}
-          onToggle={() => onToggleAutomation(auto.id)}
+          onToggle={() => onToggleAutomation(auto.name)}
           onSelect={() => onSelectAutomation(auto)}
           onRun={() => onRunAutomation(auto)}
           onEdit={() => onEditAutomation(auto)}

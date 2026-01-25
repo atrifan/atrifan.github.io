@@ -11,6 +11,7 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 
 export interface AuthResult {
   userId: string | null;
+  automationId?: string;  // The UUID of the automation (resolved from name)
   plan?: string;
   error?: string;
   statusCode?: number;
@@ -135,12 +136,13 @@ export async function validateApiKeyFromRequest(request: NextRequest): Promise<A
  * 3. API key in X-API-Key header
  * 4. Internal call header (x-internal-call: true) - trusts automation ownership
  *
- * After getting userId, verifies ownership of the automation.
+ * After getting userId, verifies ownership of the automation by name.
+ * Returns the automation UUID in the result for use in execution queries.
  * Requires pro+ plan for API key access.
  */
 export async function validateAutomationAccess(
   request: NextRequest,
-  automationId: string
+  automationName: string
 ): Promise<AuthResult> {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   let userId: string | null = null;
@@ -149,16 +151,18 @@ export async function validateAutomationAccess(
   // 1. Check for internal call (bypasses auth, trusts automation ownership)
   const isInternalCall = request.headers.get('x-internal-call') === 'true';
   if (isInternalCall) {
+    // For internal calls, we need to find the automation by name
+    // First get any automation with this name to get the user_id
     const { data: automation } = await supabase
       .from('automations')
-      .select('user_id')
-      .eq('id', automationId)
+      .select('id, user_id')
+      .eq('name', automationName)
       .single();
 
     if (!automation) {
       return { userId: null, error: 'Automation not found', statusCode: 404 };
     }
-    return { userId: automation.user_id };
+    return { userId: automation.user_id, automationId: automation.id };
   }
 
   // 2. Try Clerk session auth (for UI calls)
@@ -210,11 +214,11 @@ export async function validateAutomationAccess(
     return { userId: null, error: 'Unauthorized', statusCode: 401 };
   }
 
-  // Verify automation ownership
+  // Verify automation ownership by name + user_id
   const { data: automation, error: fetchError } = await supabase
     .from('automations')
     .select('id')
-    .eq('id', automationId)
+    .eq('name', automationName)
     .eq('user_id', userId)
     .single();
 
@@ -222,32 +226,33 @@ export async function validateAutomationAccess(
     return { userId: null, error: 'Automation not found or access denied', statusCode: 404 };
   }
 
-  return { userId, plan };
+  return { userId, automationId: automation.id, plan };
 }
 
 /**
  * Validate request for execution endpoints
- * 
+ *
  * Same as validateAutomationAccess but also verifies the execution belongs to the automation.
+ * Uses automation name for lookup, returns automation UUID in result.
  */
 export async function validateExecutionAccess(
   request: NextRequest,
-  automationId: string,
+  automationName: string,
   executionId: string
 ): Promise<AuthResult> {
-  const authResult = await validateAutomationAccess(request, automationId);
+  const authResult = await validateAutomationAccess(request, automationName);
   if (authResult.error) {
     return authResult;
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Verify execution belongs to automation
+  // Verify execution belongs to automation (using the resolved automation ID)
   const { data: execution, error } = await supabase
     .from('automation_executions')
     .select('id')
     .eq('id', executionId)
-    .eq('automation_id', automationId)
+    .eq('automation_id', authResult.automationId)
     .single();
 
   if (error || !execution) {

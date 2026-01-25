@@ -1403,9 +1403,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   }, []);
 
   // Fetch logs for an automation (most recent execution)
-  const fetchLogs = async (automationId: string) => {
+  const fetchLogs = async (automationName: string) => {
     try {
-      const response = await fetch(`/api/ai/automations/${automationId}/logs`);
+      const response = await fetch(`/api/ai/automations/${automationName}/logs`);
       if (response.ok) {
         const data = await response.json();
         setExecutionLogs(data.logs || []);
@@ -1417,9 +1417,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   };
 
   // Fetch logs for a specific execution
-  const fetchExecutionLogs = async (automationId: string, executionId: string) => {
+  const fetchExecutionLogs = async (automationName: string, executionId: string) => {
     try {
-      const response = await fetch(`/api/ai/automations/${automationId}/executions/${executionId}/logs`);
+      const response = await fetch(`/api/ai/automations/${automationName}/executions/${executionId}/logs`);
       if (response.ok) {
         const data = await response.json();
         setExecutionLogs(data.logs || []);
@@ -2034,7 +2034,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {exportedCode && <button onClick={() => setView('code')} style={{ background: view === 'code' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>💻 Code</button>}
           {currentAutomation && (
             <button
-              onClick={() => { fetchLogs(currentAutomation.id); setPreviousView(view === 'logs' ? previousView : view); setView('logs'); }}
+              onClick={() => { fetchLogs(currentAutomation.name); setPreviousView(view === 'logs' ? previousView : view); setView('logs'); }}
               style={{
                 background: view === 'logs' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
                 border: view === 'logs' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.2)',
@@ -2189,7 +2189,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               const fullAuto = automations.find(a => a.id === auto.id);
               if (fullAuto) {
                 setCurrentAutomation(fullAuto);
-                fetchExecutionLogs(fullAuto.id, exec.id);
+                fetchExecutionLogs(fullAuto.name, exec.id);
                 setPreviousView('list');
                 setView('logs');
               }
@@ -2198,17 +2198,17 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               const auto = automations.find(a => a.id === exec.automation_id);
               if (auto) {
                 setCurrentAutomation(auto);
-                fetchExecutionLogs(auto.id, exec.id);
+                fetchExecutionLogs(auto.name, exec.id);
                 setPreviousView('list');
                 setView('logs');
               }
             }}
             onProvideInput={(exec) => {
-              window.open(`/automation/${exec.automation_id}/running/${exec.id}/input`, '_blank');
+              window.open(`/automation/${exec.automation_name || exec.automation_id}/running/${exec.id}/input`, '_blank');
             }}
             onStopExecution={async (exec) => {
               try {
-                await fetch(`/api/ai/automations/${exec.automation_id}/executions/${exec.id}`, {
+                await fetch(`/api/ai/automations/${exec.automation_name || exec.automation_id}/executions/${exec.id}`, {
                   method: 'DELETE',
                 });
                 fetchAutomations();
@@ -2218,7 +2218,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             }}
             onDeleteExecution={async (exec) => {
               try {
-                await fetch(`/api/ai/automations/${exec.automation_id}/executions/${exec.id}`, {
+                await fetch(`/api/ai/automations/${exec.automation_name || exec.automation_id}/executions/${exec.id}`, {
                   method: 'DELETE',
                 });
                 fetchAutomations();

@@ -6,7 +6,7 @@ const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * GET /api/ai/automations/[id]/executions
+ * GET /api/ai/automations/[name]/executions
  * List all executions for an automation with status, logs count, etc.
  *
  * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
@@ -18,17 +18,18 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ name: string }> }
 ) {
   try {
-    const { id: automationId } = await params;
+    const { name: automationName } = await params;
 
-    // Validate access
-    const authResult = await validateAutomationAccess(request, automationId);
+    // Validate access and get automation ID
+    const authResult = await validateAutomationAccess(request, automationName);
     if (authResult.error) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
+    const automationId = authResult.automationId!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse query params
@@ -37,7 +38,7 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const statusFilter = searchParams.get('status');
 
-    // Get automation name
+    // Get automation details
     const { data: automation } = await supabase
       .from('automations')
       .select('id, name, display_name')
@@ -96,10 +97,11 @@ export async function GET(
       }
     }
 
-    // Format response
+    // Format response - include automation_name for frontend API calls
     const formattedExecutions = executions?.map(exec => ({
       id: exec.id,
       automation_id: exec.automation_id,
+      automation_name: automation.name,  // Include name for API calls
       status: exec.status,
       trigger_type: exec.trigger_type,
       current_step: exec.current_step,

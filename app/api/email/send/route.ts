@@ -7,6 +7,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 let cachedDomain: string | null = null;
 let domainCacheTime: number = 0;
 const DOMAIN_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const PREFERRED_NAME:string = "tulzo";
 
 async function getVerifiedDomain(): Promise<string> {
   // Return cached domain if still valid
@@ -27,7 +28,7 @@ async function getVerifiedDomain(): Promise<string> {
 
     // Find a verified domain with sending capability
     const verifiedDomain = data.data.find(
-      (d) => d.status === 'verified'
+      (d) => d.status === "verified" && d.name.includes(PREFERRED_NAME)
     );
 
     if (verifiedDomain) {

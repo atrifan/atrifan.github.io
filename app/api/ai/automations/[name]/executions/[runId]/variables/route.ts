@@ -6,7 +6,7 @@ const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * PUT /api/ai/automations/[id]/executions/[runId]/variables
+ * PUT /api/ai/automations/[name]/executions/[runId]/variables
  * Update variables on a running execution (for wait_for step polling)
  *
  * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
@@ -15,17 +15,18 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; runId: string }> }
+  { params }: { params: Promise<{ name: string; runId: string }> }
 ) {
   try {
-    const { id: automationId, runId } = await params;
+    const { name: automationName, runId } = await params;
 
-    // Validate access
-    const authResult = await validateExecutionAccess(request, automationId, runId);
+    // Validate access and get automation ID
+    const authResult = await validateExecutionAccess(request, automationName, runId);
     if (authResult.error) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
+    const automationId = authResult.automationId!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse body
@@ -96,24 +97,25 @@ export async function PUT(
 }
 
 /**
- * GET /api/ai/automations/[id]/executions/[runId]/variables
+ * GET /api/ai/automations/[name]/executions/[runId]/variables
  * Get current variables for an execution
  *
  * Auth: Clerk session OR API key (Bearer token or X-API-Key header)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; runId: string }> }
+  { params }: { params: Promise<{ name: string; runId: string }> }
 ) {
   try {
-    const { id: automationId, runId } = await params;
+    const { name: automationName, runId } = await params;
 
-    // Validate access
-    const authResult = await validateExecutionAccess(request, automationId, runId);
+    // Validate access and get automation ID
+    const authResult = await validateExecutionAccess(request, automationName, runId);
     if (authResult.error) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.statusCode || 401 });
     }
 
+    const automationId = authResult.automationId!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch execution

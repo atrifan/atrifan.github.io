@@ -74,7 +74,8 @@ export async function GET(request: NextRequest) {
       return {
         id: exec.id,
         automation_id: exec.automation_id,
-        automation_name: automation?.display_name || automation?.name || 'Unknown',
+        automation_name: automation?.name || 'unknown',  // Normalized name for API calls
+        automation_display_name: automation?.display_name || automation?.name || 'Unknown',  // For display
         status: exec.status,
         trigger_type: exec.trigger_type,
         current_step: exec.current_step,

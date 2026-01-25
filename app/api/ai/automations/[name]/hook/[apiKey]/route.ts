@@ -9,15 +9,15 @@ const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * POST /api/ai/automations/[id]/hook/[apiKey]
+ * POST /api/ai/automations/[name]/hook/[apiKey]
  * Webhook endpoint to trigger an automation run
- * 
+ *
  * Path params:
- * - id: Automation ID
+ * - name: Automation name (normalized snake_case name)
  * - apiKey: User's API key for authentication
- * 
+ *
  * Body: { inputs?: Record<string, unknown> }
- * 
+ *
  * Used for:
  * - External webhook triggers
  * - Manual runs (from UI with internal call)
@@ -26,10 +26,10 @@ const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; apiKey: string }> }
+  { params }: { params: Promise<{ name: string; apiKey: string }> }
 ) {
   try {
-    const { id: automationId, apiKey } = await params;
+    const { name: automationName, apiKey } = await params;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check for internal call (bypasses API key validation)
@@ -38,19 +38,41 @@ export async function POST(
     const isCronCall = cronSecret === process.env.CRON_SECRET && process.env.CRON_SECRET;
 
     let userId: string | null = null;
+    let automationId: string | null = null;
 
     if (isInternalCall || isCronCall) {
-      // Internal/cron calls - get user from automation directly
-      const { data: automation } = await supabase
-        .from('automations')
-        .select('user_id')
-        .eq('id', automationId)
-        .single();
-      
-      if (!automation) {
-        return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+      // Internal/cron calls - need to get automation by name
+      // For internal calls, we need user_id from a header or we need to find the automation differently
+      // Since internal calls come from the UI, we can use the x-user-id header
+      const headerUserId = request.headers.get('x-user-id');
+
+      if (headerUserId) {
+        const { data: automation } = await supabase
+          .from('automations')
+          .select('id, user_id')
+          .eq('name', automationName)
+          .eq('user_id', headerUserId)
+          .single();
+
+        if (!automation) {
+          return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+        }
+        userId = automation.user_id;
+        automationId = automation.id;
+      } else {
+        // Fallback: find first automation with this name (for cron jobs)
+        const { data: automation } = await supabase
+          .from('automations')
+          .select('id, user_id')
+          .eq('name', automationName)
+          .single();
+
+        if (!automation) {
+          return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+        }
+        userId = automation.user_id;
+        automationId = automation.id;
       }
-      userId = automation.user_id;
     } else {
       // External call - validate API key
       const keyHash = hashApiKey(apiKey);
@@ -78,9 +100,22 @@ export async function POST(
       }
 
       userId = apiKeyRecord.user_id;
+
+      // Look up automation by name and user_id
+      const { data: automationLookup } = await supabase
+        .from('automations')
+        .select('id')
+        .eq('name', automationName)
+        .eq('user_id', userId)
+        .single();
+
+      if (!automationLookup) {
+        return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+      }
+      automationId = automationLookup.id;
     }
 
-    // Fetch the automation and verify ownership
+    // Fetch the full automation details
     const { data: automation, error: fetchError } = await supabase
       .from('automations')
       .select('*')
@@ -281,7 +316,7 @@ ${fullInputUrl.toString()}
     const result = await runRealExecution({
       userId,
       userEmail,
-      automationId,
+      automationId: automationId!, // Non-null assertion: validated above
       executionId: execution.id,
       yamlDefinition: automation.yaml_definition,
       inputs,
