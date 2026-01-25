@@ -1,11 +1,11 @@
 # Robots.txt for Tulzo
-# https://tulzo.vercel.app
+# https://tulzo.online
 
 User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://tulzo.vercel.app/sitemap.xml
+Sitemap: https://tulzo.online/sitemap.xml
 
 # Crawl-delay (optional, for polite crawling)
 Crawl-delay: 1

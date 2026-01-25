@@ -51,6 +51,7 @@ interface AutomationFinderProps {
   selectedAutomationId?: string;
   onCreateNew?: () => void;
   onRefresh?: () => void;
+  userApiKey?: string; // User's API key for webhook URL display
 }
 
 // Status indicator colors
@@ -106,6 +107,7 @@ export function AutomationFinder({
   selectedAutomationId,
   onCreateNew,
   onRefresh,
+  userApiKey,
 }: AutomationFinderProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my_automations']));
   const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
@@ -404,9 +406,9 @@ export function AutomationFinder({
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Webhook URL</label>
               <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', color: '#10b981', wordBreak: 'break-all' }}>
-                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/YOUR_API_KEY
+                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/{userApiKey || 'YOUR_API_KEY'}
               </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>
+              {!userApiKey && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>}
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
@@ -423,7 +425,7 @@ export function AutomationFinder({
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>cURL Example</label>
               <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY" \\
+{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/${userApiKey || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{"inputs": {}}'`}
               </pre>

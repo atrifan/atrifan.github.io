@@ -37,7 +37,6 @@ interface Connector {
   external_auth_config?: Record<string, unknown>;
   external_headers?: Record<string, string>;
   mcp_server_id?: string;
-  api_key_id?: string;
 }
 
 interface MCPServer {
@@ -135,7 +134,7 @@ async function loadUserConnectors(
     .select(`
       id, connector_type, server_name, display_name,
       external_url, external_auth_type, external_auth_config, external_headers,
-      mcp_server_id, api_key_id
+      mcp_server_id
     `)
     .eq('user_id', userId)
     .eq('is_enabled', true)

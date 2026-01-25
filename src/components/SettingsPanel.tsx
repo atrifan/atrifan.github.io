@@ -212,6 +212,7 @@ export interface SettingsPanelProps {
   // Webhook info
   automationId?: string;
   webhookInputs?: Array<{ name: string; type: string; required: boolean }>;
+  userApiKey?: string; // User's API key for webhook URL display
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
@@ -288,6 +289,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
     setCronError,
     automationId,
     webhookInputs = [],
+    userApiKey,
   } = props;
 
   // Model dropdown state
@@ -1099,12 +1101,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
               {selectedSchedule === 'webhook' && automationId && (
                 <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>Webhook URL</div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', marginBottom: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from the dashboard</div>
+                  {!userApiKey && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', marginBottom: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from the dashboard</div>}
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                     <input
                       type="text"
                       readOnly
-                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${automationId}/hook/YOUR_API_KEY`}
+                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${automationId}/hook/${userApiKey || 'YOUR_API_KEY'}`}
                       style={{
                         flex: 1,
                         background: 'rgba(255,255,255,0.05)',
@@ -1118,7 +1120,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                     />
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/${automationId}/hook/YOUR_API_KEY`);
+                        navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/${automationId}/hook/${userApiKey || 'YOUR_API_KEY'}`);
                       }}
                       style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#10b981', cursor: 'pointer', fontSize: '0.8rem' }}
                     >
@@ -1130,7 +1132,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                   <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.75rem', position: 'relative' }}>
                     <pre style={{ color: '#e2e8f0', fontSize: '0.7rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', lineHeight: 1.5 }}>
 {`curl -X POST \\
-  ${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${automationId}/hook/YOUR_API_KEY \\
+  ${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${automationId}/hook/${userApiKey || 'YOUR_API_KEY'} \\
   -H "Content-Type: application/json" \\
   -d '${webhookInputs.length > 0
     ? JSON.stringify(Object.fromEntries(webhookInputs.map(i => [i.name, i.type === 'number' ? 0 : ''])), null, 2)
@@ -1139,7 +1141,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                     <button
                       onClick={() => {
                         const curl = `curl -X POST \\
-  ${window.location.origin}/api/ai/automations/${automationId}/hook/YOUR_API_KEY \\
+  ${window.location.origin}/api/ai/automations/${automationId}/hook/${userApiKey || 'YOUR_API_KEY'} \\
   -H "Content-Type: application/json" \\
   -d '${webhookInputs.length > 0
     ? JSON.stringify(Object.fromEntries(webhookInputs.map(i => [i.name, i.type === 'number' ? 0 : ''])))
