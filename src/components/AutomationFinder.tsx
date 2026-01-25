@@ -624,6 +624,7 @@ function ExecutionItem({
       </span>
       <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>{timeStr}</span>
       <div className="fm-action" style={{ display: 'flex', gap: '2px' }} onClick={e => e.stopPropagation()}>
+        <button onClick={onViewLogs} title="View Logs" style={{ background: 'rgba(59, 130, 246, 0.25)', border: 'none', borderRadius: '3px', padding: '2px 4px', cursor: 'pointer', fontSize: '9px', color: '#3b82f6' }}>📋</button>
         {exec.status === 'waiting_input' && (
           <button onClick={onProvideInput} title="Provide Input" style={{ background: 'rgba(245, 158, 11, 0.3)', border: 'none', borderRadius: '3px', padding: '2px 4px', cursor: 'pointer', fontSize: '9px', color: '#f59e0b' }}>✍</button>
         )}
