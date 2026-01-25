@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
 import { clerkClient } from '@clerk/nextjs/server';
 import { useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
+import { runRealExecution } from '@/src/lib/automation/runtime-executor';
 
 const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
@@ -256,17 +257,43 @@ ${fullInputUrl.toString()}
       });
     }
 
-    // TODO: Actually execute the automation steps
-    // For now, mark as completed immediately
-    await supabase
-      .from('automation_executions')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
-      .eq('id', execution.id);
+    // Ensure we have a valid userId
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID not found for this automation' },
+        { status: 500 }
+      );
+    }
+
+    // Get user email for workflow context
+    let userEmail: string | undefined;
+    if (userId) {
+      try {
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId);
+        userEmail = user.emailAddresses?.[0]?.emailAddress;
+      } catch (e) {
+        console.warn('Could not fetch user email:', e);
+      }
+    }
+
+    // Execute workflow with real MCP tool calls
+    const result = await runRealExecution({
+      userId,
+      userEmail,
+      automationId,
+      executionId: execution.id,
+      yamlDefinition: automation.yaml_definition,
+      inputs,
+      triggerType,
+    });
 
     return NextResponse.json({
       execution_id: execution.id,
-      status: 'running',
-      message: 'Automation triggered successfully',
+      status: result.status,
+      message: result.success ? 'Automation completed successfully' : 'Automation failed',
+      output: result.output,
+      error: result.error,
     });
   } catch (error) {
     console.error('Webhook hook error:', error);

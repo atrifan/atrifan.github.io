@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateApiKeyFromRequest } from '@/src/lib/automation/auth';
+import { runRealExecution } from '@/src/lib/automation/runtime-executor';
 import * as yaml from 'yaml';
 
 const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
@@ -134,24 +135,39 @@ export async function POST(request: NextRequest) {
       status: 'started',
     });
 
-    // TODO: In production, this would trigger the actual workflow execution
-    // For now, we'll simulate a simple execution flow
-    // The actual execution would be handled by a background worker or edge function
+    // Get user email for workflow context
+    let userEmail: string | undefined;
+    try {
+      const clerk = await clerkClient();
+      const user = await clerk.users.getUser(userId);
+      userEmail = user.emailAddresses?.[0]?.emailAddress;
+    } catch (e) {
+      console.warn('Could not fetch user email:', e);
+    }
 
-    // Simulate execution (for demo purposes)
-    // In production, this would be replaced with actual workflow execution
+    // Execute workflow with real MCP tool calls
     // NOTE: We await this to ensure it completes before Vercel terminates the function
-    await simulateExecution(supabase, execution.id, dbAutomationId, automation.yaml_definition);
+    const result = await runRealExecution({
+      userId,
+      userEmail,
+      automationId: dbAutomationId,
+      executionId: execution.id,
+      yamlDefinition: automation.yaml_definition,
+      inputs: inputs || {},
+      triggerType: triggerType as 'manual' | 'webhook' | 'cron' | 'cli' | 'automation',
+    });
 
     return NextResponse.json({
-      success: true,
+      success: result.success,
       execution: {
         id: execution.id,
         automation_id: dbAutomationId,
         workflow_id: workflowId,
-        status: 'running',
+        status: result.status,
         trigger_type: triggerType,
         started_at: execution.started_at,
+        output: result.output,
+        error: result.error,
       },
     });
   } catch (error) {
@@ -161,53 +177,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Simulate execution for demo purposes
- * In production, this would be replaced with actual workflow execution
- */
-async function simulateExecution(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  executionId: string,
-  automationId: string,
-  _yamlDefinition: string
-) {
-  // This runs in the background (fire and forget)
-  // In production, use a proper queue/worker system
-
-  const steps = ['Parsing workflow', 'Validating inputs', 'Executing steps', 'Completing'];
-
-  for (let i = 0; i < steps.length; i++) {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-
-    await supabase.from('automation_logs').insert({
-      execution_id: executionId,
-      automation_id: automationId,
-      level: 'info',
-      step_name: `Step ${i + 1}`,
-      message: steps[i],
-      status: i === steps.length - 1 ? 'completed' : 'started',
-      duration_ms: Math.floor(Math.random() * 500) + 100,
-    });
-  }
-
-  // Mark execution as completed
-  await supabase
-    .from('automation_executions')
-    .update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-    })
-    .eq('id', executionId);
-
-  await supabase.from('automation_logs').insert({
-    execution_id: executionId,
-    automation_id: automationId,
-    level: 'info',
-    message: 'Execution completed successfully',
-    status: 'completed',
-  });
 }
 
