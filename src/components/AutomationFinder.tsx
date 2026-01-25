@@ -113,6 +113,7 @@ export function AutomationFinder({
   const [loadingExecutions, setLoadingExecutions] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'folder' | 'automation' | 'execution'; item: unknown } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [webhookAutomation, setWebhookAutomation] = useState<Automation | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   // Merge provided categories with defaults
@@ -337,6 +338,7 @@ export function AutomationFinder({
                     onRunAutomation={onRunAutomation}
                     onEditAutomation={onEditAutomation}
                     onDeleteAutomation={onDeleteAutomation}
+                    onWebhook={(auto: Automation) => setWebhookAutomation(auto)}
                     onViewLogs={onViewLogs}
                     onProvideInput={onProvideInput}
                     onStopExecution={onStopExecution}
@@ -389,6 +391,94 @@ export function AutomationFinder({
           )}
         </div>
       )}
+
+      {/* Webhook Modal */}
+      {webhookAutomation && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }} onClick={() => setWebhookAutomation(null)}>
+          <div style={{ background: 'rgba(30,30,40,0.98)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '16px' }}>🔗 Webhook for &quot;{webhookAutomation.name}&quot;</h3>
+              <button onClick={() => setWebhookAutomation(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '18px' }}>×</button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Webhook URL</label>
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', color: '#10b981', wordBreak: 'break-all' }}>
+                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/YOUR_API_KEY
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Required Payload (JSON)</label>
+              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '11px', color: '#f59e0b', margin: 0, overflow: 'auto' }}>
+{`{
+  "inputs": {
+    // Optional: any input parameters for the automation
+  }
+}`}
+              </pre>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>cURL Example</label>
+              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"inputs": {}}'`}
+              </pre>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY`;
+                  navigator.clipboard.writeText(url);
+                }}
+                style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', padding: '0.5rem 1rem', color: '#10b981', cursor: 'pointer', fontSize: '12px' }}
+              >
+                📋 Copy URL
+              </button>
+              <button onClick={() => setWebhookAutomation(null)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '12px' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Webhook Modal */}
+      {webhookAutomation && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }} onClick={() => setWebhookAutomation(null)}>
+          <div style={{ background: 'rgba(30,30,40,0.98)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '12px', padding: '1.5rem', maxWidth: '600px', width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '16px' }}>🔗 Webhook for &quot;{webhookAutomation.name}&quot;</h3>
+              <button onClick={() => setWebhookAutomation(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '18px' }}>×</button>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Webhook URL</label>
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', color: '#10b981', wordBreak: 'break-all' }}>
+                {typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/{webhookAutomation.id}/hook/YOUR_API_KEY
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '0.5rem' }}>Replace YOUR_API_KEY with your actual API key from Settings.</p>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>Required Payload (JSON)</label>
+              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '11px', color: '#f59e0b', margin: 0, overflow: 'auto' }}>{`{
+  "inputs": { /* optional input parameters */ }
+}`}</pre>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', display: 'block', marginBottom: '0.5rem' }}>cURL Example</label>
+              <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '10px', color: '#60a5fa', margin: 0, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{`curl -X POST "${typeof window !== 'undefined' ? window.location.origin : ''}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"inputs": {}}'`}</pre>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/ai/automations/${webhookAutomation.id}/hook/YOUR_API_KEY`); }} style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', padding: '0.5rem 1rem', color: '#10b981', cursor: 'pointer', fontSize: '12px' }}>📋 Copy URL</button>
+              <button onClick={() => setWebhookAutomation(null)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', padding: '0.5rem 1rem', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '12px' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -405,6 +495,7 @@ function AutomationList({
   onRunAutomation,
   onEditAutomation,
   onDeleteAutomation,
+  onWebhook,
   onViewLogs,
   onProvideInput,
   onStopExecution,
@@ -425,6 +516,7 @@ function AutomationList({
   onRunAutomation: (auto: Automation) => void;
   onEditAutomation: (auto: Automation) => void;
   onDeleteAutomation: (auto: Automation) => void;
+  onWebhook: (auto: Automation) => void;
   onViewLogs: (exec: Execution) => void;
   onProvideInput: (exec: Execution) => void;
   onStopExecution: (exec: Execution) => void;
@@ -450,6 +542,7 @@ function AutomationList({
           onRun={() => onRunAutomation(auto)}
           onEdit={() => onEditAutomation(auto)}
           onDelete={() => onDeleteAutomation(auto)}
+          onWebhook={() => onWebhook(auto)}
           onViewLogs={onViewLogs}
           onProvideInput={onProvideInput}
           onStopExecution={onStopExecution}
@@ -479,6 +572,7 @@ function AutomationItem({
   onRun,
   onEdit,
   onDelete,
+  onWebhook,
   onViewLogs,
   onProvideInput,
   onStopExecution,
@@ -499,6 +593,7 @@ function AutomationItem({
   onRun: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onWebhook: () => void;
   onViewLogs: (exec: Execution) => void;
   onProvideInput: (exec: Execution) => void;
   onStopExecution: (exec: Execution) => void;
@@ -543,6 +638,7 @@ function AutomationItem({
         <div className="fm-action" style={{ display: 'flex', gap: '2px' }} onClick={e => e.stopPropagation()}>
           <button onClick={onRun} title="Run" style={{ background: 'rgba(16, 185, 129, 0.25)', border: 'none', borderRadius: '3px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px', color: '#10b981' }}>▶</button>
           <button onClick={onEdit} title="Edit" style={{ background: 'rgba(59, 130, 246, 0.25)', border: 'none', borderRadius: '3px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px', color: '#3b82f6' }}>✎</button>
+          <button onClick={onWebhook} title="Webhook" style={{ background: 'rgba(139, 92, 246, 0.25)', border: 'none', borderRadius: '3px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px', color: '#8b5cf6' }}>🔗</button>
           <button onClick={onDelete} title="Delete" style={{ background: 'rgba(239, 68, 68, 0.25)', border: 'none', borderRadius: '3px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px', color: '#ef4444' }}>×</button>
         </div>
       </div>
