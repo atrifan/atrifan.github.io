@@ -17,7 +17,7 @@ const DEFAULT_MONTHLY_BUDGET = 5.00;
 const AI_MODELS = [
   { id: 'mistral/ministral-3b', name: 'Ministral 3B', icon: '⚡', provider: 'Mistral', inputCostPer1M: 0.04, outputCostPer1M: 0.04 },
   { id: 'openai/gpt-5-nano', name: 'GPT-5 Nano', icon: '⚡', provider: 'OpenAI', inputCostPer1M: 0.05, outputCostPer1M: 0.40 },
-  { id: 'meta/llama-3.1-8b', name: 'Llama 3.1 8B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0, outputCostPer1M: 0 },
+  { id: 'meta/llama-3.1-8b', name: 'Llama 3.1 8B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0.02, outputCostPer1M: 0.05 },
   { id: 'meta/llama-3.2-1b', name: 'Llama 3.2 1B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0.10, outputCostPer1M: 0.10 },
   { id: 'google/gemini-2.0-flash-lite', name: 'Gemini Flash Lite', icon: '✨', provider: 'Google', inputCostPer1M: 0.10, outputCostPer1M: 0.40 },
   { id: 'mistral/mistral-nemo', name: 'Mistral Nemo', icon: '🔮', provider: 'Mistral', inputCostPer1M: 0.15, outputCostPer1M: 0.15 },
