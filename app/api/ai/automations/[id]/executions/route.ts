@@ -53,6 +53,7 @@ export async function GET(
       .from('automation_executions')
       .select(`
         id,
+        automation_id,
         status,
         trigger_type,
         current_step,
@@ -98,6 +99,7 @@ export async function GET(
     // Format response
     const formattedExecutions = executions?.map(exec => ({
       id: exec.id,
+      automation_id: exec.automation_id,
       status: exec.status,
       trigger_type: exec.trigger_type,
       current_step: exec.current_step,
