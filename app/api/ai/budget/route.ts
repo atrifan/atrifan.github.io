@@ -15,12 +15,15 @@ const DEFAULT_MONTHLY_BUDGET = 5.00;
 
 // AI Models (server-side copy for budget calculations)
 const AI_MODELS = [
-  { id: 'mistral/ministral-3b', name: 'Ministral 3B', icon: '🔮', provider: 'Mistral', inputCostPer1M: 0.04, outputCostPer1M: 0.04 },
-  { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0, outputCostPer1M: 0 },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', icon: '💎', provider: 'Google', inputCostPer1M: 0.1, outputCostPer1M: 0.4 },
-  { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', icon: '🎭', provider: 'Anthropic', inputCostPer1M: 0.80, outputCostPer1M: 4.00 },
+  { id: 'mistral/ministral-3b', name: 'Ministral 3B', icon: '⚡', provider: 'Mistral', inputCostPer1M: 0.04, outputCostPer1M: 0.04 },
+  { id: 'openai/gpt-5-nano', name: 'GPT-5 Nano', icon: '⚡', provider: 'OpenAI', inputCostPer1M: 0.05, outputCostPer1M: 0.40 },
+  { id: 'meta/llama-3.1-8b', name: 'Llama 3.1 8B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0, outputCostPer1M: 0 },
+  { id: 'meta/llama-3.2-1b', name: 'Llama 3.2 1B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0.10, outputCostPer1M: 0.10 },
+  { id: 'google/gemini-2.0-flash-lite', name: 'Gemini Flash Lite', icon: '✨', provider: 'Google', inputCostPer1M: 0.10, outputCostPer1M: 0.40 },
+  { id: 'mistral/mistral-nemo', name: 'Mistral Nemo', icon: '🔮', provider: 'Mistral', inputCostPer1M: 0.15, outputCostPer1M: 0.15 },
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', icon: '🤖', provider: 'OpenAI', inputCostPer1M: 0.15, outputCostPer1M: 0.60 },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', icon: '🌊', provider: 'DeepSeek', inputCostPer1M: 0.14, outputCostPer1M: 0.28 },
+  { id: 'deepseek/deepseek-v3', name: 'DeepSeek V3', icon: '🔍', provider: 'DeepSeek', inputCostPer1M: 0.27, outputCostPer1M: 1.10 },
+  { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', icon: '🎵', provider: 'Anthropic', inputCostPer1M: 0.80, outputCostPer1M: 4.00 },
 ];
 
 // Embedding Models (server-side copy for budget calculations)

@@ -1417,10 +1417,15 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
               <Link href="/chat" style={{ textDecoration: 'none' }}>
                 <button style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
                   💬 Open AI Chat
+                </button>
+              </Link>
+              <Link href="/dashboard/models" style={{ textDecoration: 'none' }}>
+                <button style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
+                  🔍 Explore Models & Costs
                 </button>
               </Link>
             </div>
