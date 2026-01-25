@@ -10,6 +10,7 @@ export interface AIModel {
   inputCostPer1M: number;  // $ per 1M tokens
   outputCostPer1M: number; // $ per 1M tokens
   contextWindow: number;
+  maxOutput?: number;      // Max output tokens (optional, defaults to contextWindow)
   description: string;
   capabilities: string[];
 }
