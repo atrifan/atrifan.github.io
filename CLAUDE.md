@@ -258,12 +258,78 @@ YAML → Parse → executeWorkflow() → runtime-executor.ts → tool-executor-s
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| GraphQL specs | ❌ | Table exists, no UI |
 | A2A agents creation | ❌ | Client exists, no creation UI |
 | Approval workflows | ❌ | `requireApprovalFor` not wired |
 | Event triggers | ❌ | Schema exists, not implemented |
-| Slack output | ❌ | Type exists, not implemented |
-| Webhook output | ❌ | Type exists, not implemented |
+| Slack output | ❌ | Use MCP tool with `SLACK_TOKEN` in YAML |
+| Webhook output | ❌ | Use `code:` step with fetch or MCP tool |
+
+## What IS Fully Implemented
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| GraphQL specs | ✅ | Import via introspection, `graphql-handler.ts` executes queries/mutations |
+| RAG as MCP tools | ✅ | Query knowledge bases via MCP tools, OAuth support with login flow on auth failure |
+| MCP servers | ✅ | Full tool discovery, OAuth, execution |
+| REST API specs | ✅ | OpenAPI/Swagger import, tool generation |
+| Push/Email notifications | ✅ | Direct `fetch()` in `runtime-executor.ts` |
+
+### Event Triggers (Future Implementation)
+
+**Event triggers** are an internal event bus system where automations can listen for named events and trigger automatically. This is different from webhooks (external HTTP calls) or notifications (push/email/slack outputs).
+
+**Concept:**
+- Some part of the system emits a named event (e.g., `order.created`)
+- All automations with `trigger.type: event` listening for that event name get triggered
+- Optional filter expression to only trigger on matching events
+
+**Type Definition** (in `src/lib/automation/types.ts`):
+```typescript
+export interface EventTrigger {
+  type: 'event';
+  event: {
+    name: string;    // e.g., "order.created", "user.signup"
+    filter?: string; // JavaScript expression to filter events
+  };
+}
+```
+
+**Example YAML:**
+```yaml
+name: high-value-order-alert
+trigger:
+  type: event
+  event:
+    name: "order.created"
+    filter: "event.order.total > 100"
+
+steps:
+  - id: notify_sales
+    tool: slack-mcp.send_message
+    params:
+      token: "{{inputs.slack_token}}"
+      channel: "#sales"
+      message: "🎉 High value order: ${{event.order.total}} from {{event.customer.name}}"
+
+  - id: send_email
+    notify:
+      channels: [email]
+      message: "New high-value order received: ${{event.order.total}}"
+```
+
+**How it would work:**
+1. An event emitter (API route, another automation, or external system) calls an internal event bus
+2. Event bus looks up all automations with `trigger.type: event` matching the event name
+3. For each matching automation, evaluate the `filter` expression against the event payload
+4. If filter passes (or no filter), trigger the automation with `event` as trigger data
+
+**Implementation needed:**
+- Event bus service with `emit(eventName, payload)` function
+- API route to emit events: `POST /api/events/emit`
+- Modify cron job or create daemon to listen for events
+- Store events in a queue table for reliable delivery
+
+**Current workaround:** Use webhooks + `trigger_automation` step to achieve similar behavior.
 
 ## API Routes Reference
 
