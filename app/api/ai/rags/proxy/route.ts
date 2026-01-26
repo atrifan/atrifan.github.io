@@ -93,7 +93,21 @@ async function refreshOAuth2Token(
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
+    // Support internal server-to-server calls with INTERNAL_API_SECRET
+    const internalSecret = request.headers.get('x-internal-secret');
+    const internalUserId = request.headers.get('x-internal-user-id');
+
+    let userId: string | null = null;
+
+    if (internalSecret && internalUserId && internalSecret === process.env.INTERNAL_API_SECRET) {
+      // Internal call from MCP route - bypass Clerk auth
+      userId = internalUserId;
+    } else {
+      // Normal browser call - use Clerk auth
+      const authResult = await auth();
+      userId = authResult.userId;
+    }
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

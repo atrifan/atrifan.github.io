@@ -262,6 +262,9 @@ export async function getRAGByToolName(toolName: string): Promise<{
   request_content_type: string;
   field_mapping: Record<string, string> | null;
   user_id: string;
+  auth_type: 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2' | 'custom' | null;
+  auth_config: Record<string, unknown> | null;
+  custom_headers: Record<string, string> | null;
 } | null> {
   // Parse tool name: rag_{env}-{name}-search
   const match = toolName.match(/^rag_([a-z0-9-]+)-(.+)-search$/);
@@ -271,7 +274,7 @@ export async function getRAGByToolName(toolName: string): Promise<{
 
   const { data, error } = await supabase
     .from('user_rags')
-    .select('id, name, rag_name, source_type, embedding_model, embedding_dimensions, top_n, remote_url, http_method, params_location, request_content_type, field_mapping, user_id')
+    .select('id, name, rag_name, source_type, embedding_model, embedding_dimensions, top_n, remote_url, http_method, params_location, request_content_type, field_mapping, user_id, auth_type, auth_config, custom_headers')
     .eq('rag_name', ragName)
     .eq('environment_name', envName)
     .single();

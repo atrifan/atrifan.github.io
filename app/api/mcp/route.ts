@@ -899,46 +899,88 @@ async function executeToolAsync(
           },
         };
       } else {
-        // For URL RAGs, we need to:
-        // 1. Generate embeddings if the remote endpoint expects them
-        // 2. Call the remote endpoint with the query/embeddings
-
-        // Build request based on field mapping
+        // For URL RAGs, use the RAG proxy which handles auth (including OAuth)
         const fieldMapping = rag.field_mapping || { query: 'query', top_n: 'top_n' };
-        const requestBody: Record<string, unknown> = {
-          [fieldMapping.query || 'query']: query,
-          [fieldMapping.top_n || 'top_n']: topN,
-        };
 
-        // If embedding model is specified, we need to generate embeddings first
-        if (rag.embedding_model && fieldMapping.embedding) {
-          // TODO: Call embedding API to generate embeddings
-          // For now, we'll pass the query and let the remote handle it
-          // This would be enhanced to call the embedding model first
+        // Build auth config for proxy
+        const authConfig: { apiKey?: string; bearerToken?: string; basicCredentials?: string } = {};
+        if (rag.auth_type === 'api_key' && rag.auth_config) {
+          authConfig.apiKey = (rag.auth_config as { api_key?: string }).api_key;
+        } else if (rag.auth_type === 'bearer' && rag.auth_config) {
+          authConfig.bearerToken = (rag.auth_config as { token?: string }).token;
+        } else if (rag.auth_type === 'basic' && rag.auth_config) {
+          const basicConfig = rag.auth_config as { username?: string; password?: string };
+          authConfig.basicCredentials = `${basicConfig.username || ''}:${basicConfig.password || ''}`;
         }
 
-        // Make the request to the remote URL
-        const method = rag.http_method || 'POST';
-        const contentType = rag.request_content_type || 'application/json';
+        // Build OAuth2 config if needed
+        const oauth2Config = rag.auth_type === 'oauth2' && rag.auth_config ? {
+          tokenEndpoint: (rag.auth_config as { token_endpoint?: string }).token_endpoint,
+          clientId: (rag.auth_config as { client_id?: string }).client_id,
+          clientSecret: (rag.auth_config as { client_secret?: string }).client_secret,
+        } : undefined;
 
-        const fetchOptions: RequestInit = {
-          method,
-          headers: { 'Content-Type': contentType },
-        };
+        // Call the RAG proxy with internal auth headers for server-to-server call
+        const proxyResponse = await fetch(`${process.env.NEXT_PUBLIC_URL || 'https://tulzo.com'}/api/ai/rags/proxy`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+            'x-internal-user-id': userId,
+          },
+          body: JSON.stringify({
+            url: rag.remote_url,
+            method: rag.http_method || 'POST',
+            paramsLocation: rag.params_location || 'body',
+            contentType: rag.request_content_type || 'application/json',
+            authType: rag.auth_type || 'none',
+            authConfig,
+            oauth2Config,
+            customHeaders: rag.custom_headers || {},
+            fieldMapping: {
+              query: fieldMapping.query || 'query',
+              embedding: fieldMapping.embedding || 'embedding',
+              top_n: fieldMapping.top_n || 'top_n',
+              dimensions: fieldMapping.dimensions || 'dimensions',
+              model: fieldMapping.model || 'model',
+            },
+            query,
+            topN,
+            generateEmbedding: !!rag.embedding_model,
+            embeddingModel: rag.embedding_model,
+            dimensions: rag.embedding_dimensions,
+            ragId: rag.id,
+          }),
+        });
 
-        if (method !== 'GET') {
-          fetchOptions.body = JSON.stringify(requestBody);
+        const proxyData = await proxyResponse.json();
+
+        // Check if OAuth is needed
+        if (proxyData.needsOAuth) {
+          return {
+            result: {
+              error: proxyData.error || 'OAuth authentication required',
+              needsOAuth: true,
+              oauthServerId: proxyData.oauthServerId || rag.id,
+              oauthServerType: 'rag',
+              loginUrl: `/mcp/${context?.serverName || 'default'}/login?tool_id=${encodeURIComponent(name)}`,
+            },
+            isRestTool: false,
+            toolInfo: {
+              hasWidget: false,
+              invokingMessage: dbTool.invoking_message || `Searching ${rag.name}...`,
+              invokedMessage: dbTool.invoked_message || 'Search complete',
+            },
+          };
         }
 
-        const response = await fetch(rag.remote_url!, fetchOptions);
-
-        if (!response.ok) {
-          throw new Error(`Remote RAG search failed: ${response.status}`);
+        // Check for proxy errors
+        if (!proxyResponse.ok || proxyData.error) {
+          throw new Error(proxyData.error || `Remote RAG search failed: ${proxyData.status}`);
         }
 
-        const data = await response.json();
         return {
-          result: data,
+          result: proxyData.data,
           isRestTool: false,
           toolInfo: {
             hasWidget: false,

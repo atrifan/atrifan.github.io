@@ -97,6 +97,10 @@ async function findToolSource(toolId: string, userId: string): Promise<OAuthSour
   const a2aResult = await checkA2AAgent(toolId, userId);
   if (a2aResult) return a2aResult;
 
+  // Check RAG (URL RAGs only, not CSV)
+  const ragResult = await checkRAG(toolId, userId);
+  if (ragResult) return ragResult;
+
   return null;
 }
 
@@ -225,6 +229,44 @@ async function checkA2AAgent(toolId: string, userId: string): Promise<OAuthSourc
     sourceType: 'a2a',
     sourceId: agent.id,
     sourceName: agent.display_name,
+    oauthConfig,
+    toolName: tool.name,
+  };
+}
+
+async function checkRAG(toolId: string, userId: string): Promise<OAuthSourceResult | null> {
+  // First find the tool in the tools table
+  const { data: tool } = await supabase
+    .from('tools')
+    .select('id, name, tool_type')
+    .eq('id', toolId)
+    .eq('tool_type', 'RAG')
+    .single();
+
+  if (!tool) return null;
+
+  // Extract RAG name from tool name (format: "rag_name.tool_name" or just the rag name)
+  const ragName = tool.name.split('.')[0];
+
+  // Find the URL RAG (has remote_url, not CSV)
+  const { data: rag } = await supabase
+    .from('user_rags')
+    .select('id, name, auth_type, auth_config, user_id, remote_url')
+    .eq('user_id', userId)
+    .ilike('name', ragName)
+    .not('remote_url', 'is', null)
+    .single();
+
+  if (!rag) return null;
+  if (rag.auth_type !== 'oauth2') return null;
+
+  const oauthConfig = rag.auth_config as unknown as OAuth2AuthConfig;
+  if (!oauthConfig?.authorization_endpoint || !oauthConfig?.token_endpoint) return null;
+
+  return {
+    sourceType: 'rag',
+    sourceId: rag.id,
+    sourceName: rag.name,
     oauthConfig,
     toolName: tool.name,
   };
