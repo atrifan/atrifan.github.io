@@ -221,15 +221,16 @@ async function checkA2AAgent(toolId: string, userId: string): Promise<OAuthSourc
     .single();
 
   if (!agent) return null;
-  if (agent.auth_type !== 'oauth2') return null;
+  const agentData = agent as { id: string; display_name: string; auth_type: string; auth_config: unknown; user_id: string };
+  if (agentData.auth_type !== 'oauth2') return null;
 
-  const oauthConfig = agent.auth_config as unknown as OAuth2AuthConfig;
+  const oauthConfig = agentData.auth_config as unknown as OAuth2AuthConfig;
   if (!oauthConfig?.authorization_endpoint || !oauthConfig?.token_endpoint) return null;
 
   return {
     sourceType: 'a2a',
-    sourceId: agent.id,
-    sourceName: agent.display_name,
+    sourceId: agentData.id,
+    sourceName: agentData.display_name,
     oauthConfig,
     toolName: toolData.name,
   };
@@ -260,15 +261,16 @@ async function checkRAG(toolId: string, userId: string): Promise<OAuthSourceResu
     .single();
 
   if (!rag) return null;
-  if (rag.auth_type !== 'oauth2') return null;
+  const ragData = rag as { id: string; name: string; auth_type: string; auth_config: unknown; user_id: string; remote_url: string };
+  if (ragData.auth_type !== 'oauth2') return null;
 
-  const oauthConfig = rag.auth_config as unknown as OAuth2AuthConfig;
+  const oauthConfig = ragData.auth_config as unknown as OAuth2AuthConfig;
   if (!oauthConfig?.authorization_endpoint || !oauthConfig?.token_endpoint) return null;
 
   return {
     sourceType: 'rag',
-    sourceId: rag.id,
-    sourceName: rag.name,
+    sourceId: ragData.id,
+    sourceName: ragData.name,
     oauthConfig,
     toolName: toolData.name,
   };

@@ -273,6 +273,26 @@ YAML → Parse → executeWorkflow() → runtime-executor.ts → tool-executor-s
 | MCP servers | ✅ | Full tool discovery, OAuth, execution, external surface OAuth via `/mcp/{serverName}/login` |
 | REST API specs | ✅ | OpenAPI/Swagger import, tool generation |
 | Push/Email notifications | ✅ | Direct `fetch()` in `runtime-executor.ts` |
+| A2A agents | ✅ | Full OAuth support across all contexts including external surfaces |
+
+### OAuth Support Matrix
+
+All tool types have full OAuth support across all execution contexts:
+
+| Tool Type | Automation | Internal Chat | External Surface | OAuth Source Lookup |
+|-----------|------------|---------------|------------------|---------------------|
+| **MCP** | ✅ | ✅ | ✅ `loginUrl` | ✅ `checkMCPServerTool()` |
+| **REST** | ✅ | ✅ | ✅ `loginUrl` | ✅ `checkRESTEndpoint()` |
+| **GraphQL** | ✅ | ✅ | ✅ `loginUrl` | ✅ `checkGraphQLSpec()` |
+| **A2A** | ✅ | ✅ | ✅ `loginUrl` | ✅ `checkA2AAgent()` |
+| **RAG (URL)** | ✅ | ✅ | ✅ `loginUrl` | ✅ `checkRAG()` |
+| **RAG (CSV)** | N/A | N/A | N/A | N/A (internal only) |
+
+**Key Files:**
+- `app/api/mcp/route.ts` - Returns `loginUrl` for all tool types on OAuth error
+- `app/api/mcp/oauth-source/route.ts` - `findToolSource()` looks up OAuth config for login page
+- `app/api/ai/rags/proxy/route.ts` - RAG proxy with OAuth handling, supports internal calls via `INTERNAL_API_SECRET`
+- `app/mcp/[serverName]/login/page.tsx` - External surface OAuth login page
 
 ### Event Triggers (Future Implementation)
 
