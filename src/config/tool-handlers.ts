@@ -595,6 +595,8 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
           },
           tag: args.tag as string,
           requireInteraction: args.requireInteraction as boolean,
+          // Send to all channels by default (don't filter by type) - matches CLI behavior
+          channels: args.channels as string[] || ['all'],
         }),
       });
 
