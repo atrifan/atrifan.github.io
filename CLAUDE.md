@@ -700,6 +700,98 @@ sequenceDiagram
     end
 ```
 
+### MCP Composer Flow (Import Sources)
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as DashboardPage
+    participant API as /api/mcp/servers
+    participant Parser as Spec Parser
+    participant MCP as External MCP
+    participant DB as Supabase
+
+    User->>UI: Open MCP Composer
+    UI->>User: Show import options
+
+    alt Import from MCP URL
+        User->>UI: Enter MCP server URL
+        UI->>API: POST /mcp/servers {url}
+        API->>MCP: GET /.well-known/mcp.json
+        MCP-->>API: Server manifest
+        API->>MCP: POST /tools/list
+        MCP-->>API: Tool definitions
+        API->>DB: Insert mcp_server + tools
+        API-->>UI: Server imported
+
+    else Import from OpenAPI/Swagger
+        User->>UI: Upload OpenAPI spec file
+        UI->>API: POST /rest-specs {file}
+        API->>Parser: Parse OpenAPI 3.x / Swagger 2.x
+        Parser-->>API: {endpoints, schemas}
+        API->>API: Convert endpoints to MCP tools
+        API->>DB: Insert rest_api_spec
+        API->>DB: Insert rest_api_endpoints
+        API-->>UI: API imported as tools
+
+    else Import from Postman Collection
+        User->>UI: Upload Postman JSON
+        UI->>API: POST /rest-specs {file, type: "postman"}
+        API->>Parser: Parse Postman v2.1
+        Parser-->>API: {requests, folders}
+        API->>API: Convert requests to endpoints
+        API->>DB: Insert rest_api_spec
+        API->>DB: Insert rest_api_endpoints
+        API-->>UI: Collection imported
+
+    else Import from cURL
+        User->>UI: Paste cURL command
+        UI->>API: POST /rest-specs/curl {curl}
+        API->>Parser: Parse cURL syntax
+        Parser-->>API: {method, url, headers, body}
+        API->>API: Create single endpoint
+        API->>DB: Insert rest_api_endpoint
+        API-->>UI: Endpoint created
+
+    else Import from GraphQL
+        User->>UI: Enter GraphQL endpoint
+        UI->>API: POST /graphql-specs {url}
+        API->>MCP: POST {query: introspection}
+        MCP-->>API: Schema introspection
+        API->>Parser: Parse GraphQL schema
+        Parser-->>API: {queries, mutations, types}
+        API->>DB: Insert graphql_spec
+        API-->>UI: GraphQL imported
+    end
+
+    Note over User,DB: Configure authentication...
+    User->>UI: Select auth type
+    alt API Key auth
+        User->>UI: Enter API key + header name
+        UI->>API: PUT /servers/{id} {auth: {type: "apiKey"}}
+    else Bearer token
+        User->>UI: Enter bearer token
+        UI->>API: PUT /servers/{id} {auth: {type: "bearer"}}
+    else OAuth 2.0
+        User->>UI: Enter client_id, secret, URLs
+        UI->>API: PUT /servers/{id} {oauth_config}
+    else Basic auth
+        User->>UI: Enter username, password
+        UI->>API: PUT /servers/{id} {auth: {type: "basic"}}
+    end
+    API->>DB: Update auth config
+    API-->>UI: Auth configured
+
+    Note over User,DB: Compose into unified toolset...
+    User->>UI: Select servers to compose
+    UI->>DB: Fetch selected servers + tools
+    DB-->>UI: Tool definitions
+    UI->>User: Show unified tool palette
+    User->>UI: Assign to chat/automation
+    UI->>API: POST /chat-connectors {serverIds}
+    API->>DB: Insert chat_connectors
+    API-->>UI: Composition complete
+```
+
 ### Chat Connector Composition Flow
 ```mermaid
 sequenceDiagram
