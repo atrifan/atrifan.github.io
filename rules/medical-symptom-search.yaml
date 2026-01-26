@@ -25,7 +25,7 @@ inputs:
 steps:
   # Step 1: Search medical records using RAG
   - id: searchMedicalRecords
-    tool: default.rag_default-medical-search
+    tool: default.rag_medical
     params:
       query: "{{symptoms}}"
       top_n: "{{result_count}}"
@@ -38,16 +38,18 @@ steps:
       # Step 3a: Format results for display
       - id: formatResults
         code: |
-          const results = searchResults.results;
-          const formatted = results.map((r, i) => {
-            const score = (r.similarity * 100).toFixed(1);
-            return `${i + 1}. [${score}% match]\n   ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
-          }).join('\n\n');
-          ({
-            count: results.length,
-            summary: formatted,
-            topMatch: results[0].content
-          })
+          (() => {
+            const results = searchResults.results;
+            const formatted = results.map((r, i) => {
+              const pct = (r.score * 100).toFixed(1);
+              return `${i + 1}. ${r.title || 'Unknown'} [${pct}% match]\n   ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
+            }).join('\n\n');
+            return {
+              count: results.length,
+              summary: formatted,
+              topMatch: results[0].content
+            };
+          })()
         output: formattedResults
 
       # Step 4a: Send push notification with results summary
@@ -56,7 +58,6 @@ steps:
         params:
           title: "🏥 Medical Search Complete"
           body: "Found {{formattedResults.count}} records matching '{{symptoms}}'. Check your email for details."
-          type: success
           requireInteraction: true
         output: pushResult
 
@@ -94,7 +95,6 @@ steps:
         params:
           title: "🏥 Medical Search"
           body: "No records found matching '{{symptoms}}'"
-          type: info
         output: pushNoResult
 
       # Step 4b: Send email about no results

@@ -97,22 +97,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Filter by channel if specified
+    // If channels includes 'all', send to all subscriptions without filtering
+    const sendToAll = channels?.includes('all');
     const notificationType = data?.type || 'general';
-    const filteredSubscriptions = channels 
-      ? subscriptions.filter(sub => {
-          const subChannels = sub.channels as string[] || [];
-          return channels.some((c: string) => subChannels.includes(c));
-        })
-      : subscriptions.filter(sub => {
-          const subChannels = sub.channels as string[] || [];
-          return subChannels.includes(notificationType) || subChannels.includes('all');
-        });
+
+    let filteredSubscriptions;
+    if (sendToAll) {
+      // 'all' means send to all active subscriptions
+      filteredSubscriptions = subscriptions;
+    } else if (channels) {
+      // Filter to subscriptions that have any of the requested channels
+      filteredSubscriptions = subscriptions.filter(sub => {
+        const subChannels = sub.channels as string[] || [];
+        return channels.some((c: string) => subChannels.includes(c));
+      });
+    } else {
+      // No channels specified - filter by notification type
+      filteredSubscriptions = subscriptions.filter(sub => {
+        const subChannels = sub.channels as string[] || [];
+        return subChannels.includes(notificationType) || subChannels.includes('all');
+      });
+    }
 
     if (filteredSubscriptions.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        message: `No subscriptions for channel: ${notificationType}`,
-        sent: 0 
+      return NextResponse.json({
+        success: false,
+        message: `No subscriptions for channel: ${channels?.join(', ') || notificationType}`,
+        sent: 0
       });
     }
 

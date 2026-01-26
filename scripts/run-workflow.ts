@@ -362,8 +362,10 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
               userId,
               title: params.title,
               body: params.body,
-              data: params.data || { type: params.type },
+              data: params.data || {},
               requireInteraction: params.requireInteraction,
+              // Send to all channels by default (don't filter by type)
+              channels: params.channels || ['all'],
             }),
           });
           const result = await response.json();
@@ -389,6 +391,35 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
           });
           const result = await response.json();
           console.log('   Result:', JSON.stringify(result, null, 2));
+          return result;
+        }
+
+        // Handle RAG tools (rag_* pattern) - call collection API directly
+        if (actualToolName.startsWith('rag_')) {
+          const ragName = actualToolName.replace('rag_', '');
+          console.log(`   Using built-in RAG handler for: ${ragName}`);
+
+          const apiKey = await loadUserApiKey(userId, 'default');
+          if (!apiKey) {
+            throw new Error('API key required for RAG search. Create an API key in dashboard.');
+          }
+
+          const response = await fetch(`${baseUrl}/api/collection/${apiKey}/${ragName}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: params.query,
+              top_k: params.top_n || params.top_k || 5
+            }),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error((errData as { error?: string }).error || `RAG search failed: ${response.status}`);
+          }
+
+          const result = await response.json();
+          console.log('   Result:', JSON.stringify(result, null, 2).substring(0, 500) + '...');
           return result;
         }
       }
