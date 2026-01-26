@@ -270,7 +270,7 @@ YAML → Parse → executeWorkflow() → runtime-executor.ts → tool-executor-s
 |---------|--------|-------|
 | GraphQL specs | ✅ | Import via introspection, `graphql-handler.ts` executes queries/mutations |
 | RAG as MCP tools | ✅ | Query knowledge bases via MCP tools, OAuth support with login flow on auth failure |
-| MCP servers | ✅ | Full tool discovery, OAuth, execution |
+| MCP servers | ✅ | Full tool discovery, OAuth, execution, external surface OAuth via `/mcp/{serverName}/login` |
 | REST API specs | ✅ | OpenAPI/Swagger import, tool generation |
 | Push/Email notifications | ✅ | Direct `fetch()` in `runtime-executor.ts` |
 
@@ -535,6 +535,40 @@ sequenceDiagram
     UI->>Exec: Resume execution
     Exec->>MCP: Retry tool call
     MCP-->>Exec: Success
+```
+
+### External Surface OAuth Flow
+```mermaid
+sequenceDiagram
+    actor User
+    participant Surface as External Surface (ChatGPT/Claude)
+    participant MCP as Tulzo MCP Server
+    participant Page as /mcp/{serverName}/login
+    participant OAuth as OAuth Provider
+    participant DB as Supabase
+
+    User->>Surface: Use tool requiring OAuth
+    Surface->>MCP: POST /mcp/call {tool, args}
+    MCP->>MCP: Check OAuth token
+    MCP-->>Surface: {needsOAuth: true, loginUrl: "/mcp/.../login?tool_id=..."}
+    Surface->>User: Show login link
+    User->>Page: Follow loginUrl
+    Page->>Page: Verify user logged in (Clerk)
+    Page->>DB: Verify server ownership
+    Page->>DB: Find tool OAuth config
+    Page->>User: Show OAuth modal
+    User->>OAuth: Authorize
+    OAuth-->>Page: Authorization code
+    Page->>OAuth: Exchange for tokens
+    OAuth-->>Page: {access_token, refresh_token}
+    Page->>DB: Store tokens
+    Page->>User: Show success message
+    User->>Surface: Return and retry
+    Surface->>MCP: POST /mcp/call {tool, args}
+    MCP->>DB: Get OAuth token
+    MCP->>MCP: Execute tool with token
+    MCP-->>Surface: Tool result
+    Surface->>User: Display result
 ```
 
 ### MCP Server Setup Flow

@@ -559,6 +559,7 @@ interface ExtendedToolContext extends ToolExecutionContext {
   environmentId?: string;
   mcpSessionId?: string; // MCP session ID for A2A context continuity
   userId?: string; // User ID for OAuth token lookup
+  serverName?: string; // Server name for OAuth login URL
 }
 
 // Tool execution - looks up handler in registry (sync for NATIVE tools)
@@ -627,6 +628,7 @@ async function executeToolAsync(
           needsOAuth: true,
           oauthServerId: restResult.oauthServerId,
           oauthServerType: 'rest',
+          loginUrl: `/mcp/${context?.serverName || 'default'}/login?tool_id=${encodeURIComponent(name)}`,
         },
         isRestTool: true,
         toolInfo: {
@@ -678,6 +680,7 @@ async function executeToolAsync(
           needsOAuth: true,
           oauthServerId: gqlResult.oauthServerId,
           oauthServerType: 'graphql',
+          loginUrl: `/mcp/${context?.serverName || 'default'}/login?tool_id=${encodeURIComponent(name)}`,
         },
         isRestTool: true,
         toolInfo: {
@@ -739,6 +742,7 @@ async function executeToolAsync(
             needsOAuth: true,
             oauthServerId: oauthResult.oauthServerId,
             oauthServerType: 'mcp',
+            loginUrl: `/mcp/${context?.serverName || 'default'}/login?tool_id=${encodeURIComponent(name)}`,
           },
           isRestTool: false,
           toolInfo: {
@@ -819,6 +823,7 @@ async function executeToolAsync(
             needsOAuth: true,
             oauthServerId: response.oauthServerId || agent.id,
             oauthServerType: 'a2a',
+            loginUrl: `/mcp/${context?.serverName || 'default'}/login?tool_id=${encodeURIComponent(name)}`,
           },
           isRestTool: false,
           toolInfo: {
@@ -2052,6 +2057,7 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           authToken: context.authToken,
           mcpSessionId: context.mcpSessionId, // Pass MCP session ID for A2A context
           userId: context.userId, // Pass user ID for OAuth token lookup
+          serverName: context.serverName, // Pass server name for OAuth login URL
         };
 
         const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);
