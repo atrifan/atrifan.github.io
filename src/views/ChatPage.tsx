@@ -496,6 +496,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
   const [showAddConnector, setShowAddConnector] = useState<ConnectorType | null>(null);
   const [loadingConnectors, setLoadingConnectors] = useState(false);
   const [connectorInfoModal, setConnectorInfoModal] = useState<{ connector: ChatConnector; tools: any[] } | null>(null);
+  const [userApiKey, setUserApiKey] = useState<string | null>(null);
 
   // Reasoning for connectors orchestration
   const [enableReasoning, setEnableReasoning] = useState(false);
@@ -719,6 +720,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
       fetchChatSettings();
     }
   }, [canAccessPro, freeUserHasAgents]);
+
+  // Fetch user's API key for MCP tool aggregation
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        const response = await fetch('/api/keys/list');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.hasKey && data.apiKey) {
+            setUserApiKey(data.apiKey);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching API key:', error);
+      }
+    };
+    fetchApiKey();
+  }, []);
 
   // For free tier: set default model to first external agent when connectors load
   useEffect(() => {
@@ -1986,6 +2005,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
           ? activePersonalities.map(p => ({ id: p.id, name: p.name, prompt: p.system_prompt }))
           : null;
 
+        // Filter MCP connectors for tool aggregation
+        const mcpConnectors = connectors.filter(
+          c => c.connector_type === 'internal_mcp' || c.connector_type === 'external_mcp'
+        );
+
         const response = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: {
@@ -2009,6 +2033,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
             maxOutputTokens,
             temperature,
             maxRetries,
+            // MCP connectors for agentic tool use
+            connectors: mcpConnectors.length > 0 ? mcpConnectors : undefined,
+            userApiKey: mcpConnectors.length > 0 ? userApiKey : undefined,
+            maxSteps: mcpConnectors.length > 0 ? 10 : undefined,
           }),
           signal: abortController.signal,
         });
@@ -2023,6 +2051,49 @@ export const ChatPage: React.FC<ChatPageProps> = ({ isLoggedIn, isPro, isPlus })
         }
 
         const data = await response.json();
+
+        // Handle OAuth errors from MCP connectors
+        if (data.oauthErrors && data.oauthErrors.length > 0) {
+          console.log('[Chat] OAuth errors from MCP connectors:', data.oauthErrors);
+
+          // Find the first connector that needs OAuth
+          const oauthError = data.oauthErrors.find((e: { needsOAuth?: boolean }) => e.needsOAuth);
+          if (oauthError) {
+            // Find the connector config to get OAuth details
+            const connector = mcpConnectors.find(c => c.id === oauthError.connectorId);
+            if (connector && connector.external_auth_type === 'oauth2' && connector.external_auth_config) {
+              const authConfig = connector.external_auth_config as Record<string, string>;
+              const authEndpoint = authConfig.authorization_endpoint;
+              const tokenEndpoint = authConfig.token_endpoint;
+              const clientId = authConfig.client_id;
+              const scopes = authConfig.scopes || 'openid';
+              const useDcr = authConfig.use_dcr === 'true' || (authConfig.use_dcr as unknown) === true;
+              const registrationEndpoint = authConfig.registration_endpoint;
+
+              const canAuthenticate = authEndpoint && tokenEndpoint && (clientId || (useDcr && registrationEndpoint));
+
+              if (canAuthenticate) {
+                triggerOAuthAndRetry(userMessage, {
+                  serverName: connector.display_name,
+                  serverType: 'mcp',
+                  serverId: oauthError.oauthServerId || connector.mcp_server_id || connector.id,
+                  oauthConfig: {
+                    authorization_endpoint: authEndpoint,
+                    token_endpoint: tokenEndpoint,
+                    scopes: scopes,
+                    use_dcr: useDcr,
+                    client_id: clientId || '',
+                    client_secret: authConfig.client_secret || '',
+                    registration_endpoint: registrationEndpoint || '',
+                  },
+                });
+                return;
+              }
+            }
+            // If we can't authenticate, show error but continue with partial response
+            console.warn('[Chat] OAuth required but connector config incomplete:', oauthError);
+          }
+        }
 
         // Update conversation ID if new conversation was created
         const convId = data.conversationId || currentConversationId;

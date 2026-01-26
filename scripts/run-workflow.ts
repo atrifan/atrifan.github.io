@@ -200,6 +200,22 @@ async function loadMCPServer(serverId: string): Promise<MCPServer | null> {
 interface MCPExtractedResult {
   text: string | null;      // content[0].text - plain text answer for display
   data: unknown;            // structuredContent.result - structured data for workflow
+  needsOAuth?: boolean;     // true if OAuth authentication is required
+  oauthServerId?: string;   // server ID that needs OAuth
+  oauthServerType?: string; // type of server (mcp, rest, graphql, a2a)
+}
+
+// Custom error for OAuth authentication requirement
+export class OAuthRequiredError extends Error {
+  constructor(
+    public serverName: string,
+    public serverId: string,
+    public serverType: string,
+    public toolName: string
+  ) {
+    super(`OAuth authentication required for ${serverName} (${serverType})`);
+    this.name = 'OAuthRequiredError';
+  }
 }
 
 // Extract text and structured result from MCP response
@@ -232,6 +248,14 @@ function extractMCPResult(mcpResponse: unknown): MCPExtractedResult {
     const structured = resultObj.structuredContent as Record<string, unknown>;
     if ('result' in structured) {
       extracted.data = structured.result;
+
+      // Check if the result indicates OAuth is needed
+      const resultData = structured.result as Record<string, unknown>;
+      if (resultData && typeof resultData === 'object' && resultData.needsOAuth === true) {
+        extracted.needsOAuth = true;
+        extracted.oauthServerId = resultData.oauthServerId as string;
+        extracted.oauthServerType = resultData.oauthServerType as string;
+      }
     }
   }
 
@@ -399,7 +423,18 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
       const rawResult = await client.callTool(actualToolName, params);
 
       // Extract text (for display) and data (for workflow)
-      const { text, data } = extractMCPResult(rawResult);
+      const { text, data, needsOAuth, oauthServerId, oauthServerType } = extractMCPResult(rawResult);
+
+      // Check if OAuth is required
+      if (needsOAuth) {
+        console.log(`\n   ⚠️ OAuth authentication required for ${connector.display_name}`);
+        throw new OAuthRequiredError(
+          connector.display_name,
+          oauthServerId || connector.mcp_server_id || connector.id,
+          oauthServerType || 'mcp',
+          toolName
+        );
+      }
 
       // Display the text answer
       if (text) {

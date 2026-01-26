@@ -151,10 +151,12 @@ export async function POST(request: NextRequest) {
       userId,
       userEmail,
       automationId: dbAutomationId,
+      automationName: automation.display_name || automation.name,
       executionId: execution.id,
       yamlDefinition: automation.yaml_definition,
       inputs: inputs || {},
       triggerType: triggerType as 'manual' | 'webhook' | 'cron' | 'cli' | 'automation',
+      notificationChannels: automation.notification_config?.channels || ['email'],
     });
 
     return NextResponse.json({

@@ -13,6 +13,7 @@
   "dependencies": {
     "@a2a-js/sdk": "^0.3.8",
     "@adobe/react-spectrum": "^3.36.0",
+    "@ai-sdk/mcp": "^1.0.13",
     "@ai-sdk/openai": "^3.0.7",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@clerk/nextjs": "^6.36.5",

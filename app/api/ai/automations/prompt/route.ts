@@ -73,15 +73,16 @@ Configure with:
 - timeout_hours: How long to wait before timing out (optional)
 
 ## Response Format
-Always respond with valid JSON:
+Always respond with valid JSON containing two fields:
 {
-  "mermaid": "flowchart TD\\n  start([Start]) --> step1[Step 1]\\n  ...",
-  "flow": {
-    "nodes": [...],
-    "edges": [...]
-  },
-  "explanation": "Clear explanation of what the flow does and why"
+  "generatedYaml": "id: my_workflow\\nname: My Workflow\\ndescription: ...\\nsteps:\\n  - id: step1\\n    ...",
+  "text": "Your explanation, clarification, or answer to questions here"
 }
+
+- **generatedYaml**: The complete YAML workflow definition. Include this when creating or modifying a workflow.
+- **text**: Your response text - explanations, clarifications, answers to questions, or suggestions. Always include this.
+
+If the user asks a question or needs clarification (not requesting a workflow change), set generatedYaml to empty string and put your answer in text.
 
 ## Node Schema
 - Start: {"id": "start", "type": "start", "label": "Start", "config": {"inputs": [{"name": "param", "type": "string", "required": true}]}}
@@ -139,6 +140,10 @@ export async function POST(request: NextRequest) {
       historyTokens,
       recentHistoryTokens,
       personaTokens,
+      // Model parameters (defaults for automation: 2048 tokens)
+      maxOutputTokens = 2048,
+      temperature = 0.3,
+      maxRetries = 5,
     } = body;
 
     if (!prompt) {
@@ -185,7 +190,9 @@ export async function POST(request: NextRequest) {
         model, // AI SDK v6 has built-in gateway support
         system: combinedSystemPrompt,
         prompt: contextMessage,
-        maxOutputTokens: 2048,
+        maxOutputTokens,
+        temperature,
+        maxRetries,
       });
 
       responseContent = result.text;
@@ -198,8 +205,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI service error' }, { status: 500 });
     }
 
-    // Parse AI response
-    let parsedResponse;
+    // Parse AI response - expecting { generatedYaml, text }
+    let parsedResponse: { generatedYaml?: string; text?: string; mermaid?: string; flow?: unknown; explanation?: string };
     try {
       parsedResponse = JSON.parse(responseContent);
     } catch {
@@ -208,9 +215,14 @@ export async function POST(request: NextRequest) {
       if (jsonMatch) {
         parsedResponse = JSON.parse(jsonMatch[1]);
       } else {
-        parsedResponse = { mermaid: '', flow: { nodes: [], edges: [] }, explanation: responseContent };
+        // Fallback: treat entire response as text
+        parsedResponse = { generatedYaml: '', text: responseContent };
       }
     }
+
+    // Normalize response - support both old format (mermaid/flow/explanation) and new format (generatedYaml/text)
+    const generatedYaml = parsedResponse.generatedYaml || '';
+    const text = parsedResponse.text || parsedResponse.explanation || '';
 
     // Save prompt history if automation exists
     let historyId: string | undefined;
@@ -219,8 +231,10 @@ export async function POST(request: NextRequest) {
         automation_id: automationId,
         user_id: userId,
         prompt,
-        response_flow: parsedResponse.flow,
-        response_mermaid: parsedResponse.mermaid,
+        response_flow: parsedResponse.flow || null,
+        response_mermaid: parsedResponse.mermaid || null,
+        response_yaml: generatedYaml || null,
+        response_text: text || null,
         input_tokens: usage.prompt_tokens,
         output_tokens: usage.completion_tokens,
         // Context tracking data
@@ -251,9 +265,12 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      mermaid: parsedResponse.mermaid,
-      flow: parsedResponse.flow,
-      explanation: parsedResponse.explanation,
+      generatedYaml,
+      text,
+      // Keep legacy fields for backward compatibility
+      mermaid: parsedResponse.mermaid || '',
+      flow: parsedResponse.flow || { nodes: [], edges: [] },
+      explanation: text,
       historyId,
       usage: {
         input: usage.prompt_tokens,

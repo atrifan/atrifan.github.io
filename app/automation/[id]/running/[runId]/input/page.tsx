@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { OAuthAuthenticationModal, OAuthSuccessData } from '@/src/components/OAuthAuthenticationModal';
+import type { OAuth2AuthConfig, OAuthServerType } from '@/src/types/supabase';
 
 interface RequiredField {
   name: string;
   type: string;
   description: string;
+  server_name?: string;
+  server_id?: string;
+  server_type?: string;
 }
 
 interface ExecutionData {
@@ -16,6 +21,14 @@ interface ExecutionData {
   status: string;
   pending_inputs: RequiredField[];
   collected_inputs: Record<string, unknown>;
+}
+
+interface ConnectorData {
+  id: string;
+  display_name: string;
+  mcp_server_id?: string;
+  external_auth_type?: string;
+  external_auth_config?: Record<string, unknown>;
 }
 
 export default function AutomationInputPage() {
@@ -32,17 +45,30 @@ export default function AutomationInputPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Get dynamic message from query params
+  // OAuth modal state
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthModalData, setOauthModalData] = useState<{
+    serverName: string;
+    serverType: OAuthServerType;
+    serverId: string;
+    oauthConfig: OAuth2AuthConfig;
+  } | null>(null);
+  const [authSuccess, setAuthSuccess] = useState(false);
+
+  // Get dynamic message and auth requirement from query params
   const dynamicMessage = searchParams.get('message');
+  const requireAuth = searchParams.get('require_auth') === 'true';
+  const serverName = searchParams.get('server_name');
+  const serverId = searchParams.get('server_id');
 
   useEffect(() => {
     fetchExecution();
   }, [automationId, runId]);
 
-  // Pre-fill from query params (exclude reserved params like 'message')
+  // Pre-fill from query params (exclude reserved params)
   useEffect(() => {
     const prefilled: Record<string, string> = {};
-    const reservedParams = ['message'];
+    const reservedParams = ['message', 'require_auth', 'server_name', 'server_id'];
     searchParams.forEach((value, key) => {
       if (!reservedParams.includes(key)) {
         prefilled[key] = value;
@@ -52,6 +78,74 @@ export default function AutomationInputPage() {
       setInputs(prev => ({ ...prev, ...prefilled }));
     }
   }, [searchParams]);
+
+  // Handle OAuth requirement - fetch connector and show modal
+  useEffect(() => {
+    if (requireAuth && serverName && !oauthModalOpen && !authSuccess) {
+      fetchConnectorAndShowAuth();
+    }
+  }, [requireAuth, serverName, oauthModalOpen, authSuccess]);
+
+  const fetchConnectorAndShowAuth = async () => {
+    try {
+      // Fetch connectors to find the one that needs auth
+      const res = await fetch('/api/connections');
+      if (!res.ok) throw new Error('Failed to fetch connectors');
+      const data = await res.json();
+
+      // Find connector by server name or ID
+      const connector = data.connections?.find((c: ConnectorData) =>
+        c.display_name === serverName ||
+        c.mcp_server_id === serverId ||
+        c.id === serverId
+      );
+
+      if (!connector) {
+        setError(`Could not find connector for ${serverName}`);
+        return;
+      }
+
+      // Check if it has OAuth config
+      if (connector.external_auth_type !== 'oauth2' || !connector.external_auth_config) {
+        setError(`Connector ${serverName} does not have OAuth configuration`);
+        return;
+      }
+
+      const authConfig = connector.external_auth_config as Record<string, string>;
+      const authEndpoint = authConfig.authorization_endpoint;
+      const tokenEndpoint = authConfig.token_endpoint;
+      const clientId = authConfig.client_id;
+      const scopes = authConfig.scopes || 'openid';
+      const useDcr = authConfig.use_dcr === 'true' || (authConfig.use_dcr as unknown) === true;
+      const registrationEndpoint = authConfig.registration_endpoint;
+
+      const canAuthenticate = authEndpoint && tokenEndpoint && (clientId || (useDcr && registrationEndpoint));
+
+      if (!canAuthenticate) {
+        setError(`OAuth configuration incomplete for ${serverName}`);
+        return;
+      }
+
+      // Show OAuth modal
+      setOauthModalData({
+        serverName: connector.display_name,
+        serverType: 'mcp' as OAuthServerType,
+        serverId: connector.mcp_server_id || connector.id,
+        oauthConfig: {
+          authorization_endpoint: authEndpoint,
+          token_endpoint: tokenEndpoint,
+          scopes: scopes,
+          use_dcr: useDcr,
+          client_id: clientId || '',
+          client_secret: authConfig.client_secret || '',
+          registration_endpoint: registrationEndpoint || '',
+        },
+      });
+      setOauthModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load connector');
+    }
+  };
 
   const fetchExecution = async () => {
     try {
@@ -65,6 +159,40 @@ export default function AutomationInputPage() {
       setLoading(false);
     }
   };
+
+  // Handle OAuth success - resume automation
+  const handleOAuthSuccess = useCallback(async (data?: OAuthSuccessData) => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+    setAuthSuccess(true);
+
+    // Resume the automation by submitting empty inputs (just to trigger continuation)
+    try {
+      setSubmitting(true);
+      const res = await fetch(`/api/ai/automations/${automationId}/executions/${runId}/input`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: {}, authCompleted: true }),
+      });
+
+      if (!res.ok) {
+        const resData = await res.json();
+        throw new Error(resData.error || 'Failed to resume automation');
+      }
+
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resume automation');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [automationId, runId]);
+
+  const handleOAuthCancel = useCallback(() => {
+    setOauthModalOpen(false);
+    setOauthModalData(null);
+    setError('Authentication cancelled');
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,6 +401,19 @@ export default function AutomationInputPage() {
           </p>
         </div>
       </div>
+
+      {/* OAuth Authentication Modal */}
+      {oauthModalData && (
+        <OAuthAuthenticationModal
+          isOpen={oauthModalOpen}
+          serverName={oauthModalData.serverName}
+          serverType={oauthModalData.serverType}
+          serverId={oauthModalData.serverId}
+          oauthConfig={oauthModalData.oauthConfig}
+          onSuccess={handleOAuthSuccess}
+          onCancel={handleOAuthCancel}
+        />
+      )}
     </div>
   );
 }

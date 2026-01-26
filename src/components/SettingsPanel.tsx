@@ -439,8 +439,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = (props) => {
                 </div>
               </div>
 
-              {/* Model Parameters - Chat mode, internal models only */}
-              {mode === 'chat' && !isExternalAgentSelected && setMaxOutputTokens && setTemperature && setMaxRetries && (
+              {/* Model Parameters - Chat and Automation modes, internal models only */}
+              {(mode === 'chat' || mode === 'automation') && !isExternalAgentSelected && setMaxOutputTokens && setTemperature && setMaxRetries && (
                 <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>⚙️ Model Parameters</div>
 

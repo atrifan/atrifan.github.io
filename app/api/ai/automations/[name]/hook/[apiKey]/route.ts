@@ -317,10 +317,12 @@ ${fullInputUrl.toString()}
       userId,
       userEmail,
       automationId: automationId!, // Non-null assertion: validated above
+      automationName: automation.display_name || automation.name,
       executionId: execution.id,
       yamlDefinition: automation.yaml_definition,
       inputs,
       triggerType,
+      notificationChannels: automation.notification_config?.channels || ['email'],
     });
 
     return NextResponse.json({

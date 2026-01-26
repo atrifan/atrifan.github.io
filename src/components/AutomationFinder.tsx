@@ -29,6 +29,8 @@ export interface Execution {
   error?: string;
   started_at: string;
   completed_at?: string;
+  input_url?: string;  // Full URL with query params from human_requests
+  required_fields?: unknown[];
 }
 
 interface CategoryInfo {

@@ -27,6 +27,23 @@ import type { ToolExecutor } from './executor';
 // Types
 type MCPServerAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2';
 
+/**
+ * Custom error for OAuth authentication requirement
+ * Thrown when an MCP tool call fails due to missing/expired OAuth token
+ */
+export class OAuthRequiredError extends Error {
+  constructor(
+    public serverName: string,
+    public serverId: string,
+    public serverType: 'mcp' | 'rest' | 'graphql' | 'a2a',
+    public toolName: string,
+    public connectorId?: string
+  ) {
+    super(`OAuth authentication required for ${serverName} (${serverType})`);
+    this.name = 'OAuthRequiredError';
+  }
+}
+
 interface Connector {
   id: string;
   connector_type: 'internal_mcp' | 'external_mcp';
@@ -197,7 +214,7 @@ async function getOrCreateMCPClient(
     // For internal MCP, get user's API key and call /api/mcp/{key}/{server}
     const serverName = connector.server_name || 'default';
     const apiKey = await getUserApiKey(supabase, userId, serverName);
-    client = createInternalMCPClient(baseUrl, userId, serverName, apiKey);
+    client = createInternalMCPClient(baseUrl, userId, serverName, apiKey, connector);
   } else if (connector.connector_type === 'external_mcp' && connector.external_url) {
     // For external MCP, connect directly with stored auth
     client = await createExternalMCPClient(
@@ -277,7 +294,8 @@ function createInternalMCPClient(
   baseUrl: string,
   userId: string,
   serverName: string,
-  apiKey: string | null
+  apiKey: string | null,
+  connector?: Connector
 ): MCPClientWrapper {
   return {
     async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -321,7 +339,21 @@ function createInternalMCPClient(
       // Extract the actual tool result from structuredContent if available
       // The MCP server wraps results in: { content, structuredContent: { query, result, display }, _meta }
       const mcpResult = result.result;
-      return mcpResult?.structuredContent?.result ?? mcpResult;
+      const toolResult = mcpResult?.structuredContent?.result ?? mcpResult;
+
+      // Check if OAuth is required
+      if (toolResult && typeof toolResult === 'object' && (toolResult as Record<string, unknown>).needsOAuth === true) {
+        const oauthResult = toolResult as Record<string, unknown>;
+        throw new OAuthRequiredError(
+          connector?.display_name || serverName,
+          (oauthResult.oauthServerId as string) || connector?.mcp_server_id || connector?.id || serverName,
+          (oauthResult.oauthServerType as 'mcp' | 'rest' | 'graphql' | 'a2a') || 'mcp',
+          name,
+          connector?.id
+        );
+      }
+
+      return toolResult;
     },
 
     async close(): Promise<void> {

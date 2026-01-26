@@ -82,6 +82,7 @@ export async function GET(
     // Get log counts for each execution
     const executionIds = executions?.map(e => e.id) || [];
     let logCounts: Record<string, number> = {};
+    let humanRequests: Record<string, { input_url: string; required_fields: unknown[] }> = {};
 
     if (executionIds.length > 0) {
       const { data: logs } = await supabase
@@ -94,6 +95,23 @@ export async function GET(
           acc[log.execution_id] = (acc[log.execution_id] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
+      }
+
+      // Get pending human requests (for input_url with query params)
+      const { data: requests } = await supabase
+        .from('automation_human_requests')
+        .select('execution_id, input_url, required_fields')
+        .in('execution_id', executionIds)
+        .is('responded_at', null);
+
+      if (requests) {
+        humanRequests = requests.reduce((acc, req) => {
+          acc[req.execution_id] = {
+            input_url: req.input_url,
+            required_fields: req.required_fields || [],
+          };
+          return acc;
+        }, {} as Record<string, { input_url: string; required_fields: unknown[] }>);
       }
     }
 
@@ -112,6 +130,8 @@ export async function GET(
       has_pending_inputs: Array.isArray(exec.pending_inputs) && exec.pending_inputs.length > 0,
       pending_inputs_count: Array.isArray(exec.pending_inputs) ? exec.pending_inputs.length : 0,
       log_count: logCounts[exec.id] || 0,
+      input_url: humanRequests[exec.id]?.input_url || null,
+      required_fields: humanRequests[exec.id]?.required_fields || [],
     })) || [];
 
     return NextResponse.json({

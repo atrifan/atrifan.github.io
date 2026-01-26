@@ -14,18 +14,20 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateText } from 'ai';
 import * as yaml from 'yaml';
 import { executeWorkflow, ExecutorOptions, LLMExecutor } from './executor';
-import { createToolExecutorForUser } from './tool-executor-service';
+import { createToolExecutorForUser, OAuthRequiredError } from './tool-executor-service';
 import { WorkflowDefinition } from './types';
 
 export interface RuntimeExecutionOptions {
   userId: string;
   userEmail?: string;
   automationId: string;
+  automationName?: string;
   executionId: string;
   yamlDefinition: string;
   inputs?: Record<string, unknown>;
   triggerType: 'manual' | 'webhook' | 'cron' | 'cli' | 'automation';
   baseUrl?: string;
+  notificationChannels?: string[];
 }
 
 export interface RuntimeExecutionResult {
@@ -33,6 +35,13 @@ export interface RuntimeExecutionResult {
   status: 'pending' | 'running' | 'completed' | 'paused' | 'waiting_input' | 'cancelled' | 'failed';
   output?: unknown;
   error?: string;
+  requiresAuth?: {
+    serverName: string;
+    serverId: string;
+    serverType: 'mcp' | 'rest' | 'graphql' | 'a2a';
+    toolName: string;
+    connectorId?: string;
+  };
 }
 
 /**
@@ -71,11 +80,13 @@ export async function runRealExecution(
     userId,
     userEmail,
     automationId,
+    automationName,
     executionId,
     yamlDefinition,
     inputs = {},
     triggerType,
     baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    notificationChannels = ['email'],
   } = options;
 
   const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
@@ -166,6 +177,124 @@ export async function runRealExecution(
       error: result.error,
     };
   } catch (error) {
+    // Handle OAuth authentication errors specially
+    if (error instanceof OAuthRequiredError) {
+      console.log(`[Runtime] OAuth required for tool: ${error.toolName}, server: ${error.serverName}`);
+
+      // Update execution status to waiting_input
+      await updateExecutionStatus(supabase, executionId, 'waiting_input', `Authentication required for ${error.serverName}`);
+      await logToDb(supabase, executionId, automationId, 'warn', error.toolName, `OAuth authentication required for server: ${error.serverName}`, 'waiting_input');
+
+      // Create human request record for auth
+      const inputUrl = `/automation/${automationId}/running/${executionId}/input`;
+      await supabase.from('automation_human_requests').insert({
+        execution_id: executionId,
+        automation_id: automationId,
+        user_id: userId,
+        request_type: 'auth',
+        message: `Automation "${automationName || automationId}" requires authentication for ${error.serverName}`,
+        required_fields: [{
+          name: 'oauth_auth',
+          type: 'oauth',
+          description: `Authenticate with ${error.serverName}`,
+          server_name: error.serverName,
+          server_id: error.serverId,
+          server_type: error.serverType,
+        }],
+        input_url: inputUrl,
+        notification_channels: notificationChannels,
+      });
+
+      // Build full URL with auth requirement query params
+      const fullInputUrl = new URL(inputUrl, baseUrl);
+      fullInputUrl.searchParams.set('require_auth', 'true');
+      fullInputUrl.searchParams.set('server_name', error.serverName);
+      if (error.serverId) {
+        fullInputUrl.searchParams.set('server_id', error.serverId);
+      }
+      fullInputUrl.searchParams.set('message', `Authentication required for ${error.serverName}`);
+
+      const notificationMessage = `Automation "${automationName || automationId}" requires authentication for ${error.serverName}`;
+
+      // Send push notification
+      if (notificationChannels.includes('push')) {
+        try {
+          await fetch(`${baseUrl}/api/push/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({
+              userId,
+              title: '🔐 Authentication Required',
+              body: notificationMessage,
+              data: {
+                url: fullInputUrl.toString(),
+                type: 'automation_auth',
+                automationId,
+                executionId,
+                serverName: error.serverName,
+              },
+              requireInteraction: true,
+            }),
+          });
+        } catch (e) {
+          console.error('[Runtime] Failed to send push notification:', e);
+        }
+      }
+
+      // Send email notification
+      if (notificationChannels.includes('email') && userEmail) {
+        try {
+          const emailBody = `
+Hello,
+
+${notificationMessage}
+
+The automation tried to use a tool from "${error.serverName}" but authentication is required.
+
+Click here to authenticate and continue:
+${fullInputUrl.toString()}
+
+⏱️ This request will timeout in 5 minutes.
+
+- Tulzo Automation
+          `.trim();
+
+          await fetch(`${baseUrl}/api/email/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+              ...(userId && { 'X-User-Id': userId }),
+            },
+            body: JSON.stringify({
+              to: userEmail,
+              subject: `🔐 Authentication Required: ${automationName || automationId}`,
+              body: emailBody,
+            }),
+          });
+        } catch (e) {
+          console.error('[Runtime] Failed to send email notification:', e);
+        }
+      }
+
+      return {
+        success: false,
+        status: 'waiting_input',
+        error: `Authentication required for ${error.serverName}`,
+        requiresAuth: {
+          serverName: error.serverName,
+          serverId: error.serverId,
+          serverType: error.serverType,
+          toolName: error.toolName,
+          connectorId: error.connectorId,
+        },
+      };
+    }
+
+    // Handle other errors
     const errorMsg = error instanceof Error ? error.message : String(error);
     await updateExecutionStatus(supabase, executionId, 'failed', errorMsg);
     await logToDb(supabase, executionId, automationId, 'error', 'workflow', errorMsg, 'failed');

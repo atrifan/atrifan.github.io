@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateText } from 'ai';
 import { AI_MODELS, TOKEN_QUOTAS } from '@/src/config/ai-tokens.config';
+import { aggregateMCPTools, type MCPConnectorConfig } from '@/src/lib/mcp-tool-aggregator';
 
 // Dynamic route - don't prerender
 export const dynamic = 'force-dynamic';
@@ -60,6 +61,11 @@ export async function POST(request: NextRequest) {
       maxOutputTokens = 512,
       temperature = 0.3,
       maxRetries = 5,
+      // MCP connectors for tool aggregation
+      connectors = [] as MCPConnectorConfig[],
+      userApiKey = '',
+      // Agentic loop settings
+      maxSteps = 10,
     } = body;
     const userMessage = messages[messages.length - 1]?.content || '';
 
@@ -104,14 +110,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid model' }, { status: 400 });
     }
 
-    // Call AI using Vercel AI SDK with built-in gateway support
+    // Call AI using Vercel AI SDK with agentic loop
     let assistantMessage = '';
     let usage = { prompt_tokens: 0, completion_tokens: 0 };
+    let toolCallsInfo: Array<{ name: string; args: unknown; result: unknown }> = [];
+    let mcpCleanup: (() => Promise<void>) | null = null;
+    let oauthErrors: Array<{ connectorId: string; error: string; needsOAuth?: boolean; oauthServerId?: string }> = [];
 
     try {
       // Build system prompt if provided
       const systemPromptText = systemPrompt || undefined;
 
+      // Aggregate tools from MCP connectors if any are provided
+      let tools: Record<string, unknown> | undefined;
+      const mcpConnectors = (connectors as MCPConnectorConfig[]).filter(
+        (c: MCPConnectorConfig) => c.connector_type === 'internal_mcp' || c.connector_type === 'external_mcp'
+      );
+
+      if (mcpConnectors.length > 0 && userApiKey) {
+        const baseUrl = request.nextUrl.origin;
+        const toolsResult = await aggregateMCPTools(mcpConnectors, userApiKey, userId, baseUrl);
+
+        if (Object.keys(toolsResult.tools).length > 0) {
+          tools = toolsResult.tools;
+          mcpCleanup = toolsResult.cleanup;
+        }
+
+        // Collect OAuth errors to return to client
+        oauthErrors = toolsResult.errors.filter(e => e.needsOAuth);
+
+        if (toolsResult.errors.length > 0) {
+          console.log('[Chat API] MCP connection errors:', toolsResult.errors);
+        }
+      }
+
+      // Use agentic loop with maxSteps if tools are available
       const result = await generateText({
         model: modelId, // AI SDK v6 has built-in gateway support
         system: systemPromptText,
@@ -122,6 +155,11 @@ export async function POST(request: NextRequest) {
         maxOutputTokens: maxOutputTokens || 512,
         temperature: temperature ?? 0.3,
         maxRetries: maxRetries || 5,
+        // Agentic loop configuration
+        ...(tools && Object.keys(tools).length > 0 ? {
+          tools: tools as Parameters<typeof generateText>[0]['tools'],
+          maxSteps: maxSteps || 10,
+        } : {}),
       });
 
       assistantMessage = result.text;
@@ -129,12 +167,40 @@ export async function POST(request: NextRequest) {
         prompt_tokens: result.usage?.inputTokens || 0,
         completion_tokens: result.usage?.outputTokens || 0,
       };
+
+      // Collect tool call information for response
+      if (result.steps) {
+        for (const step of result.steps) {
+          if (step.toolCalls) {
+            for (const toolCall of step.toolCalls) {
+              // Use type assertion to access properties (may be undefined for dynamic tools)
+              const toolCallWithArgs = toolCall as { toolName: string; toolCallId: string; args?: unknown };
+              const toolResult = step.toolResults?.find(r => r.toolCallId === toolCall.toolCallId);
+              const toolResultWithResult = toolResult as { result?: unknown } | undefined;
+              toolCallsInfo.push({
+                name: toolCall.toolName,
+                args: toolCallWithArgs.args,
+                result: toolResultWithResult?.result,
+              });
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('AI Gateway error:', error);
+      // Cleanup MCP clients on error
+      if (mcpCleanup) {
+        await mcpCleanup();
+      }
       return NextResponse.json({
         error: 'AI service error',
         details: error instanceof Error ? error.message : 'Unknown error'
       }, { status: 502 });
+    } finally {
+      // Always cleanup MCP clients
+      if (mcpCleanup) {
+        await mcpCleanup();
+      }
     }
 
     // Record usage and save messages to database
@@ -241,6 +307,10 @@ export async function POST(request: NextRequest) {
         output: usage.completion_tokens,
         cost,
       },
+      // Include tool calls info if any tools were used
+      ...(toolCallsInfo.length > 0 ? { toolCalls: toolCallsInfo } : {}),
+      // Include OAuth errors if any connectors need re-authentication
+      ...(oauthErrors.length > 0 ? { oauthErrors } : {}),
     });
   } catch (error) {
     console.error('Error in chat API:', error);

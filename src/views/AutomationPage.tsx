@@ -451,6 +451,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [retrievalEvents, setRetrievalEvents] = useState<RetrievalEventsData>({});
   const [userApiKey, setUserApiKey] = useState<string | null>(null);
 
+  // AI model parameters (automation mode defaults to 2048 max tokens)
+  const [maxOutputTokens, setMaxOutputTokens] = useState(2048);
+  const [temperature, setTemperature] = useState(0.3);
+  const [maxRetries, setMaxRetries] = useState(5);
+
   // Check screen size for responsive layout
   useEffect(() => {
     const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -1149,25 +1154,59 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           historyTokens: historyTokensEstimate,
           recentHistoryTokens: recentHistoryTokensEstimate,
           personaTokens: personaTokensEstimate,
+          // Model parameters
+          maxOutputTokens,
+          temperature,
+          maxRetries,
         }),
         signal: abortController.signal,
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.mermaid) {
+
+        // Handle new format: generatedYaml and text
+        if (data.generatedYaml) {
+          setExportedYaml(data.generatedYaml);
+          setShowYamlPanel(true);
+
+          // Generate Mermaid from the YAML
+          try {
+            const workflow = yaml.parse(data.generatedYaml) as WorkflowDefinition;
+            if (workflow && typeof workflow === 'object') {
+              const mermaid = workflowToMermaid(workflow);
+              setMermaidDiagram(mermaid);
+              setWorkflowDef(workflow);
+
+              // Add to version history
+              const newVersion = {
+                diagram: mermaid,
+                yaml: data.generatedYaml,
+                timestamp: Date.now(),
+                prompt: prompt,
+              };
+              setDiagramVersions(prev => [...prev, newVersion]);
+              setCurrentVersionIndex(prev => prev + 1);
+            }
+          } catch (yamlError) {
+            console.error('Failed to parse generated YAML:', yamlError);
+          }
+        } else if (data.mermaid) {
+          // Fallback to legacy mermaid format
           setMermaidDiagram(data.mermaid);
-          // Add to version history
           const newVersion = {
             diagram: data.mermaid,
-            yaml: '', // Will be generated when user clicks generate
+            yaml: '',
             timestamp: Date.now(),
             prompt: prompt,
           };
           setDiagramVersions(prev => [...prev, newVersion]);
           setCurrentVersionIndex(prev => prev + 1);
         }
-        if (data.explanation) setLastExplanation(data.explanation);
+
+        // Set explanation text
+        if (data.text) setLastExplanation(data.text);
+        else if (data.explanation) setLastExplanation(data.explanation);
         if (data.usage) setLastTokenUsage(data.usage);
 
         // Embed to history if enabled and we have an automation
@@ -1176,7 +1215,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             currentAutomation.id,
             data.historyId,
             prompt,
-            `${data.explanation || ''}\n\nMermaid:\n${data.mermaid || ''}`
+            `${data.text || data.explanation || ''}\n\nYAML:\n${data.generatedYaml || data.mermaid || ''}`
           );
         }
 
@@ -2223,7 +2262,10 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               }
             }}
             onProvideInput={(exec) => {
-              window.open(`/automation/${exec.automation_name || exec.automation_id}/running/${exec.id}/input`, '_blank');
+              // Use stored input_url if available (includes query params like require_auth)
+              const baseUrl = `/automation/${exec.automation_name || exec.automation_id}/running/${exec.id}/input`;
+              const url = exec.input_url || baseUrl;
+              window.open(url, '_blank');
             }}
             onStopExecution={async (exec) => {
               try {
@@ -3527,6 +3569,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           type: (def as { type?: string }).type || 'string',
           required: (def as { required?: boolean }).required || false,
         })) : []}
+        maxOutputTokens={maxOutputTokens}
+        setMaxOutputTokens={setMaxOutputTokens}
+        temperature={temperature}
+        setTemperature={setTemperature}
+        maxRetries={maxRetries}
+        setMaxRetries={setMaxRetries}
       />
 
       {/* Workflow Rules Modal - Global so it works from both list and builder views */}
