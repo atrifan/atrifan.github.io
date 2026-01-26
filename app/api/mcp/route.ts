@@ -229,7 +229,7 @@ function getClerkFrontendApi(): string {
       // Use default
     }
   }
-  return 'https://gentle-aardvark-60.clerk.accounts.dev';
+  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
 }
 
 /**
