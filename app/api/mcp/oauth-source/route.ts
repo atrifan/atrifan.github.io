@@ -300,7 +300,8 @@ async function findFirstOAuthToolInServer(userId: string, serverName: string): P
 
   // Check each tool for OAuth configuration
   for (const serverTool of serverTools) {
-    const toolId = serverTool.tool_id;
+    const serverToolData = serverTool as { tool_id: string };
+    const toolId = serverToolData.tool_id;
 
     // Check MCP server tools
     const mcpResult = await checkMCPServerTool(toolId, userId);
