@@ -1,61 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  AI_MODELS,
+  EMBEDDING_MODELS,
+  TOKEN_QUOTAS,
+  DEFAULT_MONTHLY_BUDGET,
+  calculateSafeTokensForBudget,
+} from '@/src/config/ai-tokens.config';
 
 export const dynamic = 'force-dynamic';
 
-// Plan budget constants (must match ai-tokens.config.ts TOKEN_QUOTAS.aiCostBudget)
-const PLAN_BUDGETS = {
-  free: 0,
-  pro: 5.00,
-  plus: 5.00,
-};
-
-const DEFAULT_MONTHLY_BUDGET = 5.00;
-
-// AI Models (server-side copy for budget calculations)
-const AI_MODELS = [
-  { id: 'mistral/ministral-3b', name: 'Ministral 3B', icon: '⚡', provider: 'Mistral', inputCostPer1M: 0.04, outputCostPer1M: 0.04 },
-  { id: 'openai/gpt-5-nano', name: 'GPT-5 Nano', icon: '⚡', provider: 'OpenAI', inputCostPer1M: 0.05, outputCostPer1M: 0.40 },
-  { id: 'meta/llama-3.1-8b', name: 'Llama 3.1 8B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0.02, outputCostPer1M: 0.05 },
-  { id: 'meta/llama-3.2-1b', name: 'Llama 3.2 1B', icon: '🦙', provider: 'Meta', inputCostPer1M: 0.10, outputCostPer1M: 0.10 },
-  { id: 'google/gemini-2.0-flash-lite', name: 'Gemini Flash Lite', icon: '✨', provider: 'Google', inputCostPer1M: 0.10, outputCostPer1M: 0.40 },
-  { id: 'mistral/mistral-nemo', name: 'Mistral Nemo', icon: '🔮', provider: 'Mistral', inputCostPer1M: 0.15, outputCostPer1M: 0.15 },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', icon: '🤖', provider: 'OpenAI', inputCostPer1M: 0.15, outputCostPer1M: 0.60 },
-  { id: 'deepseek/deepseek-v3', name: 'DeepSeek V3', icon: '🔍', provider: 'DeepSeek', inputCostPer1M: 0.27, outputCostPer1M: 1.10 },
-  { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', icon: '🎵', provider: 'Anthropic', inputCostPer1M: 0.80, outputCostPer1M: 4.00 },
-];
-
-// Embedding Models (server-side copy for budget calculations)
-const EMBEDDING_MODELS = [
-  { id: 'local/all-MiniLM-L6-v2', name: 'MiniLM L6 v2 (Local)', icon: '💻', provider: 'Local', costPer1M: 0, dimensions: 384, isLocal: true },
-  { id: 'alibaba/qwen3-embedding-0.6b', name: 'Qwen3 Embedding 0.6B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.01, dimensions: 1024, isLocal: false },
-  { id: 'openai/text-embedding-3-small', name: 'Text Embedding 3 Small', icon: '🤖', provider: 'OpenAI', costPer1M: 0.02, dimensions: 1536, isLocal: false },
-  { id: 'alibaba/qwen3-embedding-4b', name: 'Qwen3 Embedding 4B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.02, dimensions: 2048, isLocal: false },
-  { id: 'amazon/titan-embed-text-v2', name: 'Titan Embed Text v2', icon: '📦', provider: 'Amazon', costPer1M: 0.02, dimensions: 1024, isLocal: false },
-  { id: 'google/text-embedding-005', name: 'Text Embedding 005', icon: '🔍', provider: 'Google', costPer1M: 0.03, dimensions: 768, isLocal: false },
-  { id: 'google/text-multilingual-embedding-002', name: 'Multilingual Embedding 002', icon: '🌍', provider: 'Google', costPer1M: 0.03, dimensions: 768, isLocal: false },
-  { id: 'alibaba/qwen3-embedding-8b', name: 'Qwen3 Embedding 8B', icon: '🔷', provider: 'Alibaba', costPer1M: 0.02, dimensions: 4096, isLocal: false },
-  { id: 'openai/text-embedding-ada-002', name: 'Text Embedding Ada 002', icon: '🤖', provider: 'OpenAI', costPer1M: 0.10, dimensions: 1536, isLocal: false },
-  { id: 'openai/text-embedding-3-large', name: 'Text Embedding 3 Large', icon: '🤖', provider: 'OpenAI', costPer1M: 0.13, dimensions: 3072, isLocal: false },
-  { id: 'google/gemini-embedding-001', name: 'Gemini Embedding 001', icon: '💎', provider: 'Google', costPer1M: 0.05, dimensions: 768, isLocal: false },
-];
-
-// Get plan-based budget for user
+// Get plan-based budget for user (uses TOKEN_QUOTAS from config)
 function getPlanBudget(isPlus: boolean, isPro: boolean): number {
-  if (isPlus) return PLAN_BUDGETS.plus;
-  if (isPro) return PLAN_BUDGETS.pro;
-  return 0;
-}
-
-// Calculate safe tokens for a budget
-function calculateSafeTokensForBudget(modelId: string, budgetUsd: number): number {
-  const model = AI_MODELS.find(m => m.id === modelId);
-  if (!model) return 0;
-  const avgCostPer1M = (model.inputCostPer1M + 2 * model.outputCostPer1M) / 3;
-  if (avgCostPer1M === 0) return 100_000_000; // Free model
-  const tokensPerDollar = 1_000_000 / avgCostPer1M;
-  return Math.floor(budgetUsd * tokensPerDollar);
+  if (isPlus) return TOKEN_QUOTAS.plus.aiCostBudget;
+  if (isPro) return TOKEN_QUOTAS.pro.aiCostBudget;
+  return TOKEN_QUOTAS.free.aiCostBudget;
 }
 
 function getSupabaseClient(): SupabaseClient | null {
