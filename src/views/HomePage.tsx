@@ -372,7 +372,7 @@ export class HomePage extends Component<{}, HomePageState> {
               margin: '0 0 1rem 0',
               lineHeight: 1.2,
             }}>
-              Tools for You. And Your AI.
+              AI Workflow Automation & Free Tools
             </h1>
 
             {/* Sub-headline */}
@@ -384,7 +384,7 @@ export class HomePage extends Component<{}, HomePageState> {
               maxWidth: '40rem',
               lineHeight: 1.5,
             }}>
-              20+ instant utilities for health, money, time, and decisions. Free in your browser — upgrade to connect your AI assistant.
+              Build AI workflows with YAML. Connect to ChatGPT, Claude & Cursor via MCP. Plus {TOTAL_UI_TOOL_COUNT}+ free browser utilities.
             </p>
 
             {/* Micro-line */}
@@ -394,7 +394,7 @@ export class HomePage extends Component<{}, HomePageState> {
               fontWeight: 500,
               margin: '0 auto 2rem',
             }}>
-              No sign-ups • Instant results • Pro unlocks Claude, ChatGPT & more
+              Free tools • No sign-ups • Pro unlocks workflow automation & MCP integration
             </p>
           </View>
 
@@ -550,8 +550,8 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.7,
               margin: '0 0 1.25rem',
             }}>
-              Tulzo is your go-to collection of <strong style={{ color: '#a78bfa' }}>{TOTAL_UI_TOOL_COUNT}+ online tools</strong> for health, finance, time, and fun.
-              Web tools work instantly in your browser — no downloads, no sign-ups. <strong style={{ color: '#a78bfa' }}>Pro & Plus subscriptions</strong> unlock AI-powered MCP integration for use with Claude, ChatGPT, and other AI assistants.
+              Tulzo is an <strong style={{ color: '#a78bfa' }}>AI workflow automation platform</strong> with <strong style={{ color: '#a78bfa' }}>{TOTAL_UI_TOOL_COUNT}+ free online tools</strong>.
+              Build automations with YAML, connect external AI assistants via MCP, and use free browser utilities for health, finance, time, and decisions — no downloads, no sign-ups.
             </p>
 
             {/* Tool Categories */}
@@ -670,8 +670,8 @@ export class HomePage extends Component<{}, HomePageState> {
                 lineHeight: 1.5,
                 margin: 0,
               }}>
-                <strong style={{ color: '#a78bfa' }}>🤖 AI Integration:</strong> All Tulzo tools are available as an{' '}
-                <strong>MCP (Model Context Protocol) server</strong> — connect Claude, ChatGPT, or any AI assistant to use these tools directly in your conversations.
+                <strong style={{ color: '#a78bfa' }}>🤖 MCP Integration:</strong> Tulzo provides an{' '}
+                <strong>MCP (Model Context Protocol) server</strong> — connect ChatGPT, Claude Desktop, Cursor, or any MCP-compatible AI to run automations and use tools directly.
               </p>
             </div>
 
@@ -682,8 +682,7 @@ export class HomePage extends Component<{}, HomePageState> {
               lineHeight: 1.6,
               margin: 0,
             }}>
-              Built for speed and simplicity. Web tools require no accounts or sign-ups — just open and use.
-              Pro & Plus subscribers get AI-powered MCP integration for seamless use with AI assistants.
+              Web tools work instantly — no accounts required. Pro & Plus subscribers get YAML workflow automation, AI chat with tool integration, and MCP access for external AI assistants.
             </p>
           </View>
 

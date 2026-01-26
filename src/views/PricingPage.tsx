@@ -36,7 +36,7 @@ export const PricingPage: React.FC = () => {
             Simple, Transparent Pricing
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'clamp(1rem, 2.5vw, 1.25rem)', marginTop: '1rem' }}>
-            Free tools for everyone. Upgrade for AI superpowers.
+            Free tools for everyone. Upgrade for AI workflow automation & MCP integration.
           </p>
         </section>
 

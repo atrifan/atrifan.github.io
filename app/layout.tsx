@@ -8,11 +8,11 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://tulzo.vercel.app'),
   title: {
-    default: 'Tulzo - Free Online Tools & AI-Powered Calculators',
+    default: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
     template: '%s | Tulzo',
   },
-  description: 'Free online tools: BMI calculator, sleep calculator, blood type compatibility, eclipse finder, tip calculator, coin flip & more. No signup required for web tools. Pro & Plus subscriptions for AI-powered MCP integration.',
-  keywords: ['free online tools', 'calculators', 'MCP tools', 'AI tools', 'BMI calculator', 'sleep calculator', 'blood type calculator', 'eclipse finder', 'tip calculator', 'coin flip', 'random wheel', 'age calculator', 'timezone converter'],
+  description: 'Build AI-powered workflow automations with YAML. Connect to ChatGPT, Claude, and Cursor via MCP. AI chat with RAG knowledge bases. Plus free online tools: calculators, converters & more.',
+  keywords: ['workflow automation', 'MCP tools', 'AI automation', 'ChatGPT integration', 'Claude integration', 'Cursor AI', 'AI agents', 'RAG knowledge base', 'AI chat', 'YAML workflows', 'free online tools', 'calculators', 'BMI calculator', 'sleep calculator', 'tip calculator'],
   authors: [{ name: 'Tulzo' }],
   creator: 'Tulzo',
   publisher: 'Tulzo',
@@ -32,21 +32,21 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://tulzo.vercel.app',
     siteName: 'Tulzo',
-    title: 'Tulzo - Free Online Tools & AI-Powered Calculators',
-    description: 'Free online tools & AI-powered calculators. No signup for web tools. Pro & Plus subscriptions for MCP AI integration.',
+    title: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
+    description: 'Build AI-powered workflow automations. Connect to ChatGPT, Claude & Cursor via MCP. AI chat with tools & RAG. Plus free online calculators.',
     images: [
       {
         url: '/tulzo-og.svg',
         width: 1200,
         height: 630,
-        alt: 'Tulzo - Free Online Tools & AI Calculators',
+        alt: 'Tulzo - AI Workflow Automation & MCP Tools',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tulzo - Free Online Tools & AI-Powered Calculators',
-    description: 'Free online tools & AI-powered calculators. No signup for web tools. Pro & Plus subscriptions for MCP AI integration.',
+    title: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
+    description: 'Build AI-powered workflow automations. Connect to ChatGPT, Claude & Cursor via MCP. AI chat with tools & RAG. Plus free online calculators.',
     images: ['/tulzo-og.svg'],
   },
   icons: {

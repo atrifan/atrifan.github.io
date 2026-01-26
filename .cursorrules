@@ -1,0 +1,93 @@
+# Tulzo Project - Cursor Rules
+
+## Project Overview
+Tulzo is a workflow automation platform built with Next.js 14 (App Router), Supabase, Clerk auth, and MCP (Model Context Protocol).
+
+## Tech Stack
+- **Framework**: Next.js 14 with App Router
+- **Database**: Supabase (PostgreSQL + Realtime)
+- **Auth**: Clerk (plan checking: `has({ plan: 'pro' })`, `has({ plan: 'plus' })`)
+- **UI**: Adobe React Spectrum components
+- **AI**: Vercel AI SDK, multiple model providers
+
+## Key Directories
+- `app/` - Next.js App Router pages and API routes
+- `src/views/` - Large page components (AutomationPage, ChatPage, DashboardPage)
+- `src/lib/automation/` - Workflow execution engine
+- `src/config/ai-tokens.config.ts` - AI models & pricing (single source of truth)
+- `src/types/supabase.ts` - Database types
+
+## Path Aliases
+```typescript
+// "@/*" → "./*"
+import { AI_MODELS } from '@/src/config/ai-tokens.config';
+```
+
+## Workflow YAML Schema
+Workflows are defined in YAML with these step types:
+- `tool:` - MCP tool call (e.g., `brave-search.web_search`)
+- `llm:` - AI model call with prompt
+- `code:` - JavaScript expression
+- `if:` / `for:` / `while:` - Control flow
+- `human:` - Human-in-the-loop approval
+- `notify:` - Push/email/slack notifications
+- `delay:` - Wait N seconds
+- `trigger_automation:` - Chain automations
+- `wait_for:` - Wait for external variable
+
+## Database Patterns
+```typescript
+// Always use service role for server-side
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Filter by user_id (RLS bypass)
+const { data } = await supabase
+  .from('automations')
+  .select('*')
+  .eq('user_id', userId);
+```
+
+## API Route Patterns
+```typescript
+// Export named handlers
+export async function GET(req: NextRequest) { ... }
+export async function POST(req: NextRequest) { ... }
+
+// Return JSON with error handling
+if (!user) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+```
+
+## OAuth Support
+All tool types (MCP, REST, GraphQL, A2A, RAG) support OAuth across:
+- Automation execution
+- Internal chat
+- External surfaces (ChatGPT, Claude Desktop)
+
+Key files:
+- `app/api/mcp/route.ts` - Returns `loginUrl` on OAuth error
+- `app/api/mcp/oauth-source/route.ts` - Finds OAuth config for tools
+- `app/mcp/[serverName]/login/page.tsx` - External OAuth login page
+
+## Coding Standards
+- Use TypeScript with explicit types (avoid `any`)
+- Use async/await (not .then())
+- Destructure props in React components
+- Use Supabase RLS with user_id filtering
+
+## Testing
+Run workflow tests locally:
+```bash
+npm run automation <yaml-file>  # Needs TEST_USER_ID in .env.local
+```
+
+## Important Files
+- `CLAUDE.md` - Full project documentation
+- `rules/augment-guidelines.txt` - YAML workflow schema reference
+- `src/lib/automation/types.ts` - Workflow type definitions
+- `src/lib/automation/executor.ts` - Core workflow executor
+

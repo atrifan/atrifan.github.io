@@ -3,15 +3,15 @@ import { PricingPage } from '@/src/views/PricingPage';
 
 export const metadata: Metadata = {
   title: 'Pricing - Tulzo',
-  description: 'Choose your Tulzo plan. Free tools for everyone, Pro plan with AI-powered tools and MCP server access for just $7/month.',
+  description: 'Choose your Tulzo plan. Free tools for everyone. Pro ($7/mo) for AI workflow automation & MCP access. Plus ($14/mo) for all AI models & advanced features.',
   openGraph: {
     title: 'Pricing - Tulzo',
-    description: 'Free tools for everyone. Upgrade to Pro for AI tools and MCP server access.',
+    description: 'Free tools for everyone. Pro for AI workflow automation & MCP. Plus for all AI models.',
     url: 'https://tulzo.vercel.app/pricing',
   },
   twitter: {
     title: 'Pricing - Tulzo',
-    description: 'Free tools for everyone. Upgrade to Pro for AI tools and MCP server access.',
+    description: 'Free tools for everyone. Pro for AI workflow automation & MCP. Plus for all AI models.',
   },
 };
 
