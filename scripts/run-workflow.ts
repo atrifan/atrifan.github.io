@@ -348,6 +348,51 @@ function createLiveToolExecutor(connectors: Connector[], userId: string, baseUrl
         actualToolName = toolName;
       }
 
+      // Handle built-in notification tools (no connector required)
+      if (connectorName === 'default') {
+        if (actualToolName === 'send_push_notification') {
+          console.log('   Using built-in push notification handler');
+          const response = await fetch(`${baseUrl}/api/push/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({
+              userId,
+              title: params.title,
+              body: params.body,
+              data: params.data || { type: params.type },
+              requireInteraction: params.requireInteraction,
+            }),
+          });
+          const result = await response.json();
+          console.log('   Result:', JSON.stringify(result, null, 2));
+          return result;
+        }
+
+        if (actualToolName === 'send_email') {
+          console.log('   Using built-in email handler');
+          const response = await fetch(`${baseUrl}/api/email/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+              'X-User-Id': userId,
+            },
+            body: JSON.stringify({
+              to: params.to,
+              subject: params.subject,
+              body: params.body,
+              isHtml: params.isHtml,
+            }),
+          });
+          const result = await response.json();
+          console.log('   Result:', JSON.stringify(result, null, 2));
+          return result;
+        }
+      }
+
       // Find the connector
       const connector = connectors.find(c =>
         c.server_name === connectorName ||
