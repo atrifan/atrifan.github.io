@@ -412,6 +412,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
   // Running instances state (for list view)
   const [runningExecutions, setRunningExecutions] = useState<Record<string, AutomationExecution[]>>({});
+  const [finderRefreshKey, setFinderRefreshKey] = useState(0);
 
   // No connectors error modal state
   const [showNoConnectorsModal, setShowNoConnectorsModal] = useState(false);
@@ -1387,6 +1388,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
 
       // Subscribe to realtime updates
       subscribeToExecution(data.execution.id, automation.id);
+
+      // Refresh the finder to show the new execution
+      setFinderRefreshKey(k => k + 1);
     } catch (error) {
       console.error('Failed to run automation:', error);
       alert(error instanceof Error ? error.message : 'Failed to run automation');
@@ -2207,6 +2211,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         {/* LIST VIEW - File Manager Style */}
         {view === 'list' && (
           <AutomationFinder
+            refreshKey={finderRefreshKey}
             automations={automations.map(auto => ({
               id: auto.id,
               name: auto.name,
@@ -2273,16 +2278,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                   method: 'DELETE',
                 });
                 fetchAutomations();
+                setFinderRefreshKey(k => k + 1);
               } catch (err) {
                 console.error('Failed to stop execution:', err);
               }
             }}
             onDeleteExecution={async (exec) => {
               try {
-                await fetch(`/api/ai/automations/${exec.automation_name || exec.automation_id}/executions/${exec.id}`, {
+                await fetch(`/api/ai/automations/${exec.automation_name || exec.automation_id}/executions/${exec.id}?hard=true`, {
                   method: 'DELETE',
                 });
                 fetchAutomations();
+                setFinderRefreshKey(k => k + 1);
               } catch (err) {
                 console.error('Failed to delete execution:', err);
               }

@@ -55,6 +55,7 @@ interface AutomationFinderProps {
   onCreateNew?: () => void;
   onRefresh?: () => void;
   userApiKey?: string; // User's API key for webhook URL display
+  refreshKey?: number; // Increment to trigger re-fetch of executions
 }
 
 // Status indicator colors
@@ -111,6 +112,7 @@ export function AutomationFinder({
   onCreateNew,
   onRefresh,
   userApiKey,
+  refreshKey,
 }: AutomationFinderProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my_automations']));
   const [expandedAutomations, setExpandedAutomations] = useState<Set<string>>(new Set());
@@ -120,6 +122,16 @@ export function AutomationFinder({
   const [searchQuery, setSearchQuery] = useState('');
   const [webhookAutomation, setWebhookAutomation] = useState<Automation | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Re-fetch executions when refreshKey changes
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey > 0) {
+      expandedAutomations.forEach(automationName => {
+        fetchExecutions(automationName);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   // Merge provided categories with defaults
   const allCategories = categoryList || DEFAULT_CATEGORIES;

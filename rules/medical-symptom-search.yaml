@@ -1,0 +1,126 @@
+name: "Medical Symptom Search"
+description: "Search medical records by symptoms and send results via email and push notification"
+version: 1
+
+trigger:
+  type: manual
+
+inputs:
+  - name: symptoms
+    type: string
+    required: true
+    description: "Symptoms to search for in medical records (e.g., 'headache fever fatigue')"
+
+  - name: email
+    type: string
+    required: true
+    description: "Email address to send results to"
+
+  - name: result_count
+    type: number
+    required: false
+    default: 5
+    description: "Number of results to return (1-10)"
+
+steps:
+  # Step 1: Search medical records using RAG
+  - id: searchMedicalRecords
+    tool: default.rag_default-medical-search
+    params:
+      query: "{{symptoms}}"
+      top_n: "{{result_count}}"
+    output: searchResults
+
+  # Step 2: Check if we got results
+  - id: checkResults
+    if: searchResults.results && searchResults.results.length > 0
+    then:
+      # Step 3a: Format results for display
+      - id: formatResults
+        code: |
+          const results = searchResults.results;
+          const formatted = results.map((r, i) => {
+            const score = (r.similarity * 100).toFixed(1);
+            return `${i + 1}. [${score}% match]\n   ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
+          }).join('\n\n');
+          ({
+            count: results.length,
+            summary: formatted,
+            topMatch: results[0].content
+          })
+        output: formattedResults
+
+      # Step 4a: Send push notification with results summary
+      - id: sendPushSuccess
+        tool: default.send_push_notification
+        params:
+          title: "🏥 Medical Search Complete"
+          body: "Found {{formattedResults.count}} records matching '{{symptoms}}'. Check your email for details."
+          type: success
+          requireInteraction: true
+        output: pushResult
+
+      # Step 5a: Send email with full results
+      - id: sendEmailResults
+        tool: default.send_email
+        params:
+          to: "{{email}}"
+          subject: "Medical Records Search: {{symptoms}}"
+          isHtml: true
+          body: |
+            <h2>🏥 Medical Records Search Results</h2>
+            <p><strong>Search Query:</strong> {{symptoms}}</p>
+            <p><strong>Results Found:</strong> {{formattedResults.count}}</p>
+            <hr>
+            <h3>Top Matches:</h3>
+            <pre style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">{{formattedResults.summary}}</pre>
+            <hr>
+            <p><em>Search performed at {{new Date().toISOString()}}</em></p>
+        output: emailResult
+
+      # Step 6a: Return success
+      - id: returnSuccess
+        return:
+          status: "success"
+          message: "Found {{formattedResults.count}} medical records"
+          resultsCount: "{{formattedResults.count}}"
+          emailSent: "{{emailResult.success}}"
+          pushSent: "{{pushResult.success}}"
+
+    else:
+      # Step 3b: No results found - send notification
+      - id: sendPushNoResults
+        tool: default.send_push_notification
+        params:
+          title: "🏥 Medical Search"
+          body: "No records found matching '{{symptoms}}'"
+          type: info
+        output: pushNoResult
+
+      # Step 4b: Send email about no results
+      - id: sendEmailNoResults
+        tool: default.send_email
+        params:
+          to: "{{email}}"
+          subject: "Medical Records Search: No Results"
+          isHtml: true
+          body: |
+            <h2>🏥 Medical Records Search</h2>
+            <p><strong>Search Query:</strong> {{symptoms}}</p>
+            <p>No matching records were found in the medical database.</p>
+            <p>Try using different keywords or broader symptom descriptions.</p>
+            <hr>
+            <p><em>Search performed at {{new Date().toISOString()}}</em></p>
+        output: emailNoResult
+
+      # Step 5b: Return no results
+      - id: returnNoResults
+        return:
+          status: "no_results"
+          message: "No medical records found matching the symptoms"
+          query: "{{symptoms}}"
+
+constraints:
+  maxToolCalls: 10
+  timeout: "2m"
+
