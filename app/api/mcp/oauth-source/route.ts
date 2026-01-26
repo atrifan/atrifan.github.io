@@ -207,9 +207,10 @@ async function checkA2AAgent(toolId: string, userId: string): Promise<OAuthSourc
     .single();
 
   if (!tool) return null;
+  const toolData = tool as { id: string; name: string; tool_type: string };
 
   // Extract agent name from tool name (format: "agent_name.tool_name" or just the agent name)
-  const agentName = tool.name.split('.')[0];
+  const agentName = toolData.name.split('.')[0];
 
   // Find the A2A agent
   const { data: agent } = await supabase
@@ -230,7 +231,7 @@ async function checkA2AAgent(toolId: string, userId: string): Promise<OAuthSourc
     sourceId: agent.id,
     sourceName: agent.display_name,
     oauthConfig,
-    toolName: tool.name,
+    toolName: toolData.name,
   };
 }
 
@@ -244,9 +245,10 @@ async function checkRAG(toolId: string, userId: string): Promise<OAuthSourceResu
     .single();
 
   if (!tool) return null;
+  const toolData = tool as { id: string; name: string; tool_type: string };
 
   // Extract RAG name from tool name (format: "rag_name.tool_name" or just the rag name)
-  const ragName = tool.name.split('.')[0];
+  const ragName = toolData.name.split('.')[0];
 
   // Find the URL RAG (has remote_url, not CSV)
   const { data: rag } = await supabase
@@ -268,7 +270,7 @@ async function checkRAG(toolId: string, userId: string): Promise<OAuthSourceResu
     sourceId: rag.id,
     sourceName: rag.name,
     oauthConfig,
-    toolName: tool.name,
+    toolName: toolData.name,
   };
 }
 
