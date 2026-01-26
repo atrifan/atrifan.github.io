@@ -287,12 +287,13 @@ async function findFirstOAuthToolInServer(userId: string, serverName: string): P
     .single();
 
   if (!apiKey) return null;
+  const apiKeyData = apiKey as { id: string };
 
   // Get all tools linked to this server
   const { data: serverTools } = await supabase
     .from('server_tools')
     .select('tool_id')
-    .eq('api_key_id', apiKey.id)
+    .eq('api_key_id', apiKeyData.id)
     .eq('is_enabled', true);
 
   if (!serverTools || serverTools.length === 0) return null;
