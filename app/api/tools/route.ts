@@ -132,8 +132,74 @@ export async function GET() {
       }
     }
 
-    // Extract unique categories
-    const categories = [...new Set(tools.map(t => t.category))];
+    // Fetch RAGs and convert to tools
+    // RAGs are stored separately from the tools table
+    const ragTools: Array<{
+      name: string;
+      description: string;
+      category: string;
+      toolType: string;
+      hasWidget: boolean;
+      invokingMessage: string | null;
+      invokedMessage: string | null;
+      inputSchema: object;
+      outputSchema: object | null;
+      sourceUrl: string | undefined;
+      iconUrl: string | undefined;
+    }> = [];
+
+    if (userId) {
+      const { data: rags } = await supabase
+        .from('user_rags')
+        .select('id, name, rag_name, description, icon, source_type, source_url, environment_name, document_count, chunk_count')
+        .eq('user_id', userId);
+
+      if (rags && rags.length > 0) {
+        rags.forEach((rag: {
+          id: string;
+          name: string;
+          rag_name: string;
+          description: string | null;
+          icon: string | null;
+          source_type: string;
+          source_url: string | null;
+          environment_name: string | null;
+          document_count: number;
+          chunk_count: number;
+        }) => {
+          // Generate tool name using same convention as RAGToolsSection
+          const envName = rag.environment_name || 'default';
+          const toolName = `rag_${envName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}-${rag.rag_name}-search`;
+
+          ragTools.push({
+            name: toolName,
+            description: rag.description || `Search the "${rag.name}" knowledge base (${rag.document_count} docs, ${rag.chunk_count} chunks)`,
+            category: 'Knowledge Base',
+            toolType: 'RAG',
+            hasWidget: false,
+            invokingMessage: `Searching ${rag.name}...`,
+            invokedMessage: `Found results from ${rag.name}`,
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'The search query to find relevant documents',
+                },
+                limit: {
+                  type: 'number',
+                  description: 'Maximum number of results to return (default: 5)',
+                },
+              },
+              required: ['query'],
+            },
+            outputSchema: null,
+            sourceUrl: rag.source_type === 'url' ? (rag.source_url || undefined) : undefined,
+            iconUrl: undefined,
+          });
+        });
+      }
+    }
 
     // Transform to match expected format
     const formattedTools = tools.map(tool => ({
@@ -150,9 +216,19 @@ export async function GET() {
       iconUrl: iconUrlMap[tool.id] || undefined,
     }));
 
+    // Filter out RAG tools from formattedTools since we add them separately from user_rags
+    // This prevents duplicates when RAG tools exist in both tools table and user_rags table
+    const nonRagTools = formattedTools.filter(t => t.toolType !== 'RAG');
+
+    // Combine all tools (database tools + RAG tools)
+    const allTools = [...nonRagTools, ...ragTools];
+
+    // Extract unique categories from all tools
+    const categories = [...new Set(allTools.map(t => t.category))];
+
     return NextResponse.json({
-      tools: formattedTools,
-      totalCount: formattedTools.length,
+      tools: allTools,
+      totalCount: allTools.length,
       categories,
     }, {
       headers: {

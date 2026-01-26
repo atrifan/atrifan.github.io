@@ -54,20 +54,57 @@ export async function GET(request: NextRequest) {
     const modelId = searchParams.get('modelId');
     const groupBy = (searchParams.get('groupBy') || 'day') as AnalyticsQuery['groupBy'];
 
-    // Fetch aggregated analytics from the summary table
+    // Query ai_token_usage directly (source of truth) and aggregate in JS
+    // This avoids dependency on user_ai_analytics summary table which may not be populated
     let query = supabase
-      .from('user_ai_analytics')
-      .select('*')
+      .from('ai_token_usage')
+      .select('id, user_id, model_id, input_tokens, output_tokens, cost_usd, created_at')
       .eq('user_id', userId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: false });
+      .gte('created_at', `${startDate}T00:00:00.000Z`)
+      .lte('created_at', `${endDate}T23:59:59.999Z`)
+      .order('created_at', { ascending: false });
 
     if (modelId) {
       query = query.eq('model_id', modelId);
     }
 
-    const { data: rawData, error } = await query;
+    const { data: usageData, error } = await query;
+
+    // Transform ai_token_usage rows into the format expected by the rest of the code
+    // Group by date and model_id to create aggregated rows
+    const aggregatedMap = new Map<string, AnalyticsRow>();
+
+    for (const row of usageData || []) {
+      const date = row.created_at.split('T')[0]; // YYYY-MM-DD
+      const model = row.model_id || 'unknown';
+      const key = `${date}|${model}`;
+
+      if (!aggregatedMap.has(key)) {
+        aggregatedMap.set(key, {
+          date,
+          model_id: model,
+          message_count: 0,
+          total_input_tokens: 0,
+          total_output_tokens: 0,
+          total_rag_tokens: 0,
+          total_history_tokens: 0,
+          total_recent_history_tokens: 0,
+          total_persona_tokens: 0,
+          total_cost: 0,
+          rag_usage_count: 0,
+          history_usage_count: 0,
+          persona_usage_count: 0,
+        });
+      }
+
+      const agg = aggregatedMap.get(key)!;
+      agg.message_count += 1;
+      agg.total_input_tokens += row.input_tokens || 0;
+      agg.total_output_tokens += row.output_tokens || 0;
+      agg.total_cost += parseFloat(row.cost_usd) || 0;
+    }
+
+    const rawData = Array.from(aggregatedMap.values());
 
     if (error) {
       console.error('Failed to fetch analytics:', error);

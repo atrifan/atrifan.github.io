@@ -83,7 +83,7 @@ async function validateApiKeyForServer(
 }
 
 // Forward request to main MCP handler with user context
-async function forwardToMCP(request: NextRequest, user: ApiKeyUser) {
+async function forwardToMCP(request: NextRequest, user: ApiKeyUser, key: string) {
   const body = await request.text();
   const baseUrl = request.nextUrl.origin;
 
@@ -105,6 +105,9 @@ async function forwardToMCP(request: NextRequest, user: ApiKeyUser) {
   if (user.apiKeyId) {
     headers['X-Api-Key-Id'] = user.apiKeyId;
   }
+
+  // Forward the original API key for RAG CSV search and other features that need it
+  headers['X-Original-Api-Key'] = key;
 
   const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
     method: 'POST',
@@ -150,7 +153,7 @@ export async function POST(
   }
 
   try {
-    return await forwardToMCP(request, user);
+    return await forwardToMCP(request, user, key);
   } catch {
     return NextResponse.json({
       jsonrpc: '2.0',

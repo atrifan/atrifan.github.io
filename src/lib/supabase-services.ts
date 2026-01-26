@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase';
+import { createClient as createUntypedClient } from '@supabase/supabase-js';
 import type {
   ApiKeyRow,
   ApiKeyInsert,
@@ -256,7 +257,7 @@ export async function getRAGByToolName(toolName: string): Promise<{
   embedding_model: string | null;
   embedding_dimensions: number;
   top_n: number;
-  remote_url: string | null;
+  source_url: string | null;
   http_method: string;
   params_location: string;
   request_content_type: string;
@@ -271,17 +272,34 @@ export async function getRAGByToolName(toolName: string): Promise<{
   if (!match) return null;
 
   const [, envName, ragName] = match;
+  console.log('[getRAGByToolName] Parsed tool name:', { toolName, envName, ragName });
 
-  const { data, error } = await supabase
+  // Build query - handle 'default' environment which might be stored as null or 'default'
+  let query = supabase
     .from('user_rags')
-    .select('id, name, rag_name, source_type, embedding_model, embedding_dimensions, top_n, remote_url, http_method, params_location, request_content_type, field_mapping, user_id, auth_type, auth_config, custom_headers')
-    .eq('rag_name', ragName)
-    .eq('environment_name', envName)
-    .single();
+    .select('id, name, rag_name, source_type, embedding_model, embedding_dimensions, top_n, source_url, http_method, params_location, request_content_type, field_mapping, user_id, auth_type, auth_config, custom_headers')
+    .eq('rag_name', ragName);
+
+  // For 'default' environment, also check for null environment_name
+  if (envName === 'default') {
+    query = query.or('environment_name.eq.default,environment_name.is.null');
+  } else {
+    query = query.eq('environment_name', envName);
+  }
+
+  const { data, error } = await query.single();
 
   if (error && error.code !== 'PGRST116') {
     console.error('Error fetching RAG by tool name:', error);
     return null;
+  }
+
+  if (!data) {
+    console.log('[getRAGByToolName] No RAG found for:', { ragName, envName });
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any;
+    console.log('[getRAGByToolName] Found RAG:', { id: d.id, name: d.name, rag_name: d.rag_name });
   }
 
   return data;
@@ -1137,5 +1155,54 @@ export async function getA2AAgentByToolName(toolName: string): Promise<A2AAgentR
   }
 
   return data as unknown as A2AAgentRow;
+}
+
+// ============ Usage Tracking ============
+
+/**
+ * Get an untyped Supabase client for tables not in the Database type
+ */
+function getUntypedSupabase() {
+  const url = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL;
+  const key = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createUntypedClient(url, key);
+}
+
+/**
+ * Track RAG tool usage in ai_token_usage table
+ * RAG searches don't use tokens but we track them for analytics
+ */
+export async function trackRAGUsage(
+  userId: string,
+  ragName: string,
+  ragId: string,
+  queryLength: number,
+  resultCount: number
+): Promise<void> {
+  try {
+    const client = getUntypedSupabase();
+    if (!client) {
+      console.error('Failed to create Supabase client for RAG usage tracking');
+      return;
+    }
+
+    const { error } = await client.from('ai_token_usage').insert({
+      user_id: userId,
+      model_id: `rag:${ragName}`,
+      input_tokens: queryLength, // Use query length as proxy for input
+      output_tokens: resultCount, // Use result count as proxy for output
+      cost_usd: 0, // RAG searches are free (no LLM cost)
+      message_type: 'rag_search',
+      // Store RAG ID in conversation_id field for reference (it's UUID type)
+      conversation_id: ragId,
+    });
+
+    if (error) {
+      console.error('Failed to track RAG usage:', error);
+    }
+  } catch (err) {
+    console.error('Error tracking RAG usage:', err);
+  }
 }
 

@@ -251,17 +251,17 @@ async function checkRAG(toolId: string, userId: string): Promise<OAuthSourceResu
   // Extract RAG name from tool name (format: "rag_name.tool_name" or just the rag name)
   const ragName = toolData.name.split('.')[0];
 
-  // Find the URL RAG (has remote_url, not CSV)
+  // Find the URL RAG (has source_url, not CSV)
   const { data: rag } = await supabase
     .from('user_rags')
-    .select('id, name, auth_type, auth_config, user_id, remote_url')
+    .select('id, name, auth_type, auth_config, user_id, source_url')
     .eq('user_id', userId)
     .ilike('name', ragName)
-    .not('remote_url', 'is', null)
+    .not('source_url', 'is', null)
     .single();
 
   if (!rag) return null;
-  const ragData = rag as { id: string; name: string; auth_type: string; auth_config: unknown; user_id: string; remote_url: string };
+  const ragData = rag as { id: string; name: string; auth_type: string; auth_config: unknown; user_id: string; source_url: string };
   if (ragData.auth_type !== 'oauth2') return null;
 
   const oauthConfig = ragData.auth_config as unknown as OAuth2AuthConfig;

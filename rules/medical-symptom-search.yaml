@@ -11,11 +11,6 @@ inputs:
     required: true
     description: "Symptoms to search for in medical records (e.g., 'headache fever fatigue')"
 
-  - name: email
-    type: string
-    required: true
-    description: "Email address to send results to"
-
   - name: result_count
     type: number
     required: false
@@ -25,7 +20,7 @@ inputs:
 steps:
   # Step 1: Search medical records using RAG
   - id: searchMedicalRecords
-    tool: default.rag_medical
+    tool: default.rag_default-medical-search
     params:
       query: "{{symptoms}}"
       top_n: "{{result_count}}"
@@ -41,8 +36,8 @@ steps:
           (() => {
             const results = searchResults.results;
             const formatted = results.map((r, i) => {
-              const pct = (r.score * 100).toFixed(1);
-              return `${i + 1}. ${r.title || 'Unknown'} [${pct}% match]\n   ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
+              const pct = r.score;
+              return `${i + 1}. ${r.title || 'Unknown'} [${pct} match]\n   ${r.content}`;
             }).join('\n\n');
             return {
               count: results.length,
@@ -65,7 +60,7 @@ steps:
       - id: sendEmailResults
         tool: default.send_email
         params:
-          to: "{{email}}"
+          to: "{{user.email}}"
           subject: "Medical Records Search: {{symptoms}}"
           isHtml: true
           body: |
@@ -101,7 +96,7 @@ steps:
       - id: sendEmailNoResults
         tool: default.send_email
         params:
-          to: "{{email}}"
+          to: "{{user.email}}"
           subject: "Medical Records Search: No Results"
           isHtml: true
           body: |

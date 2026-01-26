@@ -203,7 +203,8 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ isLoggedIn, isPro,
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [viewMode, setViewMode] = useState<'overview' | 'models' | 'context' | 'trends'>('overview');
 
-  const canAccess = isPro || isPlus;
+  // Analytics is available to all logged-in users
+  void isPro; void isPlus; // Suppress unused variable warnings
 
   const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
@@ -227,24 +228,8 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ isLoggedIn, isPro,
 
   useEffect(() => {
     applySEO('analytics');
-    if (canAccess) {
-      fetchAnalytics();
-    }
-  }, [canAccess, fetchAnalytics]);
-
-  // Show upgrade modal for non-Pro users
-  if (!canAccess) {
-    return (
-      <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
-        <UpgradeModal isOpen={true} title="Analytics - Pro Feature" featureName="Usage Analytics" showCloseButton={false} />
-        <View maxWidth="56rem" marginX="auto" UNSAFE_style={{ filter: 'blur(8px)', pointerEvents: 'none' }}>
-          <div style={{ marginBottom: '2rem' }}><BackToTools /></div>
-          <h1 style={{ fontSize: 'clamp(1.75rem, 6vw, 4rem)', fontWeight: 900, background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textAlign: 'center' }}>ANALYTICS</h1>
-        </View>
-        <Footer />
-      </View>
-    );
-  }
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   const modelColors = ['#8b5cf6', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#ec4899'];
   const contextColors = {

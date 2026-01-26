@@ -198,12 +198,56 @@ trigger:
   # step: processPayment  # If on: step
 ```
 
-## Required Inputs
+## Workflow Inputs
 
-Pre-configure required input values. Fields can be:
-- **Pre-filled** with actual values
-- **Marked sensitive** for vault storage
-- **Set to human_input** for runtime collection
+There are **two formats** for defining workflow inputs. Use the appropriate format based on your use case:
+
+### Format Comparison
+
+| Format | Use Case | Prompts User at Runtime |
+|--------|----------|-------------------------|
+| `inputs:` (array) | **Primary format** for user-provided values | Yes, if `required: true` and no `default` |
+| `required_inputs:` (object) | Pre-configured values, secrets, sensitive data | Only if `human_input: true` and no `value` |
+
+### `inputs:` Array Format (Recommended)
+
+**Use this format for workflow inputs that users provide when running the workflow.**
+
+```yaml
+inputs:
+  - name: query
+    type: string
+    required: true
+    description: "Search query to execute"
+
+  - name: limit
+    type: number
+    required: false
+    default: 10
+    description: "Maximum number of results"
+
+  - name: options
+    type: object
+    required: false
+    default: { includeMetadata: true }
+```
+
+**Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Input variable name |
+| `type` | string | No | `string`, `number`, `boolean`, `object`, `array` (default: `string`) |
+| `required` | boolean | No | If `true`, user must provide value (default: `false`) |
+| `default` | any | No | Default value if not provided |
+| `description` | string | No | Help text shown in UI |
+
+**Behavior:**
+- If `required: true` and no `default`: User is prompted before execution
+- If `required: false` or has `default`: Uses default value if not provided
+
+### `required_inputs:` Object Format (Advanced)
+
+**Use this format for pre-configured values, secrets, and sensitive data.**
 
 ```yaml
 required_inputs:
@@ -220,6 +264,15 @@ required_inputs:
     value: 100
     type: number
 ```
+
+**Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `value` | any | Pre-configured value (not prompted) |
+| `sensitive` | boolean | If `true`, value is masked in UI and stored securely |
+| `human_input` | boolean | If `true` and no `value`, user is prompted at runtime |
+| `type` | string | Value type for validation |
+| `description` | string | Help text shown when prompting |
 
 **Missing Required Inputs:** If a tool step requires an input that isn't available in context or pre-configured, the workflow pauses and sends a notification (email/slack) requesting the input. This is automatic human-in-the-loop error handling.
 

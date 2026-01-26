@@ -5,6 +5,11 @@ import { validateApiKeyFromRequest } from '@/src/lib/automation/auth';
 import { runRealExecution } from '@/src/lib/automation/runtime-executor';
 import * as yaml from 'yaml';
 
+// Extend Vercel serverless function timeout to 60 seconds (requires Pro plan)
+// This is needed because workflow execution can take longer than the default 10s timeout
+// Without this, long-running workflows will cause "failed to fetch" errors
+export const maxDuration = 60;
+
 const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!;
 

@@ -146,6 +146,113 @@ export async function runRealExecution(
     toolExecutor,
     llmExecutor,
     collectedInputs: enrichedInputs,
+    // Notification handler for notify steps
+    notificationHandler: {
+      async notify({ channels, message, priority }) {
+        console.log(`[Runtime] Notify: channels=${channels.join(',')}, priority=${priority || 'normal'}`);
+
+        // Send push notification if requested
+        if (channels.includes('push')) {
+          try {
+            await fetch(`${baseUrl}/api/push/send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+              },
+              body: JSON.stringify({
+                userId,
+                title: '🔔 Automation Notification',
+                body: message,
+                data: {
+                  type: 'automation_notify',
+                  automationId,
+                  executionId,
+                  priority,
+                },
+              }),
+            });
+          } catch (e) {
+            console.error('[Runtime] Failed to send push notification:', e);
+          }
+        }
+
+        // Send email notification if requested
+        if (channels.includes('email') && userEmail) {
+          try {
+            await fetch(`${baseUrl}/api/email/send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+              },
+              body: JSON.stringify({
+                to: userEmail,
+                subject: `🔔 Automation: ${automationName || automationId}`,
+                body: message,
+              }),
+            });
+          } catch (e) {
+            console.error('[Runtime] Failed to send email notification:', e);
+          }
+        }
+      },
+    },
+    // Output handler for outputs section
+    outputHandler: {
+      async sendEmail({ to, subject, body }) {
+        try {
+          const response = await fetch(`${baseUrl}/api/email/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({ to, subject, body }),
+          });
+          return { type: 'email', success: response.ok };
+        } catch (e) {
+          return { type: 'email', success: false, error: String(e) };
+        }
+      },
+      async sendPush({ title, message, data }) {
+        try {
+          const response = await fetch(`${baseUrl}/api/push/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({
+              userId,
+              title,
+              body: message,
+              data: {
+                ...data,
+                type: 'automation_output',
+                automationId,
+                executionId,
+              },
+            }),
+          });
+          return { type: 'push', success: response.ok };
+        } catch (e) {
+          return { type: 'push', success: false, error: String(e) };
+        }
+      },
+      async sendWebhook({ url, method = 'POST', headers = {}, body }) {
+        try {
+          const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify(body),
+          });
+          return { type: 'webhook', success: response.ok };
+        } catch (e) {
+          return { type: 'webhook', success: false, error: String(e) };
+        }
+      },
+    },
     onStepStart: (stepId, stepType) => {
       stepStartTimes[stepId] = Date.now();
       updateExecutionStep(supabase, executionId, stepId);

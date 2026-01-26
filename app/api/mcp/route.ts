@@ -20,6 +20,7 @@ import {
   getA2AAgentByToolName,
   getRAGByToolName,
   validateToolForServer,
+  trackRAGUsage,
 } from '@/src/lib/supabase-services';
 import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
@@ -877,7 +878,14 @@ async function executeToolAsync(
           throw new Error('API key required for RAG search');
         }
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'https://tulzo.com'}/api/collection/${apiKey}/${rag.rag_name}`, {
+        // Use localhost for internal requests in development to avoid SSL/proxy issues
+        const baseUrl = process.env.NODE_ENV === 'development'
+          ? `http://localhost:${process.env.PORT || 3000}`
+          : (process.env.NEXT_PUBLIC_URL || 'https://tulzo.com');
+        const collectionUrl = `${baseUrl}/api/collection/${apiKey}/${rag.rag_name}`;
+        console.log('[RAG CSV Search] Calling collection API:', collectionUrl);
+
+        const response = await fetch(collectionUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query, top_n: topN }),
@@ -885,10 +893,18 @@ async function executeToolAsync(
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
+          console.error('[RAG CSV Search] Collection API error:', response.status, errData);
           throw new Error((errData as { error?: string }).error || `RAG search failed: ${response.status}`);
         }
 
         const data = await response.json();
+
+        // Track RAG usage for analytics
+        if (context?.userId) {
+          const resultCount = Array.isArray(data?.results) ? data.results.length : (Array.isArray(data) ? data.length : 1);
+          trackRAGUsage(context.userId, rag.name, rag.id, query.length, resultCount);
+        }
+
         return {
           result: data,
           isRestTool: false,
@@ -929,7 +945,7 @@ async function executeToolAsync(
             'x-internal-user-id': context?.userId || '',
           },
           body: JSON.stringify({
-            url: rag.remote_url,
+            url: rag.source_url,
             method: rag.http_method || 'POST',
             paramsLocation: rag.params_location || 'body',
             contentType: rag.request_content_type || 'application/json',
@@ -977,6 +993,13 @@ async function executeToolAsync(
         // Check for proxy errors
         if (!proxyResponse.ok || proxyData.error) {
           throw new Error(proxyData.error || `Remote RAG search failed: ${proxyData.status}`);
+        }
+
+        // Track RAG usage for analytics
+        if (context?.userId) {
+          const resultData = proxyData.data;
+          const resultCount = Array.isArray(resultData?.results) ? resultData.results.length : (Array.isArray(resultData) ? resultData.length : 1);
+          trackRAGUsage(context.userId, rag.name, rag.id, query.length, resultCount);
         }
 
         return {

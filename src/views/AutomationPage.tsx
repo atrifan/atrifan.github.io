@@ -7,6 +7,7 @@ import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Footer } from '../components/Footer';
 import { BackToTools } from '../components/BackToTools';
 import { UpgradeModal } from '../components/UpgradeModal';
+import { AlertModal } from '../components/AlertModal';
 import { MermaidDiagram } from '../components/MermaidDiagram';
 import { AutomationIcon } from '../components/AutomationIcon';
 import { FaviconImage } from '../components/FaviconImage';
@@ -94,6 +95,86 @@ interface AutomationLog {
   message: string;
   status: string | null;
   duration_ms: number | null;
+}
+
+/**
+ * Parse YAML definition to extract required_inputs that need human input.
+ * Supports two formats:
+ * 1. required_inputs: object format with human_input: true
+ * 2. inputs: array format with required: true
+ * Returns the inputs config if there are human inputs, null otherwise.
+ * Also pre-populates any preset values.
+ */
+function getHumanInputsFromYaml(yamlDefinition: string | null | undefined): {
+  hasHumanInputs: boolean;
+  inputsConfig: Record<string, RequiredInputConfig> | null;
+  presetValues: Record<string, unknown>;
+} {
+  if (!yamlDefinition) {
+    return { hasHumanInputs: false, inputsConfig: null, presetValues: {} };
+  }
+
+  try {
+    const parsed = yaml.parse(yamlDefinition);
+    const presetValues: Record<string, unknown> = {};
+    let hasHumanInputs = false;
+    let inputsConfig: Record<string, RequiredInputConfig> = {};
+
+    // Format 1: required_inputs object format (e.g., required_inputs: { query: { human_input: true } })
+    const requiredInputs = parsed?.required_inputs;
+    if (requiredInputs && typeof requiredInputs === 'object' && !Array.isArray(requiredInputs)) {
+      for (const [key, config] of Object.entries(requiredInputs)) {
+        const inputConfig = config as RequiredInputConfig;
+        inputsConfig[key] = inputConfig;
+        // Check if this input needs human input (has human_input: true and no preset value)
+        if (inputConfig.human_input && inputConfig.value === undefined) {
+          hasHumanInputs = true;
+        }
+        // Pre-populate any preset values
+        if (inputConfig.value !== undefined) {
+          presetValues[key] = inputConfig.value;
+        }
+      }
+    }
+
+    // Format 2: inputs array format (e.g., inputs: [{ name: 'query', required: true }])
+    const inputsArray = parsed?.inputs;
+    if (Array.isArray(inputsArray)) {
+      for (const input of inputsArray) {
+        if (input && typeof input === 'object' && input.name) {
+          const name = input.name as string;
+          // Convert array format to object format
+          inputsConfig[name] = {
+            type: input.type || 'string',
+            description: input.description,
+            human_input: input.required === true, // required inputs need human input
+            value: input.default
+          };
+          // If required and no default value, it needs human input
+          if (input.required === true && input.default === undefined) {
+            hasHumanInputs = true;
+          }
+          // Pre-populate default values
+          if (input.default !== undefined) {
+            presetValues[name] = input.default;
+          }
+        }
+      }
+    }
+
+    if (Object.keys(inputsConfig).length === 0) {
+      return { hasHumanInputs: false, inputsConfig: null, presetValues: {} };
+    }
+
+    return {
+      hasHumanInputs,
+      inputsConfig,
+      presetValues
+    };
+  } catch {
+    // If YAML parsing fails, return no human inputs
+    return { hasHumanInputs: false, inputsConfig: null, presetValues: {} };
+  }
 }
 
 interface FlowNode {
@@ -457,6 +538,9 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   const [temperature, setTemperature] = useState(0.3);
   const [maxRetries, setMaxRetries] = useState(5);
 
+  // Alert modal state
+  const [alertModal, setAlertModal] = useState<{ show: boolean; title: string; message: string; icon: string; color: string }>({ show: false, title: '', message: '', icon: '⚠️', color: '#f59e0b' });
+
   // Check screen size for responsive layout
   useEffect(() => {
     const checkScreenSize = () => setIsLargeScreen(window.innerWidth >= 1024);
@@ -624,9 +708,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // Fetch data on mount
   useEffect(() => {
     applySEO('automation');
+    // Always fetch budget data (API works for all users, shows usage history)
+    fetchBudget();
+
     if (canAccessPro) {
       fetchAutomations();
-      fetchBudget();
       fetchPersonalities();
       fetchRags();
       fetchMcpTools();
@@ -1356,7 +1442,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
   // Run automation
   const runAutomation = async (automation: Automation, inputs?: Record<string, unknown>) => {
     if (!automation.yaml_definition) {
-      alert('Please save the automation with a YAML definition first');
+      setAlertModal({ show: true, title: 'No YAML Definition', message: 'Please save the automation with a YAML definition first', icon: '⚠️', color: '#f59e0b' });
       return;
     }
 
@@ -1389,11 +1475,16 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       // Subscribe to realtime updates
       subscribeToExecution(data.execution.id, automation.id);
 
+      // Immediately fetch logs (in case some were already created)
+      setTimeout(() => {
+        fetchExecutionLogs(automation.name, data.execution.id);
+      }, 500);
+
       // Refresh the finder to show the new execution
       setFinderRefreshKey(k => k + 1);
     } catch (error) {
       console.error('Failed to run automation:', error);
-      alert(error instanceof Error ? error.message : 'Failed to run automation');
+      setAlertModal({ show: true, title: 'Execution Failed', message: error instanceof Error ? error.message : 'Failed to run automation', icon: '❌', color: '#ef4444' });
       setIsExecuting(false);
     }
   };
@@ -1463,6 +1554,44 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
       logsSubscriptionRef.current?.unsubscribe();
     };
   }, []);
+
+  // Poll for logs when viewing an execution that's still running
+  // This is a fallback in case Supabase realtime doesn't work
+  useEffect(() => {
+    if (!currentExecution || !currentAutomation) return;
+
+    // Only poll if execution is still in progress
+    const isRunning = ['pending', 'running', 'waiting_input'].includes(currentExecution.status);
+    if (!isRunning) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(
+          `/api/ai/automations/${currentAutomation.name}/executions/${currentExecution.id}/logs`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          // Update logs if we got new ones
+          if (data.logs && data.logs.length > executionLogs.length) {
+            setExecutionLogs(data.logs);
+          }
+          // Update execution status
+          if (data.execution) {
+            setCurrentExecution(data.execution);
+            // Stop executing state if completed
+            if (['completed', 'failed'].includes(data.execution.status)) {
+              setIsExecuting(false);
+              fetchAutomations();
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll logs:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [currentExecution?.id, currentExecution?.status, currentAutomation?.name, executionLogs.length]);
 
   // Fetch logs for an automation (most recent execution)
   const fetchLogs = async (automationName: string) => {
@@ -2118,10 +2247,12 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           {currentAutomation && currentAutomation.yaml_definition && (
             <button
               onClick={() => {
-                // If there are required inputs with human_input flag, show modal
-                const hasHumanInputs = currentAutomation.required_inputs &&
-                  Object.values(currentAutomation.required_inputs).some(config => config.human_input);
-                if (hasHumanInputs) {
+                // Parse YAML to detect required human inputs
+                const { hasHumanInputs, inputsConfig, presetValues } = getHumanInputsFromYaml(currentAutomation.yaml_definition);
+                if (hasHumanInputs && inputsConfig) {
+                  // Update the automation's required_inputs for the modal to use
+                  setCurrentAutomation({ ...currentAutomation, required_inputs: inputsConfig });
+                  setRunInputs(presetValues);
                   setShowRunModal(true);
                 } else {
                   runAutomation(currentAutomation);
@@ -2234,9 +2365,11 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             onRunAutomation={(auto) => {
               const fullAuto = automations.find(a => a.id === auto.id);
               if (fullAuto) {
-                const hasInputs = fullAuto.yaml_definition && fullAuto.yaml_definition.includes('inputs:');
-                if (hasInputs) {
-                  setCurrentAutomation(fullAuto);
+                // Parse YAML to detect required human inputs
+                const { hasHumanInputs, inputsConfig, presetValues } = getHumanInputsFromYaml(fullAuto.yaml_definition);
+                if (hasHumanInputs && inputsConfig) {
+                  setCurrentAutomation({ ...fullAuto, required_inputs: inputsConfig });
+                  setRunInputs(presetValues);
                   setShowRunModal(true);
                 } else {
                   runAutomation(fullAuto);
@@ -2586,7 +2719,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h2 style={{ color: '#fff', fontSize: '1.1rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 📋 Execution Logs
-                {isExecuting && <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>⏳ Running...</span>}
+                {isExecuting && currentExecution?.status !== 'failed' && currentExecution?.status !== 'completed' && <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>⏳ Running...</span>}
                 {currentExecution?.status === 'completed' && <span style={{ fontSize: '0.8rem', color: '#10b981' }}>✓ Completed</span>}
                 {currentExecution?.status === 'failed' && <span style={{ fontSize: '0.8rem', color: '#ef4444' }}>✗ Failed</span>}
                 {currentExecution?.status === 'waiting_input' && <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>⏸ Waiting for input</span>}
@@ -3047,15 +3180,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
                 <button
                   onClick={() => {
                     if (currentAutomation) {
-                      // Check if automation has human inputs
-                      const hasInputs = currentAutomation.yaml_definition?.includes('inputs:') || exportedYaml.includes('inputs:');
-                      if (hasInputs) {
+                      // Parse YAML to detect required human inputs
+                      const yamlToCheck = currentAutomation.yaml_definition || exportedYaml;
+                      const { hasHumanInputs, inputsConfig, presetValues } = getHumanInputsFromYaml(yamlToCheck);
+                      if (hasHumanInputs && inputsConfig) {
+                        setCurrentAutomation({ ...currentAutomation, required_inputs: inputsConfig });
+                        setRunInputs(presetValues);
                         setShowRunModal(true);
                       } else {
                         runAutomation(currentAutomation);
                       }
                     } else {
-                      alert('Please save the automation first');
+                      setAlertModal({ show: true, title: 'Save Required', message: 'Please save the automation first', icon: '⚠️', color: '#f59e0b' });
                     }
                   }}
                   disabled={isExecuting || !currentAutomation}
@@ -3617,7 +3753,7 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(workflowRules);
-                  alert('Rules copied to clipboard!');
+                  setAlertModal({ show: true, title: 'Copied!', message: 'Rules copied to clipboard!', icon: '✅', color: '#10b981' });
                 }}
                 style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(139, 92, 246, 0.4)', background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', cursor: 'pointer', fontSize: '0.85rem' }}
               >
@@ -3836,6 +3972,15 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
           </div>
         </div>
       )}
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.show}
+        title={alertModal.title}
+        message={alertModal.message}
+        icon={alertModal.icon}
+        color={alertModal.color}
+        onClose={() => setAlertModal({ ...alertModal, show: false })}
+      />
     </View>
   );
 };
