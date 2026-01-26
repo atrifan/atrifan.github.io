@@ -36,3 +36,6 @@ out/
 .env.*.local
 
 tsconfig.tsbuildinfo
+
+# clerk configuration (can include secrets)
+/.clerk/
