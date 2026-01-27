@@ -2093,6 +2093,16 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
         const toolName = (params as { name: string }).name;
         const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
 
+        console.log('[MCP Route] ===== RECEIVED tools/call =====');
+        console.log('[MCP Route] Tool Name:', toolName);
+        console.log('[MCP Route] Arguments:', JSON.stringify(toolArgs, null, 2));
+        console.log('[MCP Route] Context:', JSON.stringify({
+          isAuthenticated: context.isAuthenticated,
+          userId: context.userId ? `${context.userId.substring(0, 8)}...` : 'none',
+          serverName: context.serverName,
+          hasApiKey: !!context.apiKey,
+        }, null, 2));
+
         // Validate tool access - prevent tool call spoofing
         // For non-NATIVE tools, verify the tool is enabled for this user's server
         const toolDef = getToolDefinition(toolName);

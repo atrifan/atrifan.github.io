@@ -117,6 +117,23 @@ export async function POST(request: NextRequest) {
     let mcpCleanup: (() => Promise<void>) | null = null;
     let oauthErrors: Array<{ connectorId: string; error: string; needsOAuth?: boolean; oauthServerId?: string }> = [];
 
+    console.log('[Chat API] Request received:', {
+      userId: userId.substring(0, 8) + '...',
+      modelId,
+      messageCount: messages.length,
+      lastMessage: userMessage.substring(0, 100) + (userMessage.length > 100 ? '...' : ''),
+      connectorCount: connectors.length,
+      connectors: connectors.map((c: MCPConnectorConfig) => ({
+        id: c.id,
+        type: c.connector_type,
+        displayName: c.display_name,
+        serverName: c.server_name,
+      })),
+      hasUserApiKey: !!userApiKey,
+      userApiKeyPrefix: userApiKey ? userApiKey.substring(0, 8) + '...' : 'NONE',
+      maxSteps,
+    });
+
     try {
       // Build system prompt if provided
       const systemPromptText = systemPrompt || undefined;
@@ -127,9 +144,22 @@ export async function POST(request: NextRequest) {
         (c: MCPConnectorConfig) => c.connector_type === 'internal_mcp' || c.connector_type === 'external_mcp'
       );
 
+      console.log('[Chat API] Filtered MCP connectors:', {
+        total: connectors.length,
+        mcpConnectors: mcpConnectors.length,
+        filtered: mcpConnectors.map((c: MCPConnectorConfig) => c.display_name),
+      });
+
       if (mcpConnectors.length > 0 && userApiKey) {
         const baseUrl = request.nextUrl.origin;
+        console.log('[Chat API] Aggregating tools from MCP connectors, baseUrl:', baseUrl);
         const toolsResult = await aggregateMCPTools(mcpConnectors, userApiKey, userId, baseUrl);
+
+        console.log('[Chat API] Tool aggregation result:', {
+          toolCount: Object.keys(toolsResult.tools).length,
+          toolNames: Object.keys(toolsResult.tools),
+          errorCount: toolsResult.errors.length,
+        });
 
         if (Object.keys(toolsResult.tools).length > 0) {
           tools = toolsResult.tools;
@@ -142,9 +172,30 @@ export async function POST(request: NextRequest) {
         if (toolsResult.errors.length > 0) {
           console.log('[Chat API] MCP connection errors:', toolsResult.errors);
         }
+      } else {
+        console.log('[Chat API] Skipping tool aggregation:', {
+          reason: mcpConnectors.length === 0 ? 'No MCP connectors' : 'No userApiKey',
+          mcpConnectorCount: mcpConnectors.length,
+          hasUserApiKey: !!userApiKey,
+        });
       }
 
       // Use agentic loop with maxSteps if tools are available
+      const hasTools = tools && Object.keys(tools).length > 0;
+      const toolNames = hasTools ? Object.keys(tools!) : [];
+      console.log('[Chat API] Calling generateText:', {
+        model: modelId,
+        hasSystemPrompt: !!systemPromptText,
+        systemPromptLength: systemPromptText?.length || 0,
+        messageCount: messages.length,
+        hasTools,
+        toolCount: toolNames.length,
+        toolNames: toolNames,
+        maxSteps: hasTools ? (maxSteps || 10) : 'N/A (no tools)',
+        maxOutputTokens: maxOutputTokens || 512,
+        temperature: temperature ?? 0.3,
+      });
+
       const result = await generateText({
         model: modelId, // AI SDK v6 has built-in gateway support
         system: systemPromptText,
@@ -156,10 +207,19 @@ export async function POST(request: NextRequest) {
         temperature: temperature ?? 0.3,
         maxRetries: maxRetries || 5,
         // Agentic loop configuration
-        ...(tools && Object.keys(tools).length > 0 ? {
+        ...(hasTools ? {
           tools: tools as Parameters<typeof generateText>[0]['tools'],
           maxSteps: maxSteps || 10,
         } : {}),
+      });
+
+      console.log('[Chat API] generateText result:', {
+        textLength: result.text?.length || 0,
+        textPreview: result.text?.substring(0, 100) + (result.text?.length > 100 ? '...' : ''),
+        inputTokens: result.usage?.inputTokens || 0,
+        outputTokens: result.usage?.outputTokens || 0,
+        stepCount: result.steps?.length || 0,
+        finishReason: result.finishReason,
       });
 
       assistantMessage = result.text;
@@ -170,13 +230,22 @@ export async function POST(request: NextRequest) {
 
       // Collect tool call information for response
       if (result.steps) {
+        console.log('[Chat API] Processing steps:', result.steps.length);
         for (const step of result.steps) {
           if (step.toolCalls) {
+            console.log('[Chat API] Step has tool calls:', step.toolCalls.length);
             for (const toolCall of step.toolCalls) {
               // Use type assertion to access properties (may be undefined for dynamic tools)
               const toolCallWithArgs = toolCall as { toolName: string; toolCallId: string; args?: unknown };
               const toolResult = step.toolResults?.find(r => r.toolCallId === toolCall.toolCallId);
               const toolResultWithResult = toolResult as { result?: unknown } | undefined;
+
+              console.log('[Chat API] Tool call:', {
+                name: toolCall.toolName,
+                args: toolCallWithArgs.args,
+                hasResult: !!toolResultWithResult?.result,
+              });
+
               toolCallsInfo.push({
                 name: toolCall.toolName,
                 args: toolCallWithArgs.args,
@@ -186,8 +255,13 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+
+      console.log('[Chat API] Final tool calls info:', {
+        count: toolCallsInfo.length,
+        tools: toolCallsInfo.map(t => t.name),
+      });
     } catch (error) {
-      console.error('AI Gateway error:', error);
+      console.error('[Chat API] AI Gateway error:', error);
       // Cleanup MCP clients on error
       if (mcpCleanup) {
         await mcpCleanup();

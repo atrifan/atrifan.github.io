@@ -9,6 +9,7 @@
  */
 
 import { ToolExecuteHandler, ToolWidgetRenderer, ToolTextFormatter, ToolResult } from './tools-definitions';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // Import all calculators and utilities
 import { WeightCalculator } from '../utils/WeightCalculator';
@@ -621,6 +622,21 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       return { success: false, error: 'User not authenticated' };
     }
 
+    // If no 'to' address provided, get user's email from Clerk
+    let toEmail = args.to as string;
+    if (!toEmail) {
+      try {
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(context.userId);
+        toEmail = user.emailAddresses?.[0]?.emailAddress || '';
+        if (!toEmail) {
+          return { success: false, error: 'No email address found for user' };
+        }
+      } catch (e) {
+        return { success: false, error: 'Failed to fetch user email' };
+      }
+    }
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
 
     try {
@@ -632,7 +648,7 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
           'X-User-Id': context.userId,
         },
         body: JSON.stringify({
-          to: args.to as string,
+          to: toEmail,
           subject: args.subject as string,
           body: args.body as string,
           isHtml: args.isHtml as boolean,

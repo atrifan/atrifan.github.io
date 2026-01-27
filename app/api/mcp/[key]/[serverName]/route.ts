@@ -109,6 +109,25 @@ async function forwardToMCP(request: NextRequest, user: ApiKeyUser, key: string)
   // Forward the original API key for RAG CSV search and other features that need it
   headers['X-Original-Api-Key'] = key;
 
+  // Parse body to check method for logging
+  let parsedBody;
+  try {
+    parsedBody = JSON.parse(body);
+  } catch {
+    parsedBody = {};
+  }
+
+  console.log('[MCP Path Route] ===== FORWARDING REQUEST =====');
+  console.log('[MCP Path Route] Method:', parsedBody.method);
+  console.log('[MCP Path Route] Params:', JSON.stringify(parsedBody.params, null, 2));
+  console.log('[MCP Path Route] User:', JSON.stringify({
+    userId: user.userId.substring(0, 8) + '...',
+    serverName: user.serverName,
+    plan: user.plan,
+  }, null, 2));
+  console.log('[MCP Path Route] Forward URL:', `${baseUrl}/api/mcp`);
+  console.log('[MCP Path Route] Headers:', JSON.stringify(headers, null, 2));
+
   const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
     method: 'POST',
     headers,
@@ -116,6 +135,11 @@ async function forwardToMCP(request: NextRequest, user: ApiKeyUser, key: string)
   });
 
   const result = await mcpResponse.json();
+
+  console.log('[MCP Path Route] Response Status:', mcpResponse.status);
+  console.log('[MCP Path Route] Response:', JSON.stringify(result, null, 2).substring(0, 500));
+  console.log('[MCP Path Route] ===== END FORWARD =====');
+
   return NextResponse.json(result);
 }
 
