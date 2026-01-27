@@ -201,7 +201,7 @@ export async function POST(
 
       // Send notification via configured channels
       const channels = automation.notification_config?.channels || ['email'];
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
       const notificationMessage = `Automation "${automation.display_name || automation.name}" requires your input`;
 
       // Build full URL with query params

@@ -90,7 +90,7 @@ export async function createToolExecutorForUser(
 ): Promise<ToolExecutor> {
   const supabaseUrl = options?.supabaseUrl || process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL;
   const supabaseKey = options?.supabaseKey || process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY;
-  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = options?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const context = options?.context || 'automation';
 
   if (!supabaseUrl || !supabaseKey) {

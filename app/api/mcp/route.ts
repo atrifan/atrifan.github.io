@@ -28,6 +28,23 @@ import { executeGraphQLCall } from '@/src/lib/graphql-handler';
 import { createMCPClient, type MCPCallResult } from '@/src/lib/mcp-client';
 import type { EnvironmentRow, MCPServerAuthType } from '@/src/types/supabase';
 
+/**
+ * Get the base URL for internal API calls.
+ * Priority: NEXT_PUBLIC_URL > VERCEL_URL (with https) > localhost
+ */
+function getInternalBaseUrl(): string {
+  if (process.env.NODE_ENV === 'development') {
+    return `http://localhost:${process.env.PORT || 3000}`;
+  }
+  if (process.env.NEXT_PUBLIC_URL) {
+    return process.env.NEXT_PUBLIC_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'https://tulzo.com';
+}
+
 // Auth types
 type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
 
@@ -879,9 +896,7 @@ async function executeToolAsync(
         }
 
         // Use localhost for internal requests in development to avoid SSL/proxy issues
-        const baseUrl = process.env.NODE_ENV === 'development'
-          ? `http://localhost:${process.env.PORT || 3000}`
-          : (process.env.NEXT_PUBLIC_URL || 'https://tulzo.com');
+        const baseUrl = getInternalBaseUrl();
         const collectionUrl = `${baseUrl}/api/collection/${apiKey}/${rag.rag_name}`;
         console.log('[RAG CSV Search] Calling collection API:', collectionUrl);
 
@@ -937,7 +952,7 @@ async function executeToolAsync(
         } : undefined;
 
         // Call the RAG proxy with internal auth headers for server-to-server call
-        const proxyResponse = await fetch(`${process.env.NEXT_PUBLIC_URL || 'https://tulzo.com'}/api/ai/rags/proxy`, {
+        const proxyResponse = await fetch(`${getInternalBaseUrl()}/api/ai/rags/proxy`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

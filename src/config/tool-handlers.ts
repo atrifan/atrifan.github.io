@@ -575,7 +575,7 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       return { success: false, sent: 0, failed: 0, message: 'User not authenticated' };
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_HOST || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
     try {
       const response = await fetch(`${baseUrl}/api/push/send`, {
@@ -637,7 +637,7 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       }
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_HOST || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_HOST || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
     try {
       const response = await fetch(`${baseUrl}/api/email/send`, {
