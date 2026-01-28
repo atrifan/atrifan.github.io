@@ -29,6 +29,7 @@ export const TOOL_CATEGORIES = {
   UTILITIES: 'Utilities',
   ASTRONOMY: 'Astronomy',
   NOTIFICATIONS: 'Notifications',
+  AI: 'AI',
 } as const;
 
 export type ToolCategory = typeof TOOL_CATEGORIES[keyof typeof TOOL_CATEGORIES];
@@ -1132,6 +1133,39 @@ VERBAL: 41. HAND:GLOVE as FOOT:? [Leg|Sock|Shoe|Toe] 42. CIFAIPC rearranged=? [C
         success: { type: 'boolean', description: 'Whether email was sent successfully' },
         id: { type: 'string', description: 'Resend email ID' },
         to: { type: 'string', description: 'Recipient email address' },
+        error: { type: 'string', description: 'Error message if failed' },
+      },
+    },
+  },
+
+  // ============ AI ============
+  {
+    name: 'ai_summarize',
+    description: 'AI-powered text processing tool. Summarize, analyze, or transform text/JSON data using a lightweight AI model. Portable MCP tool that can be implemented by any AI agent. Uses aggressive defaults for cost efficiency (512 output tokens, cheapest model).',
+    category: TOOL_CATEGORIES.AI,
+    type: TOOL_TYPES.NATIVE,
+    hasWidget: false,
+    invocationMessages: { invoking: 'Processing with AI...', invoked: 'AI processing complete' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'string', description: 'The text or JSON data to process (required). Can be any text content, JSON object stringified, or structured data.' },
+        prompt: { type: 'string', description: 'Instruction for the AI (required). Examples: "summarize this", "make human friendly", "extract key points", "translate to Spanish", "explain in simple terms".' },
+        model: { type: 'string', description: 'AI model to use (optional). Defaults to mistral/ministral-3b (cheapest). Other options depend on user plan.' },
+        max_tokens: { type: 'number', description: 'Maximum output tokens (optional). Default: 512. Range: 1-4000.' },
+        temperature: { type: 'number', description: 'Creativity level 0-1 (optional). Default: 0.3. Lower = more focused, higher = more creative.' },
+      },
+      required: ['data', 'prompt'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        response: { type: 'string', description: 'The AI-generated response' },
+        input_tokens: { type: 'number', description: 'Number of input tokens used' },
+        output_tokens: { type: 'number', description: 'Number of output tokens generated' },
+        cost_usd: { type: 'number', description: 'Cost in USD for this request' },
+        model: { type: 'string', description: 'Model used for processing' },
+        success: { type: 'boolean', description: 'Whether the request was successful' },
         error: { type: 'string', description: 'Error message if failed' },
       },
     },

@@ -10,6 +10,9 @@
 
 import { ToolExecuteHandler, ToolWidgetRenderer, ToolTextFormatter, ToolResult } from './tools-definitions';
 import { clerkClient } from '@clerk/nextjs/server';
+import { generateText } from 'ai';
+import { AI_MODELS, calculateTokenCost } from './ai-tokens.config';
+import { createClient } from '@supabase/supabase-js';
 
 // Import all calculators and utilities
 import { WeightCalculator } from '../utils/WeightCalculator';
@@ -665,6 +668,107 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email'
+      };
+    }
+  },
+
+  // ============ AI ============
+  ai_summarize: async (args, context) => {
+    const DEFAULT_MODEL = 'mistral/ministral-3b';
+    const DEFAULT_MAX_TOKENS = 512;
+    const DEFAULT_TEMPERATURE = 0.3;
+
+    // Validate required inputs
+    const data = args.data as string;
+    const prompt = args.prompt as string;
+    if (!data || !prompt) {
+      return {
+        success: false,
+        error: 'Both "data" and "prompt" are required',
+        response: '',
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_usd: 0,
+        model: DEFAULT_MODEL,
+      };
+    }
+
+    // Get model (default to cheapest)
+    const modelId = (args.model as string) || DEFAULT_MODEL;
+    const modelInfo = AI_MODELS.find(m => m.id === modelId);
+    if (!modelInfo) {
+      return {
+        success: false,
+        error: `Invalid model: ${modelId}. Available models: ${AI_MODELS.map(m => m.id).join(', ')}`,
+        response: '',
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_usd: 0,
+        model: modelId,
+      };
+    }
+
+    // Get parameters with aggressive defaults
+    const maxTokens = Math.min(Math.max((args.max_tokens as number) || DEFAULT_MAX_TOKENS, 1), 4000);
+    const temperature = Math.min(Math.max((args.temperature as number) ?? DEFAULT_TEMPERATURE, 0), 1);
+
+    try {
+      // Build the prompt for the AI
+      const systemPrompt = 'You are a helpful AI assistant. Process the provided data according to the user\'s instructions. Be concise and direct.';
+      const userPrompt = `${prompt}\n\nData:\n${data}`;
+
+      // Call AI using Vercel AI SDK
+      const result = await generateText({
+        model: modelId,
+        system: systemPrompt,
+        prompt: userPrompt,
+        maxOutputTokens: maxTokens,
+        temperature,
+        maxRetries: 3,
+      });
+
+      const inputTokens = result.usage?.inputTokens || 0;
+      const outputTokens = result.usage?.outputTokens || 0;
+      const costUsd = calculateTokenCost(modelId, inputTokens, outputTokens);
+
+      // Record usage in Supabase if we have a userId
+      if (context?.userId) {
+        const supabaseUrl = process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL;
+        const supabaseKey = process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY;
+
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          await supabase.from('ai_token_usage').insert({
+            user_id: context.userId,
+            model_id: modelId,
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            cost_usd: costUsd,
+            message_type: 'tool_ai_summarize',
+          }).then(({ error }) => {
+            if (error) console.error('[ai_summarize] Failed to record token usage:', error);
+          });
+        }
+      }
+
+      return {
+        success: true,
+        response: result.text,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: costUsd,
+        model: modelId,
+      };
+    } catch (error) {
+      console.error('[ai_summarize] Error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'AI processing failed',
+        response: '',
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_usd: 0,
+        model: modelId,
       };
     }
   },
