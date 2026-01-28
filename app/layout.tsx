@@ -133,40 +133,52 @@ export default function RootLayout({
           <Providers>{children}</Providers>
         </ClerkProvider>
 
-        {/* iubenda Cookie Consent Banner - loaded after page */}
-        <Script
-          src="https://cs.iubenda.com/autoblocking/3856498.js"
-          strategy="afterInteractive"
-        />
-        <Script
-          src="//cdn.iubenda.com/cs/gpp/stub.js"
-          strategy="afterInteractive"
-        />
-        <Script
-          src="//cdn.iubenda.com/cs/iubenda_cs.js"
-          strategy="afterInteractive"
-          async
-        />
-        <Script id="iubenda-config" strategy="afterInteractive">
+        {/* iubenda - dynamically loaded based on domain */}
+        <Script id="iubenda-dynamic" strategy="afterInteractive">
           {`
-            var _iub = _iub || [];
-            _iub.csConfiguration = {
-              "siteId": 3856498,
-              "cookiePolicyId": 11077306,
-              "lang": "en",
-              "storage": { "useSiteId": true },
-              "banner": {
-                "acceptButtonDisplay": true,
-                "closeButtonDisplay": false,
-                "customizeButtonDisplay": true,
-                "explicitWithdrawal": true,
-                "listPurposes": true,
-                "position": "float-bottom-center",
-                "rejectButtonDisplay": true,
-                "showTitle": false,
-                "backgroundOverlay": true
+            (function() {
+              if (window.location.hostname === 'tulzo.online') {
+                // Load tulzo.online widget
+                var widgetScript = document.createElement('script');
+                widgetScript.src = 'https://embeds.iubenda.com/widgets/2569ce59-a2eb-4a6d-8767-523fba42cce4.js';
+                document.body.appendChild(widgetScript);
+              } else {
+                // Set config first for other domains
+                var _iub = _iub || [];
+                _iub.csConfiguration = {
+                  "siteId": 3856498,
+                  "cookiePolicyId": 11077306,
+                  "lang": "en",
+                  "storage": { "useSiteId": true },
+                  "banner": {
+                    "acceptButtonDisplay": true,
+                    "closeButtonDisplay": false,
+                    "customizeButtonDisplay": true,
+                    "explicitWithdrawal": true,
+                    "listPurposes": true,
+                    "position": "float-bottom-center",
+                    "rejectButtonDisplay": true,
+                    "showTitle": false,
+                    "backgroundOverlay": true
+                  }
+                };
+                window._iub = _iub;
+
+                // Then load scripts
+                var autoblock = document.createElement('script');
+                autoblock.src = 'https://cs.iubenda.com/autoblocking/3856498.js';
+                document.head.appendChild(autoblock);
+
+                var gpp = document.createElement('script');
+                gpp.src = '//cdn.iubenda.com/cs/gpp/stub.js';
+                document.head.appendChild(gpp);
+
+                var iubendaCs = document.createElement('script');
+                iubendaCs.src = '//cdn.iubenda.com/cs/iubenda_cs.js';
+                iubendaCs.async = true;
+                document.head.appendChild(iubendaCs);
               }
-            };
+            })();
           `}
         </Script>
       </body>
