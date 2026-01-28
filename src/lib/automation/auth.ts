@@ -168,12 +168,14 @@ export async function validateAutomationAccess(
   // 2. Try Clerk session auth (for UI calls)
   try {
     const { userId: clerkUserId } = await auth();
+    console.log('[validateAutomationAccess] Clerk auth result:', { clerkUserId, automationName });
     if (clerkUserId) {
       userId = clerkUserId;
       plan = 'session'; // Session users have their plan checked elsewhere
     }
-  } catch {
+  } catch (e) {
     // Clerk auth failed, try API key
+    console.log('[validateAutomationAccess] Clerk auth failed:', e);
   }
 
   // 3. Try API key from headers
