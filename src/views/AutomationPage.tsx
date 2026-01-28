@@ -1601,9 +1601,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         const data = await response.json();
         setExecutionLogs(data.logs || []);
         setCurrentExecution(data.execution || null);
+      } else {
+        // Log the actual error for debugging
+        const errorText = await response.text();
+        console.error(`Failed to fetch logs (${response.status}):`, errorText);
+        // Clear logs if we can't fetch them
+        setExecutionLogs([]);
+        setCurrentExecution(null);
       }
     } catch (error) {
       console.error('Failed to fetch logs:', error);
+      setExecutionLogs([]);
+      setCurrentExecution(null);
     }
   };
 
@@ -1615,9 +1624,18 @@ export const AutomationPage: React.FC<AutomationPageProps> = ({ isLoggedIn, isPr
         const data = await response.json();
         setExecutionLogs(data.logs || []);
         setCurrentExecution(data.execution || null);
+      } else {
+        // Log the actual error for debugging
+        const errorText = await response.text();
+        console.error(`Failed to fetch execution logs (${response.status}):`, errorText);
+        // Clear logs if we can't fetch them
+        setExecutionLogs([]);
+        setCurrentExecution(null);
       }
     } catch (error) {
       console.error('Failed to fetch execution logs:', error);
+      setExecutionLogs([]);
+      setCurrentExecution(null);
     }
   };
 

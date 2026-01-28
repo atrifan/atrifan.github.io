@@ -107,11 +107,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     let addedCount = 0;
     let updatedCount = 0;
+    let deletedCount = 0;
     const errors: string[] = [];
     const category = mcpServer.category || 'Utilities';
     const validCategory = VALID_CATEGORIES.includes(category as ToolCategory) ? category as ToolCategory : 'Utilities';
 
+    // Track which tools we see from the remote server
+    const seenToolNames = new Set<string>();
+
     for (const tool of tools) {
+      seenToolNames.add(tool.name);
       const hasWidget = detectWidgetSupport(tool);
       const existing = existingToolMap.get(tool.name);
 
@@ -173,6 +178,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Delete tools that no longer exist on the remote server
+    for (const [originalName, existing] of existingToolMap) {
+      if (!seenToolNames.has(originalName)) {
+        // Tool no longer exists on remote - delete it
+        // Delete from mcp_server_tools first
+        const { error: linkDeleteError } = await supabase
+          .from('mcp_server_tools')
+          .delete()
+          .eq('id', existing.id);
+
+        if (linkDeleteError) {
+          errors.push(`Failed to unlink ${originalName}`);
+          continue;
+        }
+
+        // Delete the tool itself
+        const { error: toolDeleteError } = await supabase
+          .from('tools')
+          .delete()
+          .eq('id', existing.tool_id);
+
+        if (!toolDeleteError) {
+          deletedCount++;
+        } else {
+          errors.push(`Failed to delete ${originalName}`);
+        }
+      }
+    }
+
     // Update server info
     await supabase
       .from('mcp_servers')
@@ -186,6 +220,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       success: true,
       addedCount,
       updatedCount,
+      deletedCount,
       totalTools: tools.length,
       errors: errors.length > 0 ? errors : undefined,
     });
