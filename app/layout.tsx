@@ -137,8 +137,11 @@ export default function RootLayout({
         <Script id="iubenda-dynamic" strategy="afterInteractive">
           {`
             (function() {
-              if (window.location.hostname === 'tulzo.online') {
+              var hostname = window.location.hostname;
+              console.log('[iubenda] hostname:', hostname);
+              if (hostname === 'tulzo.online' || hostname === 'www.tulzo.online' || hostname.endsWith('.tulzo.online')) {
                 // Load tulzo.online widget
+                console.log('[iubenda] Loading tulzo.online widget');
                 var widgetScript = document.createElement('script');
                 widgetScript.src = 'https://embeds.iubenda.com/widgets/2569ce59-a2eb-4a6d-8767-523fba42cce4.js';
                 document.body.appendChild(widgetScript);
