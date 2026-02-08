@@ -294,6 +294,79 @@ All tool types have full OAuth support across all execution contexts:
 - `app/api/ai/rags/proxy/route.ts` - RAG proxy with OAuth handling, supports internal calls via `INTERNAL_API_SECRET`
 - `app/mcp/[serverName]/login/page.tsx` - External surface OAuth login page
 
+### MCP Composition Sharing Limitations (Current)
+
+**MCP composition with OAuth-protected tools is currently personal-only.** You cannot meaningfully share a composed MCP server with external users if it includes tools that require OAuth authentication.
+
+#### What Works vs What Doesn't
+
+| Scenario | Works? | Reason |
+|----------|--------|--------|
+| You compose MCP with OAuth tools, you use it | ✅ Yes | You own the servers, tokens stored under your user_id |
+| You share API key, they use **non-OAuth** tools | ✅ Yes | No authentication needed |
+| You share API key, they use **OAuth** tools | ❌ No | They can't complete OAuth - login page rejects them |
+| They import your MCP URL, use OAuth tools | ❌ No | Login page checks `server.user_id !== userId` |
+
+#### Why External Users Can't Authenticate
+
+1. **Login page checks ownership**: `app/api/mcp/oauth-source/route.ts` verifies `server.user_id !== userId` and rejects non-owners
+2. **Tokens stored under owner's user_id**: OAuth tokens are keyed by `user_id` + server reference, not per-session
+3. **No session isolation**: All users of the same API key would share the same OAuth token slot
+4. **Token overwrite risk**: If external users could authenticate, they would overwrite the owner's token
+
+#### Token Storage Model (Current)
+
+```
+API Key → resolves to OWNER's user_id → OAuth tokens looked up by OWNER's user_id
+```
+
+The `mcp-session-id` header is used for A2A context continuity, NOT for OAuth token storage.
+
+#### Workarounds
+
+1. **Pre-authenticated shared tokens**: You authenticate once, everyone uses YOUR OAuth token
+   - Works for: Shared service accounts (company Slack bot, shared GitHub org)
+   - Doesn't work for: Personal accounts (user's own Google, GitHub)
+
+2. **Each user gets their own Tulzo account**: They compose their own MCP servers with their own OAuth tokens
+
+#### Future: Session-Level OAuth (Not Implemented)
+
+To fully support sharing OAuth-protected MCP compositions, the following changes would be needed:
+
+**Database Changes:**
+```sql
+ALTER TABLE oauth_tokens ADD COLUMN session_id TEXT;  -- mcp-session-id
+ALTER TABLE oauth_tokens ADD COLUMN api_key_id UUID REFERENCES api_keys(id);
+CREATE INDEX idx_oauth_tokens_session ON oauth_tokens(session_id, mcp_server_id);
+CREATE INDEX idx_oauth_tokens_api_key ON oauth_tokens(api_key_id, mcp_server_id);
+```
+
+**Token Lookup Priority:**
+1. Session token (mcp-session-id + server) → Per-session isolation
+2. API key token (api_key_id + server) → Per-API-key isolation
+3. User token (user_id + server) → Current behavior (owner's token)
+
+**Files That Would Need Changes:**
+- `oauth-token-manager.ts` - Add session-aware functions
+- `app/api/mcp/route.ts` - Pass session context to token lookup
+- `app/api/mcp/oauth-source/route.ts` - Allow external users (remove owner check)
+- `app/api/oauth/exchange-external/route.ts` - Store token with session context
+- `MCPOAuthLoginPage.tsx` - Pass session context through OAuth flow
+- `runtime-executor.ts` - Pass execution context for automation OAuth
+- `tool-executor-service.ts` - Use session-aware token lookup
+- Chat API routes - Pass conversation ID as session context
+
+**Context Mapping:**
+| Feature | Session Identifier |
+|---------|-------------------|
+| External MCP (ChatGPT/Claude) | `mcp-session-id` header |
+| Automation execution | `automation_run_id` |
+| Chat with connectors | `conversation_id` |
+| Internal chat | `user_id` (current behavior) |
+
+**Effort Estimate:** ~2-3 days of work
+
 ### Event Triggers (Future Implementation)
 
 **Event triggers** are an internal event bus system where automations can listen for named events and trigger automatically. This is different from webhooks (external HTTP calls) or notifications (push/email/slack outputs).
