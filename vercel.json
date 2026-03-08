@@ -8,6 +8,19 @@
       "path": "/api/ai/automations/cron",
       "schedule": "0 10 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "tulzo.online"
+        }
+      ],
+      "destination": "https://www.tulzo.online/:path*",
+      "permanent": true
+    }
   ]
 }
 
