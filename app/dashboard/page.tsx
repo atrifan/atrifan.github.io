@@ -1,30 +1,20 @@
 import type { Metadata } from 'next';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { DashboardPage } from '@/src/views/DashboardPage';
-import { SEO_DATA } from '@/src/utils/seo';
-
-const seo = SEO_DATA.dashboard;
+import { ControlPanelPage } from '@/src/views/ControlPanelPage';
 
 export const metadata: Metadata = {
-  title: seo.title,
-  description: seo.description,
-  keywords: seo.keywords,
+  title: 'Control Panel - Tulzo',
+  description: 'Manage your Tulzo subscription, API keys, and monitor plugin usage.',
   robots: { index: false, follow: false },
-  openGraph: {
-    title: seo.ogTitle || seo.title,
-    description: seo.ogDescription || seo.description,
-    type: 'website',
-  },
 };
 
 export default async function Dashboard() {
   const { userId } = await auth();
-  
+
   if (!userId) {
     redirect('/sign-in');
   }
 
-  return <DashboardPage />;
+  return <ControlPanelPage />;
 }
-

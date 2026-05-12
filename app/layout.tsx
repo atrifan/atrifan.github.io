@@ -8,11 +8,11 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://tulzo.vercel.app'),
   title: {
-    default: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
+    default: 'Tulzo - Your Personal AI Assistant',
     template: '%s | Tulzo',
   },
-  description: 'Build AI-powered workflow automations with YAML. Connect to ChatGPT, Claude, and Cursor via MCP. AI chat with RAG knowledge bases. Plus free online tools: calculators, converters & more.',
-  keywords: ['workflow automation', 'MCP tools', 'AI automation', 'ChatGPT integration', 'Claude integration', 'Cursor AI', 'AI agents', 'RAG knowledge base', 'AI chat', 'YAML workflows', 'free online tools', 'calculators', 'BMI calculator', 'sleep calculator', 'tip calculator'],
+  description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Runs isolated on your machine — interact via Chrome extension, CLI, or Telegram.',
+  keywords: ['AI assistant', 'browser automation', 'Playwright', 'Chrome extension', 'Telegram bot', 'AI agent', 'sandboxed AI', 'task automation'],
   authors: [{ name: 'Tulzo' }],
   creator: 'Tulzo',
   publisher: 'Tulzo',
@@ -32,21 +32,21 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://tulzo.vercel.app',
     siteName: 'Tulzo',
-    title: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
-    description: 'Build AI-powered workflow automations. Connect to ChatGPT, Claude & Cursor via MCP. AI chat with tools & RAG. Plus free online calculators.',
+    title: 'Tulzo - Your Personal AI Assistant',
+    description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
     images: [
       {
         url: '/tulzo-og.svg',
         width: 1200,
         height: 630,
-        alt: 'Tulzo - AI Workflow Automation & MCP Tools',
+        alt: 'Tulzo - Personal AI Assistant',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tulzo - AI Workflow Automation & MCP Tools Platform',
-    description: 'Build AI-powered workflow automations. Connect to ChatGPT, Claude & Cursor via MCP. AI chat with tools & RAG. Plus free online calculators.',
+    title: 'Tulzo - Your Personal AI Assistant',
+    description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
     images: ['/tulzo-og.svg'],
   },
   icons: {

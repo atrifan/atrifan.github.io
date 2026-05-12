@@ -137,11 +137,11 @@ export const PricingPage: React.FC = () => {
           </h2>
 
           {[
-            { q: 'What is MCP Server access?', a: 'MCP (Model Context Protocol) lets you use Tulzo tools directly in ChatGPT, Claude, Cursor, and other AI assistants. Your AI can calculate, convert, and generate data using our tools.' },
-            { q: 'Can I cancel anytime?', a: 'Yes! Cancel your subscription anytime from your dashboard. You\'ll keep Pro access until the end of your billing period.' },
-            { q: 'What payment methods do you accept?', a: 'We accept all major credit cards through Stripe, our secure payment processor.' },
-            { q: 'Is my API key secure?', a: 'Yes. Your API key is encrypted and only visible to you. You can regenerate it anytime from your dashboard.' },
-            { q: 'Do you offer refunds?', a: 'We offer a 14-day free trial on Pro plans. If you\'re not satisfied, you can cancel before the trial ends at no cost.' },
+            { q: 'What does the assistant actually do?', a: 'It\'s a sandboxed AI agent running on your machine. It can browse the web, fill forms, scrape data, run scheduled tasks, and learn domain-specific workflows — all controlled via Chrome extension, CLI, or Telegram.' },
+            { q: 'Is my data safe?', a: 'The agent runs locally in your sandbox. Your credentials, browsing data, and learned skills stay on your machine. The platform only stores your API key and usage stats.' },
+            { q: 'What do I need a subscription for?', a: 'The subscription unlocks the agent\'s full capabilities: higher request quotas, more concurrent sessions, scheduled tasks, and access to the vector store for custom guardrails and knowledge.' },
+            { q: 'Can I cancel anytime?', a: 'Yes. Cancel from your control panel or Stripe portal. You keep access until the end of your billing period.' },
+            { q: 'How do I interact with the assistant?', a: 'Three ways: Chrome extension side panel for in-browser tasks, CLI for terminal-based automation, or Telegram bot for remote task dispatch and notifications.' },
           ].map((faq, i) => (
             <div key={i} style={{
               background: 'rgba(255,255,255,0.05)',

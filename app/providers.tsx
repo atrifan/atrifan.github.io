@@ -4,28 +4,18 @@ import { useState, useEffect, Suspense } from 'react';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { Analytics } from '@/src/components/Analytics';
 import { Header } from '@/src/components/Header';
-import { PreferencesProvider } from '@/src/contexts/PreferencesContext';
 
 interface ProvidersProps {
   children: React.ReactNode;
 }
 
-/**
- * Client-side providers wrapper
- * Uses a two-phase render to avoid hydration mismatches:
- * 1. Server and initial client render: empty div (matches perfectly)
- * 2. After mount: full app with Provider
- */
 export function Providers({ children }: ProvidersProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Immediate mount
     setMounted(true);
   }, []);
 
-  // Show loading state only on server/initial render
-  // This should transition immediately on client
   if (!mounted) {
     return (
       <div
@@ -59,14 +49,11 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <Provider theme={defaultTheme} colorScheme="dark">
-      <PreferencesProvider>
-        <Suspense fallback={null}>
-          <Analytics />
-        </Suspense>
-        <Header />
-        {children}
-      </PreferencesProvider>
+      <Suspense fallback={null}>
+        <Analytics />
+      </Suspense>
+      <Header />
+      {children}
     </Provider>
   );
 }
-

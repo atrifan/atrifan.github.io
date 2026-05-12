@@ -1,706 +1,221 @@
-import { Component } from 'react';
+'use client';
+
 import Link from 'next/link';
-import { View } from '@adobe/react-spectrum';
-import { ToolConfig, CATEGORY_LABELS, getToolsByCategory, getCategoryOrder, TOTAL_UI_TOOL_COUNT } from '../config/tools.config';
+import { SignedIn, SignedOut, SignInButton } from '@clerk/nextjs';
+import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
-import { applySEO } from '../utils/seo';
-import { CutIcon } from '../components/CutIcon';
-import { StackIcon } from '../components/StackIcon';
-import { WhenIcon } from '../components/WhenIcon';
-import { TapIcon } from '../components/TapIcon';
-import { LuckIcon } from '../components/LuckIcon';
-import { MatchIcon } from '../components/MatchIcon';
-import { PlanetaryNav } from '../components/PlanetaryNav';
-// New tool icons
-import { SleepIcon } from '../components/SleepIcon';
-import { AgeIcon } from '../components/AgeIcon';
-import { TipIcon } from '../components/TipIcon';
-import { PercentIcon } from '../components/PercentIcon';
-import { DaysIcon } from '../components/DaysIcon';
-import { ZoneIcon } from '../components/ZoneIcon';
-import { ConvertIcon } from '../components/ConvertIcon';
-import { NamesIcon } from '../components/NamesIcon';
-import { FlipIcon } from '../components/FlipIcon';
-import { SpinIcon } from '../components/SpinIcon';
-import { DecideIcon } from '../components/DecideIcon';
-import { RankIcon } from '../components/RankIcon';
-import { BrainIcon } from '../components/BrainIcon';
-import { VibeIcon } from '../components/VibeIcon';
-import { CycleIcon } from '../components/CycleIcon';
-import { RiskIcon } from '../components/RiskIcon';
-import { BloodIcon } from '../components/BloodIcon';
-import { EclipseIcon } from '../components/EclipseIcon';
-import { ChatIcon } from '../components/ChatIcon';
-import { AutomationIcon } from '../components/AutomationIcon';
-import { WeatherTimeCardWrapper } from '../components/WeatherTimeCardWrapper';
-import { Footer } from '../components/Footer';
 
-interface HomePageState {
-  hoveredTool: string | null;
-  showPlanetaryNav: boolean;
-  collapsedCategories: Set<string>;
-  isTouchDevice: boolean;
-}
+export const HomePage: React.FC = () => {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+    }}>
+      <SideAds
+        leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
+        leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
+        leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
+        rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
+        rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
+        rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
+      />
 
-/**
- * Beautiful Home Page with Tool Grid
- */
-export class HomePage extends Component<{}, HomePageState> {
-  constructor(props: {}) {
-    super(props);
-    this.state = {
-      hoveredTool: null,
-      showPlanetaryNav: false,
-      collapsedCategories: new Set<string>(),
-      isTouchDevice: false,
-    };
-  }
-
-  componentDidMount() {
-    // Detect touch device
-    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    this.setState({ isTouchDevice });
-    applySEO('home');
-  }
-
-  private toggleCategory = (category: string) => {
-    this.setState(prevState => {
-      const newCollapsed = new Set(prevState.collapsedCategories);
-      if (newCollapsed.has(category)) {
-        newCollapsed.delete(category);
-      } else {
-        newCollapsed.add(category);
-      }
-      return { collapsedCategories: newCollapsed };
-    });
-  };
-
-  private renderToolIcon = (toolId: string, size: number): JSX.Element => {
-    const iconMap: Record<string, JSX.Element> = {
-      cut: <CutIcon size={size} />,
-      stack: <StackIcon size={size} />,
-      when: <WhenIcon size={size} />,
-      tap: <TapIcon size={size} />,
-      luck: <LuckIcon size={size} />,
-      match: <MatchIcon size={size} />,
-      sleep: <SleepIcon size={size} />,
-      unique: <RankIcon size={size} />,
-      cycle: <CycleIcon size={size} />,
-      blood: <BloodIcon size={size} />,
-      age: <AgeIcon size={size} />,
-      tip: <TipIcon size={size} />,
-      risk: <RiskIcon size={size} />,
-      percent: <PercentIcon size={size} />,
-      days: <DaysIcon size={size} />,
-      zone: <ZoneIcon size={size} />,
-      convert: <ConvertIcon size={size} />,
-      names: <NamesIcon size={size} />,
-      flip: <FlipIcon size={size} />,
-      spin: <SpinIcon size={size} />,
-      decide: <DecideIcon size={size} />,
-      brain: <BrainIcon size={size} />,
-      vibe: <VibeIcon size={size} />,
-      eclipse: <EclipseIcon size={size} />,
-      chat: <ChatIcon size={size} />,
-      automation: <AutomationIcon size={size} />,
-      'rag-explorer': (
-        <div style={{
-          width: size,
-          height: size,
-          borderRadius: size * 0.2,
-          background: 'rgba(139, 92, 246, 0.25)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
-        }}>
-          <span style={{ fontSize: size * 0.55 }}>🔮</span>
-        </div>
-      ),
-    };
-    return iconMap[toolId] || <span className="big-icon">🔧</span>;
-  };
-
-  private renderToolCard = (tool: ToolConfig, index: number): JSX.Element => {
-    const isAvailable = tool.available;
-    const delay = index * 0.1;
-
-    // For coming soon tools, render blurred placeholder
-    if (!isAvailable) {
-      return (
-        <div
-          key={tool.id}
-          className="fade-in-up"
-          style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: '32px',
-            padding: '3rem 2rem',
-            textAlign: 'center',
-            cursor: 'not-allowed',
-            minHeight: '280px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '1.5rem',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.2)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            animationDelay: `${delay}s`,
-            position: 'relative',
-            overflow: 'hidden',
-            filter: 'blur(2px)',
-          }}
-        >
-          {/* Blurred placeholder icon */}
-          <span style={{ fontSize: '5rem', opacity: 0.3 }}>❓</span>
-
-          {/* Coming Soon text */}
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'rgba(0, 0, 0, 0.7)',
-            color: '#fff',
-            padding: '1rem 2rem',
-            borderRadius: '50px',
-            fontSize: '1.2rem',
-            fontWeight: 700,
-            whiteSpace: 'nowrap',
-            filter: 'blur(0)',
-            backdropFilter: 'blur(0)',
-          }}>
-            Coming Soon
+      <main style={{ maxWidth: '64rem', margin: '0 auto', padding: '0 1.5rem' }}>
+        {/* Hero */}
+        <section style={{ textAlign: 'center', padding: '6rem 1rem 4rem' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <img
+              src="/tulzo-logo.png"
+              alt="Tulzo"
+              width={80}
+              height={80}
+              style={{ borderRadius: '16px', filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))' }}
+            />
           </div>
-        </div>
-      );
-    }
-
-    return (
-      <Link
-        key={tool.id}
-        href={tool.path}
-        style={{ textDecoration: 'none' }}
-      >
-        <div
-          className="hover-lift fade-in-up"
-          style={{
-            background: tool.gradient,
-            borderRadius: '24px',
-            padding: '2rem 1.5rem',
-            textAlign: 'center',
-            cursor: 'pointer',
-            height: '280px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            gap: '0.75rem',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            animationDelay: `${delay}s`,
-            position: 'relative',
-            overflow: 'hidden',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (this.state.isTouchDevice) return;
-            this.setState({ hoveredTool: tool.id });
-            e.currentTarget.style.transform = 'translateY(-4px)';
-            e.currentTarget.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.35)';
-          }}
-          onMouseLeave={(e) => {
-            if (this.state.isTouchDevice) return;
-            this.setState({ hoveredTool: null });
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.25)';
-          }}
-        >
-          {/* Pro Ribbon for AI tools */}
-          {tool.isPro && (
-            <div style={{
-              position: 'absolute',
-              top: '12px',
-              right: '-32px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              color: '#fff',
-              padding: '0.25rem 2.5rem',
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              transform: 'rotate(45deg)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              zIndex: 10,
-            }}>
-              PRO
-            </div>
-          )}
-
-          {/* Glow effect */}
-          <div style={{
-            position: 'absolute',
-            top: '-50%',
-            left: '-50%',
-            width: '200%',
-            height: '200%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-            opacity: this.state.hoveredTool === tool.id ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-          }} />
-
-          {/* Icon */}
-          <div className="animate-float" style={{ animationDelay: `${delay}s`, flexShrink: 0 }}>
-            {this.renderToolIcon(tool.id, 80)}
-          </div>
-
-          {/* Brand Name */}
-          <h2 style={{
-            fontSize: '1.8rem',
+          <h1 style={{
+            fontSize: 'clamp(2.5rem, 6vw, 3.5rem)',
             fontWeight: 800,
-            color: '#ffffff',
-            margin: 0,
-            textShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-            letterSpacing: '0.05em',
-            flexShrink: 0,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            margin: '0 0 1rem',
+            lineHeight: 1.1,
           }}>
-            {tool.name}
-          </h2>
-
-          {/* Descriptive Name - SEO visible */}
-          <h3 style={{
-            fontSize: '1rem',
-            fontWeight: 600,
-            color: 'rgba(255, 255, 255, 0.95)',
-            margin: 0,
-            flexShrink: 0,
-          }}>
-            {tool.descriptiveName}
-          </h3>
-
-          {/* Short Description - takes remaining space */}
+            Your Personal AI Assistant
+          </h1>
           <p style={{
-            fontSize: '0.9rem',
-            color: 'rgba(255, 255, 255, 0.8)',
-            margin: 0,
-            maxWidth: '16rem',
-            lineHeight: 1.4,
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: 'clamp(1.1rem, 2.5vw, 1.35rem)',
+            maxWidth: '38rem',
+            margin: '0 auto 2.5rem',
+            lineHeight: 1.6,
           }}>
-            {tool.shortDescription}
+            A sandboxed AI agent with browser automation, domain skills, and multi-channel access.
+            Runs isolated on your machine — interact via Chrome extension, CLI, or Telegram.
           </p>
-        </div>
-      </Link>
-    );
-  };
 
-  render() {
-    return (
-      <View minHeight="100vh" padding={{ base: 'size-200', M: 'size-400', L: 'size-600' }}>
-        {/* Side Ads - Desktop Only */}
-        <SideAds
-          leftTopSlot={ADS_CONFIG.slots.sideLeftHorizontalTop}
-          leftMiddleSlot={ADS_CONFIG.slots.sideLeftVerticalMiddle}
-          leftBottomSlot={ADS_CONFIG.slots.sideLeftHorizontalBottom}
-          rightTopSlot={ADS_CONFIG.slots.sideRightHorizontalTop}
-          rightMiddleSlot={ADS_CONFIG.slots.sideRightVerticalMiddle}
-          rightBottomSlot={ADS_CONFIG.slots.sideRightHorizontalBottom}
-        />
-
-        <View maxWidth="56rem" marginX="auto">
-          {/* Ad Banner - Home Top (above logo) */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto', paddingTop: '1rem' }}>
-            <AdBanner slot={ADS_CONFIG.slots.homeTop} format="horizontal" />
-          </View>
-
-          {/* Hero Section */}
-          <View UNSAFE_style={{ textAlign: 'center', paddingTop: '2rem', paddingBottom: '3rem' }}>
-            {/* Logo - Clickable */}
-            <div
-              className="animate-float"
-              style={{
-                marginBottom: '2rem',
-                cursor: 'pointer',
-                display: 'inline-block',
-                transition: 'transform 0.3s ease',
-              }}
-              onClick={() => this.setState({ showPlanetaryNav: true })}
-              onMouseEnter={(e) => {
-                if (this.state.isTouchDevice) return;
-                e.currentTarget.style.transform = 'scale(1.1) rotate(5deg)';
-              }}
-              onMouseLeave={(e) => {
-                if (this.state.isTouchDevice) return;
-                e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
-              }}
-              title="Click to see planetary navigation"
-            >
-              <img
-                src="/tulzo-logo.png"
-                alt="Tulzo"
-                width={120}
-                height={120}
-                style={{
-                  filter: 'drop-shadow(0 8px 24px rgba(102, 126, 234, 0.5))',
-                  borderRadius: '20px',
-                }}
-              />
-            </div>
-
-            {/* Brand - Tulzo */}
-            <div style={{
-              fontSize: 'clamp(2.5rem, 8vw, 4rem)',
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #fff 0%, #a78bfa 50%, #f472b6 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              marginBottom: '1.5rem',
-              letterSpacing: '0.05em',
-            }}>
-              Tulzo
-            </div>
-
-            {/* H1 - Main headline */}
-            <h1 style={{
-              fontSize: 'clamp(1.8rem, 5vw, 3rem)',
-              fontWeight: 700,
-              color: '#fff',
-              margin: '0 0 1rem 0',
-              lineHeight: 1.2,
-            }}>
-              AI Workflow Automation & Free Tools
-            </h1>
-
-            {/* Sub-headline */}
-            <p style={{
-              fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)',
-              color: 'rgba(255, 255, 255, 0.9)',
-              fontWeight: 400,
-              margin: '0 auto 1.5rem',
-              maxWidth: '40rem',
-              lineHeight: 1.5,
-            }}>
-              Build AI workflows with YAML. Connect to ChatGPT, Claude & Cursor via MCP. Plus {TOTAL_UI_TOOL_COUNT}+ free browser utilities.
-            </p>
-
-            {/* Micro-line */}
-            <p style={{
-              fontSize: 'clamp(0.85rem, 2vw, 1rem)',
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontWeight: 500,
-              margin: '0 auto 2rem',
-            }}>
-              Free tools • No sign-ups • Pro unlocks workflow automation & MCP integration
-            </p>
-          </View>
-
-          {/* Weather & Time Card */}
-          <WeatherTimeCardWrapper />
-
-          {/* Ad Banner - Home Hero */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto' }}>
-            <AdBanner slot={ADS_CONFIG.slots.homeHero} format="horizontal" />
-          </View>
-
-          {/* Tools Grid - Grouped by Category */}
-          <View marginTop="size-600" marginBottom="size-600">
-            {getCategoryOrder().map((category, categoryIndex) => {
-              const toolsInCategory = getToolsByCategory()[category];
-              if (toolsInCategory.length === 0) return null;
-              const isCollapsed = this.state.collapsedCategories.has(category);
-              const categoryOrder = getCategoryOrder().filter(c => getToolsByCategory()[c].length > 0);
-              const isLastCategory = categoryIndex === categoryOrder.length - 1;
-
-              return (
-                <div key={category} style={{ marginBottom: '2rem' }}>
-                  {/* Category Header - Clickable */}
-                  <button
-                    onClick={() => this.toggleCategory(category)}
-                    className="category-toggle-btn"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '1rem',
-                      borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
-                      borderRadius: '0 0.5rem 0.5rem 0',
-                      transition: 'background 0.2s',
-                      minHeight: '3.5rem',
-                      touchAction: 'manipulation',
-                      WebkitTapHighlightColor: 'rgba(255, 255, 255, 0.1)',
-                    }}
-                    onMouseEnter={(e) => { if (!this.state.isTouchDevice) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
-                    onMouseLeave={(e) => { if (!this.state.isTouchDevice) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; }}
-                  >
-                    <span style={{
-                      fontSize: '1rem',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      transition: 'transform 0.3s',
-                      transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                      flexShrink: 0,
-                    }}>
-                      ▼
-                    </span>
-                    <h2 style={{
-                      fontSize: 'clamp(1.1rem, 4vw, 1.4rem)',
-                      fontWeight: 600,
-                      color: 'rgba(255, 255, 255, 0.8)',
-                      margin: 0,
-                      textAlign: 'left',
-                    }}>
-                      {CATEGORY_LABELS[category]}
-                    </h2>
-                    <span className="tool-count" style={{
-                      fontSize: '0.8rem',
-                      color: 'rgba(255, 255, 255, 0.4)',
-                      marginLeft: 'auto',
-                      flexShrink: 0,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '1rem',
-                    }}>
-                      {toolsInCategory.length}
-                    </span>
-                  </button>
-
-                  {/* Tools in this category - Collapsible */}
-                  <div style={{
-                    display: isCollapsed ? 'none' : 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
-                    gap: '1rem',
-                    padding: '1rem 0.5rem 0',
-                    overflow: 'hidden',
-                  }}>
-                    {toolsInCategory.map((tool, index) => this.renderToolCard(tool, index))}
-                  </div>
-
-                  {/* Section Separator Ad - between categories (not after last) */}
-                  {!isLastCategory && (
-                    <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '1.5rem auto 0' }}>
-                      <AdBanner slot={ADS_CONFIG.slots.homeSectionSeparator} format="horizontal" />
-                    </View>
-                  )}
-                </div>
-              );
-            })}
-          </View>
-
-          {/* Mobile-friendly styles for category toggles */}
-          <style>{`
-            @media (max-width: 480px) {
-              .category-toggle-btn {
-                padding: 0.875rem 0.75rem !important;
-                gap: 0.5rem !important;
-              }
-              .tool-count {
-                font-size: 0.7rem !important;
-                padding: 0.2rem 0.4rem !important;
-              }
-            }
-            .category-toggle-btn:active {
-              background: rgba(255, 255, 255, 0.12) !important;
-            }
-          `}</style>
-
-          {/* About Tulzo - SEO Context Block */}
-          <View UNSAFE_style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '20px',
-            padding: 'clamp(1.5rem, 4vw, 2.5rem)',
-            marginBottom: '2rem',
-            maxWidth: '56rem',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-          }}>
-            {/* Header */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '1.5rem',
-            }}>
-              <span style={{ fontSize: '1.75rem' }}>⚡</span>
-              <h2 style={{
-                fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
-                fontWeight: 700,
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <SignedIn>
+              <Link href="/dashboard" style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '0.875rem 2rem',
                 color: '#fff',
-                margin: 0,
-                background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                fontWeight: 600,
+                fontSize: '1.05rem',
+                textDecoration: 'none',
+                boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
               }}>
-                About Tulzo
-              </h2>
-            </div>
-
-            {/* Main Description */}
-            <p style={{
-              fontSize: 'clamp(0.95rem, 2.5vw, 1.05rem)',
-              color: 'rgba(255, 255, 255, 0.85)',
-              lineHeight: 1.7,
-              margin: '0 0 1.25rem',
+                Go to Control Panel
+              </Link>
+            </SignedIn>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '0.875rem 2rem',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '1.05rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                }}>
+                  Get Started
+                </button>
+              </SignInButton>
+            </SignedOut>
+            <Link href="/pricing" style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '12px',
+              padding: '0.875rem 2rem',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: '1.05rem',
+              textDecoration: 'none',
             }}>
-              Tulzo is an <strong style={{ color: '#a78bfa' }}>AI workflow automation platform</strong> with <strong style={{ color: '#a78bfa' }}>{TOTAL_UI_TOOL_COUNT}+ free online tools</strong>.
-              Build automations with YAML, connect external AI assistants via MCP, and use free browser utilities for health, finance, time, and decisions — no downloads, no sign-ups.
-            </p>
+              View Pricing
+            </Link>
+          </div>
+        </section>
 
-            {/* Tool Categories */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1rem',
-              marginBottom: '1.5rem',
-            }}>
-              {/* Health Tools */}
-              <div style={{
-                background: 'rgba(236, 72, 153, 0.1)',
-                border: '1px solid rgba(236, 72, 153, 0.2)',
-                borderRadius: '12px',
-                padding: '1rem',
+        <AdBanner slot={ADS_CONFIG.slots.pricingTop} style={{ marginBottom: '3rem' }} />
+
+        {/* Features */}
+        <section style={{ padding: '2rem 0 4rem' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(18rem, 1fr))',
+            gap: '1.5rem',
+          }}>
+            {[
+              {
+                title: 'Sandboxed Execution',
+                desc: 'Runs isolated on your machine. Your data stays local. The AI operates within your sandbox with clear boundaries.',
+                icon: '🔒',
+              },
+              {
+                title: 'Harness Skills',
+                desc: 'Domain-specific practitioners with learned knowledge. Teach the AI your workflows — it remembers and repeats them.',
+                icon: '🧠',
+              },
+              {
+                title: 'Chrome Extension',
+                desc: 'Side panel assistant that sees and interacts with any page. Automate forms, scraping, and navigation in real-time.',
+                icon: '🧩',
+              },
+              {
+                title: 'Telegram & Multi-Channel',
+                desc: 'Dispatch tasks via Telegram, get notified on Slack, or run everything from your terminal. Your choice.',
+                icon: '💬',
+              },
+              {
+                title: 'Headless Browser',
+                desc: 'In-process Playwright for background automation. Runs tasks while you sleep — scheduled or on-demand.',
+                icon: '🌐',
+              },
+              {
+                title: 'Plan-Based Guardrails',
+                desc: 'Rate limits, quotas, and custom rules. The platform controls what the agent can do based on your subscription.',
+                icon: '📊',
+              },
+            ].map((feature, i) => (
+              <div key={i} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '16px',
+                padding: '1.5rem',
               }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ec4899', marginBottom: '0.5rem' }}>
-                  💪 Health & Body
+                <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{feature.icon}</div>
+                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+                  {feature.title}
+                </h3>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>
+                  {feature.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section style={{ padding: '2rem 0 4rem' }}>
+          <h2 style={{
+            textAlign: 'center',
+            color: '#fff',
+            fontSize: 'clamp(1.5rem, 3vw, 2rem)',
+            fontWeight: 700,
+            marginBottom: '2.5rem',
+          }}>
+            How It Works
+          </h2>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem',
+            maxWidth: '40rem',
+            margin: '0 auto',
+          }}>
+            {[
+              { step: '1', title: 'Create an account', desc: 'Sign up and choose a plan that fits your needs.' },
+              { step: '2', title: 'Generate your API key', desc: 'Get a secure key from your control panel to authenticate the plugin.' },
+              { step: '3', title: 'Install the plugin', desc: 'Load the Chrome extension or run the native host from your terminal.' },
+              { step: '4', title: 'Automate', desc: 'Tell the AI what to do — it handles the browser, forms, scraping, and more.' },
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{
+                  width: '2.5rem',
+                  height: '2.5rem',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  flexShrink: 0,
+                }}>
+                  {item.step}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
-                  Weight loss planner, sleep cycle calculator, period tracker, donation calculator, blood compatibility, baby blood predictor
+                <div>
+                  <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 0.25rem' }}>{item.title}</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: 0 }}>{item.desc}</p>
                 </div>
               </div>
+            ))}
+          </div>
+        </section>
 
-              {/* Money Tools */}
-              <div style={{
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.2)',
-                borderRadius: '12px',
-                padding: '1rem',
-              }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#10b981', marginBottom: '0.5rem' }}>
-                  💰 Money & Finance
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
-                  Budget calculator, tip calculator, percentage calculator, trading position size & risk calculator
-                </div>
-              </div>
+        <AdBanner slot={ADS_CONFIG.slots.pricingFooter} style={{ marginBottom: '2rem' }} />
+      </main>
 
-              {/* Time Tools */}
-              <div style={{
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
-                borderRadius: '12px',
-                padding: '1rem',
-              }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#3b82f6', marginBottom: '0.5rem' }}>
-                  ⏰ Time & Dates
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
-                  Date finder, countdown timer, time zone converter, age calculator
-                </div>
-              </div>
-
-              {/* Fun Tools */}
-              <div style={{
-                background: 'rgba(139, 92, 246, 0.1)',
-                border: '1px solid rgba(139, 92, 246, 0.2)',
-                borderRadius: '12px',
-                padding: '1rem',
-              }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#8b5cf6', marginBottom: '0.5rem' }}>
-                  🎲 Fun & Random
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
-                  Coin flip, dice roller, wheel spinner, decision maker, zodiac compatibility, name generator, cat/dog quiz
-                </div>
-              </div>
-            </div>
-
-            {/* Feature Pills */}
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.5rem',
-              marginBottom: '1.5rem',
-            }}>
-              {[
-                { icon: '🚀', text: 'Instant Results' },
-                { icon: '🆓', text: 'Free Web Tools' },
-                { icon: '🔒', text: 'No Data Collection' },
-                { icon: '📱', text: 'Works on Any Device' },
-                { icon: '🤖', text: 'AI & MCP Ready (Pro)' },
-                { icon: '🌙', text: 'Dark Mode' },
-              ].map((item) => (
-                <span
-                  key={item.text}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '0.4rem 0.75rem',
-                    borderRadius: '20px',
-                    fontSize: 'clamp(0.75rem, 2vw, 0.85rem)',
-                    color: 'rgba(255, 255, 255, 0.85)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                  }}
-                >
-                  {item.icon} {item.text}
-                </span>
-              ))}
-            </div>
-
-            {/* MCP Integration Note */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15))',
-              border: '1px solid rgba(102, 126, 234, 0.3)',
-              borderRadius: '10px',
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-            }}>
-              <p style={{
-                fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
-                color: 'rgba(255, 255, 255, 0.85)',
-                lineHeight: 1.5,
-                margin: 0,
-              }}>
-                <strong style={{ color: '#a78bfa' }}>🤖 MCP Integration:</strong> Tulzo provides an{' '}
-                <strong>MCP (Model Context Protocol) server</strong> — connect ChatGPT, Claude Desktop, Cursor, or any MCP-compatible AI to run automations and use tools directly.
-              </p>
-            </div>
-
-            {/* Bottom text */}
-            <p style={{
-              fontSize: 'clamp(0.85rem, 2vw, 0.95rem)',
-              color: 'rgba(255, 255, 255, 0.6)',
-              lineHeight: 1.6,
-              margin: 0,
-            }}>
-              Web tools work instantly — no accounts required. Pro & Plus subscribers get YAML workflow automation, AI chat with tool integration, and MCP access for external AI assistants.
-            </p>
-          </View>
-
-          {/* Bottom Ad - Home Footer */}
-          <View UNSAFE_style={{ width: '100%', maxWidth: '50rem', margin: '0 auto' }}>
-            <AdBanner slot={ADS_CONFIG.slots.homeFooter} format="horizontal" />
-          </View>
-
-          <Footer />
-        </View>
-
-        {/* Planetary Navigation */}
-        <PlanetaryNav
-          isOpen={this.state.showPlanetaryNav}
-          onClose={() => this.setState({ showPlanetaryNav: false })}
-        />
-      </View>
-    );
-  }
-}
-
+      <Footer />
+    </div>
+  );
+};
