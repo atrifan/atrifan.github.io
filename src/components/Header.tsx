@@ -27,7 +27,7 @@ export const Header: React.FC = () => {
         {/* Logo */}
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', textDecoration: 'none' }}>
           <img src="/tulzo-logo.png" alt="Tulzo" width={32} height={32} style={{ borderRadius: '6px' }} />
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>Tulzo</span>
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>Tex</span>
         </Link>
 
         {/* Desktop Nav */}

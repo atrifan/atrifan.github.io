@@ -43,7 +43,7 @@ export const HomePage: React.FC = () => {
             margin: '0 0 1rem',
             lineHeight: 1.1,
           }}>
-            Your Personal AI Assistant
+            Tex by Tulzo
           </h1>
           <p style={{
             color: 'rgba(255,255,255,0.7)',

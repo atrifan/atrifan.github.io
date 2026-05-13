@@ -8,11 +8,11 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://tulzo.vercel.app'),
   title: {
-    default: 'Tulzo - Your Personal AI Assistant',
-    template: '%s | Tulzo',
+    default: 'Tex by Tulzo - Your Personal AI Assistant',
+    template: '%s | Tex by Tulzo',
   },
-  description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Runs isolated on your machine — interact via Chrome extension, CLI, or Telegram.',
-  keywords: ['AI assistant', 'browser automation', 'Playwright', 'Chrome extension', 'Telegram bot', 'AI agent', 'sandboxed AI', 'task automation'],
+  description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Runs isolated on your machine — interact via Chrome extension, CLI, or Telegram.',
+  keywords: ['Tex', 'AI assistant', 'browser automation', 'Playwright', 'Chrome extension', 'Telegram bot', 'AI agent', 'sandboxed AI', 'task automation'],
   authors: [{ name: 'Tulzo' }],
   creator: 'Tulzo',
   publisher: 'Tulzo',
@@ -32,21 +32,21 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://tulzo.vercel.app',
     siteName: 'Tulzo',
-    title: 'Tulzo - Your Personal AI Assistant',
-    description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
+    title: 'Tex by Tulzo - Your Personal AI Assistant',
+    description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
     images: [
       {
         url: '/tulzo-og.svg',
         width: 1200,
         height: 630,
-        alt: 'Tulzo - Personal AI Assistant',
+        alt: 'Tex by Tulzo - Personal AI Assistant',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tulzo - Your Personal AI Assistant',
-    description: 'A sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
+    title: 'Tex by Tulzo - Your Personal AI Assistant',
+    description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
     images: ['/tulzo-og.svg'],
   },
   icons: {
