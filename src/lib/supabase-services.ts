@@ -11,6 +11,8 @@ import type {
   ApiKeyRow,
   ApiKeyInsert,
   ApiKeyUpdate,
+  DeviceHeartbeatRow,
+  DeviceHeartbeatInsert,
   ToolRow,
   ServerToolRow,
   ServerToolInsert,
@@ -177,6 +179,128 @@ export async function deleteApiKey(id: string): Promise<void> {
     console.error('Error deleting API key:', error);
     throw error;
   }
+}
+
+// ============ Device Management ============
+
+export const DEVICE_LIMITS: Record<string, number> = {
+  free: 1,
+  pro: 3,
+  plus: 10,
+};
+
+export async function getActiveDeviceCount(
+  userId: string,
+  serverName: string = 'default'
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('api_keys')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
+    .eq('is_active', true);
+
+  if (error) {
+    console.error('Error counting devices:', error);
+    throw error;
+  }
+  return count || 0;
+}
+
+export async function getApiKeyByUserServerDevice(
+  userId: string,
+  serverName: string,
+  deviceName: string
+): Promise<ApiKeyRow | null> {
+  const { data, error } = await supabase
+    .from('api_keys')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('server_name', serverName)
+    .eq('device_name', deviceName)
+    .eq('is_active', true)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching API key by device:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function getApiKeyById(id: string): Promise<ApiKeyRow | null> {
+  const { data, error } = await supabase
+    .from('api_keys')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching API key by id:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function upsertDeviceHeartbeat(
+  apiKeyId: string,
+  userId: string,
+  deviceName: string,
+  data: Partial<Omit<DeviceHeartbeatInsert, 'api_key_id' | 'user_id' | 'device_name'>>
+): Promise<DeviceHeartbeatRow> {
+  const { data: result, error } = await supabase
+    .from('device_heartbeats')
+    .upsert(
+      {
+        api_key_id: apiKeyId,
+        user_id: userId,
+        device_name: deviceName,
+        ...data,
+        updated_at: new Date().toISOString(),
+      } as never,
+      { onConflict: 'api_key_id' }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error upserting heartbeat:', error);
+    throw error;
+  }
+  return result as unknown as DeviceHeartbeatRow;
+}
+
+export interface DeviceWithHeartbeat extends ApiKeyRow {
+  heartbeat: DeviceHeartbeatRow | null;
+}
+
+export async function getDevicesWithHeartbeats(userId: string): Promise<DeviceWithHeartbeat[]> {
+  const keys = await getApiKeysByUser(userId);
+  if (keys.length === 0) return [];
+
+  const keyIds = keys.map(k => k.id);
+  const { data: heartbeats } = await supabase
+    .from('device_heartbeats')
+    .select('*')
+    .in('api_key_id', keyIds);
+
+  const heartbeatMap = new Map(
+    (heartbeats || []).map((h: Record<string, unknown>) => [h.api_key_id as string, h as unknown as DeviceHeartbeatRow])
+  );
+
+  return keys.map(k => ({
+    ...k,
+    heartbeat: heartbeatMap.get(k.id) || null,
+  }));
+}
+
+export function computeDeviceStatus(
+  heartbeat: DeviceHeartbeatRow | null
+): 'online' | 'offline' | 'never_connected' {
+  if (!heartbeat) return 'never_connected';
+  const tenMinAgo = Date.now() - 10 * 60 * 1000;
+  if (new Date(heartbeat.updated_at).getTime() < tenMinAgo) return 'offline';
+  return 'online';
 }
 
 // ============ Tools ============

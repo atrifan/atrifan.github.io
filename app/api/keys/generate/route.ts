@@ -1,96 +1,63 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import {
-  getApiKeyByUserAndServer,
   createApiKey,
-  deleteApiKey,
   linkAllNativeToolsToServer,
   hashApiKey,
   getApiKeySuffix,
+  getActiveDeviceCount,
+  getApiKeyByUserServerDevice,
+  DEVICE_LIMITS,
 } from '@/src/lib/supabase-services';
 
-/**
- * Determine user's effective plan from Clerk session claims
- * Session claims contain `pla` field with format like 'u:pro', 'u:plus', 'u:free'
- */
 function getUserPlanFromClaims(sessionClaims: Record<string, unknown> | null): 'free' | 'pro' | 'plus' {
   if (!sessionClaims) return 'free';
-
-  // Check pla (plan) claim - format is 'u:pro', 'u:plus', etc.
   const plaClaim = sessionClaims.pla as string | undefined;
   if (plaClaim) {
-    // Extract plan from 'u:pro' format
     if (plaClaim.includes(':')) {
       const plan = plaClaim.split(':')[1];
-      if (plan === 'pro' || plan === 'plus' || plan === 'free') {
-        return plan;
-      }
+      if (plan === 'pro' || plan === 'plus' || plan === 'free') return plan;
     }
-    // Direct value
-    if (plaClaim === 'pro' || plaClaim === 'plus' || plaClaim === 'free') {
-      return plaClaim;
-    }
+    if (plaClaim === 'pro' || plaClaim === 'plus' || plaClaim === 'free') return plaClaim;
   }
-
   return 'free';
 }
 
-/**
- * Generate a new API key for the authenticated user
- * POST /api/keys/generate
- *
- * - Uses Clerk's API Keys feature for key generation
- * - Stores key metadata in Supabase
- * - Links all NATIVE tools to the new server
- * - Handles plan changes by regenerating key
- */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const { userId, sessionClaims } = await auth();
 
     if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const plan = getUserPlanFromClaims(sessionClaims as Record<string, unknown> | null);
+
+    const body = await request.json().catch(() => ({}));
+    const deviceName: string = body.device_name || 'default';
+
+    if (deviceName.length > 32) {
+      return NextResponse.json({ error: 'Device name must be 32 characters or less' }, { status: 400 });
+    }
+
+    // Enforce plan device limit
+    const currentCount = await getActiveDeviceCount(userId, 'default');
+    const limit = DEVICE_LIMITS[plan] || 1;
+    if (currentCount >= limit) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'device_limit_reached', limit, current: currentCount },
+        { status: 403 }
       );
     }
 
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-
-    // Determine user's plan from session claims
-    const plan = getUserPlanFromClaims(sessionClaims as Record<string, unknown> | null);
-
-    // Check if user already has an API key for default server
-    const existingKey = await getApiKeyByUserAndServer(userId, 'default');
-
-    // If existing key, delete it from Supabase
-    if (existingKey) {
-      // Delete from Supabase (cascades to server_tools)
-      await deleteApiKey(existingKey.id);
-    }
-
-    // Always clean up any existing Clerk API keys for this user (revoked or not)
-    // This prevents "token with same name and subject already exists" conflicts
-    // includeInvalid: true ensures we also get revoked keys
-    try {
-      const existingClerkKeys = await client.apiKeys.list({
-        subject: userId,
-        includeInvalid: true
-      });
-      console.log(`Found ${existingClerkKeys.data.length} existing Clerk keys for user ${userId}`);
-      for (const key of existingClerkKeys.data) {
-        // Delete the key entirely (not just revoke)
-        try {
-          console.log(`Deleting Clerk key ${key.id} (revoked: ${key.revoked})`);
-          await client.apiKeys.delete(key.id);
-        } catch (deleteErr) {
-          console.error(`Error deleting Clerk key ${key.id}:`, deleteErr);
-        }
-      }
-    } catch (e) {
-      console.error('Error listing/deleting Clerk keys:', e);
+    // Check for duplicate device name
+    const existing = await getApiKeyByUserServerDevice(userId, 'default', deviceName);
+    if (existing) {
+      return NextResponse.json(
+        { error: 'device_name_exists', device_name: deviceName },
+        { status: 409 }
+      );
     }
 
     // Generate new API key
@@ -98,43 +65,50 @@ export async function POST() {
     let provider: 'clerk' | 'custom' = 'clerk';
 
     if (useClerkApiKeys()) {
-      // Use Clerk's API Keys feature
+      const client = await clerkClient();
+      // Clean up any existing revoked keys for this user to prevent conflicts
+      try {
+        const existingClerkKeys = await client.apiKeys.list({
+          subject: userId,
+          includeInvalid: true,
+        });
+        for (const key of existingClerkKeys.data) {
+          if (key.revoked) {
+            try { await client.apiKeys.delete(key.id); } catch {}
+          }
+        }
+      } catch {}
+
       const apiKey = await client.apiKeys.create({
-        name: 'MCP Server Access',
+        name: `Device: ${deviceName}`,
         subject: userId,
-        description: 'API key for MCP server access',
+        description: `API key for device ${deviceName}`,
         scopes: ['mcp:access'],
       });
 
       if (!apiKey.secret) {
-        return NextResponse.json(
-          { error: 'Failed to generate API key secret' },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to generate API key secret' }, { status: 500 });
       }
-
       apiKeySecret = apiKey.secret;
       provider = 'clerk';
     } else {
-      // Generate a random API key (custom provider)
       const randomBytes = require('crypto').randomBytes(24);
       apiKeySecret = `ak_${randomBytes.toString('base64url').toUpperCase().slice(0, 32)}`;
       provider = 'custom';
     }
 
-    // Store in Supabase (including plaintext for internal use)
     const newApiKey = await createApiKey({
       user_id: userId,
       api_key_hash: hashApiKey(apiKeySecret),
       api_key_suffix: getApiKeySuffix(apiKeySecret),
-      api_key: apiKeySecret, // Store plaintext for automation/tool execution
-      name: 'Default Key',
+      api_key: apiKeySecret,
+      name: deviceName,
+      device_name: deviceName,
       server_name: 'default',
       provider,
       plan,
     });
 
-    // Link all NATIVE tools to this server
     await linkAllNativeToolsToServer(userId, 'default');
 
     return NextResponse.json({
@@ -143,14 +117,11 @@ export async function POST() {
       apiKeyId: newApiKey.id,
       provider,
       plan,
+      deviceName,
       createdAt: newApiKey.created_at,
     });
   } catch (error) {
     console.error('Error generating API key:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate API key' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate API key' }, { status: 500 });
   }
 }
-

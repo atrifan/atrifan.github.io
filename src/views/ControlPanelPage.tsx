@@ -6,20 +6,26 @@ import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
 
-interface ApiKeyData {
-  apiKey: string;
-  plan: string;
-  provider: string;
-  createdAt: string;
-}
-
-interface ApiKeyListItem {
+interface DeviceItem {
   id: string;
+  device_name: string;
   api_key_suffix: string;
   plan: string;
   provider: string;
   is_active: boolean;
   created_at: string;
+  last_used_at: string | null;
+  status: 'online' | 'offline' | 'never_connected';
+  last_seen_at: string | null;
+  hostname: string | null;
+  platform: string | null;
+  arch: string | null;
+  model: string | null;
+  tokens_today_input: number;
+  tokens_today_output: number;
+  schedules_count: number;
+  active_tasks_count: number;
+  skills_loaded: number;
 }
 
 interface UsageStats {
@@ -29,27 +35,59 @@ interface UsageStats {
   lastRequestAt: string | null;
 }
 
+function relativeTime(dateStr: string | null): string {
+  if (!dateStr) return 'Never';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
+  return String(n);
+}
+
 export const ControlPanelPage: React.FC = () => {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'overview' | 'apikey' | 'usage' | 'docs'>('overview');
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [apiKeys, setApiKeys] = useState<ApiKeyListItem[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'docs'>('overview');
+  const [devices, setDevices] = useState<DeviceItem[]>([]);
+  const [deviceLimit, setDeviceLimit] = useState(1);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<UsageStats | null>(null);
 
+  // Add device modal state
+  const [showAddDevice, setShowAddDevice] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [addingDevice, setAddingDevice] = useState(false);
+  const [newDeviceKey, setNewDeviceKey] = useState<string | null>(null);
+  const [addDeviceError, setAddDeviceError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Extension detection
+  const [extensionDetected, setExtensionDetected] = useState(false);
+  const [keySentToExtension, setKeySentToExtension] = useState(false);
+
+  // Revoke confirmation
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+
   const plan = (user?.publicMetadata?.plan as string) || 'free';
 
-  const fetchKeys = useCallback(async () => {
+  const fetchDevices = useCallback(async () => {
     try {
       const res = await fetch('/api/keys/list');
       if (res.ok) {
         const data = await res.json();
-        setApiKeys(data.keys || []);
+        setDevices(data.devices || []);
+        setDeviceLimit(data.limit || 1);
       }
     } catch (e) {
-      console.error('Failed to fetch keys:', e);
+      console.error('Failed to fetch devices:', e);
     } finally {
       setLoading(false);
     }
@@ -68,27 +106,60 @@ export const ControlPanelPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchKeys();
+    fetchDevices();
     fetchUsage();
-  }, [fetchKeys, fetchUsage]);
+  }, [fetchDevices, fetchUsage]);
 
-  const generateKey = async () => {
-    setGenerating(true);
-    try {
-      const res = await fetch('/api/keys/generate', { method: 'POST' });
-      if (res.ok) {
-        const data: ApiKeyData = await res.json();
-        setApiKey(data.apiKey);
-        fetchKeys();
+  // Extension detection via postMessage
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.source === 'tex-extension') {
+        if (e.data.action === 'pong') {
+          setExtensionDetected(true);
+        }
+        if (e.data.action === 'device_activated' && e.data.success) {
+          setKeySentToExtension(true);
+        }
       }
+    };
+    window.addEventListener('message', handler);
+    window.postMessage({ source: 'tulzo', action: 'ping' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const addDevice = async () => {
+    if (!newDeviceName.trim()) return;
+    setAddingDevice(true);
+    setAddDeviceError(null);
+    setNewDeviceKey(null);
+    setKeySentToExtension(false);
+    try {
+      const res = await fetch('/api/keys/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_name: newDeviceName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error === 'device_limit_reached') {
+          setAddDeviceError(`Device limit reached (${data.limit}). Upgrade your plan to add more devices.`);
+        } else if (data.error === 'device_name_exists') {
+          setAddDeviceError(`A device named "${newDeviceName}" already exists.`);
+        } else {
+          setAddDeviceError(data.error || 'Failed to add device');
+        }
+        return;
+      }
+      setNewDeviceKey(data.apiKey);
+      fetchDevices();
     } catch (e) {
-      console.error('Failed to generate key:', e);
+      setAddDeviceError('Network error. Please try again.');
     } finally {
-      setGenerating(false);
+      setAddingDevice(false);
     }
   };
 
-  const revokeKey = async (id: string) => {
+  const revokeDevice = async (id: string) => {
     try {
       const res = await fetch('/api/keys/delete', {
         method: 'DELETE',
@@ -96,17 +167,33 @@ export const ControlPanelPage: React.FC = () => {
         body: JSON.stringify({ keyId: id }),
       });
       if (res.ok) {
-        fetchKeys();
-        setApiKey(null);
+        fetchDevices();
+        setConfirmRevoke(null);
       }
     } catch (e) {
-      console.error('Failed to revoke key:', e);
+      console.error('Failed to revoke device:', e);
+    }
+  };
+
+  const sendKeyToExtension = () => {
+    if (newDeviceKey) {
+      window.postMessage({
+        source: 'tulzo',
+        action: 'activate_device',
+        apiKey: newDeviceKey,
+        deviceName: newDeviceName.trim(),
+      }, '*');
+      setTimeout(() => {
+        if (!keySentToExtension) {
+          // Extension didn't respond — fallback to manual copy
+        }
+      }, 2000);
     }
   };
 
   const copyKey = () => {
-    if (apiKey) {
-      navigator.clipboard.writeText(apiKey);
+    if (newDeviceKey) {
+      navigator.clipboard.writeText(newDeviceKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -132,6 +219,14 @@ export const ControlPanelPage: React.FC = () => {
     marginBottom: '1.5rem',
   };
 
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'online': return '#22c55e';
+      case 'offline': return '#6b7280';
+      default: return '#9ca3af';
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -149,14 +244,14 @@ export const ControlPanelPage: React.FC = () => {
             Control Panel
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.5)', margin: 0, fontSize: '0.9rem' }}>
-            Manage your subscription, API keys, and monitor usage.
+            Manage your devices, subscription, and monitor usage.
           </p>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
           <button onClick={() => setActiveTab('overview')} style={tabStyle('overview')}>Overview</button>
-          <button onClick={() => setActiveTab('apikey')} style={tabStyle('apikey')}>API Keys</button>
+          <button onClick={() => setActiveTab('devices')} style={tabStyle('devices')}>Devices</button>
           <button onClick={() => setActiveTab('usage')} style={tabStyle('usage')}>Usage</button>
           <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Installation</button>
         </div>
@@ -198,15 +293,15 @@ export const ControlPanelPage: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>Rate Limit</div>
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>Devices</div>
                     <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>
-                      {plan === 'free' ? '—' : plan === 'pro' ? '100 req/hr' : '500 req/hr'}
+                      {devices.length} / {deviceLimit}
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>Browser Sessions</div>
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>Rate Limit</div>
                     <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>
-                      {plan === 'free' ? '—' : plan === 'pro' ? '5 concurrent' : 'Unlimited'}
+                      {plan === 'free' ? '—' : plan === 'pro' ? '100 req/hr' : '500 req/hr'}
                     </div>
                   </div>
                 </div>
@@ -224,125 +319,356 @@ export const ControlPanelPage: React.FC = () => {
                 <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{usage?.requestsThisMonth ?? '—'}</div>
               </div>
               <div style={cardStyle}>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>API Keys</div>
-                <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{apiKeys.length}</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Devices</div>
+                <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{devices.length}</div>
               </div>
             </div>
           </>
         )}
 
-        {/* API Keys Tab */}
-        {activeTab === 'apikey' && (
+        {/* Devices Tab */}
+        {activeTab === 'devices' && (
           <>
-            <div style={cardStyle}>
-              <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.75rem' }}>
-                API Key Management
-              </h3>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', margin: '0 0 1.25rem' }}>
-                Your API key authenticates the Chrome extension and native host with Tulzo.
-                {plan === 'free' && ' Upgrade to Pro to enable API access.'}
-              </p>
+            <div style={{ ...cardStyle, position: 'relative' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
+                    Devices ({devices.length} of {deviceLimit})
+                  </h3>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
+                    Each device connects via its own API key.
+                    {plan === 'free' && ' Upgrade to Pro for up to 3 devices.'}
+                  </p>
+                </div>
+                {plan !== 'free' && (
+                  <button
+                    onClick={() => { setShowAddDevice(true); setNewDeviceName(''); setNewDeviceKey(null); setAddDeviceError(null); setKeySentToExtension(false); }}
+                    disabled={devices.length >= deviceLimit}
+                    style={{
+                      background: devices.length >= deviceLimit ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0.6rem 1.25rem',
+                      color: devices.length >= deviceLimit ? 'rgba(255,255,255,0.3)' : '#fff',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      cursor: devices.length >= deviceLimit ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    + Add Device
+                  </button>
+                )}
+              </div>
 
-              {plan !== 'free' && (
-                <button
-                  onClick={generateKey}
-                  disabled={generating}
-                  style={{
-                    background: generating ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '0.6rem 1.25rem',
-                    color: '#fff',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    cursor: generating ? 'not-allowed' : 'pointer',
-                    marginBottom: '1rem',
-                  }}
-                >
-                  {generating ? 'Generating...' : 'Generate New Key'}
-                </button>
-              )}
-
-              {apiKey && (
+              {/* Extension detection banner */}
+              {extensionDetected && (
                 <div style={{
                   background: 'rgba(34, 197, 94, 0.1)',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  border: '1px solid rgba(34, 197, 94, 0.2)',
                   borderRadius: '8px',
-                  padding: '1rem',
+                  padding: '0.5rem 0.75rem',
                   marginBottom: '1rem',
+                  fontSize: '0.8rem',
+                  color: '#22c55e',
                 }}>
-                  <div style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                    New key generated — copy it now, it won't be shown again:
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <code style={{
-                      flex: 1,
-                      background: 'rgba(0,0,0,0.3)',
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '6px',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      wordBreak: 'break-all',
+                  Browser extension detected — keys can be sent directly.
+                </div>
+              )}
+
+              {/* Device list */}
+              {loading ? (
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>Loading devices...</p>
+              ) : devices.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>
+                    No devices connected yet.
+                  </p>
+                  {plan !== 'free' && (
+                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', margin: 0 }}>
+                      Click &quot;+ Add Device&quot; to generate an API key for your first device.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {devices.map((device) => (
+                    <div key={device.id} style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '12px',
+                      padding: '1rem 1.25rem',
                     }}>
-                      {apiKey}
-                    </code>
-                    <button onClick={copyKey} style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.5rem 0.75rem',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {copied ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                            <span style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: statusColor(device.status),
+                              display: 'inline-block',
+                            }} />
+                            <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600 }}>
+                              {device.device_name}
+                            </span>
+                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem' }}>
+                              ****{device.api_key_suffix}
+                            </span>
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            {device.platform && (
+                              <span>{device.platform}{device.arch ? ` · ${device.arch}` : ''}</span>
+                            )}
+                            {device.model && (
+                              <span>{device.model.split('/').pop()?.split('.').pop() || device.model}</span>
+                            )}
+                            <span>
+                              {device.status === 'online' ? 'Active now' :
+                               device.status === 'offline' ? `Last seen: ${relativeTime(device.last_seen_at)}` :
+                               'Never connected'}
+                            </span>
+                          </div>
+                          {device.status === 'online' && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem' }}>
+                              <span>Tokens: {formatTokens(device.tokens_today_input)} in / {formatTokens(device.tokens_today_output)} out</span>
+                              {device.schedules_count > 0 && <span>{device.schedules_count} schedules</span>}
+                              {device.skills_loaded > 0 && <span>{device.skills_loaded} skills</span>}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          {confirmRevoke === device.id ? (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <button
+                                onClick={() => revokeDevice(device.id)}
+                                style={{
+                                  background: '#ef4444',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '0.35rem 0.75rem',
+                                  color: '#fff',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setConfirmRevoke(null)}
+                                style={{
+                                  background: 'rgba(255,255,255,0.1)',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '0.35rem 0.75rem',
+                                  color: 'rgba(255,255,255,0.6)',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmRevoke(device.id)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '6px',
+                                padding: '0.35rem 0.75rem',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Existing keys list */}
-            {apiKeys.length > 0 && (
-              <div style={cardStyle}>
-                <h4 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 1rem' }}>
-                  Active Keys
-                </h4>
-                {apiKeys.map((key) => (
-                  <div key={key.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '0.75rem 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                  }}>
-                    <div>
-                      <code style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
-                        ****{key.api_key_suffix}
-                      </code>
-                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginLeft: '0.75rem' }}>
-                        {key.provider} · {key.plan} · {new Date(key.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <button onClick={() => revokeKey(key.id)} style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      borderRadius: '6px',
-                      padding: '0.35rem 0.75rem',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      fontSize: '0.75rem',
-                    }}>
-                      Revoke
-                    </button>
-                  </div>
-                ))}
+            {/* Add Device Modal */}
+            {showAddDevice && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: '1rem',
+              }}>
+                <div style={{
+                  background: '#1e293b',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '16px',
+                  padding: '2rem',
+                  maxWidth: '28rem',
+                  width: '100%',
+                }}>
+                  {!newDeviceKey ? (
+                    <>
+                      <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+                        Add Device
+                      </h3>
+                      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1.25rem' }}>
+                        Give your device a name to identify it in the dashboard.
+                      </p>
+                      <input
+                        type="text"
+                        value={newDeviceName}
+                        onChange={(e) => setNewDeviceName(e.target.value)}
+                        placeholder="e.g. Work Macbook, Home PC"
+                        maxLength={32}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '8px',
+                          padding: '0.7rem 0.9rem',
+                          color: '#fff',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') addDevice(); }}
+                        autoFocus
+                      />
+                      {addDeviceError && (
+                        <p style={{ color: '#ef4444', fontSize: '0.8rem', margin: '0.75rem 0 0' }}>
+                          {addDeviceError}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => setShowAddDevice(false)}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '0.6rem 1.25rem',
+                            color: 'rgba(255,255,255,0.7)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={addDevice}
+                          disabled={addingDevice || !newDeviceName.trim()}
+                          style={{
+                            background: (!newDeviceName.trim() || addingDevice) ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '0.6rem 1.25rem',
+                            color: '#fff',
+                            fontWeight: 600,
+                            cursor: (!newDeviceName.trim() || addingDevice) ? 'not-allowed' : 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          {addingDevice ? 'Generating...' : 'Generate Key'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 style={{ color: '#22c55e', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+                        Device Added
+                      </h3>
+                      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
+                        Copy this API key now — it won&apos;t be shown again.
+                      </p>
+                      <div style={{
+                        background: 'rgba(0,0,0,0.4)',
+                        borderRadius: '8px',
+                        padding: '0.75rem',
+                        marginBottom: '1rem',
+                      }}>
+                        <code style={{
+                          color: '#fff',
+                          fontSize: '0.8rem',
+                          wordBreak: 'break-all',
+                          lineHeight: 1.5,
+                        }}>
+                          {newDeviceKey}
+                        </code>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={copyKey}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '8px',
+                            padding: '0.6rem 1rem',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          {copied ? 'Copied!' : 'Copy Key'}
+                        </button>
+                        {extensionDetected && !keySentToExtension && (
+                          <button
+                            onClick={sendKeyToExtension}
+                            style={{
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '0.6rem 1rem',
+                              color: '#fff',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                            }}
+                          >
+                            Send to Extension
+                          </button>
+                        )}
+                        {keySentToExtension && (
+                          <span style={{ color: '#22c55e', fontSize: '0.85rem', alignSelf: 'center' }}>
+                            Sent to extension
+                          </span>
+                        )}
+                      </div>
+                      {!extensionDetected && (
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', margin: '0.75rem 0 0' }}>
+                          Extension not detected. Copy the key and paste it in the extension settings.
+                        </p>
+                      )}
+                      <div style={{ marginTop: '1.25rem', textAlign: 'right' }}>
+                        <button
+                          onClick={() => setShowAddDevice(false)}
+                          style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '0.6rem 1.25rem',
+                            color: 'rgba(255,255,255,0.7)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            )}
-
-            {loading && (
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>Loading keys...</p>
             )}
           </>
         )}
@@ -395,6 +721,7 @@ export const ControlPanelPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {[
+                    ['Devices', '1', '3', '10'],
                     ['API Access', '—', '100 req/hr', '500 req/hr'],
                     ['Browser Sessions', '—', '5 concurrent', 'Unlimited'],
                     ['Scheduled Tasks', '—', '10', 'Unlimited'],
@@ -413,7 +740,7 @@ export const ControlPanelPage: React.FC = () => {
           </>
         )}
 
-        {/* Docs Tab */}
+        {/* Installation Tab */}
         {activeTab === 'docs' && (
           <>
             <div style={cardStyle}>
@@ -424,21 +751,21 @@ export const ControlPanelPage: React.FC = () => {
               {/* Chrome Extension */}
               <div style={{ marginBottom: '2rem' }}>
                 <h4 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>🧩</span> Chrome Extension
+                  Chrome Extension
                 </h4>
                 <ol style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', lineHeight: 1.8, paddingLeft: '1.25rem', margin: 0 }}>
-                  <li>Download the extension from the <a href="#" style={{ color: '#667eea' }}>releases page</a></li>
+                  <li>Download the extension from the releases page</li>
                   <li>Open Chrome → <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>chrome://extensions</code></li>
-                  <li>Enable "Developer mode" (top right toggle)</li>
-                  <li>Click "Load unpacked" → select the <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>plugin/dist</code> folder</li>
-                  <li>Click the extension icon → enter your API key from the API Keys tab</li>
+                  <li>Enable &quot;Developer mode&quot; (top right toggle)</li>
+                  <li>Click &quot;Load unpacked&quot; → select the <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>plugin/dist</code> folder</li>
+                  <li>Add a device in the Devices tab — the key will be sent to the extension automatically</li>
                 </ol>
               </div>
 
               {/* Native Host */}
               <div style={{ marginBottom: '2rem' }}>
                 <h4 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>⌨️</span> Native Host (CLI)
+                  Native Host (CLI)
                 </h4>
                 <div style={{
                   background: 'rgba(0,0,0,0.3)',
@@ -464,10 +791,10 @@ export const ControlPanelPage: React.FC = () => {
               {/* Authentication */}
               <div>
                 <h4 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>🔐</span> Authentication Flow
+                  Authentication Flow
                 </h4>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 0.75rem', lineHeight: 1.6 }}>
-                  When the plugin starts without authentication, it opens a browser window to Tulzo's login page.
+                  When the plugin starts without authentication, it opens a browser window to Tulzo&apos;s login page.
                   After signing in, your session is verified and the plugin receives a token that confirms your plan and quotas.
                 </p>
                 <div style={{

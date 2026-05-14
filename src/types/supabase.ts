@@ -46,6 +46,8 @@ export interface ApiKeyRow {
   last_used_at: string | null;
   /** When the key was revoked (null if active) */
   revoked_at: string | null;
+  /** Device name this key is associated with */
+  device_name: string;
 }
 
 /**
@@ -58,6 +60,7 @@ export interface ApiKeyInsert {
   api_key?: string; // Plaintext key for internal use
   name?: string;
   server_name?: string;
+  device_name?: string;
   provider: 'clerk' | 'custom';
   plan: 'free' | 'pro' | 'plus';
   is_active?: boolean;
@@ -68,9 +71,67 @@ export interface ApiKeyInsert {
  */
 export interface ApiKeyUpdate {
   name?: string;
+  device_name?: string;
   is_active?: boolean;
   last_used_at?: string;
   revoked_at?: string;
+}
+
+// ============ Device Heartbeats Table ============
+
+export interface DeviceHeartbeatRow {
+  id: string;
+  api_key_id: string;
+  user_id: string;
+  device_name: string;
+  hostname: string | null;
+  platform: string | null;
+  arch: string | null;
+  model: string | null;
+  extension_id: string | null;
+  tokens_today_input: number;
+  tokens_today_output: number;
+  schedules_count: number;
+  active_tasks_count: number;
+  skills_loaded: number;
+  mcp_servers_connected: number;
+  ip_address: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface DeviceHeartbeatInsert {
+  api_key_id: string;
+  user_id: string;
+  device_name: string;
+  hostname?: string;
+  platform?: string;
+  arch?: string;
+  model?: string;
+  extension_id?: string;
+  tokens_today_input?: number;
+  tokens_today_output?: number;
+  schedules_count?: number;
+  active_tasks_count?: number;
+  skills_loaded?: number;
+  mcp_servers_connected?: number;
+  ip_address?: string;
+}
+
+export interface DeviceHeartbeatUpdate {
+  hostname?: string;
+  platform?: string;
+  arch?: string;
+  model?: string;
+  extension_id?: string;
+  tokens_today_input?: number;
+  tokens_today_output?: number;
+  schedules_count?: number;
+  active_tasks_count?: number;
+  skills_loaded?: number;
+  mcp_servers_connected?: number;
+  ip_address?: string;
+  updated_at?: string;
 }
 
 // ============ User Preferences Table ============
@@ -641,6 +702,11 @@ export interface Database {
         Row: A2AAgentRow;
         Insert: A2AAgentInsert;
         Update: A2AAgentUpdate;
+      };
+      device_heartbeats: {
+        Row: DeviceHeartbeatRow;
+        Insert: DeviceHeartbeatInsert;
+        Update: DeviceHeartbeatUpdate;
       };
     };
   };
