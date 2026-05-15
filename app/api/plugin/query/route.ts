@@ -11,12 +11,7 @@ function getSupabase() {
 
 /**
  * RAG query endpoint for native-host.
- * The plugin can query the user's vector store for context during operation.
- *
- * Use cases:
- * - Look up guardrails/rules for a specific domain or action
- * - Retrieve learned knowledge for a practitioner/skill
- * - Get context before performing an action
+ * Text search against the user's knowledge base documents.
  *
  * POST body:
  * - query: string (the search query)
@@ -36,7 +31,6 @@ export async function POST(req: NextRequest) {
   const apiKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
   const supabase = getSupabase();
 
-  // Validate key
   const { data: keyRecord, error } = await supabase
     .from('api_keys')
     .select('user_id, plan, is_active')
@@ -59,7 +53,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'query is required' }, { status: 400 });
   }
 
-  // Find the target RAG(s)
   let ragQuery = supabase
     .from('user_rags')
     .select('id, name')
@@ -77,34 +70,7 @@ export async function POST(req: NextRequest) {
 
   const ragIds = rags.map(r => r.id);
 
-  // Vector similarity search using Supabase's match_documents RPC
-  // Falls back to text search if embeddings aren't available
-  const { data: results } = await supabase
-    .rpc('match_rag_documents', {
-      query_text: query,
-      match_count: limit,
-      filter_rag_ids: ragIds,
-    });
-
-  if (results) {
-    // Log the query
-    await supabase.from('api_usage_log').insert({
-      user_id: keyRecord.user_id,
-      event_type: 'rag_query',
-      metadata: { query: query.slice(0, 100), rag_name },
-      created_at: new Date().toISOString(),
-    });
-
-    return NextResponse.json({
-      results: results.map((r: { content: string; similarity: number; rag_id: string }) => ({
-        content: r.content,
-        score: r.similarity,
-        rag_id: r.rag_id,
-      })),
-    });
-  }
-
-  // Fallback: simple text search
+  // Text search against rag_documents
   const { data: textResults } = await supabase
     .from('rag_documents')
     .select('content, rag_id')
@@ -115,7 +81,7 @@ export async function POST(req: NextRequest) {
   await supabase.from('api_usage_log').insert({
     user_id: keyRecord.user_id,
     event_type: 'rag_query',
-    metadata: { query: query.slice(0, 100), rag_name, fallback: true },
+    metadata: { query: query.slice(0, 100), rag_name },
     created_at: new Date().toISOString(),
   });
 
