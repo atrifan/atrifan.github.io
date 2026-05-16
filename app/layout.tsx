@@ -117,6 +117,27 @@ export default function RootLayout({
             }
           `}
         </Script>
+
+        {/* Extension detection — runs on all pages */}
+        <Script id="tulzo-extension-bridge" strategy="afterInteractive">
+          {`
+            (function() {
+              window.__tulzoExtension = { detected: false };
+              window.addEventListener("message", function(e) {
+                if (e.data && e.data.source === "tex-extension") {
+                  window.__tulzoExtension.detected = true;
+                  window.__tulzoExtension.lastMessage = e.data;
+                  window.dispatchEvent(new CustomEvent("tulzo-extension-detected", { detail: e.data }));
+                }
+              });
+              function ping() { window.postMessage({ source: "tulzo", action: "ping" }, "*"); }
+              ping();
+              setTimeout(ping, 500);
+              setTimeout(ping, 1500);
+              setTimeout(ping, 3000);
+            })();
+          `}
+        </Script>
       </head>
       <body suppressHydrationWarning>
         <ClerkProvider

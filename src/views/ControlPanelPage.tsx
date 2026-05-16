@@ -110,13 +110,20 @@ export const ControlPanelPage: React.FC = () => {
     fetchUsage();
   }, [fetchDevices, fetchUsage]);
 
-  // Extension detection via postMessage
+  // Extension detection — check global flag (set by layout script) + listen for future messages
   useEffect(() => {
-    let detected = false;
+    // Check if already detected by the global script
+    const w = window as unknown as { __tulzoExtension?: { detected: boolean } };
+    if (w.__tulzoExtension?.detected) {
+      setExtensionDetected(true);
+    }
+
+    const handleExtension = () => setExtensionDetected(true);
+    window.addEventListener('tulzo-extension-detected', handleExtension);
+
     const handler = (e: MessageEvent) => {
       if (e.data?.source === 'tex-extension') {
         if (e.data.action === 'pong' || e.data.action === 'init') {
-          detected = true;
           setExtensionDetected(true);
         }
         if (e.data.action === 'device_activated' && e.data.success) {
@@ -126,18 +133,9 @@ export const ControlPanelPage: React.FC = () => {
     };
     window.addEventListener('message', handler);
 
-    // Ping immediately, then retry a few times in case content script loads late
-    const ping = () => window.postMessage({ source: 'tulzo', action: 'ping' }, '*');
-    ping();
-    const t1 = setTimeout(() => { if (!detected) ping(); }, 500);
-    const t2 = setTimeout(() => { if (!detected) ping(); }, 1500);
-    const t3 = setTimeout(() => { if (!detected) ping(); }, 3000);
-
     return () => {
+      window.removeEventListener('tulzo-extension-detected', handleExtension);
       window.removeEventListener('message', handler);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
     };
   }, []);
 
