@@ -112,9 +112,11 @@ export const ControlPanelPage: React.FC = () => {
 
   // Extension detection via postMessage
   useEffect(() => {
+    let detected = false;
     const handler = (e: MessageEvent) => {
       if (e.data?.source === 'tex-extension') {
-        if (e.data.action === 'pong') {
+        if (e.data.action === 'pong' || e.data.action === 'init') {
+          detected = true;
           setExtensionDetected(true);
         }
         if (e.data.action === 'device_activated' && e.data.success) {
@@ -123,8 +125,20 @@ export const ControlPanelPage: React.FC = () => {
       }
     };
     window.addEventListener('message', handler);
-    window.postMessage({ source: 'tulzo', action: 'ping' }, '*');
-    return () => window.removeEventListener('message', handler);
+
+    // Ping immediately, then retry a few times in case content script loads late
+    const ping = () => window.postMessage({ source: 'tulzo', action: 'ping' }, '*');
+    ping();
+    const t1 = setTimeout(() => { if (!detected) ping(); }, 500);
+    const t2 = setTimeout(() => { if (!detected) ping(); }, 1500);
+    const t3 = setTimeout(() => { if (!detected) ping(); }, 3000);
+
+    return () => {
+      window.removeEventListener('message', handler);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, []);
 
   const addDevice = async () => {
