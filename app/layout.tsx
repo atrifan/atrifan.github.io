@@ -118,23 +118,25 @@ export default function RootLayout({
           `}
         </Script>
 
-        {/* Extension detection — runs on all pages */}
+        {/* Extension bridge — starts discovery on all pages */}
         <Script id="tulzo-extension-bridge" strategy="afterInteractive">
           {`
             (function() {
+              // Lazy-start the bridge singleton when the module loads client-side
+              // The bridge itself is in src/lib/extension-bridge.ts and started by components that need it
+              // This script just ensures early discovery messages are sent even before React hydrates
               window.__tulzoExtension = { detected: false };
               window.addEventListener("message", function(e) {
                 if (e.data && e.data.source === "tex-extension") {
                   window.__tulzoExtension.detected = true;
-                  window.__tulzoExtension.lastMessage = e.data;
+                  window.__tulzoExtension.data = e.data;
                   window.dispatchEvent(new CustomEvent("tulzo-extension-detected", { detail: e.data }));
                 }
               });
-              function ping() { window.postMessage({ source: "tulzo", action: "ping" }, "*"); }
-              ping();
-              setTimeout(ping, 500);
-              setTimeout(ping, 1500);
-              setTimeout(ping, 3000);
+              function discover() { window.postMessage({ source: "tulzo", action: "discover" }, "*"); }
+              discover();
+              setTimeout(discover, 1000);
+              setTimeout(discover, 3000);
             })();
           `}
         </Script>

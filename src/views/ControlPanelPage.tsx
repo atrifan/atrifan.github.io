@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
+import { extensionBridge } from '../lib/extension-bridge';
 
 interface DeviceItem {
   id: string;
@@ -110,31 +111,28 @@ export const ControlPanelPage: React.FC = () => {
     fetchUsage();
   }, [fetchDevices, fetchUsage]);
 
-  // Extension detection — check global flag (set by layout script) + listen for future messages
+  // Extension detection via bridge
   useEffect(() => {
-    // Check if already detected by the global script
-    const w = window as unknown as { __tulzoExtension?: { detected: boolean } };
-    if (w.__tulzoExtension?.detected) {
+    extensionBridge.start();
+
+    if (extensionBridge.state === 'connected') {
       setExtensionDetected(true);
     }
 
-    const handleExtension = () => setExtensionDetected(true);
-    window.addEventListener('tulzo-extension-detected', handleExtension);
+    const unsub = extensionBridge.onStateChange((state) => {
+      setExtensionDetected(state === 'connected');
+    });
 
+    // Also listen for key delivery ack
     const handler = (e: MessageEvent) => {
-      if (e.data?.source === 'tex-extension') {
-        if (e.data.action === 'pong' || e.data.action === 'init') {
-          setExtensionDetected(true);
-        }
-        if (e.data.action === 'device_activated' && e.data.success) {
-          setKeySentToExtension(true);
-        }
+      if (e.data?.source === 'tex-extension' && e.data.action === 'device_activated' && e.data.success) {
+        setKeySentToExtension(true);
       }
     };
     window.addEventListener('message', handler);
 
     return () => {
-      window.removeEventListener('tulzo-extension-detected', handleExtension);
+      unsub();
       window.removeEventListener('message', handler);
     };
   }, []);
