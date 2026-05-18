@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
@@ -54,6 +54,20 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function generateDeviceName(): string {
+  const ua = navigator.userAgent;
+  let browser = 'Browser';
+  let os = 'Unknown';
+  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+  else if (ua.includes('Edg')) browser = 'Edge';
+  else if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+  if (ua.includes('Mac OS X') || ua.includes('Macintosh')) os = 'macOS';
+  else if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Linux')) os = 'Linux';
+  return `${browser} on ${os}`;
+}
+
 export const ControlPanelPage: React.FC = () => {
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'docs'>('overview');
@@ -73,6 +87,14 @@ export const ControlPanelPage: React.FC = () => {
   // Extension detection
   const [extensionDetected, setExtensionDetected] = useState(false);
   const [keySentToExtension, setKeySentToExtension] = useState(false);
+
+  // Auto-activation
+  const [autoActivating, setAutoActivating] = useState(false);
+  const autoActivateAttempted = useRef(false);
+
+  // Live extension data
+  const [liveUsage, setLiveUsage] = useState<{ tokensIn: number; tokensOut: number } | null>(null);
+  const [liveProvider, setLiveProvider] = useState<{ provider: string; model: string } | null>(null);
 
   // Revoke confirmation
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
@@ -136,6 +158,82 @@ export const ControlPanelPage: React.FC = () => {
       window.removeEventListener('message', handler);
     };
   }, []);
+
+  // Auto-activation: extension present + not already paired + user has 0 devices + paid plan
+  useEffect(() => {
+    if (autoActivateAttempted.current) return;
+    if (!extensionDetected) return;
+    if (extensionBridge.activated) return;
+    if (loading) return;
+    if (devices.length > 0) return;
+    if (plan === 'free') return;
+
+    autoActivateAttempted.current = true;
+    setAutoActivating(true);
+
+    const deviceName = generateDeviceName();
+
+    (async () => {
+      try {
+        const res = await fetch('/api/keys/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_name: deviceName }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setAutoActivating(false);
+          return;
+        }
+
+        window.postMessage({
+          source: 'tulzo',
+          action: 'activate_device',
+          apiKey: data.apiKey,
+          deviceName: deviceName,
+        }, '*');
+
+        setTimeout(() => {
+          setKeySentToExtension(true);
+          setAutoActivating(false);
+          fetchDevices();
+        }, 1000);
+      } catch {
+        setAutoActivating(false);
+      }
+    })();
+  }, [extensionDetected, loading, devices.length, plan, fetchDevices]);
+
+  // Fetch live data from extension when connected and activated
+  useEffect(() => {
+    if (extensionBridge.state !== 'connected') return;
+    if (!keySentToExtension && !extensionBridge.activated) return;
+
+    let cancelled = false;
+
+    const fetchLiveData = async () => {
+      try {
+        const [usage, providers] = await Promise.allSettled([
+          extensionBridge.send<{ tokensIn: number; tokensOut: number }>('GET_USAGE'),
+          extensionBridge.send<{ provider: string; model: string }>('GET_PROVIDERS'),
+        ]);
+        if (cancelled) return;
+        if (usage.status === 'fulfilled') setLiveUsage(usage.value);
+        if (providers.status === 'fulfilled') setLiveProvider(providers.value);
+      } catch {
+        // Extension commands failed — not critical
+      }
+    };
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [keySentToExtension, extensionDetected]);
 
   const addDevice = async () => {
     if (!newDeviceName.trim()) return;
@@ -391,13 +489,35 @@ export const ControlPanelPage: React.FC = () => {
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>Loading devices...</p>
               ) : devices.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>
-                    No devices connected yet.
-                  </p>
-                  {plan !== 'free' && (
-                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', margin: 0 }}>
-                      Click &quot;+ Add Device&quot; to generate an API key for your first device.
-                    </p>
+                  {autoActivating ? (
+                    <>
+                      <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>
+                        Connecting your device...
+                      </p>
+                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', margin: 0 }}>
+                        Sending API key to extension automatically.
+                      </p>
+                    </>
+                  ) : keySentToExtension ? (
+                    <>
+                      <p style={{ color: '#22c55e', fontSize: '0.9rem', margin: '0 0 0.5rem', fontWeight: 600 }}>
+                        Device auto-connected!
+                      </p>
+                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', margin: 0 }}>
+                        Your extension is now paired. Refreshing...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>
+                        No devices connected yet.
+                      </p>
+                      {plan !== 'free' && (
+                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', margin: 0 }}>
+                          Click &quot;+ Add Device&quot; to generate an API key for your first device.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (
@@ -444,6 +564,12 @@ export const ControlPanelPage: React.FC = () => {
                               <span>Tokens: {formatTokens(device.tokens_today_input)} in / {formatTokens(device.tokens_today_output)} out</span>
                               {device.schedules_count > 0 && <span>{device.schedules_count} schedules</span>}
                               {device.skills_loaded > 0 && <span>{device.skills_loaded} skills</span>}
+                            </div>
+                          )}
+                          {liveUsage && extensionBridge.deviceName === device.device_name && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem' }}>
+                              <span style={{ color: '#667eea' }}>Live: {formatTokens(liveUsage.tokensIn)} in / {formatTokens(liveUsage.tokensOut)} out</span>
+                              {liveProvider && <span>{liveProvider.provider} / {liveProvider.model}</span>}
                             </div>
                           )}
                         </div>

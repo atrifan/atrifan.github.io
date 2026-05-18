@@ -18,6 +18,7 @@ class ExtensionBridge {
   capabilities: string[] = [];
   version: string | null = null;
   deviceName: string | null = null;
+  activated: boolean = false;
 
   private pending = new Map<string, PendingRequest>();
   private listeners = new Set<BridgeListener>();
@@ -40,6 +41,7 @@ class ExtensionBridge {
     window.removeEventListener('message', this.handleMessage);
     this.clearTimers();
     this.rejectAll('Bridge stopped');
+    this.activated = false;
     this.setState('disconnected');
   }
 
@@ -91,10 +93,11 @@ class ExtensionBridge {
     }
   };
 
-  private onDiscoverAck(data: { version?: string; capabilities?: string[]; deviceName?: string }) {
+  private onDiscoverAck(data: { version?: string; capabilities?: string[]; deviceName?: string; activated?: boolean }) {
     this.version = data.version || null;
     this.capabilities = data.capabilities || [];
     this.deviceName = data.deviceName || null;
+    this.activated = data.activated ?? false;
     this.enterConnected();
   }
 
