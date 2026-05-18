@@ -80,6 +80,10 @@ class ExtensionBridge {
     const data = e.data;
     if (!data || data.source !== 'tex-extension') return;
 
+    if (this.state === 'disconnected' && data.action !== 'discover_ack') {
+      this.postDiscover();
+    }
+
     switch (data.action) {
       case 'discover_ack':
         this.onDiscoverAck(data);

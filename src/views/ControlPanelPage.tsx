@@ -206,6 +206,7 @@ export const ControlPanelPage: React.FC = () => {
 
   // Revoke confirmation
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
 
   const [serverPlan, setServerPlan] = useState<string | null>(null);
   const plan = serverPlan || (user?.publicMetadata?.plan as string) || 'free';
@@ -757,14 +758,25 @@ export const ControlPanelPage: React.FC = () => {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {devices.map((device) => (
+                  {devices.map((device) => {
+                    const isExpanded = expandedDevice === device.id;
+                    const isLiveDevice = extensionBridge.deviceName === device.device_name;
+                    return (
                     <div key={device.id} style={{
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.06)',
+                      background: isExpanded ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                      border: isExpanded ? '1px solid rgba(102, 126, 234, 0.2)' : '1px solid rgba(255,255,255,0.06)',
                       borderRadius: '12px',
                       padding: '1rem 1.25rem',
+                      transition: 'all 0.2s',
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', cursor: 'pointer' }}
+                        onClick={() => setExpandedDevice(isExpanded ? null : device.id)}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDevice(isExpanded ? null : device.id); } }}
+                      >
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                             <span style={{
@@ -780,6 +792,14 @@ export const ControlPanelPage: React.FC = () => {
                             <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem' }}>
                               ****{device.api_key_suffix}
                             </span>
+                            {isLiveDevice && liveData.version && latestVersion && isVersionOutdated(liveData.version.version, latestVersion) && (
+                              <span style={{ background: 'rgba(251, 191, 36, 0.15)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fbbf24', fontSize: '0.6rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: '999px' }}>
+                                Update available
+                              </span>
+                            )}
+                            <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.7rem', marginLeft: 'auto' }}>
+                              {isExpanded ? '▾' : '▸'}
+                            </span>
                           </div>
                           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                             {device.platform && (
@@ -793,6 +813,9 @@ export const ControlPanelPage: React.FC = () => {
                                device.status === 'offline' ? `Last seen: ${relativeTime(device.last_seen_at)}` :
                                'Never connected'}
                             </span>
+                            {isLiveDevice && liveData.providers?.active_model && (
+                              <span style={{ color: '#667eea' }}>{liveData.providers.active_provider}/{liveData.providers.active_model}</span>
+                            )}
                           </div>
                           {device.status === 'online' && (
                             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem' }}>
@@ -801,355 +824,179 @@ export const ControlPanelPage: React.FC = () => {
                               {device.skills_loaded > 0 && <span>{device.skills_loaded} skills</span>}
                             </div>
                           )}
-                          {/* Live data for this device */}
-                          {extensionBridge.deviceName === device.device_name && liveData.version && (
-                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span>v{liveData.version.version}</span>
-                              <span>{liveData.version.platform}/{liveData.version.arch}</span>
-                              <span style={{ color: 'rgba(255,255,255,0.25)' }}>{liveData.version.gitCommit}</span>
-                              <span>{liveData.version.nodeVersion}</span>
-                              {latestVersion && isVersionOutdated(liveData.version.version, latestVersion) && (
-                                <span style={{
-                                  background: 'rgba(251, 191, 36, 0.15)',
-                                  border: '1px solid rgba(251, 191, 36, 0.3)',
-                                  color: '#fbbf24',
-                                  fontSize: '0.65rem',
-                                  fontWeight: 600,
-                                  padding: '0.15rem 0.5rem',
-                                  borderRadius: '999px',
-                                }}>
-                                  Update available (v{latestVersion})
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {extensionBridge.deviceName === device.device_name && liveData.providers?.active_model && (
-                            <div style={{ color: '#667eea', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                              {statusDot('online')}
-                              <span>Live: {liveData.providers.active_provider}/{liveData.providers.active_model}</span>
-                              {liveData.usage?.tokens && (
-                                <span>{formatTokens(liveData.usage.tokens.input)} in / {formatTokens(liveData.usage.tokens.output)} out</span>
-                              )}
-                              {liveData.usage?.monthly_cost != null && (
-                                <span>{formatCost(liveData.usage.monthly_cost)} this month</span>
-                              )}
-                            </div>
-                          )}
                         </div>
-                        <div>
+                        <div onClick={(e) => e.stopPropagation()}>
                           {confirmRevoke === device.id ? (
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                              <button
-                                onClick={() => revokeDevice(device.id)}
-                                style={{
-                                  background: '#ef4444',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '0.35rem 0.75rem',
-                                  color: '#fff',
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setConfirmRevoke(null)}
-                                style={{
-                                  background: 'rgba(255,255,255,0.1)',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '0.35rem 0.75rem',
-                                  color: 'rgba(255,255,255,0.6)',
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                Cancel
-                              </button>
+                              <button onClick={() => revokeDevice(device.id)} style={{ background: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.35rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500 }}>Confirm</button>
+                              <button onClick={() => setConfirmRevoke(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.75rem', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '0.75rem' }}>Cancel</button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => setConfirmRevoke(device.id)}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                borderRadius: '6px',
-                                padding: '0.35rem 0.75rem',
-                                color: '#ef4444',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem',
-                              }}
-                            >
-                              Revoke
-                            </button>
+                            <button onClick={() => setConfirmRevoke(device.id)} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.75rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}>Revoke</button>
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            {/* Live Extension Panels — shown when connected */}
-            {hasLiveData && liveData.lastFetched && (
-              <>
-                {/* Providers */}
-                {liveData.providers?.providers && liveData.providers.providers.length > 0 && (
-                  <div style={cardStyle}>
-                    <h4 style={sectionHeaderStyle}>
-                      Providers
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {liveData.providers.providers.map((p, i) => (
-                        <div key={i} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '0.6rem 0.75rem',
-                          background: p.active ? 'rgba(102, 126, 234, 0.08)' : 'transparent',
-                          border: p.active ? '1px solid rgba(102, 126, 234, 0.2)' : '1px solid rgba(255,255,255,0.04)',
-                          borderRadius: '8px',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {statusDot(p.active ? 'online' : 'offline')}
-                            <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: p.active ? 600 : 400 }}>
-                              {p.name}
-                            </span>
-                            {p.active && <span style={pillStyle(true)}>Active</span>}
-                          </div>
-                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                            {p.models.length} model{p.models.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Skills */}
-                {liveData.skills && liveData.skills.length > 0 && (
-                  <div style={cardStyle}>
-                    <h4 style={sectionHeaderStyle}>
-                      Skills ({liveData.skills.length})
-                    </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(14rem, 1fr))', gap: '0.5rem' }}>
-                      {liveData.skills.map((skill) => (
-                        <div key={skill.id} style={{
-                          padding: '0.6rem 0.75rem',
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          borderRadius: '8px',
-                        }}>
-                          <div style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.2rem' }}>
-                            {skill.name}
-                          </div>
-                          {skill.description && (
-                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', lineHeight: 1.4 }}>
-                              {skill.description.length > 60 ? skill.description.slice(0, 60) + '...' : skill.description}
+                      {/* Expanded device details */}
+                      {isExpanded && (
+                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          {/* Version info */}
+                          {isLiveDevice && liveData.version && (
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', fontSize: '0.8rem' }}>
+                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Version: </span><span style={{ color: '#fff' }}>v{liveData.version.version}</span></div>
+                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Commit: </span><span style={{ color: '#fff' }}>{liveData.version.gitCommit}</span></div>
+                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Platform: </span><span style={{ color: '#fff' }}>{liveData.version.platform}/{liveData.version.arch}</span></div>
+                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Node: </span><span style={{ color: '#fff' }}>{liveData.version.nodeVersion}</span></div>
                             </div>
                           )}
-                          {skill.matches && skill.matches.length > 0 && (
-                            <div style={{ marginTop: '0.3rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                              {skill.matches.slice(0, 3).map((m, i) => (
-                                <span key={i} style={{
-                                  fontSize: '0.6rem',
-                                  padding: '0.1rem 0.35rem',
-                                  borderRadius: '4px',
-                                  background: 'rgba(102, 126, 234, 0.15)',
-                                  color: 'rgba(102, 126, 234, 0.8)',
-                                }}>
-                                  {m}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
-                {/* MCP Servers */}
-                {liveData.mcpServers && liveData.mcpServers.length > 0 && (
-                  <div style={cardStyle}>
-                    <h4 style={sectionHeaderStyle}>
-                      MCP Integrations ({liveData.mcpServers.length})
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {liveData.mcpServers.map((server, i) => (
-                        <div key={i} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '0.6rem 0.75rem',
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          borderRadius: '8px',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {statusDot(server.status)}
-                            <span style={{ color: '#fff', fontSize: '0.85rem' }}>{server.name}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {server.tools_count != null && (
-                              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-                                {server.tools_count} tool{server.tools_count !== 1 ? 's' : ''}
-                              </span>
-                            )}
-                            <span style={pillStyle(server.status === 'connected')}>
-                              {server.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {liveData.mcpTools && liveData.mcpTools.length > 0 && (
-                      <details style={{ marginTop: '0.75rem' }}>
-                        <summary style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', cursor: 'pointer', userSelect: 'none' }}>
-                          View all tools ({liveData.mcpTools.length})
-                        </summary>
-                        <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(16rem, 1fr))', gap: '0.35rem' }}>
-                          {liveData.mcpTools.map((tool, i) => (
-                            <div key={i} style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}>
-                              <span style={{ color: '#fff' }}>{tool.name}</span>
-                              {tool.server && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '0.35rem' }}>({tool.server})</span>}
-                              {tool.description && (
-                                <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem', marginTop: '0.1rem' }}>
-                                  {tool.description.length > 80 ? tool.description.slice(0, 80) + '...' : tool.description}
+                          {/* Usage */}
+                          {isLiveDevice && liveData.usage && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Usage</div>
+                              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                                {liveData.usage.monthly_cost != null && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Cost: </span><span style={{ color: '#fff', fontWeight: 600 }}>{formatCost(liveData.usage.monthly_cost)}/mo</span></div>}
+                                {liveData.usage.tokens && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Tokens: </span><span style={{ color: '#fff' }}>{formatTokens(liveData.usage.tokens.input)} in / {formatTokens(liveData.usage.tokens.output)} out</span></div>}
+                              </div>
+                              {liveData.usage.calls_by_provider && Object.keys(liveData.usage.calls_by_provider).length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                  {Object.entries(liveData.usage.calls_by_provider).map(([provider, calls]) => (
+                                    <span key={provider} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
+                                      {provider}: {calls} calls
+                                    </span>
+                                  ))}
                                 </div>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-                )}
-
-                {/* Schedules */}
-                {liveData.schedules && liveData.schedules.length > 0 && (
-                  <div style={cardStyle}>
-                    <h4 style={sectionHeaderStyle}>
-                      Scheduled Tasks ({liveData.schedules.length})
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      {liveData.schedules.map((schedule) => (
-                        <div key={schedule.id} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '0.5rem 0.75rem',
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          borderRadius: '8px',
-                          flexWrap: 'wrap',
-                          gap: '0.5rem',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {statusDot(schedule.status)}
-                            <span style={{ color: '#fff', fontSize: '0.85rem' }}>
-                              {schedule.name || schedule.id}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <code style={{
-                              color: 'rgba(255,255,255,0.5)',
-                              fontSize: '0.7rem',
-                              background: 'rgba(255,255,255,0.05)',
-                              padding: '0.15rem 0.4rem',
-                              borderRadius: '4px',
-                            }}>
-                              {schedule.cron}
-                            </code>
-                            {schedule.next_run && (
-                              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-                                Next: {relativeTime(schedule.next_run)}
-                              </span>
-                            )}
-                            <span style={pillStyle(schedule.status === 'active')}>
-                              {schedule.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Browser + Notifications row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '1rem' }}>
-                  {/* Headless Browser */}
-                  {liveData.browserStatus && (
-                    <div style={cardStyle}>
-                      <h4 style={sectionHeaderStyle}>
-                        Headless Browser
-                      </h4>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        {statusDot(liveData.browserStatus.running ? 'online' : 'offline')}
-                        <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>
-                          {liveData.browserStatus.running ? 'Running' : 'Stopped'}
-                        </span>
-                      </div>
-                      {liveData.browserStatus.running && (
-                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>
-                          {liveData.browserStatus.pages_open != null && (
-                            <div>{liveData.browserStatus.pages_open} page{liveData.browserStatus.pages_open !== 1 ? 's' : ''} open</div>
                           )}
-                          {liveData.browserStatus.memory_mb != null && (
-                            <div>{liveData.browserStatus.memory_mb} MB memory</div>
+
+                          {/* Providers */}
+                          {isLiveDevice && liveData.providers?.providers && liveData.providers.providers.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Providers</div>
+                              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                {liveData.providers.providers.map((p, i) => (
+                                  <span key={i} style={pillStyle(p.active)}>
+                                    {p.name} ({p.models.length})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Skills */}
+                          {isLiveDevice && liveData.skills && liveData.skills.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Skills ({liveData.skills.length})</div>
+                              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                {liveData.skills.map((skill) => (
+                                  <span key={skill.id} style={{ background: 'rgba(102, 126, 234, 0.1)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }} title={skill.description}>
+                                    {skill.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* MCP Servers */}
+                          {isLiveDevice && liveData.mcpServers && liveData.mcpServers.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>MCP Servers ({liveData.mcpServers.length})</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                {liveData.mcpServers.map((server, i) => (
+                                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                                    {statusDot(server.status)}
+                                    <span style={{ color: '#fff' }}>{server.name}</span>
+                                    {server.tools_count != null && <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>{server.tools_count} tools</span>}
+                                  </div>
+                                ))}
+                              </div>
+                              {liveData.mcpTools && liveData.mcpTools.length > 0 && (
+                                <details style={{ marginTop: '0.5rem' }}>
+                                  <summary style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer' }}>All tools ({liveData.mcpTools.length})</summary>
+                                  <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                    {liveData.mcpTools.map((tool, i) => (
+                                      <span key={i} style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} title={tool.description}>
+                                        {tool.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Schedules */}
+                          {isLiveDevice && liveData.schedules && liveData.schedules.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Schedules ({liveData.schedules.length})</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                {liveData.schedules.map((s) => (
+                                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                                    {statusDot(s.status)}
+                                    <span style={{ color: '#fff' }}>{s.name || s.id}</span>
+                                    <code style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>{s.cron}</code>
+                                    {s.next_run && <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>next: {relativeTime(s.next_run)}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Browser + Notifications */}
+                          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                            {isLiveDevice && liveData.browserStatus && (
+                              <div>
+                                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Browser</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}>
+                                  {statusDot(liveData.browserStatus.running ? 'online' : 'offline')}
+                                  <span style={{ color: '#fff' }}>{liveData.browserStatus.running ? 'Running' : 'Stopped'}</span>
+                                  {liveData.browserStatus.pages_open != null && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>({liveData.browserStatus.pages_open} pages)</span>}
+                                </div>
+                              </div>
+                            )}
+                            {isLiveDevice && liveData.notifications && (
+                              <div>
+                                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notifications</div>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <span style={pillStyle(!!liveData.notifications.telegram?.enabled)}>Telegram</span>
+                                  <span style={pillStyle(!!liveData.notifications.webhook?.enabled)}>Webhook</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Refresh */}
+                          {isLiveDevice && (
+                            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                              <button onClick={(e) => { e.stopPropagation(); fetchLiveData(); }} disabled={liveData.loading} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.35rem 0.75rem', color: 'rgba(255,255,255,0.5)', cursor: liveData.loading ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                                {liveData.loading ? 'Refreshing...' : 'Refresh'}
+                              </button>
+                              {liveData.lastFetched && <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.65rem', marginLeft: '0.5rem' }}>Updated {relativeTime(new Date(liveData.lastFetched).toISOString())}</span>}
+                            </div>
+                          )}
+
+                          {/* Non-live device: basic info */}
+                          {!isLiveDevice && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>
+                              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Created: </span><span style={{ color: '#fff' }}>{new Date(device.created_at).toLocaleDateString()}</span></div>
+                                {device.last_used_at && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Last used: </span><span style={{ color: '#fff' }}>{relativeTime(device.last_used_at)}</span></div>}
+                              </div>
+                              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', margin: '0.5rem 0 0' }}>
+                                Connect the browser extension on this device to see live data.
+                              </p>
+                            </div>
                           )}
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Notifications */}
-                  {liveData.notifications && (
-                    <div style={cardStyle}>
-                      <h4 style={sectionHeaderStyle}>
-                        Notifications
-                      </h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Telegram</span>
-                          <span style={pillStyle(!!liveData.notifications.telegram?.enabled)}>
-                            {liveData.notifications.telegram?.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Webhook</span>
-                          <span style={pillStyle(!!liveData.notifications.webhook?.enabled)}>
-                            {liveData.notifications.webhook?.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
+              )}
+            </div>
 
-                {/* Refresh button */}
-                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                  <button
-                    onClick={fetchLiveData}
-                    disabled={liveData.loading}
-                    style={{
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '8px',
-                      padding: '0.5rem 1.25rem',
-                      color: 'rgba(255,255,255,0.6)',
-                      cursor: liveData.loading ? 'not-allowed' : 'pointer',
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    {liveData.loading ? 'Refreshing...' : 'Refresh Live Data'}
-                  </button>
-                </div>
-              </>
-            )}
 
             {/* Add Device Modal */}
             {showAddDevice && (
