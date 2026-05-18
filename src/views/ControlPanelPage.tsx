@@ -139,7 +139,8 @@ function formatCost(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function isVersionOutdated(current: string, latest: string): boolean {
+function isVersionOutdated(current: string | undefined, latest: string | undefined): boolean {
+  if (!current || !latest) return false;
   const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
   const c = parse(current);
   const l = parse(latest);
