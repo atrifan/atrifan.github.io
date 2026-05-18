@@ -99,7 +99,8 @@ export const ControlPanelPage: React.FC = () => {
   // Revoke confirmation
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
 
-  const plan = (user?.publicMetadata?.plan as string) || 'free';
+  const [serverPlan, setServerPlan] = useState<string | null>(null);
+  const plan = serverPlan || (user?.publicMetadata?.plan as string) || 'free';
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -108,6 +109,7 @@ export const ControlPanelPage: React.FC = () => {
         const data = await res.json();
         setDevices(data.devices || []);
         setDeviceLimit(data.limit || 1);
+        if (data.plan) setServerPlan(data.plan);
       }
     } catch (e) {
       console.error('Failed to fetch devices:', e);
