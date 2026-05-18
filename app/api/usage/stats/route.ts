@@ -21,38 +21,53 @@ export async function GET() {
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const { count: totalRequests } = await supabase
-    .from('api_usage_log')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
+  try {
+    const { count: totalRequests, error: totalErr } = await supabase
+      .from('api_usage_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
 
-  // Get today's count
-  const { count: requestsToday } = await supabase
-    .from('api_usage_log')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', startOfDay);
+    if (totalErr) {
+      return NextResponse.json({
+        totalRequests: 0,
+        requestsToday: 0,
+        requestsThisMonth: 0,
+        lastRequestAt: null,
+      });
+    }
 
-  // Get this month's count
-  const { count: requestsThisMonth } = await supabase
-    .from('api_usage_log')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', startOfMonth);
+    const { count: requestsToday } = await supabase
+      .from('api_usage_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', startOfDay);
 
-  // Get last request
-  const { data: lastRequest } = await supabase
-    .from('api_usage_log')
-    .select('created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    const { count: requestsThisMonth } = await supabase
+      .from('api_usage_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', startOfMonth);
 
-  return NextResponse.json({
-    totalRequests: totalRequests || 0,
-    requestsToday: requestsToday || 0,
-    requestsThisMonth: requestsThisMonth || 0,
-    lastRequestAt: lastRequest?.created_at || null,
-  });
+    const { data: lastRequest } = await supabase
+      .from('api_usage_log')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return NextResponse.json({
+      totalRequests: totalRequests || 0,
+      requestsToday: requestsToday || 0,
+      requestsThisMonth: requestsThisMonth || 0,
+      lastRequestAt: lastRequest?.created_at || null,
+    });
+  } catch {
+    return NextResponse.json({
+      totalRequests: 0,
+      requestsToday: 0,
+      requestsThisMonth: 0,
+      lastRequestAt: null,
+    });
+  }
 }
