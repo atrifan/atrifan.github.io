@@ -36,43 +36,71 @@ interface UsageStats {
   lastRequestAt: string | null;
 }
 
-interface LiveUsage {
-  monthly_cost?: number;
-  tokens?: { input: number; output: number };
-  calls_by_provider?: Record<string, number>;
-  daily_breakdown?: Array<{ date: string; cost: number; tokens: number }>;
+interface LiveUsageRaw {
+  ok?: boolean;
+  data?: {
+    month?: string;
+    totalCost?: number;
+    providers?: Record<string, { totalCost: number; inputTokens: number; outputTokens: number; calls: number }>;
+    today?: Record<string, { totalCost: number; inputTokens: number; outputTokens: number; calls: number }>;
+  };
 }
 
-interface LiveProvider {
+interface LiveUsage {
+  monthly_cost: number;
+  tokens: { input: number; output: number };
+  calls_by_provider: Record<string, number>;
+}
+
+interface LiveProvidersRaw {
+  providers?: Record<string, { type: string; models: Record<string, string>; region?: string }>;
+  activeProvider?: string;
+}
+
+interface LiveProviderDisplay {
   name: string;
   models: string[];
   active: boolean;
 }
 
 interface LiveProviders {
-  providers?: LiveProvider[];
-  active_provider?: string;
-  active_model?: string;
+  providers: LiveProviderDisplay[];
+  active_provider: string;
+  active_model: string;
+}
+
+interface LiveSkillsRaw {
+  skills?: Array<{ path?: string; name: string; id?: string; description?: string; docPath?: string; codePath?: string }>;
 }
 
 interface LiveSkill {
   id: string;
   name: string;
   description?: string;
-  matches?: string[];
+}
+
+interface LiveMCPServersRaw {
+  servers?: Array<{ id: string; name: string; transport?: string; connected: boolean; toolCount?: number; authStatus?: string }>;
 }
 
 interface LiveMCPServer {
   name: string;
-  url?: string;
   status: string;
   tools_count?: number;
+}
+
+interface LiveMCPToolsRaw {
+  tools?: Array<{ serverId?: string; name: string; description?: string }>;
 }
 
 interface LiveMCPTool {
   name: string;
   description?: string;
   server?: string;
+}
+
+interface LiveSchedulesRaw {
+  schedules?: Array<{ id: string; cron: string; prompt: string; enabled: boolean; last_run?: string | null; source?: string }>;
 }
 
 interface LiveSchedule {
@@ -83,15 +111,31 @@ interface LiveSchedule {
   status: string;
 }
 
+interface LiveBrowserStatusRaw {
+  running?: boolean;
+}
+
 interface LiveBrowserStatus {
   running: boolean;
-  pages_open?: number;
-  memory_mb?: number;
+}
+
+interface LiveNotificationConfigRaw {
+  config?: {
+    channels?: {
+      telegram?: { enabled: boolean; chat_id?: string };
+      slack?: { enabled: boolean; webhook_url?: string };
+    };
+  };
 }
 
 interface LiveNotificationConfig {
   telegram?: { enabled: boolean; chat_id?: string };
   webhook?: { enabled: boolean; url?: string };
+}
+
+interface LiveVersionRaw {
+  ok?: boolean;
+  data?: { version?: string; gitCommit?: string; platform?: string; arch?: string; nodeVersion?: string };
 }
 
 interface LiveVersion {
@@ -327,27 +371,108 @@ export const ControlPanelPage: React.FC = () => {
     setLiveData(prev => ({ ...prev, loading: true }));
 
     const results = await Promise.allSettled([
-      extensionBridge.send<LiveUsage>('GET_USAGE'),
-      extensionBridge.send<LiveProviders>('GET_PROVIDERS'),
-      extensionBridge.send<LiveSkill[]>('LIST_SKILLS'),
-      extensionBridge.send<LiveMCPServer[]>('MCP_LIST_SERVERS'),
-      extensionBridge.send<LiveMCPTool[]>('MCP_LIST_TOOLS'),
-      extensionBridge.send<LiveSchedule[]>('SCHEDULE_LIST'),
-      extensionBridge.send<LiveBrowserStatus>('DAEMON_BROWSER_STATUS'),
-      extensionBridge.send<LiveNotificationConfig>('NOTIFICATION_GET_CONFIG'),
-      extensionBridge.send<LiveVersion>('GET_VERSION'),
+      extensionBridge.send<LiveUsageRaw>('GET_USAGE'),
+      extensionBridge.send<LiveProvidersRaw>('GET_PROVIDERS'),
+      extensionBridge.send<LiveSkillsRaw>('LIST_SKILLS'),
+      extensionBridge.send<LiveMCPServersRaw>('MCP_LIST_SERVERS'),
+      extensionBridge.send<LiveMCPToolsRaw>('MCP_LIST_TOOLS'),
+      extensionBridge.send<LiveSchedulesRaw>('SCHEDULE_LIST'),
+      extensionBridge.send<LiveBrowserStatusRaw>('DAEMON_BROWSER_STATUS'),
+      extensionBridge.send<LiveNotificationConfigRaw>('NOTIFICATION_GET_CONFIG'),
+      extensionBridge.send<LiveVersionRaw>('GET_VERSION'),
     ]);
 
+    const fulfilled = <T,>(r: PromiseSettledResult<T>): T | null =>
+      r.status === 'fulfilled' ? r.value : null;
+
+    // Transform raw responses into display shapes
+    const rawUsage = fulfilled(results[0]);
+    const rawProviders = fulfilled(results[1]);
+    const rawSkills = fulfilled(results[2]);
+    const rawServers = fulfilled(results[3]);
+    const rawTools = fulfilled(results[4]);
+    const rawSchedules = fulfilled(results[5]);
+    const rawBrowser = fulfilled(results[6]);
+    const rawNotif = fulfilled(results[7]);
+    const rawVersion = fulfilled(results[8]);
+
+    // GET_USAGE → { ok, data: { totalCost, providers, today } }
+    let usage: LiveUsage | null = null;
+    const usageData = rawUsage?.data;
+    if (usageData && (usageData.totalCost != null || usageData.providers)) {
+      let totalIn = 0, totalOut = 0;
+      const callsByProvider: Record<string, number> = {};
+      if (usageData.providers) {
+        for (const [name, p] of Object.entries(usageData.providers)) {
+          totalIn += p.inputTokens || 0;
+          totalOut += p.outputTokens || 0;
+          callsByProvider[name] = p.calls || 0;
+        }
+      }
+      usage = { monthly_cost: usageData.totalCost || 0, tokens: { input: totalIn, output: totalOut }, calls_by_provider: callsByProvider };
+    }
+
+    // GET_PROVIDERS → { providers: { name: { type, models } }, activeProvider }
+    let providers: LiveProviders | null = null;
+    if (rawProviders?.providers && Object.keys(rawProviders.providers).length > 0) {
+      const active = rawProviders.activeProvider || '';
+      const list: LiveProviderDisplay[] = Object.entries(rawProviders.providers).map(([name, p]) => ({
+        name,
+        models: Object.values(p.models || {}),
+        active: name === active,
+      }));
+      const activeModels = rawProviders.providers[active]?.models;
+      providers = { providers: list, active_provider: active, active_model: activeModels?.orchestrator || '' };
+    }
+
+    // LIST_SKILLS → { skills: [{ name, id, description }] }
+    let skills: LiveSkill[] | null = null;
+    if (rawSkills?.skills && rawSkills.skills.length > 0) {
+      skills = rawSkills.skills.map(s => ({ id: s.id || s.name, name: s.name, description: s.description }));
+    }
+
+    // MCP_LIST_SERVERS → { servers: [{ id, name, connected, toolCount }] }
+    let mcpServers: LiveMCPServer[] | null = null;
+    if (rawServers?.servers && rawServers.servers.length > 0) {
+      mcpServers = rawServers.servers.map(s => ({ name: s.name, status: s.connected ? 'connected' : 'disconnected', tools_count: s.toolCount }));
+    }
+
+    // MCP_LIST_TOOLS → { tools: [{ name, description, serverId }] }
+    let mcpTools: LiveMCPTool[] | null = null;
+    if (rawTools?.tools && rawTools.tools.length > 0) {
+      mcpTools = rawTools.tools.map(t => ({ name: t.name, description: t.description, server: t.serverId }));
+    }
+
+    // SCHEDULE_LIST → { schedules: [{ id, cron, prompt, enabled }] }
+    let schedules: LiveSchedule[] | null = null;
+    if (rawSchedules?.schedules && rawSchedules.schedules.length > 0) {
+      schedules = rawSchedules.schedules.map(s => ({ id: s.id, name: s.prompt, cron: s.cron, status: s.enabled ? 'active' : 'paused' }));
+    }
+
+    // DAEMON_BROWSER_STATUS → { running: boolean }
+    let browserStatus: LiveBrowserStatus | null = null;
+    if (rawBrowser && rawBrowser.running != null) {
+      browserStatus = { running: rawBrowser.running };
+    }
+
+    // NOTIFICATION_GET_CONFIG → { config: { channels: { telegram, slack } } }
+    let notifications: LiveNotificationConfig | null = null;
+    if (rawNotif?.config?.channels) {
+      const ch = rawNotif.config.channels;
+      notifications = {};
+      if (ch.telegram) notifications.telegram = { enabled: ch.telegram.enabled, chat_id: ch.telegram.chat_id };
+      if (ch.slack) notifications.webhook = { enabled: ch.slack.enabled, url: ch.slack.webhook_url };
+    }
+
+    // GET_VERSION → { ok, data: { version, gitCommit, platform, arch, nodeVersion } }
+    let version: LiveVersion | null = null;
+    const vd = rawVersion?.data;
+    if (vd?.version) {
+      version = { version: vd.version, gitCommit: vd.gitCommit || '', platform: vd.platform || '', arch: vd.arch || '', nodeVersion: vd.nodeVersion || '' };
+    }
+
     setLiveData({
-      usage: results[0].status === 'fulfilled' ? results[0].value : null,
-      providers: results[1].status === 'fulfilled' ? results[1].value : null,
-      skills: results[2].status === 'fulfilled' ? results[2].value : null,
-      mcpServers: results[3].status === 'fulfilled' ? results[3].value : null,
-      mcpTools: results[4].status === 'fulfilled' ? results[4].value : null,
-      schedules: results[5].status === 'fulfilled' ? results[5].value : null,
-      browserStatus: results[6].status === 'fulfilled' ? results[6].value : null,
-      notifications: results[7].status === 'fulfilled' ? results[7].value : null,
-      version: results[8].status === 'fulfilled' ? results[8].value : null,
+      usage, providers, skills, mcpServers, mcpTools, schedules, browserStatus, notifications, version,
       loading: false,
       lastFetched: Date.now(),
     });
@@ -845,12 +970,12 @@ export const ControlPanelPage: React.FC = () => {
                       {isExpanded && (
                         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                           {/* Version info */}
-                          {isLiveDevice && liveData.version && (
+                          {isLiveDevice && liveData.version?.version && (
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', fontSize: '0.8rem' }}>
                               <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Version: </span><span style={{ color: '#fff' }}>v{liveData.version.version}</span></div>
-                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Commit: </span><span style={{ color: '#fff' }}>{liveData.version.gitCommit}</span></div>
-                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Platform: </span><span style={{ color: '#fff' }}>{liveData.version.platform}/{liveData.version.arch}</span></div>
-                              <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Node: </span><span style={{ color: '#fff' }}>{liveData.version.nodeVersion}</span></div>
+                              {liveData.version.gitCommit && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Commit: </span><span style={{ color: '#fff' }}>{liveData.version.gitCommit}</span></div>}
+                              {liveData.version.platform && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Platform: </span><span style={{ color: '#fff' }}>{liveData.version.platform}{liveData.version.arch ? `/${liveData.version.arch}` : ''}</span></div>}
+                              {liveData.version.nodeVersion && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Node: </span><span style={{ color: '#fff' }}>{liveData.version.nodeVersion}</span></div>}
                             </div>
                           )}
 
@@ -949,17 +1074,16 @@ export const ControlPanelPage: React.FC = () => {
 
                           {/* Browser + Notifications */}
                           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                            {isLiveDevice && liveData.browserStatus && (
+                            {isLiveDevice && liveData.browserStatus && liveData.browserStatus.running != null && (
                               <div>
                                 <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Browser</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}>
                                   {statusDot(liveData.browserStatus.running ? 'online' : 'offline')}
                                   <span style={{ color: '#fff' }}>{liveData.browserStatus.running ? 'Running' : 'Stopped'}</span>
-                                  {liveData.browserStatus.pages_open != null && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>({liveData.browserStatus.pages_open} pages)</span>}
                                 </div>
                               </div>
                             )}
-                            {isLiveDevice && liveData.notifications && (
+                            {isLiveDevice && liveData.notifications && (liveData.notifications.telegram || liveData.notifications.webhook) && (
                               <div>
                                 <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notifications</div>
                                 <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -1264,33 +1388,6 @@ export const ControlPanelPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Daily breakdown */}
-                {liveData.usage.daily_breakdown && liveData.usage.daily_breakdown.length > 0 && (
-                  <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>Daily Breakdown (Last 7 Days)</div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', height: '4rem' }}>
-                      {liveData.usage.daily_breakdown.slice(-7).map((day, i) => {
-                        const max = Math.max(...liveData.usage!.daily_breakdown!.slice(-7).map(d => d.tokens));
-                        const height = max > 0 ? (day.tokens / max) * 100 : 0;
-                        return (
-                          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                            <div style={{
-                              width: '100%',
-                              maxWidth: '2rem',
-                              height: `${Math.max(height, 4)}%`,
-                              background: 'linear-gradient(180deg, #667eea 0%, #764ba2 100%)',
-                              borderRadius: '3px 3px 0 0',
-                              minHeight: '2px',
-                            }} />
-                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.6rem' }}>
-                              {new Date(day.date).toLocaleDateString('en', { weekday: 'short' })}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
