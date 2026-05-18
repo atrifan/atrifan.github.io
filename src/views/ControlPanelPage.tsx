@@ -760,7 +760,10 @@ export const ControlPanelPage: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {devices.map((device) => {
                     const isExpanded = expandedDevice === device.id;
-                    const isLiveDevice = extensionBridge.deviceName === device.device_name;
+                    const isLiveDevice = extensionDetected && (
+                      extensionBridge.deviceName === device.device_name ||
+                      devices.length === 1
+                    );
                     return (
                     <div key={device.id} style={{
                       background: isExpanded ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
