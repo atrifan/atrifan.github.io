@@ -480,12 +480,11 @@ export const ControlPanelPage: React.FC = () => {
 
   useEffect(() => {
     if (!extensionDetected) return;
-    if (!keySentToExtension && !extensionBridge.activated) return;
 
     fetchLiveData();
-    const interval = setInterval(fetchLiveData, 30000);
+    const interval = setInterval(fetchLiveData, 15000);
     return () => clearInterval(interval);
-  }, [keySentToExtension, extensionDetected, fetchLiveData]);
+  }, [extensionDetected, fetchLiveData]);
 
   const addDevice = async () => {
     if (!newDeviceName.trim()) return;
@@ -1101,6 +1100,22 @@ export const ControlPanelPage: React.FC = () => {
                                 {liveData.loading ? 'Refreshing...' : 'Refresh'}
                               </button>
                               {liveData.lastFetched && <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.65rem', marginLeft: '0.5rem' }}>Updated {relativeTime(new Date(liveData.lastFetched).toISOString())}</span>}
+                            </div>
+                          )}
+
+                          {/* No live data available */}
+                          {isLiveDevice && !liveData.version && !liveData.providers && !liveData.skills && !liveData.mcpServers && !liveData.browserStatus && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>
+                              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Created: </span><span style={{ color: '#fff' }}>{new Date(device.created_at).toLocaleDateString()}</span></div>
+                                {device.last_used_at && <div><span style={{ color: 'rgba(255,255,255,0.4)' }}>Last used: </span><span style={{ color: '#fff' }}>{relativeTime(device.last_used_at)}</span></div>}
+                              </div>
+                              <div style={{ background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px', padding: '0.6rem 0.75rem', fontSize: '0.8rem', color: 'rgba(251, 191, 36, 0.9)' }}>
+                                Extension connected but native host not responding. Start it with <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>node bin/cli.js start</code> to see live data.
+                              </div>
+                              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', margin: '0.5rem 0 0' }}>
+                                Auto-retrying every 15s...
+                              </p>
                             </div>
                           )}
 
