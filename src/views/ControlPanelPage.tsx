@@ -280,6 +280,7 @@ export const ControlPanelPage: React.FC = () => {
   // Revoke confirmation
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
+  const [deviceSubTab, setDeviceSubTab] = useState<'info' | 'logs'>('info');
 
   // Logs
   interface LogEntry { ts: number; source: 'bridge' | 'native'; direction: 'in' | 'out'; message: string; data?: unknown; level?: string; category?: string }
@@ -375,21 +376,22 @@ export const ControlPanelPage: React.FC = () => {
 
   // Auto-refresh native logs
   useEffect(() => {
-    if (!extensionDetected || activeTab !== 'logs' || !nativeLogAutoRefresh) return;
+    const logsVisible = activeTab === 'logs' || (activeTab === 'devices' && expandedDevice !== null && deviceSubTab === 'logs');
+    if (!extensionDetected || !logsVisible || !nativeLogAutoRefresh) return;
     const interval = setInterval(() => {
       if (lastNativeLogTs.current > 0) {
         fetchNativeLogs({ since: lastNativeLogTs.current });
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [extensionDetected, activeTab, nativeLogAutoRefresh, fetchNativeLogs]);
+  }, [extensionDetected, activeTab, deviceSubTab, expandedDevice, nativeLogAutoRefresh, fetchNativeLogs]);
 
-  // Fetch logs on tab open
+  // Fetch logs on tab/sub-tab open
   useEffect(() => {
-    if (activeTab === 'logs' && extensionDetected) {
-      fetchNativeLogs();
-    }
-  }, [activeTab, extensionDetected, fetchNativeLogs]);
+    if (!extensionDetected) return;
+    const logsVisible = activeTab === 'logs' || (activeTab === 'devices' && expandedDevice !== null && deviceSubTab === 'logs');
+    if (logsVisible) fetchNativeLogs();
+  }, [activeTab, deviceSubTab, expandedDevice, extensionDetected, fetchNativeLogs]);
 
   // Extension detection via bridge + log capture
   useEffect(() => {
@@ -664,11 +666,9 @@ export const ControlPanelPage: React.FC = () => {
 
   useEffect(() => {
     if (!extensionDetected) return;
-
     fetchLiveData();
-    const interval = setInterval(fetchLiveData, 15000);
-    return () => clearInterval(interval);
-  }, [extensionDetected, fetchLiveData]);
+    fetchNativeLogs();
+  }, [extensionDetected, fetchLiveData, fetchNativeLogs]);
 
   const addDevice = async () => {
     if (!newDeviceName.trim()) return;
@@ -1084,11 +1084,11 @@ export const ControlPanelPage: React.FC = () => {
                     }}>
                       <div
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', cursor: 'pointer' }}
-                        onClick={() => setExpandedDevice(isExpanded ? null : device.id)}
+                        onClick={() => { setExpandedDevice(isExpanded ? null : device.id); if (!isExpanded) setDeviceSubTab('info'); }}
                         role="button"
                         tabIndex={0}
                         aria-expanded={isExpanded}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDevice(isExpanded ? null : device.id); } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDevice(isExpanded ? null : device.id); if (!isExpanded) setDeviceSubTab('info'); } }}
                       >
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
@@ -1153,6 +1153,30 @@ export const ControlPanelPage: React.FC = () => {
                       {/* Expanded device details */}
                       {isExpanded && (
                         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          {/* Sub-tab navigation */}
+                          {isLiveDevice && (
+                            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '1rem' }}>
+                              {(['info', 'logs'] as const).map(tab => (
+                                <button
+                                  key={tab}
+                                  onClick={(e) => { e.stopPropagation(); setDeviceSubTab(tab); }}
+                                  style={{
+                                    background: deviceSubTab === tab ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
+                                    border: `1px solid ${deviceSubTab === tab ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                    borderRadius: '6px', padding: '0.3rem 0.7rem',
+                                    color: deviceSubTab === tab ? '#667eea' : 'rgba(255,255,255,0.5)',
+                                    cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
+                                  }}
+                                >
+                                  {tab === 'info' ? 'Info' : 'Logs'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Info sub-tab */}
+                          {deviceSubTab === 'info' && (
+                          <>
                           {/* Version info */}
                           {isLiveDevice && liveData.version?.version && (
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', fontSize: '0.8rem' }}>
@@ -1245,7 +1269,7 @@ export const ControlPanelPage: React.FC = () => {
                               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Skills ({liveData.skills.length})</div>
                               <details>
                                 <summary style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', marginBottom: '0.35rem' }}>
-                                  {liveData.skills.filter(s => !s.practitionerId && !s.pluginId).length} built-in · {liveData.skills.filter(s => s.practitionerId || s.pluginId).length} from plugins/practitioners
+                                  {liveData.skills.length} skills · {liveData.practitioners?.length || 0} practitioners · {liveData.plugins?.length || 0} standalone plugins
                                 </summary>
                                 <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                                   {liveData.skills.map((skill) => (
@@ -1350,7 +1374,7 @@ export const ControlPanelPage: React.FC = () => {
                                 Extension connected but native host not responding. Start it with <code style={{ background: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.3rem', borderRadius: '3px' }}>node bin/cli.js start</code> to see live data.
                               </div>
                               <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', margin: '0.5rem 0 0' }}>
-                                Auto-retrying every 15s...
+                                Use Refresh to retry.
                               </p>
                             </div>
                           )}
@@ -1367,6 +1391,176 @@ export const ControlPanelPage: React.FC = () => {
                               </p>
                             </div>
                           )}
+                          </>
+                          )}
+
+                          {/* Logs sub-tab */}
+                          {deviceSubTab === 'logs' && isLiveDevice && (
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  Native Host Logs
+                                  {nativeLogAutoRefresh && (
+                                    <span style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.3)', color: '#22c55e', fontSize: '0.6rem', fontWeight: 600, padding: '0.15rem 0.4rem', borderRadius: '999px' }}>Live</span>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setNativeLogAutoRefresh(!nativeLogAutoRefresh); }}
+                                    style={{
+                                      background: nativeLogAutoRefresh ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255,255,255,0.05)',
+                                      border: `1px solid ${nativeLogAutoRefresh ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                      borderRadius: '6px', padding: '0.3rem 0.6rem',
+                                      color: nativeLogAutoRefresh ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                                      cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
+                                    }}
+                                  >
+                                    Auto-refresh
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); fetchNativeLogs(selectedLogDay ? { date: selectedLogDay } : undefined); }}
+                                    disabled={nativeLogsLoading}
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '0.3rem 0.6rem', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.7rem' }}
+                                  >
+                                    {nativeLogsLoading ? 'Loading...' : 'Refresh'}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Day picker */}
+                              {nativeLogDays.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                                  {nativeLogDays.map(day => (
+                                    <button
+                                      key={day}
+                                      onClick={(e) => { e.stopPropagation(); setSelectedLogDay(day); fetchNativeLogs({ date: day }); }}
+                                      style={{
+                                        background: selectedLogDay === day ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.04)',
+                                        border: `1px solid ${selectedLogDay === day ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.06)'}`,
+                                        borderRadius: '6px', padding: '0.25rem 0.5rem',
+                                        color: selectedLogDay === day ? '#667eea' : 'rgba(255,255,255,0.5)',
+                                        cursor: 'pointer', fontSize: '0.65rem',
+                                      }}
+                                    >
+                                      {day}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Filters row */}
+                              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                  {['agent', 'mcp', 'skill', 'schedule', 'telegram', 'browser', 'system'].map(cat => {
+                                    const active = nativeLogCategories.size === 0 || nativeLogCategories.has(cat);
+                                    const catColors: Record<string, string> = { agent: '#667eea', mcp: '#22c55e', skill: '#a855f7', schedule: '#f59e0b', telegram: '#06b6d4', browser: '#ec4899', system: '#6b7280' };
+                                    return (
+                                      <button
+                                        key={cat}
+                                        onClick={(e) => { e.stopPropagation(); setNativeLogCategories(prev => { const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next; }); }}
+                                        style={{
+                                          background: active ? `${catColors[cat]}15` : 'transparent',
+                                          border: `1px solid ${active ? `${catColors[cat]}40` : 'rgba(255,255,255,0.06)'}`,
+                                          borderRadius: '4px', padding: '0.2rem 0.4rem',
+                                          color: active ? catColors[cat] : 'rgba(255,255,255,0.3)',
+                                          cursor: 'pointer', fontSize: '0.6rem',
+                                        }}
+                                      >
+                                        {cat}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.25rem', marginLeft: '0.5rem' }}>
+                                  {(['info', 'warn', 'error'] as const).map(lvl => {
+                                    const active = nativeLogLevels.has(lvl);
+                                    const lvlColor = lvl === 'error' ? '#ef4444' : lvl === 'warn' ? '#f59e0b' : 'rgba(255,255,255,0.5)';
+                                    return (
+                                      <button
+                                        key={lvl}
+                                        onClick={(e) => { e.stopPropagation(); setNativeLogLevels(prev => { const next = new Set(prev); if (next.has(lvl)) next.delete(lvl); else next.add(lvl); return next; }); }}
+                                        style={{
+                                          background: active ? `${lvlColor}15` : 'transparent',
+                                          border: `1px solid ${active ? `${lvlColor}40` : 'rgba(255,255,255,0.06)'}`,
+                                          borderRadius: '4px', padding: '0.2rem 0.4rem',
+                                          color: active ? lvlColor : 'rgba(255,255,255,0.3)',
+                                          cursor: 'pointer', fontSize: '0.6rem',
+                                        }}
+                                      >
+                                        {lvl}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={logSearch}
+                                  onChange={(e) => setLogSearch(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder="Search logs..."
+                                  style={{
+                                    marginLeft: 'auto', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#fff', fontSize: '0.7rem', outline: 'none', width: '10rem',
+                                  }}
+                                />
+                              </div>
+
+                              {/* Stats bar */}
+                              {nativeLogs.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
+                                  {Object.entries(nativeLogs.reduce((acc, l) => { acc[l.category] = (acc[l.category] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([cat, count]) => (
+                                    <span key={cat}>{cat}: {count}</span>
+                                  ))}
+                                  <span style={{ color: '#ef4444' }}>errors: {nativeLogs.filter(l => l.level === 'error').length}</span>
+                                </div>
+                              )}
+
+                              {/* Log entries */}
+                              <div style={{
+                                background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem',
+                                maxHeight: '24rem', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.7rem', lineHeight: 1.6,
+                              }}>
+                                {(() => {
+                                  const filtered = nativeLogs
+                                    .filter(l => nativeLogLevels.has(l.level))
+                                    .filter(l => nativeLogCategories.size === 0 || nativeLogCategories.has(l.category))
+                                    .filter(l => !logSearch || l.message.toLowerCase().includes(logSearch.toLowerCase()));
+                                  if (filtered.length === 0) {
+                                    return <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '2rem 0' }}>
+                                      {nativeLogs.length === 0 ? 'No native host logs available.' : 'No logs match current filters.'}
+                                    </div>;
+                                  }
+                                  return filtered.map((log, i) => {
+                                    const lvlColor = log.level === 'error' ? '#ef4444' : log.level === 'warn' ? '#f59e0b' : 'rgba(255,255,255,0.4)';
+                                    const catColors: Record<string, string> = { agent: '#667eea', mcp: '#22c55e', skill: '#a855f7', schedule: '#f59e0b', telegram: '#06b6d4', browser: '#ec4899', system: '#6b7280' };
+                                    return (
+                                      <div key={`${log.ts}-${i}`} style={{ display: 'flex', gap: '0.4rem', padding: '0.2rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)', alignItems: 'flex-start' }}>
+                                        <span style={{ color: 'rgba(255,255,255,0.2)', minWidth: '5.5rem', flexShrink: 0 }}>
+                                          {new Date(log.ts).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}.{String(log.ts % 1000).padStart(3, '0')}
+                                        </span>
+                                        <span style={{ color: lvlColor, minWidth: '0.5rem', flexShrink: 0 }}>
+                                          {log.level === 'error' ? '!' : log.level === 'warn' ? '*' : ' '}
+                                        </span>
+                                        <span style={{ color: catColors[log.category] || '#6b7280', minWidth: '4.5rem', flexShrink: 0, fontSize: '0.6rem', paddingTop: '0.1rem' }}>
+                                          {log.category}
+                                        </span>
+                                        <span style={{ color: log.level === 'error' ? '#fca5a5' : log.level === 'warn' ? '#fde68a' : 'rgba(255,255,255,0.75)', wordBreak: 'break-all', flex: 1 }}>
+                                          {log.message}
+                                          {log.data != null && (
+                                            <details style={{ display: 'inline' }}>
+                                              <summary style={{ color: 'rgba(255,255,255,0.25)', cursor: 'pointer', display: 'inline', marginLeft: '0.35rem' }}>[data]</summary>
+                                              <pre style={{ color: 'rgba(255,255,255,0.3)', margin: '0.2rem 0 0', fontSize: '0.6rem', whiteSpace: 'pre-wrap' }}>{JSON.stringify(log.data, null, 2)}</pre>
+                                            </details>
+                                          )}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          )}
+
                         </div>
                       )}
                     </div>
