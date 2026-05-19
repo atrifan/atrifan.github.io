@@ -70,9 +70,9 @@ interface LiveProviders {
 }
 
 interface LiveSkillsRaw {
-  skills?: Array<{ path?: string; name: string; id?: string; description?: string; docPath?: string; codePath?: string; matches?: string[]; autoActivate?: boolean; mcpServers?: string[]; practitionerId?: string; pluginId?: string }>;
+  skills?: Array<{ name: string; id?: string; description?: string; matches?: string[]; autoActivate?: boolean; hasCode?: boolean; mcpServers?: string[]; practitionerId?: string; pluginId?: string }>;
   practitioners?: Array<{ id: string; name: string; pluginCount?: number; skillCount?: number; plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number }> }>;
-  plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number }>;
+  plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number; bindings?: Array<{ practitionerId: string; priority?: string }>; skills?: Array<{ id: string; name: string; description?: string; matches?: string[] }> }>;
 }
 
 interface LiveSkill {
@@ -80,6 +80,8 @@ interface LiveSkill {
   name: string;
   description?: string;
   matches?: string[];
+  autoActivate?: boolean;
+  hasCode?: boolean;
   mcpServers?: string[];
   practitionerId?: string;
   pluginId?: string;
@@ -93,6 +95,8 @@ interface LivePlugin {
   startUrl?: string;
   mcpServers?: string[];
   skillCount?: number;
+  bindings?: Array<{ practitionerId: string; priority?: string }>;
+  skills?: Array<{ id: string; name: string; description?: string; matches?: string[] }>;
 }
 
 interface LivePractitioner {
@@ -526,8 +530,8 @@ export const ControlPanelPage: React.FC = () => {
     if (rawSkillsObj?.skills && rawSkillsObj.skills.length > 0) {
       skills = rawSkillsObj.skills.map(s => ({
         id: s.id || s.name, name: s.name, description: s.description,
-        matches: s.matches, mcpServers: s.mcpServers,
-        practitionerId: s.practitionerId, pluginId: s.pluginId,
+        matches: s.matches, autoActivate: s.autoActivate, hasCode: s.hasCode,
+        mcpServers: s.mcpServers, practitionerId: s.practitionerId, pluginId: s.pluginId,
       }));
     }
     if (rawSkillsObj?.practitioners && rawSkillsObj.practitioners.length > 0) {
@@ -543,6 +547,7 @@ export const ControlPanelPage: React.FC = () => {
       plugins = rawSkillsObj.plugins.map(pl => ({
         id: pl.id, name: pl.name, description: pl.description,
         matches: pl.matches, startUrl: pl.startUrl, mcpServers: pl.mcpServers, skillCount: pl.skillCount,
+        bindings: pl.bindings, skills: pl.skills,
       }));
     }
 
@@ -1252,11 +1257,11 @@ export const ControlPanelPage: React.FC = () => {
                           {/* Standalone Plugins */}
                           {isLiveDevice && liveData.plugins && liveData.plugins.length > 0 && (
                             <div style={{ marginBottom: '1rem' }}>
-                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Plugins ({liveData.plugins.length})</div>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Standalone Plugins ({liveData.plugins.length})</div>
                               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                                 {liveData.plugins.map((pl) => (
-                                  <span key={pl.id} style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }} title={pl.description}>
-                                    {pl.name}{pl.skillCount ? ` (${pl.skillCount} skills)` : ''}
+                                  <span key={pl.id} style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }} title={`${pl.description || ''}${pl.bindings?.length ? `\nBound to: ${pl.bindings.map(b => b.practitionerId).join(', ')}` : ''}`}>
+                                    {pl.name}{pl.skillCount ? ` (${pl.skillCount} skills)` : ''}{pl.bindings?.length ? ' →' : ''}
                                   </span>
                                 ))}
                               </div>
