@@ -70,13 +70,37 @@ interface LiveProviders {
 }
 
 interface LiveSkillsRaw {
-  skills?: Array<{ path?: string; name: string; id?: string; description?: string; docPath?: string; codePath?: string }>;
+  skills?: Array<{ path?: string; name: string; id?: string; description?: string; docPath?: string; codePath?: string; matches?: string[]; autoActivate?: boolean; mcpServers?: string[]; practitionerId?: string; pluginId?: string }>;
+  practitioners?: Array<{ id: string; name: string; pluginCount?: number; skillCount?: number; plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number }> }>;
+  plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number }>;
 }
 
 interface LiveSkill {
   id: string;
   name: string;
   description?: string;
+  matches?: string[];
+  mcpServers?: string[];
+  practitionerId?: string;
+  pluginId?: string;
+}
+
+interface LivePlugin {
+  id: string;
+  name: string;
+  description?: string;
+  matches?: string[];
+  startUrl?: string;
+  mcpServers?: string[];
+  skillCount?: number;
+}
+
+interface LivePractitioner {
+  id: string;
+  name: string;
+  pluginCount?: number;
+  skillCount?: number;
+  plugins: LivePlugin[];
 }
 
 interface LiveMCPServersRaw {
@@ -150,6 +174,8 @@ interface LiveData {
   usage: LiveUsage | null;
   providers: LiveProviders | null;
   skills: LiveSkill[] | null;
+  practitioners: LivePractitioner[] | null;
+  plugins: LivePlugin[] | null;
   mcpServers: LiveMCPServer[] | null;
   mcpTools: LiveMCPTool[] | null;
   schedules: LiveSchedule[] | null;
@@ -211,7 +237,7 @@ function generateDeviceName(): string {
 
 export const ControlPanelPage: React.FC = () => {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'docs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -238,6 +264,8 @@ export const ControlPanelPage: React.FC = () => {
     usage: null,
     providers: null,
     skills: null,
+    practitioners: null,
+    plugins: null,
     mcpServers: null,
     mcpTools: null,
     schedules: null,
@@ -253,8 +281,14 @@ export const ControlPanelPage: React.FC = () => {
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
 
-  const [serverPlan, setServerPlan] = useState<string | null>(null);
-  const plan = serverPlan || (user?.publicMetadata?.plan as string) || 'free';
+  // Logs
+  interface LogEntry { ts: number; source: 'bridge' | 'native'; direction: 'in' | 'out'; message: string; data?: unknown }
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logFilter, setLogFilter] = useState<'all' | 'bridge' | 'native'>('all');
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const [serverPlan, setServerPlan] = useState<string>('free');
+  const plan = serverPlan;
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -292,9 +326,17 @@ export const ControlPanelPage: React.FC = () => {
     }).catch(() => {});
   }, [fetchDevices, fetchUsage]);
 
-  // Extension detection via bridge
+  const addLog = useCallback((source: 'bridge' | 'native', direction: 'in' | 'out', message: string, data?: unknown) => {
+    setLogs(prev => {
+      const next = [...prev, { ts: Date.now(), source, direction, message, data }];
+      return next.length > 200 ? next.slice(-200) : next;
+    });
+  }, []);
+
+  // Extension detection via bridge + log capture
   useEffect(() => {
     extensionBridge.start();
+    addLog('bridge', 'out', 'discover (start)');
 
     if (extensionBridge.state === 'connected') {
       setExtensionDetected(true);
@@ -302,21 +344,30 @@ export const ControlPanelPage: React.FC = () => {
 
     const unsub = extensionBridge.onStateChange((state) => {
       setExtensionDetected(state === 'connected');
+      addLog('bridge', 'in', `state → ${state}`);
     });
 
-    // Also listen for key delivery ack
-    const handler = (e: MessageEvent) => {
-      if (e.data?.source === 'tex-extension' && e.data.action === 'device_activated' && e.data.success) {
-        setKeySentToExtension(true);
+    // Capture all messages for logging
+    const logHandler = (e: MessageEvent) => {
+      if (e.source !== window) return;
+      const d = e.data;
+      if (!d || typeof d !== 'object') return;
+      if (d.source === 'tex-extension') {
+        addLog('bridge', 'in', d.action, d.action === 'command_response' ? { id: d.id, ok: d.ok, error: d.error } : undefined);
+        if (d.action === 'device_activated' && d.success) {
+          setKeySentToExtension(true);
+        }
+      } else if (d.source === 'tulzo') {
+        addLog('bridge', 'out', d.action, d.action === 'command' ? { command: d.command, id: d.id } : undefined);
       }
     };
-    window.addEventListener('message', handler);
+    window.addEventListener('message', logHandler);
 
     return () => {
       unsub();
-      window.removeEventListener('message', handler);
+      window.removeEventListener('message', logHandler);
     };
-  }, []);
+  }, [addLog]);
 
   // Auto-activation: extension present + not already paired + user has 0 devices + paid plan
   useEffect(() => {
@@ -364,12 +415,160 @@ export const ControlPanelPage: React.FC = () => {
     })();
   }, [extensionDetected, loading, devices.length, plan, fetchDevices]);
 
-  // Fetch all live data from extension when connected and activated
+  // Transform raw responses into display-ready state
+  const transformRawData = useCallback((raw: {
+    usage?: LiveUsageRaw | { month?: string; totalCost?: number; providers?: Record<string, { totalCost: number; inputTokens: number; outputTokens: number; calls: number }>; today?: Record<string, { totalCost: number; inputTokens: number; outputTokens: number; calls: number }> };
+    providers?: LiveProvidersRaw;
+    skills?: LiveSkillsRaw;
+    mcpServers?: LiveMCPServersRaw | Array<{ id: string; name: string; connected: boolean; toolCount?: number }>;
+    mcpTools?: LiveMCPToolsRaw | Array<{ name: string; description?: string; serverId?: string }>;
+    schedules?: LiveSchedulesRaw | Array<{ id: string; cron: string; prompt: string; enabled: boolean }>;
+    browser?: LiveBrowserStatusRaw;
+    notifications?: LiveNotificationConfigRaw | { channels?: { telegram?: { enabled: boolean; chat_id?: string }; slack?: { enabled: boolean; webhook_url?: string } } };
+    version?: LiveVersionRaw | { version?: string; gitCommit?: string; platform?: string; arch?: string; nodeVersion?: string };
+    practitioners?: Array<{ id: string; name: string; pluginCount?: number; skillCount?: number; plugins?: Array<{ id: string; name: string; description?: string; matches?: string[] }> }>;
+  }): Omit<LiveData, 'loading' | 'lastFetched'> => {
+    // Usage
+    let usage: LiveUsage | null = null;
+    const usageData = (raw.usage && 'data' in raw.usage) ? raw.usage.data : raw.usage;
+    if (usageData && ('totalCost' in usageData || 'providers' in usageData)) {
+      let totalIn = 0, totalOut = 0;
+      const callsByProvider: Record<string, number> = {};
+      const providers = (usageData as { providers?: Record<string, { inputTokens: number; outputTokens: number; calls: number }> }).providers;
+      if (providers) {
+        for (const [name, p] of Object.entries(providers)) {
+          totalIn += p.inputTokens || 0;
+          totalOut += p.outputTokens || 0;
+          callsByProvider[name] = p.calls || 0;
+        }
+      }
+      usage = { monthly_cost: (usageData as { totalCost?: number }).totalCost || 0, tokens: { input: totalIn, output: totalOut }, calls_by_provider: callsByProvider };
+    }
+
+    // Providers
+    let providersResult: LiveProviders | null = null;
+    if (raw.providers?.providers && Object.keys(raw.providers.providers).length > 0) {
+      const active = raw.providers.activeProvider || '';
+      const list: LiveProviderDisplay[] = Object.entries(raw.providers.providers).map(([name, p]) => ({
+        name,
+        models: Object.values(p.models || {}),
+        active: name === active,
+      }));
+      const activeModels = raw.providers.providers[active]?.models;
+      providersResult = { providers: list, active_provider: active, active_model: activeModels?.orchestrator || '' };
+    }
+
+    // Skills + Practitioners + Plugins
+    let skills: LiveSkill[] | null = null;
+    let practitioners: LivePractitioner[] | null = null;
+    let plugins: LivePlugin[] | null = null;
+    const rawSkillsObj = raw.skills && 'skills' in raw.skills ? raw.skills : null;
+    if (rawSkillsObj?.skills && rawSkillsObj.skills.length > 0) {
+      skills = rawSkillsObj.skills.map(s => ({
+        id: s.id || s.name, name: s.name, description: s.description,
+        matches: s.matches, mcpServers: s.mcpServers,
+        practitionerId: s.practitionerId, pluginId: s.pluginId,
+      }));
+    }
+    if (rawSkillsObj?.practitioners && rawSkillsObj.practitioners.length > 0) {
+      practitioners = rawSkillsObj.practitioners.map(p => ({
+        id: p.id, name: p.name, pluginCount: p.pluginCount, skillCount: p.skillCount,
+        plugins: (p.plugins || []).map(pl => ({
+          id: pl.id, name: pl.name, description: pl.description,
+          matches: pl.matches, startUrl: pl.startUrl, mcpServers: pl.mcpServers, skillCount: pl.skillCount,
+        })),
+      }));
+    }
+    if (rawSkillsObj?.plugins && rawSkillsObj.plugins.length > 0) {
+      plugins = rawSkillsObj.plugins.map(pl => ({
+        id: pl.id, name: pl.name, description: pl.description,
+        matches: pl.matches, startUrl: pl.startUrl, mcpServers: pl.mcpServers, skillCount: pl.skillCount,
+      }));
+    }
+
+    // MCP Servers
+    let mcpServers: LiveMCPServer[] | null = null;
+    const serversList = raw.mcpServers && 'servers' in raw.mcpServers ? raw.mcpServers.servers : Array.isArray(raw.mcpServers) ? raw.mcpServers : null;
+    if (serversList && serversList.length > 0) {
+      mcpServers = serversList.map(s => ({ name: s.name, status: s.connected ? 'connected' : 'disconnected', tools_count: s.toolCount }));
+    }
+
+    // MCP Tools
+    let mcpTools: LiveMCPTool[] | null = null;
+    const toolsList = raw.mcpTools && 'tools' in raw.mcpTools ? raw.mcpTools.tools : Array.isArray(raw.mcpTools) ? raw.mcpTools : null;
+    if (toolsList && toolsList.length > 0) {
+      mcpTools = toolsList.map(t => ({ name: t.name, description: t.description, server: t.serverId }));
+    }
+
+    // Schedules
+    let schedules: LiveSchedule[] | null = null;
+    const schedList = raw.schedules && 'schedules' in raw.schedules ? raw.schedules.schedules : Array.isArray(raw.schedules) ? raw.schedules : null;
+    if (schedList && schedList.length > 0) {
+      schedules = schedList.map(s => ({ id: s.id, name: s.prompt, cron: s.cron, status: s.enabled ? 'active' : 'paused' }));
+    }
+
+    // Browser
+    let browserStatus: LiveBrowserStatus | null = null;
+    const bRaw = raw.browser;
+    if (bRaw && bRaw.running != null) {
+      browserStatus = { running: bRaw.running };
+    }
+
+    // Notifications
+    let notifications: LiveNotificationConfig | null = null;
+    const nRaw = raw.notifications && 'config' in raw.notifications ? raw.notifications.config : raw.notifications;
+    const channels = nRaw && 'channels' in (nRaw as object) ? (nRaw as { channels?: { telegram?: { enabled: boolean; chat_id?: string }; slack?: { enabled: boolean; webhook_url?: string } } }).channels : null;
+    if (channels) {
+      notifications = {};
+      if (channels.telegram) notifications.telegram = { enabled: channels.telegram.enabled, chat_id: channels.telegram.chat_id };
+      if (channels.slack) notifications.webhook = { enabled: channels.slack.enabled, url: channels.slack.webhook_url };
+    }
+
+    // Version
+    let version: LiveVersion | null = null;
+    const vRaw = raw.version && 'data' in raw.version ? raw.version.data : raw.version;
+    if (vRaw && (vRaw as { version?: string }).version) {
+      const v = vRaw as { version: string; gitCommit?: string; platform?: string; arch?: string; nodeVersion?: string };
+      version = { version: v.version, gitCommit: v.gitCommit || '', platform: v.platform || '', arch: v.arch || '', nodeVersion: v.nodeVersion || '' };
+    }
+
+    return { usage, providers: providersResult, skills, practitioners, plugins, mcpServers, mcpTools, schedules, browserStatus, notifications, version };
+  }, []);
+
+  // Fetch all live data — tries GET_DEVICE_INFO (single call), falls back to individual commands
   const fetchLiveData = useCallback(async () => {
     if (extensionBridge.state !== 'connected') return;
 
     setLiveData(prev => ({ ...prev, loading: true }));
 
+    // Try single-call GET_DEVICE_INFO first
+    try {
+      addLog('native', 'out', 'GET_DEVICE_INFO');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await extensionBridge.send<{ ok?: boolean; data?: any }>('GET_DEVICE_INFO');
+      addLog('native', 'in', 'GET_DEVICE_INFO response', { hasData: !!result?.data });
+      if (result?.data) {
+        const d = result.data;
+        const transformed = transformRawData({
+          usage: d.usage,
+          providers: d.providers,
+          skills: d.skills || d.practitioners || d.plugins ? { skills: d.skills, practitioners: d.practitioners, plugins: d.plugins } : undefined,
+          mcpServers: d.mcpServers,
+          mcpTools: d.mcpTools ? { tools: d.mcpTools } : undefined,
+          schedules: d.schedules ? { schedules: d.schedules } : undefined,
+          browser: d.browser,
+          notifications: d.notifications ? { config: d.notifications } : undefined,
+          version: d.version,
+        });
+        setLiveData({ ...transformed, loading: false, lastFetched: Date.now() });
+        return;
+      }
+    } catch (e) {
+      addLog('native', 'in', 'GET_DEVICE_INFO failed, falling back', { error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // Fallback: individual commands
+    addLog('native', 'out', 'Fetching 9 individual commands');
     const results = await Promise.allSettled([
       extensionBridge.send<LiveUsageRaw>('GET_USAGE'),
       extensionBridge.send<LiveProvidersRaw>('GET_PROVIDERS'),
@@ -385,98 +584,25 @@ export const ControlPanelPage: React.FC = () => {
     const fulfilled = <T,>(r: PromiseSettledResult<T>): T | null =>
       r.status === 'fulfilled' ? r.value : null;
 
-    // Transform raw responses into display shapes
-    const rawUsage = fulfilled(results[0]);
-    const rawProviders = fulfilled(results[1]);
-    const rawSkills = fulfilled(results[2]);
-    const rawServers = fulfilled(results[3]);
-    const rawTools = fulfilled(results[4]);
-    const rawSchedules = fulfilled(results[5]);
-    const rawBrowser = fulfilled(results[6]);
-    const rawNotif = fulfilled(results[7]);
-    const rawVersion = fulfilled(results[8]);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    const failedCmds = ['GET_USAGE', 'GET_PROVIDERS', 'LIST_SKILLS', 'MCP_LIST_SERVERS', 'MCP_LIST_TOOLS', 'SCHEDULE_LIST', 'DAEMON_BROWSER_STATUS', 'NOTIFICATION_GET_CONFIG', 'GET_VERSION']
+      .filter((_, i) => results[i].status === 'rejected');
+    addLog('native', 'in', `${successCount}/9 commands succeeded`, failedCmds.length > 0 ? { failed: failedCmds } : undefined);
 
-    // GET_USAGE → { ok, data: { totalCost, providers, today } }
-    let usage: LiveUsage | null = null;
-    const usageData = rawUsage?.data;
-    if (usageData && (usageData.totalCost != null || usageData.providers)) {
-      let totalIn = 0, totalOut = 0;
-      const callsByProvider: Record<string, number> = {};
-      if (usageData.providers) {
-        for (const [name, p] of Object.entries(usageData.providers)) {
-          totalIn += p.inputTokens || 0;
-          totalOut += p.outputTokens || 0;
-          callsByProvider[name] = p.calls || 0;
-        }
-      }
-      usage = { monthly_cost: usageData.totalCost || 0, tokens: { input: totalIn, output: totalOut }, calls_by_provider: callsByProvider };
-    }
-
-    // GET_PROVIDERS → { providers: { name: { type, models } }, activeProvider }
-    let providers: LiveProviders | null = null;
-    if (rawProviders?.providers && Object.keys(rawProviders.providers).length > 0) {
-      const active = rawProviders.activeProvider || '';
-      const list: LiveProviderDisplay[] = Object.entries(rawProviders.providers).map(([name, p]) => ({
-        name,
-        models: Object.values(p.models || {}),
-        active: name === active,
-      }));
-      const activeModels = rawProviders.providers[active]?.models;
-      providers = { providers: list, active_provider: active, active_model: activeModels?.orchestrator || '' };
-    }
-
-    // LIST_SKILLS → { skills: [{ name, id, description }] }
-    let skills: LiveSkill[] | null = null;
-    if (rawSkills?.skills && rawSkills.skills.length > 0) {
-      skills = rawSkills.skills.map(s => ({ id: s.id || s.name, name: s.name, description: s.description }));
-    }
-
-    // MCP_LIST_SERVERS → { servers: [{ id, name, connected, toolCount }] }
-    let mcpServers: LiveMCPServer[] | null = null;
-    if (rawServers?.servers && rawServers.servers.length > 0) {
-      mcpServers = rawServers.servers.map(s => ({ name: s.name, status: s.connected ? 'connected' : 'disconnected', tools_count: s.toolCount }));
-    }
-
-    // MCP_LIST_TOOLS → { tools: [{ name, description, serverId }] }
-    let mcpTools: LiveMCPTool[] | null = null;
-    if (rawTools?.tools && rawTools.tools.length > 0) {
-      mcpTools = rawTools.tools.map(t => ({ name: t.name, description: t.description, server: t.serverId }));
-    }
-
-    // SCHEDULE_LIST → { schedules: [{ id, cron, prompt, enabled }] }
-    let schedules: LiveSchedule[] | null = null;
-    if (rawSchedules?.schedules && rawSchedules.schedules.length > 0) {
-      schedules = rawSchedules.schedules.map(s => ({ id: s.id, name: s.prompt, cron: s.cron, status: s.enabled ? 'active' : 'paused' }));
-    }
-
-    // DAEMON_BROWSER_STATUS → { running: boolean }
-    let browserStatus: LiveBrowserStatus | null = null;
-    if (rawBrowser && rawBrowser.running != null) {
-      browserStatus = { running: rawBrowser.running };
-    }
-
-    // NOTIFICATION_GET_CONFIG → { config: { channels: { telegram, slack } } }
-    let notifications: LiveNotificationConfig | null = null;
-    if (rawNotif?.config?.channels) {
-      const ch = rawNotif.config.channels;
-      notifications = {};
-      if (ch.telegram) notifications.telegram = { enabled: ch.telegram.enabled, chat_id: ch.telegram.chat_id };
-      if (ch.slack) notifications.webhook = { enabled: ch.slack.enabled, url: ch.slack.webhook_url };
-    }
-
-    // GET_VERSION → { ok, data: { version, gitCommit, platform, arch, nodeVersion } }
-    let version: LiveVersion | null = null;
-    const vd = rawVersion?.data;
-    if (vd?.version) {
-      version = { version: vd.version, gitCommit: vd.gitCommit || '', platform: vd.platform || '', arch: vd.arch || '', nodeVersion: vd.nodeVersion || '' };
-    }
-
-    setLiveData({
-      usage, providers, skills, mcpServers, mcpTools, schedules, browserStatus, notifications, version,
-      loading: false,
-      lastFetched: Date.now(),
+    const transformed = transformRawData({
+      usage: fulfilled(results[0]) || undefined,
+      providers: fulfilled(results[1]) || undefined,
+      skills: fulfilled(results[2]) || undefined,
+      mcpServers: fulfilled(results[3]) || undefined,
+      mcpTools: fulfilled(results[4]) || undefined,
+      schedules: fulfilled(results[5]) || undefined,
+      browser: fulfilled(results[6]) || undefined,
+      notifications: fulfilled(results[7]) || undefined,
+      version: fulfilled(results[8]) || undefined,
     });
-  }, []);
+
+    setLiveData({ ...transformed, loading: false, lastFetched: Date.now() });
+  }, [transformRawData, addLog]);
 
   useEffect(() => {
     if (!extensionDetected) return;
@@ -648,7 +774,8 @@ export const ControlPanelPage: React.FC = () => {
           <button onClick={() => setActiveTab('overview')} style={tabStyle('overview')}>Overview</button>
           <button onClick={() => setActiveTab('devices')} style={tabStyle('devices')}>Devices</button>
           <button onClick={() => setActiveTab('usage')} style={tabStyle('usage')}>Usage</button>
-          <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Installation</button>
+          <button onClick={() => setActiveTab('logs')} style={tabStyle('logs')}>Logs</button>
+          <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Docs</button>
         </div>
 
         {/* Overview Tab */}
@@ -1012,17 +1139,68 @@ export const ControlPanelPage: React.FC = () => {
                             </div>
                           )}
 
+                          {/* Practitioners */}
+                          {isLiveDevice && liveData.practitioners && liveData.practitioners.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Practitioners ({liveData.practitioners.length})</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                {liveData.practitioners.map((p) => (
+                                  <div key={p.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '0.5rem 0.7rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: p.plugins.length > 0 ? '0.35rem' : '0' }}>
+                                      <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 600 }}>{p.name}</span>
+                                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>
+                                        {p.skillCount || 0} skills{p.pluginCount ? ` · ${p.pluginCount} plugins` : ''}
+                                      </span>
+                                    </div>
+                                    {p.plugins.length > 0 && (
+                                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', paddingLeft: '0.5rem' }}>
+                                        {p.plugins.map(pl => (
+                                          <span key={pl.id} style={{ background: 'rgba(102, 126, 234, 0.1)', border: '1px solid rgba(102, 126, 234, 0.15)', borderRadius: '5px', padding: '0.2rem 0.4rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)' }} title={pl.description}>
+                                            {pl.name}{pl.skillCount ? ` (${pl.skillCount})` : ''}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Standalone Plugins */}
+                          {isLiveDevice && liveData.plugins && liveData.plugins.length > 0 && (
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Plugins ({liveData.plugins.length})</div>
+                              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                {liveData.plugins.map((pl) => (
+                                  <span key={pl.id} style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }} title={pl.description}>
+                                    {pl.name}{pl.skillCount ? ` (${pl.skillCount} skills)` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Skills */}
                           {isLiveDevice && liveData.skills && liveData.skills.length > 0 && (
                             <div style={{ marginBottom: '1rem' }}>
                               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Skills ({liveData.skills.length})</div>
-                              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                {liveData.skills.map((skill) => (
-                                  <span key={skill.id} style={{ background: 'rgba(102, 126, 234, 0.1)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }} title={skill.description}>
-                                    {skill.name}
-                                  </span>
-                                ))}
-                              </div>
+                              <details>
+                                <summary style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer', marginBottom: '0.35rem' }}>
+                                  {liveData.skills.filter(s => !s.practitionerId && !s.pluginId).length} built-in · {liveData.skills.filter(s => s.practitionerId || s.pluginId).length} from plugins/practitioners
+                                </summary>
+                                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                  {liveData.skills.map((skill) => (
+                                    <span key={skill.id} style={{
+                                      background: skill.practitionerId ? 'rgba(34, 197, 94, 0.08)' : skill.pluginId ? 'rgba(168, 85, 247, 0.08)' : 'rgba(102, 126, 234, 0.08)',
+                                      border: `1px solid ${skill.practitionerId ? 'rgba(34, 197, 94, 0.15)' : skill.pluginId ? 'rgba(168, 85, 247, 0.15)' : 'rgba(102, 126, 234, 0.15)'}`,
+                                      borderRadius: '5px', padding: '0.2rem 0.4rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)',
+                                    }} title={`${skill.description || ''}${skill.matches?.length ? `\nMatches: ${skill.matches.join(', ')}` : ''}`}>
+                                      {skill.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </details>
                             </div>
                           )}
 
@@ -1436,6 +1614,113 @@ export const ControlPanelPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </>
+        )}
+
+        {/* Logs Tab */}
+        {activeTab === 'logs' && (
+          <>
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
+                  Activity Log
+                </h3>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  {(['all', 'bridge', 'native'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setLogFilter(f)}
+                      style={{
+                        background: logFilter === f ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
+                        border: logFilter === f ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.6rem',
+                        color: logFilter === f ? '#667eea' : 'rgba(255,255,255,0.5)',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {f === 'all' ? 'All' : f === 'bridge' ? 'Bridge' : 'Native Host'}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setLogs([])}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.6rem',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '8px',
+                padding: '0.75rem',
+                maxHeight: '28rem',
+                overflowY: 'auto',
+                fontFamily: 'monospace',
+                fontSize: '0.72rem',
+                lineHeight: 1.6,
+              }}>
+                {logs.filter(l => logFilter === 'all' || l.source === logFilter).length === 0 ? (
+                  <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '2rem 0' }}>
+                    No logs yet. Activity will appear here in real-time.
+                  </div>
+                ) : (
+                  logs.filter(l => logFilter === 'all' || l.source === logFilter).map((log, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.5rem', padding: '0.15rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.25)', minWidth: '5rem', flexShrink: 0 }}>
+                        {new Date(log.ts).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                      <span style={{
+                        minWidth: '3.5rem',
+                        flexShrink: 0,
+                        color: log.source === 'bridge' ? '#22c55e' : '#667eea',
+                        fontWeight: 500,
+                      }}>
+                        {log.source === 'bridge' ? 'BRIDGE' : 'NATIVE'}
+                      </span>
+                      <span style={{
+                        color: log.direction === 'out' ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255,255,255,0.6)',
+                        minWidth: '1.5rem',
+                        flexShrink: 0,
+                      }}>
+                        {log.direction === 'out' ? '→' : '←'}
+                      </span>
+                      <span style={{ color: 'rgba(255,255,255,0.8)', wordBreak: 'break-all' }}>
+                        {log.message}
+                        {log.data != null && (
+                          <span style={{ color: 'rgba(255,255,255,0.35)', marginLeft: '0.5rem' }}>
+                            {JSON.stringify(log.data)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))
+                )}
+                <div ref={logsEndRef} />
+              </div>
+
+              {logs.length > 0 && (
+                <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
+                    {logs.length} entries (max 200)
+                  </span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
+                    Bridge: {logs.filter(l => l.source === 'bridge').length} | Native: {logs.filter(l => l.source === 'native').length}
+                  </span>
+                </div>
+              )}
             </div>
           </>
         )}
