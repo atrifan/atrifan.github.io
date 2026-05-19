@@ -282,10 +282,22 @@ export const ControlPanelPage: React.FC = () => {
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
 
   // Logs
-  interface LogEntry { ts: number; source: 'bridge' | 'native'; direction: 'in' | 'out'; message: string; data?: unknown }
+  interface LogEntry { ts: number; source: 'bridge' | 'native'; direction: 'in' | 'out'; message: string; data?: unknown; level?: string; category?: string }
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logFilter, setLogFilter] = useState<'all' | 'bridge' | 'native'>('all');
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Native host logs (from GET_LOGS)
+  interface NativeLogEntry { ts: number; level: 'info' | 'warn' | 'error'; category: string; message: string; data?: unknown }
+  const [nativeLogs, setNativeLogs] = useState<NativeLogEntry[]>([]);
+  const [nativeLogDays, setNativeLogDays] = useState<string[]>([]);
+  const [selectedLogDay, setSelectedLogDay] = useState<string>('');
+  const [nativeLogCategories, setNativeLogCategories] = useState<Set<string>>(new Set());
+  const [nativeLogLevels, setNativeLogLevels] = useState<Set<string>>(new Set(['info', 'warn', 'error']));
+  const [logSearch, setLogSearch] = useState('');
+  const [nativeLogsLoading, setNativeLogsLoading] = useState(false);
+  const [nativeLogAutoRefresh, setNativeLogAutoRefresh] = useState(true);
+  const lastNativeLogTs = useRef<number>(0);
 
   const [serverPlan, setServerPlan] = useState<string>('free');
   const plan = serverPlan;
@@ -332,6 +344,52 @@ export const ControlPanelPage: React.FC = () => {
       return next.length > 200 ? next.slice(-200) : next;
     });
   }, []);
+
+  const fetchNativeLogs = useCallback(async (params?: { date?: string; since?: number }) => {
+    if (extensionBridge.state !== 'connected') return;
+    try {
+      setNativeLogsLoading(true);
+      const result = await extensionBridge.send<{ ok?: boolean; files?: string[]; logs?: NativeLogEntry[]; date?: string }>('GET_LOGS', params || {});
+      if (result?.files) {
+        setNativeLogDays(result.files.map(f => f.replace('.jsonl', '')));
+      }
+      if (result?.logs && result.logs.length > 0) {
+        if (params?.since) {
+          setNativeLogs(prev => [...prev, ...result.logs!]);
+        } else {
+          setNativeLogs(result.logs);
+        }
+        const maxTs = Math.max(...result.logs.map(l => l.ts));
+        if (maxTs > lastNativeLogTs.current) lastNativeLogTs.current = maxTs;
+        const cats = new Set(result.logs.map(l => l.category));
+        setNativeLogCategories(prev => new Set([...prev, ...cats]));
+      } else if (!params?.since) {
+        setNativeLogs([]);
+      }
+    } catch {
+      // GET_LOGS not available
+    } finally {
+      setNativeLogsLoading(false);
+    }
+  }, []);
+
+  // Auto-refresh native logs
+  useEffect(() => {
+    if (!extensionDetected || activeTab !== 'logs' || !nativeLogAutoRefresh) return;
+    const interval = setInterval(() => {
+      if (lastNativeLogTs.current > 0) {
+        fetchNativeLogs({ since: lastNativeLogTs.current });
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [extensionDetected, activeTab, nativeLogAutoRefresh, fetchNativeLogs]);
+
+  // Fetch logs on tab open
+  useEffect(() => {
+    if (activeTab === 'logs' && extensionDetected) {
+      fetchNativeLogs();
+    }
+  }, [activeTab, extensionDetected, fetchNativeLogs]);
 
   // Extension detection via bridge + log capture
   useEffect(() => {
@@ -1621,104 +1679,242 @@ export const ControlPanelPage: React.FC = () => {
         {/* Logs Tab */}
         {activeTab === 'logs' && (
           <>
+            {/* Native Host Logs */}
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
-                  Activity Log
+                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  Native Host Logs
+                  {nativeLogAutoRefresh && extensionDetected && (
+                    <span style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.3)', color: '#22c55e', fontSize: '0.6rem', fontWeight: 600, padding: '0.15rem 0.4rem', borderRadius: '999px' }}>
+                      Live
+                    </span>
+                  )}
+                </h3>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setNativeLogAutoRefresh(!nativeLogAutoRefresh)}
+                    style={{
+                      background: nativeLogAutoRefresh ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${nativeLogAutoRefresh ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: '6px', padding: '0.3rem 0.6rem',
+                      color: nativeLogAutoRefresh ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                      cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
+                    }}
+                  >
+                    Auto-refresh
+                  </button>
+                  <button
+                    onClick={() => fetchNativeLogs(selectedLogDay ? { date: selectedLogDay } : undefined)}
+                    disabled={nativeLogsLoading}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '0.3rem 0.6rem', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.7rem' }}
+                  >
+                    {nativeLogsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+              </div>
+
+              {!extensionDetected ? (
+                <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '2rem 0' }}>
+                  Device offline — logs unavailable
+                </div>
+              ) : (
+                <>
+                  {/* Day picker */}
+                  {nativeLogDays.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                      {nativeLogDays.map(day => (
+                        <button
+                          key={day}
+                          onClick={() => { setSelectedLogDay(day); fetchNativeLogs({ date: day }); }}
+                          style={{
+                            background: selectedLogDay === day ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${selectedLogDay === day ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.06)'}`,
+                            borderRadius: '6px', padding: '0.25rem 0.5rem',
+                            color: selectedLogDay === day ? '#667eea' : 'rgba(255,255,255,0.5)',
+                            cursor: 'pointer', fontSize: '0.65rem',
+                          }}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Filters row */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center' }}>
+                    {/* Category filters */}
+                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                      {['agent', 'mcp', 'skill', 'schedule', 'telegram', 'browser', 'system'].map(cat => {
+                        const active = nativeLogCategories.size === 0 || nativeLogCategories.has(cat);
+                        const catColors: Record<string, string> = { agent: '#667eea', mcp: '#22c55e', skill: '#a855f7', schedule: '#f59e0b', telegram: '#06b6d4', browser: '#ec4899', system: '#6b7280' };
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() => setNativeLogCategories(prev => {
+                              const next = new Set(prev);
+                              if (next.has(cat)) next.delete(cat); else next.add(cat);
+                              return next;
+                            })}
+                            style={{
+                              background: active ? `${catColors[cat]}15` : 'transparent',
+                              border: `1px solid ${active ? `${catColors[cat]}40` : 'rgba(255,255,255,0.06)'}`,
+                              borderRadius: '4px', padding: '0.2rem 0.4rem',
+                              color: active ? catColors[cat] : 'rgba(255,255,255,0.3)',
+                              cursor: 'pointer', fontSize: '0.6rem',
+                            }}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Level filters */}
+                    <div style={{ display: 'flex', gap: '0.25rem', marginLeft: '0.5rem' }}>
+                      {(['info', 'warn', 'error'] as const).map(lvl => {
+                        const active = nativeLogLevels.has(lvl);
+                        const lvlColor = lvl === 'error' ? '#ef4444' : lvl === 'warn' ? '#f59e0b' : 'rgba(255,255,255,0.5)';
+                        return (
+                          <button
+                            key={lvl}
+                            onClick={() => setNativeLogLevels(prev => {
+                              const next = new Set(prev);
+                              if (next.has(lvl)) next.delete(lvl); else next.add(lvl);
+                              return next;
+                            })}
+                            style={{
+                              background: active ? `${lvlColor}15` : 'transparent',
+                              border: `1px solid ${active ? `${lvlColor}40` : 'rgba(255,255,255,0.06)'}`,
+                              borderRadius: '4px', padding: '0.2rem 0.4rem',
+                              color: active ? lvlColor : 'rgba(255,255,255,0.3)',
+                              cursor: 'pointer', fontSize: '0.6rem',
+                            }}
+                          >
+                            {lvl}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Search */}
+                    <input
+                      type="text"
+                      value={logSearch}
+                      onChange={(e) => setLogSearch(e.target.value)}
+                      placeholder="Search logs..."
+                      style={{
+                        marginLeft: 'auto', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '6px', padding: '0.3rem 0.6rem', color: '#fff', fontSize: '0.7rem', outline: 'none', width: '10rem',
+                      }}
+                    />
+                  </div>
+
+                  {/* Stats bar */}
+                  {nativeLogs.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
+                      {Object.entries(nativeLogs.reduce((acc, l) => { acc[l.category] = (acc[l.category] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([cat, count]) => (
+                        <span key={cat}>{cat}: {count}</span>
+                      ))}
+                      <span style={{ color: '#ef4444' }}>errors: {nativeLogs.filter(l => l.level === 'error').length}</span>
+                    </div>
+                  )}
+
+                  {/* Log entries */}
+                  <div style={{
+                    background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem',
+                    maxHeight: '24rem', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.7rem', lineHeight: 1.6,
+                  }}>
+                    {(() => {
+                      const filtered = nativeLogs
+                        .filter(l => nativeLogLevels.has(l.level))
+                        .filter(l => nativeLogCategories.size === 0 || nativeLogCategories.has(l.category))
+                        .filter(l => !logSearch || l.message.toLowerCase().includes(logSearch.toLowerCase()));
+                      if (filtered.length === 0) {
+                        return <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '2rem 0' }}>
+                          {nativeLogs.length === 0 ? 'No native host logs available.' : 'No logs match current filters.'}
+                        </div>;
+                      }
+                      return filtered.map((log, i) => {
+                        const lvlColor = log.level === 'error' ? '#ef4444' : log.level === 'warn' ? '#f59e0b' : 'rgba(255,255,255,0.4)';
+                        const catColors: Record<string, string> = { agent: '#667eea', mcp: '#22c55e', skill: '#a855f7', schedule: '#f59e0b', telegram: '#06b6d4', browser: '#ec4899', system: '#6b7280' };
+                        return (
+                          <div key={`${log.ts}-${i}`} style={{ display: 'flex', gap: '0.4rem', padding: '0.2rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)', alignItems: 'flex-start' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.2)', minWidth: '5.5rem', flexShrink: 0 }}>
+                              {new Date(log.ts).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}.{String(log.ts % 1000).padStart(3, '0')}
+                            </span>
+                            <span style={{ color: lvlColor, minWidth: '0.5rem', flexShrink: 0 }}>
+                              {log.level === 'error' ? '!' : log.level === 'warn' ? '*' : ' '}
+                            </span>
+                            <span style={{ color: catColors[log.category] || '#6b7280', minWidth: '4.5rem', flexShrink: 0, fontSize: '0.6rem', paddingTop: '0.1rem' }}>
+                              {log.category}
+                            </span>
+                            <span style={{ color: log.level === 'error' ? '#fca5a5' : log.level === 'warn' ? '#fde68a' : 'rgba(255,255,255,0.75)', wordBreak: 'break-all', flex: 1 }}>
+                              {log.message}
+                              {log.data != null && (
+                                <details style={{ display: 'inline' }}>
+                                  <summary style={{ color: 'rgba(255,255,255,0.25)', cursor: 'pointer', display: 'inline', marginLeft: '0.35rem' }}>[data]</summary>
+                                  <pre style={{ color: 'rgba(255,255,255,0.3)', margin: '0.2rem 0 0', fontSize: '0.6rem', whiteSpace: 'pre-wrap' }}>{JSON.stringify(log.data, null, 2)}</pre>
+                                </details>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Bridge Logs */}
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: 0 }}>
+                  Bridge Messages
                 </h3>
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                   {(['all', 'bridge', 'native'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setLogFilter(f)}
-                      style={{
-                        background: logFilter === f ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
-                        border: logFilter === f ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '6px',
-                        padding: '0.3rem 0.6rem',
-                        color: logFilter === f ? '#667eea' : 'rgba(255,255,255,0.5)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {f === 'all' ? 'All' : f === 'bridge' ? 'Bridge' : 'Native Host'}
+                    <button key={f} onClick={() => setLogFilter(f)} style={{
+                      background: logFilter === f ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
+                      border: logFilter === f ? '1px solid rgba(102, 126, 234, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '6px', padding: '0.25rem 0.5rem', color: logFilter === f ? '#667eea' : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.65rem',
+                    }}>
+                      {f === 'all' ? 'All' : f === 'bridge' ? 'Extension' : 'Commands'}
                     </button>
                   ))}
-                  <button
-                    onClick={() => setLogs([])}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.2)',
-                      borderRadius: '6px',
-                      padding: '0.3rem 0.6rem',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      fontSize: '0.7rem',
-                    }}
-                  >
+                  <button onClick={() => setLogs([])} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', padding: '0.25rem 0.5rem', color: '#ef4444', cursor: 'pointer', fontSize: '0.65rem' }}>
                     Clear
                   </button>
                 </div>
               </div>
 
-              <div style={{
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: '8px',
-                padding: '0.75rem',
-                maxHeight: '28rem',
-                overflowY: 'auto',
-                fontFamily: 'monospace',
-                fontSize: '0.72rem',
-                lineHeight: 1.6,
-              }}>
+              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem', maxHeight: '12rem', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.68rem', lineHeight: 1.6 }}>
                 {logs.filter(l => logFilter === 'all' || l.source === logFilter).length === 0 ? (
-                  <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '2rem 0' }}>
-                    No logs yet. Activity will appear here in real-time.
+                  <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '1rem 0' }}>
+                    No bridge messages yet.
                   </div>
                 ) : (
                   logs.filter(l => logFilter === 'all' || l.source === logFilter).map((log, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '0.5rem', padding: '0.15rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.25)', minWidth: '5rem', flexShrink: 0 }}>
+                    <div key={i} style={{ display: 'flex', gap: '0.4rem', padding: '0.1rem 0', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.2)', minWidth: '5rem', flexShrink: 0 }}>
                         {new Date(log.ts).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
-                      <span style={{
-                        minWidth: '3.5rem',
-                        flexShrink: 0,
-                        color: log.source === 'bridge' ? '#22c55e' : '#667eea',
-                        fontWeight: 500,
-                      }}>
-                        {log.source === 'bridge' ? 'BRIDGE' : 'NATIVE'}
-                      </span>
-                      <span style={{
-                        color: log.direction === 'out' ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255,255,255,0.6)',
-                        minWidth: '1.5rem',
-                        flexShrink: 0,
-                      }}>
+                      <span style={{ color: log.direction === 'out' ? 'rgba(251, 191, 36, 0.7)' : 'rgba(255,255,255,0.5)', minWidth: '1rem', flexShrink: 0 }}>
                         {log.direction === 'out' ? '→' : '←'}
                       </span>
-                      <span style={{ color: 'rgba(255,255,255,0.8)', wordBreak: 'break-all' }}>
+                      <span style={{ color: log.source === 'bridge' ? '#22c55e' : '#667eea', minWidth: '2.5rem', flexShrink: 0 }}>
+                        {log.source === 'bridge' ? 'EXT' : 'CMD'}
+                      </span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>
                         {log.message}
-                        {log.data != null && (
-                          <span style={{ color: 'rgba(255,255,255,0.35)', marginLeft: '0.5rem' }}>
-                            {JSON.stringify(log.data)}
-                          </span>
-                        )}
+                        {log.data != null && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '0.3rem' }}>{JSON.stringify(log.data)}</span>}
                       </span>
                     </div>
                   ))
                 )}
                 <div ref={logsEndRef} />
               </div>
-
               {logs.length > 0 && (
-                <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
-                    {logs.length} entries (max 200)
-                  </span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>
-                    Bridge: {logs.filter(l => l.source === 'bridge').length} | Native: {logs.filter(l => l.source === 'native').length}
-                  </span>
+                <div style={{ marginTop: '0.35rem', color: 'rgba(255,255,255,0.25)', fontSize: '0.65rem' }}>
+                  {logs.length} entries | Bridge: {logs.filter(l => l.source === 'bridge').length} | Commands: {logs.filter(l => l.source === 'native').length}
                 </div>
               )}
             </div>
