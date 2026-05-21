@@ -630,6 +630,58 @@ export interface RestApiEndpointUpdate {
 /**
  * Full database schema type for Supabase client
  */
+// ============ Packages Table ============
+
+export interface PackageRow {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 'plugin' | 'skill' | 'practitioner';
+  latest_version: string;
+  blob_url: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+}
+
+export interface PackageInsert {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'plugin' | 'skill' | 'practitioner';
+  latest_version: string;
+  blob_url: string;
+  created_by: string;
+  updated_at?: string;
+}
+
+export interface PackageUpdate {
+  name?: string;
+  description?: string;
+  type?: 'plugin' | 'skill' | 'practitioner';
+  latest_version?: string;
+  blob_url?: string;
+  updated_at?: string;
+}
+
+// ============ Package Versions Table ============
+
+export interface PackageVersionRow {
+  id: string;
+  package_id: string;
+  version: string;
+  blob_url: string;
+  changelog: string | null;
+  created_at: string;
+}
+
+export interface PackageVersionInsert {
+  package_id: string;
+  version: string;
+  blob_url: string;
+  changelog?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -707,6 +759,16 @@ export interface Database {
         Row: DeviceHeartbeatRow;
         Insert: DeviceHeartbeatInsert;
         Update: DeviceHeartbeatUpdate;
+      };
+      packages: {
+        Row: PackageRow;
+        Insert: PackageInsert;
+        Update: PackageUpdate;
+      };
+      package_versions: {
+        Row: PackageVersionRow;
+        Insert: PackageVersionInsert;
+        Update: never;
       };
     };
   };

@@ -1,11 +1,15 @@
 'use client';
 
-import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/nextjs';
+import { SignedIn, SignedOut, UserButton, SignInButton, useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useState } from 'react';
 
+const ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
+
 export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user } = useUser();
+  const isAdmin = user?.emailAddresses?.some(e => ADMIN_EMAILS.includes(e.emailAddress));
 
   return (
     <header style={{
@@ -40,6 +44,11 @@ export const Header: React.FC = () => {
               <Link href="/dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
                 Control Panel
               </Link>
+              {isAdmin && (
+                <Link href="/dashboard/admin/packages" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
+                  Package Admin
+                </Link>
+              )}
             </SignedIn>
           </div>
 
@@ -109,6 +118,11 @@ export const Header: React.FC = () => {
             <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '0.9rem' }}>
               Control Panel
             </Link>
+            {isAdmin && (
+              <Link href="/dashboard/admin/packages" onClick={() => setMobileMenuOpen(false)} style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '0.9rem' }}>
+                Package Admin
+              </Link>
+            )}
           </SignedIn>
         </div>
       )}

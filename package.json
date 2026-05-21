@@ -22,6 +22,7 @@
     "@spectrum-icons/illustrations": "^3.6.14",
     "@spectrum-icons/workflow": "^4.2.13",
     "@supabase/supabase-js": "^2.78.0",
+    "@vercel/blob": "^1.1.1",
     "ai": "^6.0.26",
     "dotenv": "^17.2.3",
     "graphql": "^16.12.0",

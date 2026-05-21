@@ -239,9 +239,268 @@ function generateDeviceName(): string {
   return `${browser} on ${os}`;
 }
 
+interface InstalledPkg {
+  id: string;
+  type: string;
+  version?: string;
+  name?: string;
+}
+
+interface AvailablePkg {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  latest_version: string;
+  blob_url: string;
+}
+
+interface ExtBridge {
+  state: string;
+  send<T = unknown>(command: string, params: Record<string, unknown>): Promise<T>;
+}
+
+function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extensionBridge: ExtBridge; extensionDetected: boolean }) {
+  const [packages, setPackages] = useState<AvailablePkg[]>([]);
+  const [installed, setInstalled] = useState<InstalledPkg[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+
+  const fetchAvailable = useCallback(async () => {
+    try {
+      const res = await fetch('/api/packages');
+      if (res.ok) {
+        const data = await res.json();
+        setPackages(data.packages || []);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  const fetchInstalled = useCallback(async () => {
+    if (!extensionDetected || bridge.state !== 'connected') return;
+    try {
+      const result = await bridge.send<{ packages?: InstalledPkg[] }>('LIST_INSTALLED', {});
+      setInstalled(result?.packages || []);
+    } catch { /* device may not support command yet */ }
+  }, [bridge, extensionDetected]);
+
+  useEffect(() => {
+    fetchAvailable();
+  }, [fetchAvailable]);
+
+  useEffect(() => {
+    fetchInstalled();
+  }, [fetchInstalled]);
+
+  const getStatus = (pkg: AvailablePkg) => {
+    const inst = installed.find(i => i.id === pkg.id);
+    if (!inst) return 'not_installed';
+    if (inst.version && inst.version !== pkg.latest_version) return 'update_available';
+    return 'installed';
+  };
+
+  const handleInstall = async (pkg: AvailablePkg) => {
+    setActionId(pkg.id);
+    setActionErr(null);
+    try {
+      await bridge.send('INSTALL_PACKAGE', {
+        type: pkg.type,
+        id: pkg.id,
+        source: pkg.blob_url,
+        sourceType: 'archive',
+      });
+      await fetchInstalled();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : 'Install failed');
+    }
+    setActionId(null);
+  };
+
+  const handleUpdate = async (pkg: AvailablePkg) => {
+    setActionId(pkg.id);
+    setActionErr(null);
+    try {
+      await bridge.send('INSTALL_PACKAGE', {
+        type: pkg.type,
+        id: pkg.id,
+        source: pkg.blob_url,
+        sourceType: 'archive',
+        update: true,
+      });
+      await fetchInstalled();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : 'Update failed');
+    }
+    setActionId(null);
+  };
+
+  const handleRemove = async (pkg: AvailablePkg) => {
+    setActionId(pkg.id);
+    setActionErr(null);
+    try {
+      await bridge.send('UNINSTALL_PACKAGE', { id: pkg.id, type: pkg.type });
+      await fetchInstalled();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : 'Remove failed');
+    }
+    setActionId(null);
+  };
+
+  const cardStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px',
+    padding: '1.5rem',
+    marginBottom: '1.5rem',
+  };
+
+  const typeBadgeStyle = (type: string): React.CSSProperties => ({
+    display: 'inline-block',
+    padding: '0.15rem 0.5rem',
+    borderRadius: '999px',
+    fontSize: '0.7rem',
+    fontWeight: 500,
+    background: type === 'plugin' ? 'rgba(59, 130, 246, 0.15)' : type === 'skill' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+    color: type === 'plugin' ? '#3b82f6' : type === 'skill' ? '#22c55e' : '#a855f7',
+    border: `1px solid ${type === 'plugin' ? 'rgba(59, 130, 246, 0.3)' : type === 'skill' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
+  });
+
+  if (loading) {
+    return <div style={cardStyle}><p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>Loading packages...</p></div>;
+  }
+
+  if (packages.length === 0) {
+    return <div style={cardStyle}><p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>No packages available yet.</p></div>;
+  }
+
+  return (
+    <>
+      {!extensionDetected && (
+        <div style={{ ...cardStyle, background: 'rgba(234, 179, 8, 0.06)', borderColor: 'rgba(234, 179, 8, 0.2)' }}>
+          <p style={{ color: '#eab308', fontSize: '0.85rem', margin: 0 }}>
+            Extension not connected. Install the browser extension and refresh this page to install packages on your device.
+          </p>
+        </div>
+      )}
+
+      {actionErr && (
+        <div style={{ ...cardStyle, background: 'rgba(239, 68, 68, 0.06)', borderColor: 'rgba(239, 68, 68, 0.2)', padding: '0.75rem 1rem' }}>
+          <span style={{ color: '#ef4444', fontSize: '0.85rem' }}>{actionErr}</span>
+        </div>
+      )}
+
+      <div style={cardStyle}>
+        <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          Available Packages
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.8rem' }}>({packages.length})</span>
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {packages.map(pkg => {
+            const status = getStatus(pkg);
+            const busy = actionId === pkg.id;
+            const instVersion = installed.find(i => i.id === pkg.id)?.version;
+
+            return (
+              <div key={pkg.id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                padding: '0.75rem 1rem',
+                background: 'rgba(255,255,255,0.02)',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                    <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{pkg.name}</span>
+                    <span style={typeBadgeStyle(pkg.type)}>{pkg.type}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>v{pkg.latest_version}</span>
+                  </div>
+                  {pkg.description && (
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pkg.description}
+                    </div>
+                  )}
+                  {status === 'installed' && (
+                    <div style={{ color: '#22c55e', fontSize: '0.7rem', marginTop: '0.2rem' }}>Installed{instVersion ? ` (v${instVersion})` : ''}</div>
+                  )}
+                  {status === 'update_available' && (
+                    <div style={{ color: '#eab308', fontSize: '0.7rem', marginTop: '0.2rem' }}>Update available: v{instVersion} → v{pkg.latest_version}</div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                  {status === 'not_installed' && (
+                    <button
+                      onClick={() => handleInstall(pkg)}
+                      disabled={!extensionDetected || busy}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: extensionDetected && !busy ? 'pointer' : 'not-allowed',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: '#fff',
+                        opacity: !extensionDetected || busy ? 0.5 : 1,
+                      }}
+                    >
+                      {busy ? '...' : 'Install'}
+                    </button>
+                  )}
+                  {status === 'update_available' && (
+                    <button
+                      onClick={() => handleUpdate(pkg)}
+                      disabled={!extensionDetected || busy}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: extensionDetected && !busy ? 'pointer' : 'not-allowed',
+                        background: 'rgba(234, 179, 8, 0.2)',
+                        color: '#eab308',
+                        opacity: !extensionDetected || busy ? 0.5 : 1,
+                      }}
+                    >
+                      {busy ? '...' : 'Update'}
+                    </button>
+                  )}
+                  {(status === 'installed' || status === 'update_available') && (
+                    <button
+                      onClick={() => handleRemove(pkg)}
+                      disabled={!extensionDetected || busy}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: extensionDetected && !busy ? 'pointer' : 'not-allowed',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#ef4444',
+                        opacity: !extensionDetected || busy ? 0.5 : 1,
+                      }}
+                    >
+                      {busy ? '...' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export const ControlPanelPage: React.FC = () => {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -839,6 +1098,7 @@ export const ControlPanelPage: React.FC = () => {
           <button onClick={() => setActiveTab('usage')} style={tabStyle('usage')}>Usage</button>
           <button onClick={() => setActiveTab('logs')} style={tabStyle('logs')}>Logs</button>
           <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Docs</button>
+          <button onClick={() => setActiveTab('packages')} style={tabStyle('packages')}>Packages</button>
         </div>
 
         {/* Overview Tab */}
@@ -2595,6 +2855,10 @@ export const ControlPanelPage: React.FC = () => {
 
             <AdBanner slot={ADS_CONFIG.slots.pricingFooter} style={{ marginTop: '1rem' }} />
           </>
+        )}
+
+        {activeTab === 'packages' && (
+          <PackagesTab extensionBridge={extensionBridge} extensionDetected={extensionDetected} />
         )}
       </main>
 
