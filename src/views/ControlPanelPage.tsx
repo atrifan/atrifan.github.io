@@ -279,12 +279,18 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
     setLoading(false);
   }, []);
 
+  const [mcpServers, setMcpServers] = useState<Array<{ id: string; name: string; connected: boolean }>>([]);
+
   const fetchInstalled = useCallback(async () => {
     if (!extensionDetected || bridge.state !== 'connected') return;
     try {
       const result = await bridge.send<{ packages?: InstalledPkg[] }>('LIST_INSTALLED', {});
       setInstalled(result?.packages || []);
     } catch { /* device may not support command yet */ }
+    try {
+      const mcpResult = await bridge.send<{ servers?: Array<{ id: string; name: string; connected: boolean }> }>('MCP_LIST_SERVERS', {});
+      setMcpServers(mcpResult?.servers || []);
+    } catch { /* ignore */ }
   }, [bridge, extensionDetected]);
 
   useEffect(() => {
@@ -296,6 +302,10 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
   }, [fetchInstalled]);
 
   const getStatus = (pkg: AvailablePkg) => {
+    if (pkg.type === 'mcp') {
+      const mcpId = `marketplace__${pkg.id}`;
+      return mcpServers.some(s => s.id === mcpId) ? 'installed' : 'not_installed';
+    }
     const inst = installed.find(i => i.id === pkg.id);
     if (!inst) return 'not_installed';
     if (inst.version && inst.version !== pkg.latest_version) return 'update_available';
@@ -319,8 +329,6 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
           source: 'marketplace',
           packageId: pkg.id,
         });
-        // Record install on server
-        await fetch(`/api/packages/${pkg.id}/install`, { method: 'POST' });
       } else {
         await bridge.send('INSTALL_PACKAGE', {
           type: pkg.type,
@@ -360,8 +368,6 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
     try {
       if (pkg.type === 'mcp') {
         await bridge.send('MCP_REMOVE_SERVER', { serverId: `marketplace__${pkg.id}` });
-        // Record uninstall on server
-        await fetch(`/api/packages/${pkg.id}/install`, { method: 'DELETE' });
       } else {
         await bridge.send('UNINSTALL_PACKAGE', { id: pkg.id, type: pkg.type });
       }

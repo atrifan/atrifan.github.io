@@ -109,23 +109,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fetch user's installed MCP servers from marketplace
-  let mcpServers: any[] = [];
-  const { data: mcpInstalls } = await supabase
-    .from('user_mcp_installs')
-    .select('package_id, packages(id, name, config_json)')
-    .eq('user_id', keyRecord.user_id);
-
-  if (mcpInstalls) {
-    mcpServers = mcpInstalls
-      .filter((row: any) => row.packages?.config_json)
-      .map((row: any) => ({
-        id: `marketplace__${row.packages.id}`,
-        name: row.packages.name,
-        ...row.packages.config_json,
-      }));
-  }
-
   // Log this config fetch
   await supabase.from('api_usage_log').insert({
     user_id: keyRecord.user_id,
@@ -139,6 +122,5 @@ export async function GET(req: NextRequest) {
     guardrails,
     custom_rules: customRules,
     user_id: keyRecord.user_id,
-    mcp_servers: mcpServers,
   });
 }
