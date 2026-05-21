@@ -7,9 +7,10 @@ interface PackageItem {
   id: string;
   name: string;
   description: string | null;
-  type: 'plugin' | 'skill' | 'practitioner';
+  type: 'plugin' | 'skill' | 'practitioner' | 'mcp';
   latest_version: string;
   blob_url: string;
+  config_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,11 +35,21 @@ export const PackageAdminPage: React.FC = () => {
   const [formId, setFormId] = useState('');
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formType, setFormType] = useState<'plugin' | 'skill' | 'practitioner'>('plugin');
+  const [formType, setFormType] = useState<'plugin' | 'skill' | 'practitioner' | 'mcp'>('plugin');
   const [formVersion, setFormVersion] = useState('1.0.0');
   const [formFile, setFormFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // MCP config form fields
+  const [mcpTransport, setMcpTransport] = useState<'http' | 'sse' | 'stdio'>('http');
+  const [mcpUrl, setMcpUrl] = useState('');
+  const [mcpCommand, setMcpCommand] = useState('');
+  const [mcpArgs, setMcpArgs] = useState('');
+  const [mcpOAuthAuthUrl, setMcpOAuthAuthUrl] = useState('');
+  const [mcpOAuthTokenUrl, setMcpOAuthTokenUrl] = useState('');
+  const [mcpOAuthClientId, setMcpOAuthClientId] = useState('');
+  const [mcpOAuthScopes, setMcpOAuthScopes] = useState('');
 
   // New version modal
   const [versionPkg, setVersionPkg] = useState<PackageItem | null>(null);
@@ -103,19 +114,40 @@ export const PackageAdminPage: React.FC = () => {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formFile || !formId || !formName) return;
+    if (!formId || !formName) return;
+    if (formType !== 'mcp' && !formFile) return;
 
     setUploading(true);
     setError(null);
     setSuccess(null);
 
     const fd = new FormData();
-    fd.append('file', formFile);
+    if (formFile) fd.append('file', formFile);
     fd.append('id', formId);
     fd.append('name', formName);
     fd.append('description', formDescription);
     fd.append('type', formType);
     fd.append('version', formVersion);
+
+    if (formType === 'mcp') {
+      const configJson: Record<string, unknown> = { transport: mcpTransport };
+      if (mcpTransport === 'stdio') {
+        configJson.command = mcpCommand;
+        if (mcpArgs.trim()) configJson.args = mcpArgs.trim().split(/\s+/);
+      } else {
+        configJson.url = mcpUrl;
+      }
+      if (mcpOAuthAuthUrl && mcpOAuthTokenUrl && mcpOAuthClientId) {
+        configJson.oauth = {
+          auth_url: mcpOAuthAuthUrl,
+          token_url: mcpOAuthTokenUrl,
+          client_id: mcpOAuthClientId,
+          scopes: mcpOAuthScopes ? mcpOAuthScopes.split(',').map(s => s.trim()) : [],
+          redirect_uri: 'http://localhost:8919/callback',
+        };
+      }
+      fd.append('config_json', JSON.stringify(configJson));
+    }
 
     try {
       const res = await fetch('/api/packages', { method: 'POST', body: fd });
@@ -123,7 +155,7 @@ export const PackageAdminPage: React.FC = () => {
       if (!res.ok) {
         setError(data.error || 'Upload failed');
       } else {
-        setSuccess(`Package "${formName}" v${formVersion} uploaded`);
+        setSuccess(`Package "${formName}" v${formVersion} ${formType === 'mcp' ? 'created' : 'uploaded'}`);
         setShowForm(false);
         resetForm();
         fetchPackages();
@@ -193,6 +225,14 @@ export const PackageAdminPage: React.FC = () => {
     setFormType('plugin');
     setFormVersion('1.0.0');
     setFormFile(null);
+    setMcpTransport('http');
+    setMcpUrl('');
+    setMcpCommand('');
+    setMcpArgs('');
+    setMcpOAuthAuthUrl('');
+    setMcpOAuthTokenUrl('');
+    setMcpOAuthClientId('');
+    setMcpOAuthScopes('');
   };
 
   const handleDrop = (e: React.DragEvent, setFile: (f: File) => void, setDrag: (b: boolean) => void) => {
@@ -238,16 +278,25 @@ export const PackageAdminPage: React.FC = () => {
     color: variant === 'danger' ? '#ef4444' : '#fff',
   });
 
-  const typeBadge = (type: string): React.CSSProperties => ({
-    display: 'inline-block',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '999px',
-    fontSize: '0.7rem',
-    fontWeight: 500,
-    background: type === 'plugin' ? 'rgba(59, 130, 246, 0.15)' : type === 'skill' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(168, 85, 247, 0.15)',
-    color: type === 'plugin' ? '#3b82f6' : type === 'skill' ? '#22c55e' : '#a855f7',
-    border: `1px solid ${type === 'plugin' ? 'rgba(59, 130, 246, 0.3)' : type === 'skill' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
-  });
+  const typeBadge = (type: string): React.CSSProperties => {
+    const colors: Record<string, { bg: string; fg: string; border: string }> = {
+      plugin: { bg: 'rgba(59, 130, 246, 0.15)', fg: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
+      skill: { bg: 'rgba(34, 197, 94, 0.15)', fg: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' },
+      practitioner: { bg: 'rgba(168, 85, 247, 0.15)', fg: '#a855f7', border: 'rgba(168, 85, 247, 0.3)' },
+      mcp: { bg: 'rgba(245, 158, 11, 0.15)', fg: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)' },
+    };
+    const c = colors[type] || colors.plugin;
+    return {
+      display: 'inline-block',
+      padding: '0.15rem 0.5rem',
+      borderRadius: '999px',
+      fontSize: '0.7rem',
+      fontWeight: 500,
+      background: c.bg,
+      color: c.fg,
+      border: `1px solid ${c.border}`,
+    };
+  };
 
   const dropZoneStyle = (dragging: boolean): React.CSSProperties => ({
     border: `2px dashed ${dragging ? '#667eea' : 'rgba(255,255,255,0.15)'}`,
@@ -312,10 +361,11 @@ export const PackageAdminPage: React.FC = () => {
                 </div>
                 <div>
                   <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Type</label>
-                  <select value={formType} onChange={e => setFormType(e.target.value as 'plugin' | 'skill' | 'practitioner')} style={{ ...inputStyle, appearance: 'none' }}>
+                  <select value={formType} onChange={e => setFormType(e.target.value as any)} style={{ ...inputStyle, appearance: 'none' }}>
                     <option value="plugin">Plugin</option>
                     <option value="skill">Skill</option>
                     <option value="practitioner">Practitioner</option>
+                    <option value="mcp">MCP Server</option>
                   </select>
                 </div>
                 <div>
@@ -327,26 +377,77 @@ export const PackageAdminPage: React.FC = () => {
                 <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Description</label>
                 <textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="What this package does..." style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} />
               </div>
-              <div
-                style={dropZoneStyle(isDragging)}
-                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                onDragEnter={() => setIsDragging(true)}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={e => handleDrop(e, setFormFile, setIsDragging)}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input ref={fileInputRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && setFormFile(e.target.files[0])} />
-                {formFile ? (
-                  <span style={{ color: '#22c55e', fontSize: '0.85rem' }}>{formFile.name} ({(formFile.size / 1024).toFixed(1)} KB)</span>
-                ) : (
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-                    {isDragging ? 'Drop zip file here' : 'Click or drag & drop zip file'}
-                  </span>
-                )}
-              </div>
+              {formType === 'mcp' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Transport</label>
+                    <select value={mcpTransport} onChange={e => setMcpTransport(e.target.value as any)} style={{ ...inputStyle, appearance: 'none' }}>
+                      <option value="http">HTTP</option>
+                      <option value="sse">SSE</option>
+                      <option value="stdio">stdio (local process)</option>
+                    </select>
+                  </div>
+                  {mcpTransport === 'stdio' ? (
+                    <>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Command</label>
+                        <input value={mcpCommand} onChange={e => setMcpCommand(e.target.value)} placeholder="npx, uvx, node..." style={inputStyle} required />
+                      </div>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Args (space-separated)</label>
+                        <input value={mcpArgs} onChange={e => setMcpArgs(e.target.value)} placeholder="@modelcontextprotocol/server-filesystem /tmp" style={inputStyle} />
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>URL</label>
+                      <input value={mcpUrl} onChange={e => setMcpUrl(e.target.value)} placeholder="https://mcp.example.com/sse" style={inputStyle} required />
+                    </div>
+                  )}
+                  <details style={{ marginTop: '0.5rem' }}>
+                    <summary style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', cursor: 'pointer' }}>OAuth (optional)</summary>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Auth URL</label>
+                        <input value={mcpOAuthAuthUrl} onChange={e => setMcpOAuthAuthUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Token URL</label>
+                        <input value={mcpOAuthTokenUrl} onChange={e => setMcpOAuthTokenUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Client ID</label>
+                        <input value={mcpOAuthClientId} onChange={e => setMcpOAuthClientId(e.target.value)} placeholder="client_id" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', display: 'block', marginBottom: '0.3rem' }}>Scopes (comma-separated)</label>
+                        <input value={mcpOAuthScopes} onChange={e => setMcpOAuthScopes(e.target.value)} placeholder="read,write" style={inputStyle} />
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              ) : (
+                <div
+                  style={dropZoneStyle(isDragging)}
+                  onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                  onDragEnter={() => setIsDragging(true)}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={e => handleDrop(e, setFormFile, setIsDragging)}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input ref={fileInputRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && setFormFile(e.target.files[0])} />
+                  {formFile ? (
+                    <span style={{ color: '#22c55e', fontSize: '0.85rem' }}>{formFile.name} ({(formFile.size / 1024).toFixed(1)} KB)</span>
+                  ) : (
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                      {isDragging ? 'Drop zip file here' : 'Click or drag & drop zip file'}
+                    </span>
+                  )}
+                </div>
+              )}
               <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="submit" disabled={uploading || !formFile} style={{ ...buttonStyle('primary'), opacity: uploading || !formFile ? 0.5 : 1 }}>
-                  {uploading ? 'Uploading...' : 'Upload Package'}
+                <button type="submit" disabled={uploading || (formType !== 'mcp' && !formFile)} style={{ ...buttonStyle('primary'), opacity: uploading || (formType !== 'mcp' && !formFile) ? 0.5 : 1 }}>
+                  {uploading ? (formType === 'mcp' ? 'Saving...' : 'Uploading...') : (formType === 'mcp' ? 'Save MCP Server' : 'Upload Package')}
                 </button>
               </div>
             </form>

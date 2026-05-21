@@ -253,6 +253,7 @@ interface AvailablePkg {
   type: string;
   latest_version: string;
   blob_url: string;
+  config_json?: Record<string, unknown> | null;
 }
 
 interface ExtBridge {
@@ -305,12 +306,29 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
     setActionId(pkg.id);
     setActionErr(null);
     try {
-      await bridge.send('INSTALL_PACKAGE', {
-        type: pkg.type,
-        id: pkg.id,
-        source: pkg.blob_url,
-        sourceType: 'archive',
-      });
+      if (pkg.type === 'mcp' && pkg.config_json) {
+        const cfg = pkg.config_json as any;
+        await bridge.send('MCP_ADD_SERVER', {
+          name: pkg.name,
+          id: `marketplace__${pkg.id}`,
+          transport: cfg.transport,
+          url: cfg.url,
+          command: cfg.command,
+          args: cfg.args,
+          env: cfg.env,
+          source: 'marketplace',
+          packageId: pkg.id,
+        });
+        // Record install on server
+        await fetch(`/api/packages/${pkg.id}/install`, { method: 'POST' });
+      } else {
+        await bridge.send('INSTALL_PACKAGE', {
+          type: pkg.type,
+          id: pkg.id,
+          source: pkg.blob_url,
+          sourceType: 'archive',
+        });
+      }
       await fetchInstalled();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : 'Install failed');
@@ -340,7 +358,13 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
     setActionId(pkg.id);
     setActionErr(null);
     try {
-      await bridge.send('UNINSTALL_PACKAGE', { id: pkg.id, type: pkg.type });
+      if (pkg.type === 'mcp') {
+        await bridge.send('MCP_REMOVE_SERVER', { serverId: `marketplace__${pkg.id}` });
+        // Record uninstall on server
+        await fetch(`/api/packages/${pkg.id}/install`, { method: 'DELETE' });
+      } else {
+        await bridge.send('UNINSTALL_PACKAGE', { id: pkg.id, type: pkg.type });
+      }
       await fetchInstalled();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : 'Remove failed');
@@ -356,16 +380,25 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
     marginBottom: '1.5rem',
   };
 
-  const typeBadgeStyle = (type: string): React.CSSProperties => ({
-    display: 'inline-block',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '999px',
-    fontSize: '0.7rem',
-    fontWeight: 500,
-    background: type === 'plugin' ? 'rgba(59, 130, 246, 0.15)' : type === 'skill' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(168, 85, 247, 0.15)',
-    color: type === 'plugin' ? '#3b82f6' : type === 'skill' ? '#22c55e' : '#a855f7',
-    border: `1px solid ${type === 'plugin' ? 'rgba(59, 130, 246, 0.3)' : type === 'skill' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
-  });
+  const typeBadgeStyle = (type: string): React.CSSProperties => {
+    const colors: Record<string, { bg: string; fg: string; border: string }> = {
+      plugin: { bg: 'rgba(59, 130, 246, 0.15)', fg: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
+      skill: { bg: 'rgba(34, 197, 94, 0.15)', fg: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' },
+      practitioner: { bg: 'rgba(168, 85, 247, 0.15)', fg: '#a855f7', border: 'rgba(168, 85, 247, 0.3)' },
+      mcp: { bg: 'rgba(245, 158, 11, 0.15)', fg: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)' },
+    };
+    const c = colors[type] || colors.plugin;
+    return {
+      display: 'inline-block',
+      padding: '0.15rem 0.5rem',
+      borderRadius: '999px',
+      fontSize: '0.7rem',
+      fontWeight: 500,
+      background: c.bg,
+      color: c.fg,
+      border: `1px solid ${c.border}`,
+    };
+  };
 
   if (loading) {
     return <div style={cardStyle}><p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>Loading packages...</p></div>;
