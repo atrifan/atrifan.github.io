@@ -1635,9 +1635,11 @@ export const ControlPanelPage: React.FC = () => {
                                   <div key={p.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '0.5rem 0.7rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: p.plugins.length > 0 ? '0.35rem' : '0' }}>
                                       <span style={{ color: '#fff', fontSize: '0.8rem', fontWeight: 600 }}>{p.name}</span>
-                                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>
-                                        {p.skillCount || 0} skills{p.pluginCount ? ` · ${p.pluginCount} plugins` : ''}
-                                      </span>
+                                      {p.pluginCount ? (
+                                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>
+                                          {p.pluginCount} plugins
+                                        </span>
+                                      ) : null}
                                     </div>
                                     {p.plugins.length > 0 && (
                                       <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', paddingLeft: '0.5rem' }}>
