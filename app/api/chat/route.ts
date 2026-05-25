@@ -67,14 +67,23 @@ export async function POST(request: NextRequest) {
     const hash = await sha256Hex(apiKey);
     const { data: keyRecord } = await supabase
       .from('api_keys')
-      .select('id, user_id, is_active')
+      .select('id, user_id, is_active, plan')
       .eq('api_key_hash', hash)
-      .eq('is_active', true)
       .single();
 
     if (!keyRecord) {
-      return new Response(JSON.stringify({ error: 'Invalid or revoked API key' }), {
+      return new Response(JSON.stringify({ error: 'Invalid API key' }), {
         status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!keyRecord.is_active) {
+      const msg = keyRecord.plan === 'free'
+        ? 'Your subscription has expired. Re-subscribe at tulzo.online/pricing to reactivate your API key.'
+        : 'API key has been revoked. Please generate a new one from your dashboard.';
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' },
       });
     }
