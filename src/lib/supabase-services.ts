@@ -76,7 +76,6 @@ export async function getApiKeyByHash(apiKeyHash: string): Promise<ApiKeyRow | n
     .from('api_keys')
     .select('*')
     .eq('api_key_hash', apiKeyHash)
-    .eq('is_active', true)
     .single();
 
   if (error && error.code !== 'PGRST116') {
@@ -100,6 +99,24 @@ export async function getApiKeysByUser(userId: string): Promise<ApiKeyRow[]> {
 
   if (error) {
     console.error('Error fetching API keys:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
+ * Get all API keys for a user (including inactive/revoked)
+ */
+export async function getAllApiKeysByUser(userId: string): Promise<ApiKeyRow[]> {
+  const { data, error } = await supabase
+    .from('api_keys')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching all API keys:', error);
     throw error;
   }
 

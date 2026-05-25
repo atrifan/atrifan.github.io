@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { streamText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 
 export const runtime = 'edge';
 
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { messages, model = 'openai/gpt-4o-mini' } = body;
+  const { messages, model = 'openai/gpt-4o-mini', tools, stream = true } = body;
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: 'Invalid request body: messages required' }), {
@@ -130,9 +131,26 @@ export async function POST(request: NextRequest) {
     apiKey: process.env.AI_GATEWAY_API_KEY!,
   });
 
+  // Build tool definitions for Vercel AI SDK if tools provided
+  let aiTools: Record<string, any> | undefined;
+  if (tools && Array.isArray(tools) && tools.length > 0) {
+    const { tool } = await import('ai');
+    aiTools = {};
+    for (const t of tools) {
+      if (t.type === 'function' && t.function) {
+        aiTools[t.function.name] = tool({
+          description: t.function.description || '',
+          parameters: z.object({}).passthrough(),
+        });
+      }
+    }
+  }
+
   const result = streamText({
     model: gateway(model),
     messages,
+    tools: aiTools,
+    maxSteps: 1,
     headers: {
       'x-vercel-ai-user-id': userId,
       'x-vercel-ai-tag': sessionId,
@@ -182,5 +200,75 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return result.toTextStreamResponse();
+  if (!stream) {
+    const text = await result.text;
+    return new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: text } }] }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Stream as OpenAI-compatible SSE with tool_calls support
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      let toolCallIndex = 0;
+      let finishReason = 'stop';
+      let usageData: { prompt_tokens: number; completion_tokens: number } | null = null;
+
+      try {
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            const chunk = {
+              choices: [{ index: 0, delta: { content: part.textDelta }, finish_reason: null }],
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          } else if (part.type === 'tool-call') {
+            finishReason = 'tool_calls';
+            const chunk = {
+              choices: [{
+                index: 0,
+                delta: {
+                  tool_calls: [{
+                    index: toolCallIndex,
+                    id: part.toolCallId,
+                    type: 'function',
+                    function: { name: part.toolName, arguments: JSON.stringify(part.args) },
+                  }],
+                },
+                finish_reason: null,
+              }],
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+            toolCallIndex++;
+          } else if (part.type === 'finish') {
+            usageData = {
+              prompt_tokens: part.usage?.inputTokens || 0,
+              completion_tokens: part.usage?.outputTokens || 0,
+            };
+          }
+        }
+
+        // Send finish chunk
+        const finishChunk = {
+          choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+          ...(usageData ? { usage: usageData } : {}),
+        };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk)}\n\n`));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      } catch (err: any) {
+        const errorChunk = { error: { message: err?.message || 'Stream error' } };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

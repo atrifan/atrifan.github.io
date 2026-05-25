@@ -55,6 +55,9 @@ async function validateApiKey(key: string, serverName: string = 'default'): Prom
 
     if (supabaseKey) {
       if (!supabaseKey.is_active) {
+        if (supabaseKey.plan === 'free') {
+          return { user: null, error: 'Your subscription has expired. Re-subscribe at tulzo.vercel.app/pricing to reactivate your API key.' };
+        }
         return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
       }
 

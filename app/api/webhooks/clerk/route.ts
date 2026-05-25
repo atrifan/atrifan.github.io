@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import {
+  getAllApiKeysByUser,
   getApiKeysByUser,
   deleteApiKey,
   updateApiKey,
@@ -99,12 +100,15 @@ function extractPlan(userData: Record<string, unknown>): string {
 
 /**
  * Handle plan changes for a user
+ * - Downgrade to free: soft-disable keys (not delete) so they can be reactivated
+ * - Upgrade from free: reactivate previously disabled keys
+ * - Paid tier change: update plan field, keep keys active
  */
 async function handlePlanChange(userId: string, newPlan: string): Promise<void> {
   console.log(`[webhook] Processing plan change for user ${userId}: new plan = ${newPlan}`);
 
-  const apiKeys = await getApiKeysByUser(userId);
-  
+  const apiKeys = await getAllApiKeysByUser(userId);
+
   if (apiKeys.length === 0) {
     console.log(`[webhook] No API keys found for user ${userId}`);
     return;
@@ -112,23 +116,27 @@ async function handlePlanChange(userId: string, newPlan: string): Promise<void> 
 
   for (const apiKey of apiKeys) {
     const storedPlan = apiKey.plan || 'free';
-    
-    if (storedPlan === newPlan) {
-      console.log(`[webhook] API key ${apiKey.id} already has plan ${newPlan}`);
-      continue;
-    }
-
-    console.log(`[webhook] Plan changed for API key ${apiKey.id}: ${storedPlan} -> ${newPlan}`);
 
     if (newPlan === 'free') {
-      // Downgrade to free: Delete all API keys and servers
-      console.log(`[webhook] Deleting API key ${apiKey.id} (downgrade to free)`);
-      await deleteApiKey(apiKey.id);
-    } else {
-      // Plan changed between paid tiers (pro <-> plus)
-      // Mark key as inactive so it needs regeneration
-      console.log(`[webhook] Marking API key ${apiKey.id} as needing regeneration`);
-      await updateApiKey(apiKey.id, { is_active: false });
+      if (!apiKey.is_active) {
+        continue;
+      }
+      console.log(`[webhook] Soft-disabling API key ${apiKey.id} (downgrade to free)`);
+      await updateApiKey(apiKey.id, {
+        is_active: false,
+        plan: 'free',
+        revoked_at: new Date().toISOString(),
+      });
+    } else if (storedPlan === 'free' || !apiKey.is_active) {
+      console.log(`[webhook] Reactivating API key ${apiKey.id} (upgrade to ${newPlan})`);
+      await updateApiKey(apiKey.id, {
+        is_active: true,
+        plan: newPlan,
+        revoked_at: null,
+      });
+    } else if (storedPlan !== newPlan) {
+      console.log(`[webhook] Updating API key ${apiKey.id} plan: ${storedPlan} -> ${newPlan}`);
+      await updateApiKey(apiKey.id, { plan: newPlan });
     }
   }
 }

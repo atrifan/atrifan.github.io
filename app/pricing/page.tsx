@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PricingPage } from '@/src/views/PricingPage';
+import { isPreferenced } from '@/src/lib/preferenced';
 
 export const metadata: Metadata = {
   title: 'Pricing - Tulzo',
@@ -15,7 +16,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Pricing() {
-  return <PricingPage />;
+export default async function Pricing() {
+  const preferenced = await isPreferenced();
+  return <PricingPage preferenced={preferenced} />;
 }
 

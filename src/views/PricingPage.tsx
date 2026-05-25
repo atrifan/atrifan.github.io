@@ -7,7 +7,11 @@ import { AdBanner } from '../components/AdBanner';
 import { SideAds } from '../components/SideAds';
 import { ADS_CONFIG } from '../config/ads.config';
 
-export const PricingPage: React.FC = () => {
+interface PricingPageProps {
+  preferenced?: boolean;
+}
+
+export const PricingPage: React.FC<PricingPageProps> = ({ preferenced }) => {
   return (
     <View UNSAFE_style={{
       minHeight: '100vh',
@@ -50,7 +54,7 @@ export const PricingPage: React.FC = () => {
           margin: '0 auto',
         }}>
           <SignedIn>
-            <div className="pricing-table-wrapper">
+            <div className={`pricing-table-wrapper${!preferenced ? ' hide-preferenced-plan' : ''}`}>
               <PricingTable />
             </div>
           </SignedIn>
@@ -114,6 +118,10 @@ export const PricingPage: React.FC = () => {
             flex: 0 1 17rem !important;
             max-width: 17rem !important;
             min-width: 15rem !important;
+          }
+          .hide-preferenced-plan .cl-pricingTableCard:nth-child(2),
+          .hide-preferenced-plan > div > div > div:nth-child(2) {
+            display: none !important;
           }
           @media (max-width: 44rem) {
             .pricing-table-wrapper .cl-pricingTable-root,

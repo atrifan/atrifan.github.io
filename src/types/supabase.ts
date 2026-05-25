@@ -73,8 +73,9 @@ export interface ApiKeyUpdate {
   name?: string;
   device_name?: string;
   is_active?: boolean;
+  plan?: string;
   last_used_at?: string;
-  revoked_at?: string;
+  revoked_at?: string | null;
 }
 
 // ============ Device Heartbeats Table ============
