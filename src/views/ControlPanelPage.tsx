@@ -621,6 +621,8 @@ export const ControlPanelPage: React.FC = () => {
   const [budgetMonth, setBudgetMonth] = useState<string>('all');
   const [budgetDevice, setBudgetDevice] = useState<string>('all');
   const [budgetModel, setBudgetModel] = useState<string>('all');
+  const [buyAmount, setBuyAmount] = useState(5);
+  const [buyLoading, setBuyLoading] = useState(false);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -3171,6 +3173,85 @@ export const ControlPanelPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Add tokens:</span>
+                    {[5, 10, 25, 50].map(amt => (
+                      <button
+                        key={amt}
+                        onClick={() => setBuyAmount(amt)}
+                        style={{
+                          background: buyAmount === amt ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${buyAmount === amt ? 'rgba(102, 126, 234, 0.5)' : 'rgba(255,255,255,0.1)'}`,
+                          borderRadius: '6px',
+                          padding: '0.4rem 0.75rem',
+                          color: buyAmount === amt ? '#667eea' : 'rgba(255,255,255,0.7)',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ${amt}
+                      </button>
+                    ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>$</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={buyAmount}
+                        onChange={e => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= 500) setBuyAmount(v);
+                        }}
+                        style={{
+                          width: '4rem',
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '6px',
+                          padding: '0.4rem 0.5rem',
+                          color: '#fff',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          textAlign: 'center',
+                        }}
+                      />
+                    </div>
+                    <button
+                      disabled={buyLoading}
+                      onClick={async () => {
+                        setBuyLoading(true);
+                        try {
+                          const res = await fetch('/api/billing/checkout', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ amount: buyAmount }),
+                          });
+                          const data = await res.json();
+                          if (data.url) window.location.href = data.url;
+                        } catch (e) {
+                          console.error('Checkout error:', e);
+                        } finally {
+                          setBuyLoading(false);
+                        }
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #667eea, #a855f7)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '0.5rem 1.25rem',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: buyLoading ? 'wait' : 'pointer',
+                        opacity: buyLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {buyLoading ? 'Redirecting...' : `Buy $${buyAmount} tokens`}
+                    </button>
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem' }}>You pay ${(buyAmount * 1.1).toFixed(2)} (includes 10% processing fee)</span>
+                  </div>
                 </div>
 
                 {/* Filters */}
