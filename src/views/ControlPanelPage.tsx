@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
@@ -539,7 +539,7 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
 
 export const ControlPanelPage: React.FC = () => {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'budget'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -582,7 +582,7 @@ export const ControlPanelPage: React.FC = () => {
   // Revoke confirmation
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
-  const [deviceSubTab, setDeviceSubTab] = useState<'info' | 'logs'>('info');
+  const [deviceSubTab, setDeviceSubTab] = useState<'info' | 'logs' | 'usage'>('info');
 
   // Logs
   interface LogEntry { ts: number; source: 'bridge' | 'native'; direction: 'in' | 'out'; message: string; data?: unknown; level?: string; category?: string }
@@ -604,6 +604,23 @@ export const ControlPanelPage: React.FC = () => {
 
   const [serverPlan, setServerPlan] = useState<string>('free');
   const plan = serverPlan;
+
+  // Budget analytics state
+  interface BudgetAnalytics {
+    remainingBalance: number;
+    totalSpent: number;
+    totalDeposited: number;
+    modelSummaries: Array<{ provider: string; model: string; totalCost: number; totalTokens: number; count: number }>;
+    deviceSummaries: Array<{ apiKeyId: string; deviceName: string; totalCost: number; totalTokens: number; count: number }>;
+    purchaseHistory: Array<{ id: number; amount: number; type: string; description: string; createdAt: string }>;
+    dailySpending: Array<{ date: string; cost: number; tokens: number; count: number }>;
+    rawDeviceLogs: Array<{ apiKeyId: string | null; deviceName: string | null; provider: string; model: string; tokensUsed: number; costDeducted: number; createdAt: string }>;
+  }
+  const [budgetData, setBudgetData] = useState<BudgetAnalytics | null>(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [budgetMonth, setBudgetMonth] = useState<string>('all');
+  const [budgetDevice, setBudgetDevice] = useState<string>('all');
+  const [budgetModel, setBudgetModel] = useState<string>('all');
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -632,6 +649,91 @@ export const ControlPanelPage: React.FC = () => {
       console.error('Failed to fetch usage:', e);
     }
   }, []);
+
+  const fetchBudgetData = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const res = await fetch('/api/dashboard/paid-stats');
+      if (res.ok) {
+        const data = await res.json();
+        setBudgetData(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch budget data:', e);
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const needsBudget = activeTab === 'budget' || (activeTab === 'devices' && deviceSubTab === 'usage');
+    if (needsBudget && !budgetData && !budgetLoading) {
+      fetchBudgetData();
+    }
+  }, [activeTab, deviceSubTab, budgetData, budgetLoading, fetchBudgetData]);
+
+  const filteredBudgetLogs = useMemo(() => {
+    if (!budgetData) return [];
+    let logs = budgetData.rawDeviceLogs;
+    if (budgetMonth !== 'all') {
+      logs = logs.filter(l => l.createdAt.startsWith(budgetMonth));
+    }
+    if (budgetDevice !== 'all') {
+      logs = logs.filter(l => (l.apiKeyId || '') === budgetDevice);
+    }
+    if (budgetModel !== 'all') {
+      logs = logs.filter(l => l.model === budgetModel);
+    }
+    return logs;
+  }, [budgetData, budgetMonth, budgetDevice, budgetModel]);
+
+  const filteredModelSummaries = useMemo(() => {
+    const map = new Map<string, { provider: string; model: string; totalCost: number; totalTokens: number; count: number }>();
+    for (const log of filteredBudgetLogs) {
+      const key = `${log.provider}/${log.model}`;
+      const existing = map.get(key) || { provider: log.provider, model: log.model, totalCost: 0, totalTokens: 0, count: 0 };
+      existing.totalCost += parseFloat(String(log.costDeducted || '0'));
+      existing.totalTokens += log.tokensUsed;
+      existing.count += 1;
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.totalCost - a.totalCost);
+  }, [filteredBudgetLogs]);
+
+  const filteredDailySpending = useMemo(() => {
+    const map = new Map<string, { date: string; cost: number; tokens: number; count: number }>();
+    for (const log of filteredBudgetLogs) {
+      const date = new Date(log.createdAt).toISOString().split('T')[0];
+      const existing = map.get(date) || { date, cost: 0, tokens: 0, count: 0 };
+      existing.cost += parseFloat(String(log.costDeducted || '0'));
+      existing.tokens += log.tokensUsed;
+      existing.count += 1;
+      map.set(date, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredBudgetLogs]);
+
+  const filteredDeviceSummaries = useMemo(() => {
+    const map = new Map<string, { apiKeyId: string; deviceName: string; totalCost: number; totalTokens: number; count: number }>();
+    for (const log of filteredBudgetLogs) {
+      const key = log.apiKeyId || 'unknown';
+      const existing = map.get(key) || { apiKeyId: log.apiKeyId || '', deviceName: log.deviceName || 'Unknown', totalCost: 0, totalTokens: 0, count: 0 };
+      existing.totalCost += parseFloat(String(log.costDeducted || '0'));
+      existing.totalTokens += log.tokensUsed;
+      existing.count += 1;
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.totalCost - a.totalCost);
+  }, [filteredBudgetLogs]);
+
+  const availableMonths = useMemo(() => {
+    if (!budgetData) return [];
+    const months = new Set<string>();
+    for (const log of budgetData.rawDeviceLogs) {
+      months.add(log.createdAt.slice(0, 7));
+    }
+    return Array.from(months).sort().reverse();
+  }, [budgetData]);
 
   useEffect(() => {
     fetchDevices();
@@ -1138,6 +1240,7 @@ export const ControlPanelPage: React.FC = () => {
           <button onClick={() => setActiveTab('logs')} style={tabStyle('logs')}>Logs</button>
           <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Docs</button>
           <button onClick={() => setActiveTab('packages')} style={tabStyle('packages')}>Packages</button>
+          <button onClick={() => setActiveTab('budget')} style={tabStyle('budget')}>Budget</button>
         </div>
 
         {/* Overview Tab */}
@@ -1458,25 +1561,23 @@ export const ControlPanelPage: React.FC = () => {
                       {isExpanded && (
                         <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                           {/* Sub-tab navigation */}
-                          {isLiveDevice && (
-                            <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '1rem' }}>
-                              {(['info', 'logs'] as const).map(tab => (
-                                <button
-                                  key={tab}
-                                  onClick={(e) => { e.stopPropagation(); setDeviceSubTab(tab); }}
-                                  style={{
-                                    background: deviceSubTab === tab ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
-                                    border: `1px solid ${deviceSubTab === tab ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.08)'}`,
-                                    borderRadius: '6px', padding: '0.3rem 0.7rem',
-                                    color: deviceSubTab === tab ? '#667eea' : 'rgba(255,255,255,0.5)',
-                                    cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
-                                  }}
-                                >
-                                  {tab === 'info' ? 'Info' : 'Logs'}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '1rem' }}>
+                            {(['info', ...(isLiveDevice ? ['logs'] : []), 'usage'] as const).map(tab => (
+                              <button
+                                key={tab}
+                                onClick={(e) => { e.stopPropagation(); setDeviceSubTab(tab as 'info' | 'logs' | 'usage'); }}
+                                style={{
+                                  background: deviceSubTab === tab ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255,255,255,0.05)',
+                                  border: `1px solid ${deviceSubTab === tab ? 'rgba(102, 126, 234, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                  borderRadius: '6px', padding: '0.3rem 0.7rem',
+                                  color: deviceSubTab === tab ? '#667eea' : 'rgba(255,255,255,0.5)',
+                                  cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500,
+                                }}
+                              >
+                                {tab === 'info' ? 'Info' : tab === 'logs' ? 'Logs' : 'Usage'}
+                              </button>
+                            ))}
+                          </div>
 
                           {/* Info sub-tab */}
                           {deviceSubTab === 'info' && (
@@ -1862,6 +1963,134 @@ export const ControlPanelPage: React.FC = () => {
                                   });
                                 })()}
                               </div>
+                            </div>
+                          )}
+
+                          {/* Usage sub-tab */}
+                          {deviceSubTab === 'usage' && (
+                            <div>
+                              {budgetLoading && !budgetData ? (
+                                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', margin: 0 }}>Loading usage data...</p>
+                              ) : !budgetData ? (
+                                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', margin: 0 }}>No usage data available yet.</p>
+                              ) : (() => {
+                                const deviceLogs = budgetData.rawDeviceLogs.filter(l => l.apiKeyId === device.id);
+                                if (deviceLogs.length === 0) {
+                                  return <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', margin: 0 }}>No AI usage recorded for this device yet.</p>;
+                                }
+                                const totalCost = deviceLogs.reduce((s, l) => s + parseFloat(String(l.costDeducted || '0')), 0);
+                                const totalTokens = deviceLogs.reduce((s, l) => s + l.tokensUsed, 0);
+                                const totalRequests = deviceLogs.length;
+
+                                const modelMap = new Map<string, { model: string; cost: number; tokens: number; count: number }>();
+                                const dailyMap = new Map<string, { date: string; cost: number; count: number }>();
+                                for (const log of deviceLogs) {
+                                  const mKey = log.model || 'unknown';
+                                  const mEx = modelMap.get(mKey) || { model: mKey, cost: 0, tokens: 0, count: 0 };
+                                  mEx.cost += parseFloat(String(log.costDeducted || '0'));
+                                  mEx.tokens += log.tokensUsed;
+                                  mEx.count += 1;
+                                  modelMap.set(mKey, mEx);
+
+                                  const date = new Date(log.createdAt).toISOString().split('T')[0];
+                                  const dEx = dailyMap.get(date) || { date, cost: 0, count: 0 };
+                                  dEx.cost += parseFloat(String(log.costDeducted || '0'));
+                                  dEx.count += 1;
+                                  dailyMap.set(date, dEx);
+                                }
+                                const modelList = Array.from(modelMap.values()).sort((a, b) => b.cost - a.cost);
+                                const dailyList = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+                                const colors = ['#667eea', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6'];
+
+                                return (
+                                  <>
+                                    {/* Summary stats */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                                      <div>
+                                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Cost</div>
+                                        <div style={{ color: '#667eea', fontSize: '1.25rem', fontWeight: 700 }}>${totalCost.toFixed(4)}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tokens</div>
+                                        <div style={{ color: '#fff', fontSize: '1.25rem', fontWeight: 700 }}>{formatTokens(totalTokens)}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requests</div>
+                                        <div style={{ color: '#fff', fontSize: '1.25rem', fontWeight: 700 }}>{totalRequests}</div>
+                                      </div>
+                                    </div>
+
+                                    {/* Model breakdown */}
+                                    {modelList.length > 0 && (
+                                      <div style={{ marginBottom: '1rem' }}>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>By Model</div>
+                                        {(() => {
+                                          const maxCost = Math.max(...modelList.map(m => m.cost), 0.001);
+                                          return modelList.map((m, i) => (
+                                            <div key={m.model} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                                              <div style={{ width: '90px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.model}</div>
+                                              <div style={{ flex: 1, height: '14px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                <div style={{ width: `${(m.cost / maxCost) * 100}%`, height: '100%', background: colors[i % colors.length], borderRadius: '3px' }} />
+                                              </div>
+                                              <div style={{ width: '55px', fontSize: '0.68rem', color: colors[i % colors.length], fontWeight: 600, textAlign: 'right' }}>${m.cost.toFixed(4)}</div>
+                                              <div style={{ width: '40px', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textAlign: 'right' }}>{m.count}x</div>
+                                            </div>
+                                          ));
+                                        })()}
+                                      </div>
+                                    )}
+
+                                    {/* Daily trend mini-chart */}
+                                    {dailyList.length > 1 && (
+                                      <div>
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Daily Trend</div>
+                                        {(() => {
+                                          const maxCost = Math.max(...dailyList.map(d => d.cost), 0.001);
+                                          const chartH = 60;
+                                          const pts = dailyList.map((d, i) => ({
+                                            x: (i / Math.max(dailyList.length - 1, 1)) * 100,
+                                            y: chartH - 5 - ((d.cost / maxCost) * (chartH - 15)),
+                                          }));
+                                          const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                          const areaD = `${pathD} L 100 ${chartH - 5} L 0 ${chartH - 5} Z`;
+                                          return (
+                                            <div>
+                                              <svg width="100%" height={chartH} viewBox={`0 0 100 ${chartH}`} preserveAspectRatio="none">
+                                                <defs>
+                                                  <linearGradient id={`devTrend-${device.id.slice(0, 8)}`} x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#667eea" stopOpacity="0.25" />
+                                                    <stop offset="100%" stopColor="#667eea" stopOpacity="0" />
+                                                  </linearGradient>
+                                                </defs>
+                                                <path d={areaD} fill={`url(#devTrend-${device.id.slice(0, 8)})`} />
+                                                <path d={pathD} fill="none" stroke="#667eea" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                                              </svg>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)' }}>
+                                                <span>{dailyList[0].date}</span>
+                                                <span>{dailyList[dailyList.length - 1].date}</span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+
+                                    {/* Recent activity */}
+                                    <details style={{ marginTop: '0.75rem' }}>
+                                      <summary style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', cursor: 'pointer' }}>Recent requests ({Math.min(deviceLogs.length, 20)} of {deviceLogs.length})</summary>
+                                      <div style={{ marginTop: '0.4rem', maxHeight: '12rem', overflowY: 'auto' }}>
+                                        {deviceLogs.slice(0, 20).map((log, i) => (
+                                          <div key={i} style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)', fontSize: '0.68rem' }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.3)', minWidth: '5.5rem' }}>{new Date(log.createdAt).toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span style={{ color: 'rgba(255,255,255,0.6)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.model}</span>
+                                            <span style={{ color: '#667eea', fontWeight: 600, minWidth: '3.5rem', textAlign: 'right' }}>${parseFloat(String(log.costDeducted || '0')).toFixed(4)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
 
@@ -2898,6 +3127,269 @@ export const ControlPanelPage: React.FC = () => {
 
         {activeTab === 'packages' && (
           <PackagesTab extensionBridge={extensionBridge} extensionDetected={extensionDetected} />
+        )}
+
+        {activeTab === 'budget' && (
+          <>
+            {budgetLoading && !budgetData ? (
+              <div style={cardStyle}>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>Loading budget data...</p>
+              </div>
+            ) : !budgetData ? (
+              <div style={cardStyle}>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>No budget data available.</p>
+              </div>
+            ) : (
+              <>
+                {/* Balance Overview */}
+                <div style={cardStyle}>
+                  <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1.25rem' }}>Balance Overview</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '1.25rem' }}>
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Remaining Balance</div>
+                      <div style={{ color: '#22c55e', fontSize: '2rem', fontWeight: 700 }}>${budgetData.remainingBalance.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Total Deposited</div>
+                      <div style={{ color: '#3b82f6', fontSize: '2rem', fontWeight: 700 }}>${budgetData.totalDeposited.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Total Spent</div>
+                      <div style={{ color: '#a855f7', fontSize: '2rem', fontWeight: 700 }}>${budgetData.totalSpent.toFixed(4)}</div>
+                    </div>
+                  </div>
+                  {budgetData.totalDeposited > 0 && (
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.35rem' }}>
+                        <span>Budget Used</span>
+                        <span>{((budgetData.totalSpent / budgetData.totalDeposited) * 100).toFixed(1)}%</span>
+                      </div>
+                      <div style={{ height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min((budgetData.totalSpent / budgetData.totalDeposited) * 100, 100)}%`, background: 'linear-gradient(90deg, #667eea, #a855f7)', borderRadius: '4px', transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Filters */}
+                <div style={{ ...cardStyle, padding: '1rem 1.5rem' }}>
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Month</label>
+                      <select
+                        value={budgetMonth}
+                        onChange={e => setBudgetMonth(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.4rem 0.6rem', color: '#fff', fontSize: '0.8rem' }}
+                      >
+                        <option value="all">All Time</option>
+                        {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Device</label>
+                      <select
+                        value={budgetDevice}
+                        onChange={e => setBudgetDevice(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.4rem 0.6rem', color: '#fff', fontSize: '0.8rem' }}
+                      >
+                        <option value="all">All Devices</option>
+                        {budgetData.deviceSummaries.map(d => <option key={d.apiKeyId || d.deviceName} value={d.apiKeyId}>{d.deviceName}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>Model</label>
+                      <select
+                        value={budgetModel}
+                        onChange={e => setBudgetModel(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.4rem 0.6rem', color: '#fff', fontSize: '0.8rem' }}
+                      >
+                        <option value="all">All Models</option>
+                        {budgetData.modelSummaries.map(m => <option key={m.model} value={m.model}>{m.model}</option>)}
+                      </select>
+                    </div>
+                    {(budgetMonth !== 'all' || budgetDevice !== 'all' || budgetModel !== 'all') && (
+                      <button
+                        onClick={() => { setBudgetMonth('all'); setBudgetDevice('all'); setBudgetModel('all'); }}
+                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.4rem 0.75rem', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Spending Trend */}
+                {filteredDailySpending.length > 1 && (
+                  <div style={cardStyle}>
+                    <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>Spending Trend</h3>
+                    <div style={{ position: 'relative' }}>
+                      {(() => {
+                        const data = filteredDailySpending;
+                        const maxCost = Math.max(...data.map(d => d.cost), 0.001);
+                        const chartHeight = 120;
+                        const points = data.map((d, i) => ({
+                          x: (i / Math.max(data.length - 1, 1)) * 100,
+                          y: chartHeight - 10 - ((d.cost / maxCost) * (chartHeight - 30)),
+                        }));
+                        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                        const areaD = `${pathD} L 100 ${chartHeight - 10} L 0 ${chartHeight - 10} Z`;
+                        return (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', width: '50px', textAlign: 'right', paddingRight: '4px' }}>
+                              <span>${maxCost.toFixed(4)}</span>
+                              <span>${(maxCost / 2).toFixed(4)}</span>
+                              <span>$0</span>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <svg width="100%" height={chartHeight} viewBox={`0 0 100 ${chartHeight}`} preserveAspectRatio="none">
+                                <line x1="0" y1={chartHeight - 10} x2="100" y2={chartHeight - 10} stroke="rgba(255,255,255,0.1)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                                <line x1="0" y1={(chartHeight - 10) / 2} x2="100" y2={(chartHeight - 10) / 2} stroke="rgba(255,255,255,0.05)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="4 4" />
+                                <defs>
+                                  <linearGradient id="budgetTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#667eea" stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor="#667eea" stopOpacity="0" />
+                                  </linearGradient>
+                                </defs>
+                                <path d={areaD} fill="url(#budgetTrendGrad)" />
+                                <path d={pathD} fill="none" stroke="#667eea" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                                {points.map((p, i) => (
+                                  <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#667eea" vectorEffect="non-scaling-stroke" />
+                                ))}
+                              </svg>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.25rem' }}>
+                                <span>{data[0]?.date}</span>
+                                <span>{data[data.length - 1]?.date}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Model Breakdown */}
+                {filteredModelSummaries.length > 0 && (
+                  <div style={cardStyle}>
+                    <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>Model Breakdown</h3>
+                    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                      {/* Donut Chart */}
+                      {(() => {
+                        const colors = ['#667eea', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#06b6d4'];
+                        const total = filteredModelSummaries.reduce((s, m) => s + m.totalCost, 0);
+                        if (total === 0) return null;
+                        const size = 120;
+                        const radius = size / 2;
+                        const innerRadius = radius * 0.6;
+                        let currentAngle = 0;
+                        const segments = filteredModelSummaries.map((m, i) => {
+                          const angle = (m.totalCost / total) * 360;
+                          const seg = { ...m, startAngle: currentAngle, endAngle: currentAngle + angle, color: colors[i % colors.length] };
+                          currentAngle += angle;
+                          return seg;
+                        });
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                              {segments.map((seg, i) => {
+                                const startRad = (seg.startAngle - 90) * (Math.PI / 180);
+                                const endRad = (seg.endAngle - 90) * (Math.PI / 180);
+                                const largeArc = seg.endAngle - seg.startAngle > 180 ? 1 : 0;
+                                const x1 = radius + radius * Math.cos(startRad);
+                                const y1 = radius + radius * Math.sin(startRad);
+                                const x2 = radius + radius * Math.cos(endRad);
+                                const y2 = radius + radius * Math.sin(endRad);
+                                const x3 = radius + innerRadius * Math.cos(endRad);
+                                const y3 = radius + innerRadius * Math.sin(endRad);
+                                const x4 = radius + innerRadius * Math.cos(startRad);
+                                const y4 = radius + innerRadius * Math.sin(startRad);
+                                return (
+                                  <path key={i} d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`} fill={seg.color} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+                                );
+                              })}
+                            </svg>
+                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>Total: ${total.toFixed(4)}</div>
+                          </div>
+                        );
+                      })()}
+                      {/* Bar list */}
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        {(() => {
+                          const colors = ['#667eea', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#06b6d4'];
+                          const maxCost = Math.max(...filteredModelSummaries.map(m => m.totalCost), 0.001);
+                          return filteredModelSummaries.map((m, i) => (
+                            <div key={m.model} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                              <div style={{ width: '110px', fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.model}</div>
+                              <div style={{ flex: 1, height: '18px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${(m.totalCost / maxCost) * 100}%`, height: '100%', background: colors[i % colors.length], borderRadius: '4px', transition: 'width 0.3s' }} />
+                              </div>
+                              <div style={{ width: '65px', fontSize: '0.72rem', color: colors[i % colors.length], fontWeight: 600, textAlign: 'right' }}>${m.totalCost.toFixed(4)}</div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Device Breakdown */}
+                {filteredDeviceSummaries.length > 0 && (
+                  <div style={cardStyle}>
+                    <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>Per-Device Breakdown</h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          <th style={{ textAlign: 'left', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Device</th>
+                          <th style={{ textAlign: 'right', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Requests</th>
+                          <th style={{ textAlign: 'right', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Tokens</th>
+                          <th style={{ textAlign: 'right', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDeviceSummaries.map((d, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <td style={{ padding: '0.6rem 0', color: '#fff', fontSize: '0.85rem' }}>{d.deviceName}</td>
+                            <td style={{ padding: '0.6rem 0', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', textAlign: 'right' }}>{d.count.toLocaleString()}</td>
+                            <td style={{ padding: '0.6rem 0', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', textAlign: 'right' }}>{formatTokens(d.totalTokens)}</td>
+                            <td style={{ padding: '0.6rem 0', color: '#667eea', fontSize: '0.85rem', fontWeight: 600, textAlign: 'right' }}>${d.totalCost.toFixed(4)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Purchase History */}
+                <div style={cardStyle}>
+                  <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>Purchase History</h3>
+                  {budgetData.purchaseHistory.length === 0 ? (
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 }}>No purchases recorded yet. Future deposits will appear here.</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          <th style={{ textAlign: 'left', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Date</th>
+                          <th style={{ textAlign: 'left', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Description</th>
+                          <th style={{ textAlign: 'right', padding: '0.5rem 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 500 }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {budgetData.purchaseHistory.map(tx => (
+                          <tr key={tx.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <td style={{ padding: '0.6rem 0', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>{new Date(tx.createdAt).toLocaleDateString()}</td>
+                            <td style={{ padding: '0.6rem 0', color: '#fff', fontSize: '0.85rem' }}>{tx.description || tx.type}</td>
+                            <td style={{ padding: '0.6rem 0', color: tx.type === 'deposit' ? '#22c55e' : '#ef4444', fontSize: '0.85rem', fontWeight: 600, textAlign: 'right' }}>
+                              {tx.type === 'deposit' ? '+' : '-'}${tx.amount.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
+          </>
         )}
       </main>
 

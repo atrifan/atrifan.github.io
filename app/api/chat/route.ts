@@ -5,6 +5,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'edge';
 
+async function sha256Hex(input: string): Promise<string> {
+  const encoded = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function getSupabase() {
   return createClient(
     process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!,
@@ -51,17 +57,51 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const authResult = await validateClerkToken(apiKey);
-  if (!authResult) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const supabase = getSupabase();
+  let userId: string;
+  let sessionId: string;
+  let apiKeyId: string | null = null;
+
+  if (apiKey.startsWith('ak_')) {
+    const hash = await sha256Hex(apiKey);
+    const { data: keyRecord } = await supabase
+      .from('api_keys')
+      .select('id, user_id, is_active')
+      .eq('api_key_hash', hash)
+      .eq('is_active', true)
+      .single();
+
+    if (!keyRecord) {
+      return new Response(JSON.stringify({ error: 'Invalid or revoked API key' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    userId = keyRecord.user_id;
+    sessionId = keyRecord.id;
+    apiKeyId = keyRecord.id;
+  } else {
+    const authResult = await validateClerkToken(apiKey);
+    if (!authResult) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    userId = authResult.userId;
+    sessionId = authResult.sessionId;
+
+    const { data: keyRecord } = await supabase
+      .from('api_keys')
+      .select('id')
+      .eq('api_key', apiKey)
+      .eq('user_id', userId)
+      .maybeSingle();
+    apiKeyId = keyRecord?.id || null;
   }
 
-  const { userId, sessionId } = authResult;
-
-  const supabase = getSupabase();
   const { data: budget } = await supabase
     .from('user_budgets')
     .select('remaining_balance, status')
@@ -132,6 +172,7 @@ export async function POST(request: NextRequest) {
         await supabase.from('paid_usage_analytics').insert({
           user_id: userId,
           device_session_id: sessionId,
+          api_key_id: apiKeyId,
           provider: model.split('/')[0] || 'unknown',
           model_name: model,
           tokens_used: totalTokens,

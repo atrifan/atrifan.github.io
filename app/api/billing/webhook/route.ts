@@ -54,6 +54,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Database error' }, { status: 500 });
       }
 
+      await supabase.from('balance_transactions').insert({
+        user_id: clerkUserId,
+        type: 'deposit',
+        amount: parseFloat(rawDepositAmount),
+        stripe_session_id: session.id,
+        description: `AI Token Pool - $${rawDepositAmount}`,
+      });
+
       console.log(`[billing/webhook] Deposited $${rawDepositAmount} for user ${clerkUserId}`);
     }
 
