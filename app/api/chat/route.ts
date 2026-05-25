@@ -135,12 +135,13 @@ export async function POST(request: NextRequest) {
   let aiTools: Record<string, any> | undefined;
   if (tools && Array.isArray(tools) && tools.length > 0) {
     const { tool } = await import('ai');
+    const { jsonSchema } = await import('ai');
     aiTools = {};
     for (const t of tools) {
       if (t.type === 'function' && t.function) {
         aiTools[t.function.name] = tool({
           description: t.function.description || '',
-          parameters: z.object({}).passthrough(),
+          inputSchema: jsonSchema({ type: 'object', additionalProperties: true }),
         });
       }
     }
@@ -150,7 +151,6 @@ export async function POST(request: NextRequest) {
     model: gateway(model),
     messages,
     tools: aiTools,
-    maxSteps: 1,
     headers: {
       'x-vercel-ai-user-id': userId,
       'x-vercel-ai-tag': sessionId,
@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
         for await (const part of result.fullStream) {
           if (part.type === 'text-delta') {
             const chunk = {
-              choices: [{ index: 0, delta: { content: part.textDelta }, finish_reason: null }],
+              choices: [{ index: 0, delta: { content: part.text }, finish_reason: null }],
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
           } else if (part.type === 'tool-call') {
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
                     index: toolCallIndex,
                     id: part.toolCallId,
                     type: 'function',
-                    function: { name: part.toolName, arguments: JSON.stringify(part.args) },
+                    function: { name: part.toolName, arguments: JSON.stringify(part.input) },
                   }],
                 },
                 finish_reason: null,
@@ -242,8 +242,8 @@ export async function POST(request: NextRequest) {
             toolCallIndex++;
           } else if (part.type === 'finish') {
             usageData = {
-              prompt_tokens: part.usage?.inputTokens || 0,
-              completion_tokens: part.usage?.outputTokens || 0,
+              prompt_tokens: part.totalUsage?.inputTokens || 0,
+              completion_tokens: part.totalUsage?.outputTokens || 0,
             };
           }
         }
