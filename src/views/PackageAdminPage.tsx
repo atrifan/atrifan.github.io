@@ -23,6 +23,144 @@ interface VersionItem {
   created_at: string;
 }
 
+interface DownloadItem {
+  url: string;
+  pathname: string;
+  size: number;
+  uploadedAt: string;
+}
+
+function DownloadsSection() {
+  const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const fetchDownloads = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/downloads');
+      if (res.ok) {
+        const data = await res.json();
+        setDownloads(data.downloads || []);
+      }
+    } catch {
+      setError('Failed to load downloads');
+    }
+  }, []);
+
+  useEffect(() => { fetchDownloads(); }, [fetchDownloads]);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/admin/downloads', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+      const data = await res.json();
+      setSuccess(`Uploaded: ${data.url}`);
+      await fetchDownloads();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (url: string) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      const res = await fetch('/api/admin/downloads', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (res.ok) {
+        await fetchDownloads();
+        setSuccess('Deleted');
+      }
+    } catch {
+      setError('Delete failed');
+    }
+  };
+
+  return (
+    <div style={{ marginTop: '2rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1.5rem' }}>
+      <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>
+        File Uploads (Downloads / Packages / Archives)
+      </h3>
+
+      {error && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</div>}
+      {success && <div style={{ color: '#22c55e', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{success}</div>}
+
+      <div style={{ marginBottom: '1rem' }}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".dmg,.zip,.tar.gz,.tgz"
+          onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
+          style={{ display: 'none' }}
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '0.6rem 1.2rem',
+            color: '#fff',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            cursor: uploading ? 'wait' : 'pointer',
+            opacity: uploading ? 0.6 : 1,
+          }}
+        >
+          {uploading ? 'Uploading...' : 'Upload File'}
+        </button>
+      </div>
+
+      {downloads.length === 0 ? (
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>No downloads uploaded yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {downloads.map(d => (
+            <div key={d.url} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.6rem 0.75rem' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {d.pathname.replace('downloads/', '')}
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                  {(d.size / 1024 / 1024).toFixed(1)} MB
+                </div>
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(d.url); setSuccess('URL copied!'); }}
+                style={{ background: 'rgba(102, 126, 234, 0.15)', border: '1px solid rgba(102, 126, 234, 0.3)', borderRadius: '6px', padding: '0.35rem 0.6rem', color: '#667eea', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                Copy URL
+              </button>
+              <button
+                onClick={() => handleDelete(d.url)}
+                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.35rem 0.6rem', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const PackageAdminPage: React.FC = () => {
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -566,6 +704,8 @@ export const PackageAdminPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        <DownloadsSection />
       </main>
     </div>
   );

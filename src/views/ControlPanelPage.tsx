@@ -537,7 +537,11 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
   );
 }
 
-export const ControlPanelPage: React.FC = () => {
+interface ControlPanelPageProps {
+  showDownloads?: boolean;
+}
+
+export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownloads }) => {
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'budget'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
@@ -2689,6 +2693,51 @@ export const ControlPanelPage: React.FC = () => {
               <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>
                 Installation
               </h3>
+
+              {showDownloads && (
+                <div style={{ marginBottom: '1.25rem', background: 'rgba(102, 126, 234, 0.08)', border: '1px solid rgba(102, 126, 234, 0.2)', borderRadius: '10px', padding: '1rem' }}>
+                  <div style={{ color: '#667eea', fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                    Desktop App (macOS)
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <a
+                      href="https://s07musqc7iej8klq.public.blob.vercel-storage.com/HoriaAssistant-0.1.1-arm64.dmg"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        borderRadius: '8px',
+                        padding: '0.6rem 1.2rem',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Download for Apple Silicon
+                    </a>
+                    <a
+                      href="https://s07musqc7iej8klq.public.blob.vercel-storage.com/HoriaAssistant-0.1.1-x64.dmg"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        background: 'rgba(102, 126, 234, 0.15)',
+                        border: '1px solid rgba(102, 126, 234, 0.3)',
+                        borderRadius: '8px',
+                        padding: '0.6rem 1.2rem',
+                        color: '#667eea',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Download for Intel
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <details style={{ marginBottom: '1.25rem' }}>
                 <summary style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', marginBottom: '0.75rem' }}>
