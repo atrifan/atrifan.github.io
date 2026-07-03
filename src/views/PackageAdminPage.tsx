@@ -13,6 +13,11 @@ interface PackageItem {
   config_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  visibility?: 'public' | 'pending' | 'private';
+  install_count?: number;
+  avg_rating?: number | null;
+  rating_count?: number;
+  owner_user_id?: string | null;
 }
 
 interface VersionItem {
@@ -356,6 +361,25 @@ export const PackageAdminPage: React.FC = () => {
     }
   };
 
+  const handleModerate = async (pkgId: string, visibility: 'public' | 'pending' | 'private') => {
+    try {
+      const res = await fetch(`/api/packages/${pkgId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibility }),
+      });
+      if (res.ok) {
+        setSuccess(`Package set to ${visibility}`);
+        fetchPackages();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Moderation failed');
+      }
+    } catch {
+      setError('Moderation failed');
+    }
+  };
+
   const resetForm = () => {
     setFormId('');
     setFormName('');
@@ -619,12 +643,38 @@ export const PackageAdminPage: React.FC = () => {
                         <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{pkg.name}</span>
                         <span style={typeBadge(pkg.type)}>{pkg.type}</span>
                         <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>v{pkg.latest_version}</span>
+                        {pkg.visibility && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            padding: '0.1rem 0.45rem',
+                            borderRadius: '999px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                            color: pkg.visibility === 'public' ? '#22c55e' : pkg.visibility === 'pending' ? '#eab308' : 'rgba(255,255,255,0.5)',
+                            background: pkg.visibility === 'public' ? 'rgba(34,197,94,0.12)' : pkg.visibility === 'pending' ? 'rgba(234,179,8,0.12)' : 'rgba(255,255,255,0.06)',
+                          }}>
+                            {pkg.visibility}
+                          </span>
+                        )}
                       </div>
                       <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
                         {pkg.id} &middot; {new Date(pkg.updated_at).toLocaleDateString()}
+                        {' '}&middot; {pkg.install_count ?? 0} installs
+                        {pkg.avg_rating != null && <> &middot; ★ {pkg.avg_rating.toFixed(1)} ({pkg.rating_count ?? 0})</>}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                      {pkg.visibility === 'pending' && (
+                        <button onClick={() => handleModerate(pkg.id, 'public')} style={{ ...buttonStyle('primary'), fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}>
+                          Approve
+                        </button>
+                      )}
+                      {pkg.visibility === 'public' && (
+                        <button onClick={() => handleModerate(pkg.id, 'private')} style={{ ...buttonStyle('secondary'), fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}>
+                          Hide
+                        </button>
+                      )}
                       <button onClick={() => handleExpand(pkg.id)} style={{ ...buttonStyle('secondary'), fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}>
                         {expandedPkg === pkg.id ? 'Hide' : 'Versions'}
                       </button>

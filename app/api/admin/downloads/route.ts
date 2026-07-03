@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs/server';
 import { put, list, del } from '@vercel/blob';
-
-const ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
+import { isAdmin } from '@/src/lib/admin';
 
 async function checkAdmin() {
-  const user = await currentUser();
-  if (!user) return false;
-  return user.emailAddresses?.some(e => ADMIN_EMAILS.includes(e.emailAddress)) ?? false;
+  return isAdmin();
 }
 
 export async function GET() {

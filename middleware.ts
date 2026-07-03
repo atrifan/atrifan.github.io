@@ -11,6 +11,9 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/api/oauth/plugin/verify(.*)',
   '/api/mcp(.*)',
+  '/api/marketplace/discover(.*)',
+  '/api/marketplace/publish(.*)',
+  '/api/marketplace/install(.*)',
   '/api/billing/webhook(.*)',
   '/api/chat(.*)',
 ]);

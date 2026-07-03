@@ -633,36 +633,67 @@ export interface RestApiEndpointUpdate {
  */
 // ============ Packages Table ============
 
+export type PackageType = 'plugin' | 'skill' | 'practitioner' | 'mcp';
+export type PackageVisibility = 'public' | 'pending' | 'private';
+
 export interface PackageRow {
   id: string;
   name: string;
   description: string | null;
-  type: 'plugin' | 'skill' | 'practitioner';
+  type: PackageType;
   latest_version: string;
   blob_url: string;
+  config_json: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   created_by: string;
+  install_count: number;
+  owner_user_id: string | null;
+  visibility: PackageVisibility;
 }
 
 export interface PackageInsert {
   id: string;
   name: string;
   description?: string;
-  type: 'plugin' | 'skill' | 'practitioner';
+  type: PackageType;
   latest_version: string;
   blob_url: string;
+  config_json?: Record<string, unknown> | null;
   created_by: string;
+  owner_user_id?: string | null;
+  visibility?: PackageVisibility;
   updated_at?: string;
 }
 
 export interface PackageUpdate {
   name?: string;
   description?: string;
-  type?: 'plugin' | 'skill' | 'practitioner';
+  type?: PackageType;
   latest_version?: string;
   blob_url?: string;
+  config_json?: Record<string, unknown> | null;
+  owner_user_id?: string | null;
+  visibility?: PackageVisibility;
   updated_at?: string;
+}
+
+// ============ Package Ratings & Installs ============
+
+export interface PackageRatingRow {
+  id: string;
+  package_id: string;
+  user_id: string;
+  rating: number;
+  review: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackageRatingStats {
+  package_id: string;
+  avg_rating: number | null;
+  rating_count: number;
 }
 
 // ============ Package Versions Table ============

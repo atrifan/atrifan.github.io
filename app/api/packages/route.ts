@@ -2,13 +2,12 @@ import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { createClient } from '@supabase/supabase-js';
+import { isAdminUser } from '@/src/lib/admin';
 
 const supabase = createClient(
   process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!,
   process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
 
 export async function GET(request: Request) {
   const { userId } = await auth();
@@ -34,7 +33,28 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ packages: data });
+  const packages = data || [];
+
+  // Merge aggregate ratings (avg + count) from the rating-stats view.
+  if (packages.length > 0) {
+    const ids = packages.map((p) => p.id);
+    const { data: stats } = await supabase
+      .from('package_rating_stats')
+      .select('*')
+      .in('package_id', ids);
+    const statsById = new Map<string, { avg_rating: number | null; rating_count: number }>();
+    for (const s of stats || []) {
+      statsById.set(s.package_id, { avg_rating: s.avg_rating, rating_count: s.rating_count });
+    }
+    for (const p of packages) {
+      const stat = statsById.get(p.id);
+      p.avg_rating = stat?.avg_rating ?? null;
+      p.rating_count = stat?.rating_count ?? 0;
+      p.install_count = p.install_count ?? 0;
+    }
+  }
+
+  return NextResponse.json({ packages });
 }
 
 export async function POST(request: Request) {
@@ -43,8 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const isAdmin = user.emailAddresses?.some(e => ADMIN_EMAILS.includes(e.emailAddress));
-  if (!isAdmin) {
+  if (!isAdminUser(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -108,6 +127,7 @@ export async function POST(request: Request) {
     blob_url: blobUrl,
     updated_at: new Date().toISOString(),
     created_by: user.id,
+    visibility: 'public', // admin uploads are published immediately
     ...(configJson ? { config_json: configJson } : {}),
   });
 

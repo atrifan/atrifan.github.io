@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { del } from '@vercel/blob';
 import { createClient } from '@supabase/supabase-js';
+import { isAdminUser } from '@/src/lib/admin';
 
 const supabase = createClient(
   process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!,
   process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
 
 export async function GET(
   _request: NextRequest,
@@ -49,8 +48,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const isAdmin = user.emailAddresses?.some(e => ADMIN_EMAILS.includes(e.emailAddress));
-  if (!isAdmin) {
+  if (!isAdminUser(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -74,4 +72,42 @@ export async function DELETE(
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * PATCH — admin moderation. Approve or hide a (user-published) package by
+ * setting its visibility. Body: { visibility: 'public' | 'pending' | 'private' }.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!isAdminUser(user)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  let visibility: string;
+  try {
+    ({ visibility } = await request.json());
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+  if (!['public', 'pending', 'private'].includes(visibility)) {
+    return NextResponse.json({ error: 'visibility must be public, pending, or private' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('packages')
+    .update({ visibility, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, id, visibility });
 }

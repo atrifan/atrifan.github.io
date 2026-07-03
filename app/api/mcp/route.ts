@@ -26,6 +26,11 @@ import { sendA2AMessage } from '@/src/lib/a2a-client';
 import { executeRestApiCall } from '@/src/lib/rest-api-handler';
 import { executeGraphQLCall } from '@/src/lib/graphql-handler';
 import { createMCPClient, type MCPCallResult } from '@/src/lib/mcp-client';
+import {
+  MARKETPLACE_TOOLS,
+  isMarketplaceTool,
+  executeMarketplaceTool,
+} from '@/src/lib/marketplace-mcp-tools';
 import type { EnvironmentRow, MCPServerAuthType } from '@/src/types/supabase';
 
 /**
@@ -1893,6 +1898,7 @@ interface MCPContext {
   apiKeyId?: string;
   serverName: string;
   isAuthenticated: boolean;
+  plan?: string;        // User's plan (for tools that gate on paid tier)
   apiKey?: string;      // API key for REST calls
   authToken?: string;   // Bearer token for REST calls
   mcpSessionId?: string; // MCP session ID for A2A context continuity
@@ -2096,6 +2102,12 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           }
         }
 
+        // Marketplace tools (discover/install/publish) are available to any
+        // authenticated (paid) caller, independent of their enabled tool set.
+        if (context.isAuthenticated && context.userId) {
+          toolsList = [...toolsList, ...MARKETPLACE_TOOLS];
+        }
+
         // Track tools/list event
         trackMCPEvent('mcp_tools_list', {
           tool_count: toolsList.length,
@@ -2117,6 +2129,37 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
           serverName: context.serverName,
           hasApiKey: !!context.apiKey,
         }, null, 2));
+
+        // Marketplace tools (discover/install/publish) — require an
+        // authenticated paid caller; handled outside the widget/native path.
+        if (isMarketplaceTool(toolName)) {
+          if (!context.isAuthenticated || !context.userId) {
+            return {
+              jsonrpc: '2.0',
+              id,
+              error: { code: -32001, message: 'Authentication required to call this tool' },
+            };
+          }
+          const mpResult = await executeMarketplaceTool(toolName, toolArgs, {
+            userId: context.userId,
+            plan: (context.plan as 'pro' | 'plus') || 'pro',
+          });
+          trackMCPEvent('mcp_tool_call', {
+            tool_name: toolName,
+            event_category: 'mcp',
+            event_label: toolName,
+            has_args: Object.keys(toolArgs).length > 0,
+            is_rest_tool: false,
+          });
+          return {
+            jsonrpc: '2.0',
+            id,
+            result: {
+              content: [{ type: 'text', text: JSON.stringify(mpResult, null, 2) }],
+              structuredContent: mpResult,
+            },
+          };
+        }
 
         // Validate tool access - prevent tool call spoofing
         // For non-NATIVE tools, verify the tool is enabled for this user's server
@@ -2281,6 +2324,7 @@ export async function POST(request: NextRequest) {
         apiKeyId: internalApiKeyId || undefined,
         serverName: internalServerName,
         isAuthenticated: true,
+        plan: request.headers.get('X-User-Plan') || undefined,
         apiKey: originalApiKey || undefined,
         authToken: bearerToken,
         mcpSessionId,
@@ -2341,6 +2385,7 @@ export async function POST(request: NextRequest) {
         apiKeyId: authResult.apiKeyId,
         serverName: authResult.serverName || 'default',
         isAuthenticated: true,
+        plan: authResult.plan,
         apiKey: isApiKeyAuth ? apiKey : undefined,
         authToken: isBearerAuth ? apiKey : undefined,
         mcpSessionId,

@@ -213,6 +213,18 @@ function formatCost(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+// Human-friendly labels for api_usage_log event types.
+const EVENT_LABELS: Record<string, string> = {
+  request: 'API request',
+  verify: 'Key verified',
+  config_fetch: 'Config fetch',
+  marketplace_discover: 'Marketplace search',
+  marketplace_publish: 'Package published',
+};
+function eventLabel(type: string): string {
+  return EVENT_LABELS[type] || type.replace(/_/g, ' ');
+}
+
 function isVersionOutdated(current: string | undefined, latest: string | undefined): boolean {
   if (!current || !latest) return false;
   const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
@@ -254,6 +266,9 @@ interface AvailablePkg {
   latest_version: string;
   blob_url: string;
   config_json?: Record<string, unknown> | null;
+  avg_rating?: number | null;
+  rating_count?: number;
+  install_count?: number;
 }
 
 interface ExtBridge {
@@ -267,6 +282,7 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [ratingId, setRatingId] = useState<string | null>(null);
 
   const fetchAvailable = useCallback(async () => {
     try {
@@ -277,6 +293,24 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
       }
     } catch { /* ignore */ }
     setLoading(false);
+  }, []);
+
+  const submitRating = useCallback(async (pkgId: string, rating: number) => {
+    setRatingId(pkgId);
+    try {
+      const res = await fetch(`/api/packages/${encodeURIComponent(pkgId)}/ratings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPackages(prev => prev.map(p =>
+          p.id === pkgId ? { ...p, avg_rating: data.avg_rating, rating_count: data.rating_count } : p
+        ));
+      }
+    } catch { /* ignore */ }
+    setRatingId(null);
   }, []);
 
   const [mcpServers, setMcpServers] = useState<Array<{ id: string; name: string; connected: boolean }>>([]);
@@ -468,6 +502,43 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
                   {status === 'update_available' && (
                     <div style={{ color: '#eab308', fontSize: '0.7rem', marginTop: '0.2rem' }}>Update available: v{instVersion} → v{pkg.latest_version}</div>
                   )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem' }}>
+                    <div
+                      role="group"
+                      aria-label={`Rate ${pkg.name}`}
+                      style={{ display: 'flex', gap: '0.1rem', opacity: ratingId === pkg.id ? 0.5 : 1 }}
+                    >
+                      {[1, 2, 3, 4, 5].map(star => {
+                        const filled = Math.round(pkg.avg_rating ?? 0) >= star;
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                            onClick={() => submitRating(pkg.id, star)}
+                            disabled={ratingId === pkg.id}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                              lineHeight: 1,
+                              color: filled ? '#f59e0b' : 'rgba(255,255,255,0.25)',
+                            }}
+                          >
+                            ★
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                      {pkg.avg_rating != null ? `${pkg.avg_rating.toFixed(1)} (${pkg.rating_count ?? 0})` : 'No ratings'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem' }}>
+                      · {pkg.install_count ?? 0} installs
+                    </span>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                   {status === 'not_installed' && (
@@ -537,17 +608,124 @@ function PackagesTab({ extensionBridge: bridge, extensionDetected }: { extension
   );
 }
 
+interface PublisherStat {
+  id: string;
+  name: string;
+  type: string;
+  visibility: string;
+  latest_version: string;
+  install_count: number;
+  avg_rating: number | null;
+  rating_count: number;
+}
+
+/**
+ * Publisher analytics — owners see downloads and ratings for packages they've
+ * published, plus each package's moderation status.
+ */
+function PublisherTab() {
+  const [packages, setPackages] = useState<PublisherStat[]>([]);
+  const [totals, setTotals] = useState<{ installs: number; ratings: number }>({ installs: 0, ratings: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/marketplace/publisher');
+        if (res.ok) {
+          const data = await res.json();
+          setPackages(data.packages || []);
+          setTotals(data.totals || { installs: 0, ratings: 0 });
+        }
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
+  }, []);
+
+  const card: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px',
+    padding: '1.5rem',
+    marginBottom: '1.5rem',
+  };
+  const muted = { color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', margin: 0 };
+  const visColor: Record<string, string> = { public: '#22c55e', pending: '#eab308', private: 'rgba(255,255,255,0.4)' };
+
+  if (loading) {
+    return <div style={card}><p style={muted}>Loading publisher stats...</p></div>;
+  }
+  if (packages.length === 0) {
+    return <div style={card}><p style={muted}>You haven&apos;t published any packages yet. Publish a skill, plugin, or MCP to see downloads and ratings here.</p></div>;
+  }
+
+  return (
+    <>
+      <div style={{ ...card, display: 'flex', gap: '2rem' }}>
+        <div>
+          <div style={muted}>Total Downloads</div>
+          <div style={{ color: '#3b82f6', fontSize: '2rem', fontWeight: 700 }}>{totals.installs}</div>
+        </div>
+        <div>
+          <div style={muted}>Total Ratings</div>
+          <div style={{ color: '#f59e0b', fontSize: '2rem', fontWeight: 700 }}>{totals.ratings}</div>
+        </div>
+        <div>
+          <div style={muted}>Published Packages</div>
+          <div style={{ color: '#a855f7', fontSize: '2rem', fontWeight: 700 }}>{packages.length}</div>
+        </div>
+      </div>
+
+      <div style={card}>
+        <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem' }}>Your Packages</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead>
+            <tr style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'left' }}>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Package</th>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Type</th>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Version</th>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Downloads</th>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Rating</th>
+              <th style={{ padding: '0.5rem', fontWeight: 500 }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packages.map(p => (
+              <tr key={p.id} style={{ color: '#fff', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <td style={{ padding: '0.5rem', fontWeight: 600 }}>{p.name}</td>
+                <td style={{ padding: '0.5rem', color: 'rgba(255,255,255,0.6)' }}>{p.type}</td>
+                <td style={{ padding: '0.5rem', color: 'rgba(255,255,255,0.6)' }}>v{p.latest_version}</td>
+                <td style={{ padding: '0.5rem' }}>{p.install_count}</td>
+                <td style={{ padding: '0.5rem' }}>
+                  {p.avg_rating != null ? `★ ${p.avg_rating.toFixed(1)} (${p.rating_count})` : '—'}
+                </td>
+                <td style={{ padding: '0.5rem', color: visColor[p.visibility] || 'rgba(255,255,255,0.5)' }}>
+                  {p.visibility}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 interface ControlPanelPageProps {
   showDownloads?: boolean;
 }
 
 export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownloads }) => {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'budget'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'publisher' | 'budget'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [activity, setActivity] = useState<{
+    timeline: Array<{ event_type: string; metadata: Record<string, unknown> | null; created_at: string }>;
+    event_counts: Record<string, number>;
+  } | null>(null);
 
   // Add device modal state
   const [showAddDevice, setShowAddDevice] = useState(false);
@@ -744,6 +922,9 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
   useEffect(() => {
     fetchDevices();
     fetchUsage();
+    fetch('/api/dashboard/activity').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) setActivity({ timeline: d.timeline || [], event_counts: d.event_counts || {} });
+    }).catch(() => {});
     fetch('/api/plugin/version').then(r => r.json()).then(d => {
       if (d.latest) setLatestVersion(d.latest);
     }).catch(() => {});
@@ -1155,17 +1336,59 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
 
   const hasLiveData = extensionDetected && (keySentToExtension || extensionBridge.activated);
 
-  const tabStyle = (tab: string) => ({
-    padding: '0.6rem 1.25rem',
+  const tabStyle = (tab: string): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.45rem',
+    padding: '0.6rem 1.1rem',
     borderRadius: '8px',
-    border: 'none',
+    border: `1px solid ${activeTab === tab ? 'rgba(102, 126, 234, 0.45)' : 'transparent'}`,
     cursor: 'pointer',
     fontSize: '0.9rem',
-    fontWeight: 500 as const,
+    fontWeight: activeTab === tab ? 600 : 500,
     background: activeTab === tab ? 'rgba(102, 126, 234, 0.2)' : 'transparent',
-    color: activeTab === tab ? '#667eea' : 'rgba(255,255,255,0.6)',
+    color: activeTab === tab ? '#a5b4fc' : 'rgba(255,255,255,0.65)',
     transition: 'all 0.2s',
+    whiteSpace: 'nowrap',
   });
+
+  // Menu definition — icon + label per tab, in a clear, stable order.
+  const TABS: Array<{ id: typeof activeTab; label: string; icon: string }> = [
+    { id: 'overview', label: 'Overview', icon: '◉' },
+    { id: 'devices', label: 'Devices', icon: '▣' },
+    { id: 'usage', label: 'Usage', icon: '◴' },
+    { id: 'logs', label: 'Logs', icon: '≣' },
+    { id: 'docs', label: 'Docs', icon: '☷' },
+    { id: 'packages', label: 'Marketplace', icon: '◈' },
+    { id: 'publisher', label: 'Publisher', icon: '☆' },
+    { id: 'budget', label: 'Budget', icon: '◎' },
+  ];
+
+  const focusTab = (index: number) => {
+    const el = document.getElementById(`cp-tab-${TABS[index].id}`);
+    el?.focus();
+  };
+  const onTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = (index + 1) % TABS.length;
+      setActiveTab(TABS[next].id);
+      focusTab(next);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = (index - 1 + TABS.length) % TABS.length;
+      setActiveTab(TABS[prev].id);
+      focusTab(prev);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveTab(TABS[0].id);
+      focusTab(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveTab(TABS[TABS.length - 1].id);
+      focusTab(TABS.length - 1);
+    }
+  };
 
   const cardStyle: React.CSSProperties = {
     background: 'rgba(255,255,255,0.03)',
@@ -1238,17 +1461,34 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
           </p>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-          <button onClick={() => setActiveTab('overview')} style={tabStyle('overview')}>Overview</button>
-          <button onClick={() => setActiveTab('devices')} style={tabStyle('devices')}>Devices</button>
-          <button onClick={() => setActiveTab('usage')} style={tabStyle('usage')}>Usage</button>
-          <button onClick={() => setActiveTab('logs')} style={tabStyle('logs')}>Logs</button>
-          <button onClick={() => setActiveTab('docs')} style={tabStyle('docs')}>Docs</button>
-          <button onClick={() => setActiveTab('packages')} style={tabStyle('packages')}>Packages</button>
-          <button onClick={() => setActiveTab('budget')} style={tabStyle('budget')}>Budget</button>
+        {/* Tabs — accessible tablist with arrow-key navigation */}
+        <div
+          role="tablist"
+          aria-label="Control panel sections"
+          style={{ display: 'flex', gap: '0.4rem', marginBottom: '2rem', flexWrap: 'wrap' }}
+        >
+          {TABS.map((tab, index) => {
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                id={`cp-tab-${tab.id}`}
+                role="tab"
+                aria-selected={selected}
+                aria-controls="cp-panel"
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => onTabKeyDown(e, index)}
+                style={tabStyle(tab.id)}
+              >
+                <span aria-hidden="true" style={{ fontSize: '0.9rem', opacity: 0.85 }}>{tab.icon}</span>
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
+        <div id="cp-panel" role="tabpanel" aria-labelledby={`cp-tab-${activeTab}`} tabIndex={0}>
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
@@ -1316,6 +1556,34 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                 <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{devices.length}</div>
               </div>
             </div>
+
+            {/* Activity — interactions observed across API, MCP, and marketplace */}
+            {activity && activity.timeline.length > 0 && (
+              <div style={cardStyle}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem' }}>Recent Activity</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                  {Object.entries(activity.event_counts).map(([type, count]) => (
+                    <div key={type} style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '10px',
+                      padding: '0.5rem 0.85rem',
+                    }}>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>{eventLabel(type)}</div>
+                      <div style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>{count}</div>
+                    </div>
+                  ))}
+                </div>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {activity.timeline.slice(0, 12).map((ev, i) => (
+                    <li key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>
+                      <span>{eventLabel(ev.event_type)}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.35)' }}>{relativeTime(ev.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Live Extension Summary (only when connected) */}
             {hasLiveData && (
@@ -3182,6 +3450,8 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
           <PackagesTab extensionBridge={extensionBridge} extensionDetected={extensionDetected} />
         )}
 
+        {activeTab === 'publisher' && <PublisherTab />}
+
         {activeTab === 'budget' && (
           <>
             {budgetLoading && !budgetData ? (
@@ -3523,6 +3793,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
             )}
           </>
         )}
+        </div>
       </main>
 
       <Footer />
