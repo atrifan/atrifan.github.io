@@ -11,7 +11,8 @@
  */
 import { config as loadEnv } from 'dotenv';
 import { put } from '@vercel/blob';
-import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 loadEnv({ path: '.env.local' });
@@ -40,13 +41,16 @@ async function main() {
   const sizeMb = (info.size / 1024 / 1024).toFixed(1);
   console.log(`Uploading ${srcPath} (${sizeMb} MB) → blob:${key} ...`);
 
-  const data = await readFile(srcPath);
+  // Stream the file and use multipart so large (>hundreds of MB) DMGs don't hit
+  // the single-request server-upload size limit.
+  const data = createReadStream(srcPath);
   const blob = await put(key, data, {
     access: 'public',
     contentType: srcPath.endsWith('.dmg') ? 'application/x-apple-diskimage' : 'application/octet-stream',
     addRandomSuffix: false,
     token,
     allowOverwrite: true,
+    multipart: true,
   });
 
   console.log('Uploaded.');
