@@ -28,7 +28,9 @@ Multi-device, per `(user_id, server_name, device_name)`. SHA-256 hashed. Free pl
 `tabpanel`, arrow-key nav) with tabs: Overview, Devices, Usage, Logs, Docs, Marketplace, Publisher, Budget.
 The Overview "Recent Activity" card and `GET /api/dashboard/activity` surface interactions (from
 `api_usage_log`) and per-device installed inventory (from heartbeats). Package install/manage on-device
-goes through `extension-bridge.ts` (`LIST_INSTALLED`, `INSTALL_PACKAGE`, `MCP_ADD_SERVER`).
+goes through `extension-bridge.ts` (`LIST_INSTALLED`, `INSTALL_PACKAGE`, `MCP_ADD_SERVER`). The live
+device view also manages skills/plugins (enable/disable, YAML settings), notification channels, and
+schedules over the same bridge — see [[plugin-admin]].
 
 The in-browser side panel connects via a control-plane content-script bridge on the tulzo/zip.run.place
 domains (`window.postMessage` handshake carrying the API key + device name).

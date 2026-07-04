@@ -19,6 +19,7 @@ frontmatter (`description`, `appliesTo` globs, `alwaysApply`). Read the ones rel
 | [automation-yaml](.claude/rules/automation-yaml.md) | Workflow YAML schema, step types, execution |
 | [oauth-mcp](.claude/rules/oauth-mcp.md) | OAuth flow, MCP tool execution, external MCP surface |
 | [plugin-control-plane](.claude/rules/plugin-control-plane.md) | Assistant ↔ Tulzo, API keys, observability |
+| [plugin-admin](.claude/rules/plugin-admin.md) | Skill enable/disable, settings, notification channels, schedules, plugin catalog |
 | [api-routes](.claude/rules/api-routes.md) | API route reference |
 
 ## Quick start

@@ -69,8 +69,15 @@ interface LiveProviders {
   active_model: string;
 }
 
+interface RawSkillConfig {
+  disabled?: boolean;
+  settingsFile?: string;
+  commands?: Array<{ name: string; description?: string }>;
+  notificationChannel?: { id: string; name?: string };
+}
+
 interface LiveSkillsRaw {
-  skills?: Array<{ name: string; id?: string; description?: string; matches?: string[]; autoActivate?: boolean; hasCode?: boolean; mcpServers?: string[]; practitionerId?: string; pluginId?: string }>;
+  skills?: Array<{ name: string; id?: string; description?: string; matches?: string[]; autoActivate?: boolean; hasCode?: boolean; mcpServers?: string[]; practitionerId?: string; pluginId?: string } & RawSkillConfig>;
   practitioners?: Array<{ id: string; name: string; pluginCount?: number; skillCount?: number; plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number }> }>;
   plugins?: Array<{ id: string; name: string; description?: string; matches?: string[]; startUrl?: string; mcpServers?: string[]; skillCount?: number; bindings?: Array<{ practitionerId: string; priority?: string }>; skills?: Array<{ id: string; name: string; description?: string; matches?: string[] }> }>;
 }
@@ -85,6 +92,10 @@ interface LiveSkill {
   mcpServers?: string[];
   practitionerId?: string;
   pluginId?: string;
+  disabled?: boolean;
+  settingsFile?: string;
+  commands?: Array<{ name: string; description?: string }>;
+  notificationChannel?: { id: string; name?: string };
 }
 
 interface LivePlugin {
@@ -134,6 +145,7 @@ interface LiveSchedulesRaw {
 interface LiveSchedule {
   id: string;
   name?: string;
+  prompt?: string;
   cron: string;
   next_run?: string;
   status: string;
@@ -153,12 +165,20 @@ interface LiveNotificationConfigRaw {
       telegram?: { enabled: boolean; chat_id?: string };
       slack?: { enabled: boolean; webhook_url?: string };
     };
+    availableChannels?: Array<{ id: string; name?: string; builtin?: boolean }>;
   };
+  availableChannels?: Array<{ id: string; name?: string; builtin?: boolean }>;
 }
 
 interface LiveNotificationConfig {
   telegram?: { enabled: boolean; chat_id?: string };
   webhook?: { enabled: boolean; url?: string };
+}
+
+interface LiveNotificationChannel {
+  id: string;
+  name?: string;
+  builtin?: boolean;
 }
 
 interface LiveVersionRaw {
@@ -185,6 +205,7 @@ interface LiveData {
   schedules: LiveSchedule[] | null;
   browserStatus: LiveBrowserStatus | null;
   notifications: LiveNotificationConfig | null;
+  notificationChannels: LiveNotificationChannel[] | null;
   version: LiveVersion | null;
   loading: boolean;
   lastFetched: number | null;
@@ -755,6 +776,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
     schedules: null,
     browserStatus: null,
     notifications: null,
+    notificationChannels: null,
     version: null,
     loading: false,
     lastFetched: null,
@@ -1119,6 +1141,8 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
         id: s.id || s.name, name: s.name, description: s.description,
         matches: s.matches, autoActivate: s.autoActivate, hasCode: s.hasCode,
         mcpServers: s.mcpServers, practitionerId: s.practitionerId, pluginId: s.pluginId,
+        disabled: s.disabled, settingsFile: s.settingsFile, commands: s.commands,
+        notificationChannel: s.notificationChannel,
       }));
     }
     if (rawSkillsObj?.practitioners && rawSkillsObj.practitioners.length > 0) {
@@ -1176,6 +1200,14 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
       if (channels.slack) notifications.webhook = { enabled: channels.slack.enabled, url: channels.slack.webhook_url };
     }
 
+    // Dynamic notification channel registry (availableChannels)
+    let notificationChannels: LiveNotificationChannel[] | null = null;
+    const availRaw = (nRaw as { availableChannels?: LiveNotificationChannel[] } | null)?.availableChannels
+      || (raw.notifications as { availableChannels?: LiveNotificationChannel[] } | undefined)?.availableChannels;
+    if (availRaw && availRaw.length > 0) {
+      notificationChannels = availRaw.map(c => ({ id: c.id, name: c.name, builtin: c.builtin }));
+    }
+
     // Version
     let version: LiveVersion | null = null;
     const vRaw = raw.version && 'data' in raw.version ? raw.version.data : raw.version;
@@ -1184,7 +1216,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
       version = { version: v.version, gitCommit: v.gitCommit || '', platform: v.platform || '', arch: v.arch || '', nodeVersion: v.nodeVersion || '' };
     }
 
-    return { usage, providers: providersResult, skills, practitioners, plugins, mcpServers, mcpTools, schedules, browserStatus, notifications, version };
+    return { usage, providers: providersResult, skills, practitioners, plugins, mcpServers, mcpTools, schedules, browserStatus, notifications, notificationChannels, version };
   }, []);
 
   // Fetch all live data — tries GET_DEVICE_INFO (single call), falls back to individual commands
@@ -1261,6 +1293,57 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
     fetchLiveData();
     fetchNativeLogs();
   }, [extensionDetected, fetchLiveData, fetchNativeLogs]);
+
+  // ── Live device management over the extension bridge ──────────────────────
+  const [mgmtBusy, setMgmtBusy] = useState<string | null>(null);
+  const [settingsEditor, setSettingsEditor] = useState<{ skillId: string; settingsFile: string; content: string } | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  const runBridge = useCallback(async (busyKey: string, command: string, params: Record<string, unknown> = {}) => {
+    setMgmtBusy(busyKey);
+    try {
+      addLog('native', 'out', command, params);
+      await extensionBridge.send(command, params);
+      await fetchLiveData();
+    } catch (e) {
+      addLog('native', 'in', `${command} failed`, { error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setMgmtBusy(null);
+    }
+  }, [extensionBridge, fetchLiveData, addLog]);
+
+  const toggleSkill = useCallback((skill: LiveSkill) => {
+    const enabled = skill.disabled === true; // enabling if currently disabled
+    return runBridge(`skill:${skill.id}`, 'SKILL_SET_ENABLED', { skillId: skill.id, enabled });
+  }, [runBridge]);
+
+  const openSkillSettings = useCallback(async (skill: LiveSkill) => {
+    setMgmtBusy(`settings:${skill.id}`);
+    try {
+      const res = await extensionBridge.send<{ ok?: boolean; skillId?: string; settingsFile?: string; content?: string }>('GET_SKILL_SETTINGS', { skillId: skill.id });
+      if (res?.ok) {
+        setSettingsEditor({ skillId: skill.id, settingsFile: res.settingsFile || skill.settingsFile || 'settings.yaml', content: res.content || '' });
+      }
+    } catch (e) {
+      addLog('native', 'in', 'GET_SKILL_SETTINGS failed', { error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setMgmtBusy(null);
+    }
+  }, [extensionBridge, addLog]);
+
+  const saveSkillSettings = useCallback(async () => {
+    if (!settingsEditor) return;
+    setSettingsSaving(true);
+    try {
+      await extensionBridge.send('SET_SKILL_SETTINGS', { skillId: settingsEditor.skillId, content: settingsEditor.content });
+      setSettingsEditor(null);
+      await fetchLiveData();
+    } catch (e) {
+      addLog('native', 'in', 'SET_SKILL_SETTINGS failed', { error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSettingsSaving(false);
+    }
+  }, [settingsEditor, extensionBridge, fetchLiveData, addLog]);
 
   const addDevice = async () => {
     if (!newDeviceName.trim()) return;
@@ -1652,6 +1735,136 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Skills & Plugins management (connected device) */}
+            {hasLiveData && liveData.skills && liveData.skills.length > 0 && (
+              <div style={cardStyle}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem' }}>
+                  Skills &amp; Plugins
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                    ({liveData.skills.filter(s => !s.disabled).length} enabled / {liveData.skills.length})
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {liveData.skills.map(skill => {
+                    const busy = mgmtBusy === `skill:${skill.id}` || mgmtBusy === `settings:${skill.id}`;
+                    return (
+                      <div key={skill.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                        padding: '0.6rem 0.85rem', background: 'rgba(255,255,255,0.02)',
+                        borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)',
+                        opacity: skill.disabled ? 0.55 : 1,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>{skill.name}</span>
+                            {skill.autoActivate && <span style={{ color: '#22c55e', fontSize: '0.65rem' }}>auto</span>}
+                            {skill.notificationChannel && <span style={{ color: '#f59e0b', fontSize: '0.65rem' }}>channel</span>}
+                            {skill.commands && skill.commands.length > 0 && (
+                              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>
+                                {skill.commands.map(c => `/${c.name}`).join(' ')}
+                              </span>
+                            )}
+                          </div>
+                          {skill.description && (
+                            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {skill.description}
+                            </div>
+                          )}
+                        </div>
+                        {skill.settingsFile && (
+                          <button
+                            onClick={() => openSkillSettings(skill)}
+                            disabled={busy}
+                            aria-label={`Edit ${skill.name} settings`}
+                            title="Edit settings"
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', padding: '0.3rem 0.5rem', cursor: busy ? 'wait' : 'pointer' }}
+                          >
+                            ⚙
+                          </button>
+                        )}
+                        <button
+                          onClick={() => toggleSkill(skill)}
+                          disabled={busy}
+                          aria-label={`${skill.disabled ? 'Enable' : 'Disable'} ${skill.name}`}
+                          style={{
+                            background: skill.disabled ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)',
+                            border: `1px solid ${skill.disabled ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                            borderRadius: '6px',
+                            color: skill.disabled ? '#22c55e' : 'rgba(255,255,255,0.6)',
+                            fontSize: '0.75rem', fontWeight: 600, padding: '0.3rem 0.7rem',
+                            cursor: busy ? 'wait' : 'pointer', minWidth: '4.5rem',
+                          }}
+                        >
+                          {busy ? '…' : skill.disabled ? 'Enable' : 'Disable'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Schedules management (connected device) */}
+            {hasLiveData && liveData.schedules && liveData.schedules.length > 0 && (
+              <div style={cardStyle}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem' }}>Schedules</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {liveData.schedules.map(sch => {
+                    const paused = sch.status !== 'active';
+                    const busy = mgmtBusy === `sched:${sch.id}`;
+                    return (
+                      <div key={sch.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.85rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', opacity: paused ? 0.6 : 1 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sch.prompt || sch.id}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', fontFamily: 'monospace' }}>{sch.cron}{paused ? ' · paused' : ''}</div>
+                        </div>
+                        <button
+                          onClick={() => runBridge(`sched:${sch.id}`, paused ? 'SCHEDULE_RESUME' : 'SCHEDULE_PAUSE', { id: sch.id })}
+                          disabled={busy}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', fontWeight: 600, padding: '0.3rem 0.7rem', cursor: busy ? 'wait' : 'pointer' }}
+                        >
+                          {busy ? '…' : paused ? 'Resume' : 'Pause'}
+                        </button>
+                        <button
+                          onClick={() => runBridge(`sched:${sch.id}`, 'SCHEDULE_REMOVE', { id: sch.id })}
+                          disabled={busy}
+                          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', color: '#ef4444', fontSize: '0.72rem', fontWeight: 600, padding: '0.3rem 0.7rem', cursor: busy ? 'wait' : 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Notification channels (connected device) */}
+            {hasLiveData && liveData.notificationChannels && liveData.notificationChannels.length > 0 && (
+              <div style={cardStyle}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem' }}>Notification Channels</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {liveData.notificationChannels.map(ch => {
+                    const busy = mgmtBusy === `notif:${ch.id}`;
+                    return (
+                      <div key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.7rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '999px' }}>
+                        <span style={{ color: '#fff', fontSize: '0.78rem' }}>{ch.name || ch.id}</span>
+                        {ch.builtin && <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}>built-in</span>}
+                        <button
+                          onClick={() => runBridge(`notif:${ch.id}`, 'NOTIFICATION_TEST', { channel: ch.id })}
+                          disabled={busy}
+                          aria-label={`Send test notification to ${ch.name || ch.id}`}
+                          style={{ background: 'rgba(102,126,234,0.15)', border: '1px solid rgba(102,126,234,0.3)', borderRadius: '6px', color: '#a5b4fc', fontSize: '0.68rem', fontWeight: 600, padding: '0.2rem 0.55rem', cursor: busy ? 'wait' : 'pointer' }}
+                        >
+                          {busy ? '…' : 'Test'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>
@@ -3794,6 +4007,51 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
           </>
         )}
         </div>
+
+        {/* Skill settings YAML editor */}
+        {settingsEditor && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Edit ${settingsEditor.settingsFile}`}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+            onClick={() => !settingsSaving && setSettingsEditor(null)}
+          >
+            <div style={{ ...cardStyle, maxWidth: '40rem', width: '100%', margin: 0 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, margin: 0 }}>
+                  {settingsEditor.skillId} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400, fontSize: '0.8rem' }}>· {settingsEditor.settingsFile}</span>
+                </h3>
+              </div>
+              <label htmlFor="skill-settings-yaml" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                {settingsEditor.settingsFile} contents (YAML)
+              </label>
+              <textarea
+                id="skill-settings-yaml"
+                value={settingsEditor.content}
+                onChange={e => setSettingsEditor(prev => prev ? { ...prev, content: e.target.value } : prev)}
+                spellCheck={false}
+                style={{ width: '100%', minHeight: '18rem', background: 'rgba(0,0,0,0.35)', color: '#e5e7eb', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.85rem' }}>
+                <button
+                  onClick={() => setSettingsEditor(null)}
+                  disabled={settingsSaving}
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSkillSettings}
+                  disabled={settingsSaving}
+                  style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.85rem', fontWeight: 600, padding: '0.5rem 1.25rem', cursor: settingsSaving ? 'wait' : 'pointer' }}
+                >
+                  {settingsSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />
