@@ -5935,6 +5935,34 @@
   color: var(--accent, #8b7cf6);
 }
 
+.rc-root .rc-refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #23232b);
+  background: transparent;
+  color: var(--text, #e8e8ea);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rc-root .rc-refresh:hover:not(:disabled) {
+  background: var(--border, #23232b);
+  border-color: var(--accent, #6d5cf6);
+}
+
+.rc-root .rc-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .rc-root .rc-title,
 .rc-root .rc-header .rc-title {
   font-size: 15px;

@@ -101,4 +101,17 @@ test.describe('remote chat UI (/chat)', () => {
     const back = page.getByRole('button', { name: /back/i }).or(page.getByRole('link', { name: /back/i }));
     await expect(back.first()).toBeVisible();
   });
+
+  test('picker: a refresh control re-reads device presence', async ({ page }) => {
+    await page.goto('/chat');
+    await expect(page.getByRole('heading', { name: /connected devices/i })).toBeVisible();
+
+    // A labelled refresh control triggers a fresh /api/plugin/devices read.
+    const refresh = page.getByRole('button', { name: /refresh devices/i });
+    await expect(refresh).toBeVisible();
+
+    const req = page.waitForRequest((r) => r.url().includes('/api/plugin/devices'));
+    await refresh.click();
+    await req;
+  });
 });
