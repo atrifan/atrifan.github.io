@@ -1,4 +1,4 @@
-import { seedMarketplace, hasSupabaseEnv } from './fixtures/seed';
+import { seedMarketplace, seedRelaySession, hasSupabaseEnv } from './fixtures/seed';
 
 /**
  * Seed marketplace fixtures ONCE before the whole run. Individual specs must
@@ -9,4 +9,5 @@ import { seedMarketplace, hasSupabaseEnv } from './fixtures/seed';
 export default async function globalSetup() {
   if (!hasSupabaseEnv()) return;
   await seedMarketplace();
+  await seedRelaySession();
 }

@@ -64,3 +64,18 @@ test.describe('authenticated dashboard', () => {
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+test.describe('authenticated remote chat', () => {
+  test.skip(!process.env.E2E_CLERK_STORAGE_STATE, 'requires Clerk test session (E2E_CLERK_STORAGE_STATE)');
+  test.use({ storageState: process.env.E2E_CLERK_STORAGE_STATE });
+
+  test('remote chat device picker has no serious accessibility violations', async ({ page }) => {
+    await page.goto('/chat');
+    // The message log region anchors the chat surface.
+    const blocking = await scan(page);
+    expect(
+      blocking,
+      blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
+    ).toEqual([]);
+  });
+});

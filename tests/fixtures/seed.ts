@@ -16,6 +16,12 @@ export const TEST_PRO_KEY = process.env.TEST_MARKETPLACE_KEY || 'tlz_test_pro_ma
 export const TEST_USER_ID = process.env.TEST_MARKETPLACE_USER || 'test_user_marketplace';
 export const TEST_PACKAGE_ID = 'test-mcp-weather';
 
+// Remote chat relay fixtures. A relay session is normally created via the
+// Clerk-gated route; for device-side (Bearer) tests we seed one directly so
+// poll/emit can be exercised with the fixture API key alone.
+export const TEST_RELAY_SESSION_ID = '00000000-0000-4000-8000-00000000c0de';
+export const TEST_RELAY_DEVICE_NAME = 'e2e';
+
 function hash(key: string): string {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
@@ -73,4 +79,35 @@ export async function cleanupMarketplace(): Promise<void> {
   const db = client();
   await db.from('packages').delete().eq('id', TEST_PACKAGE_ID);
   await db.from('api_keys').delete().eq('api_key_hash', hash(TEST_PRO_KEY));
+}
+
+/**
+ * Seed a relay session owned by the fixture user + fixture device (api key),
+ * so device Bearer routes (poll/emit) can be tested without Clerk. Requires the
+ * fixture api_keys row to exist (seedMarketplace runs first in global-setup).
+ * Idempotent: upserts by fixed session id and clears any leftover frames.
+ */
+export async function seedRelaySession(): Promise<void> {
+  const db = client();
+  const { data: key } = await db
+    .from('api_keys')
+    .select('id')
+    .eq('api_key_hash', hash(TEST_PRO_KEY))
+    .single();
+  if (!key) return;
+
+  await db.from('chat_relay_sessions').upsert(
+    {
+      id: TEST_RELAY_SESSION_ID,
+      user_id: TEST_USER_ID,
+      api_key_id: (key as { id: string }).id,
+      device_name: TEST_RELAY_DEVICE_NAME,
+      title: 'e2e relay session',
+    },
+    { onConflict: 'id' }
+  );
+
+  // Start each run with a clean frame/message slate for this session.
+  await db.from('chat_relay_frames').delete().eq('session_id', TEST_RELAY_SESSION_ID);
+  await db.from('chat_relay_messages').delete().eq('session_id', TEST_RELAY_SESSION_ID);
 }

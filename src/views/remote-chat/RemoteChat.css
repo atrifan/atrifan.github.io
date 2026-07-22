@@ -1,0 +1,243 @@
+/* Mobile-first remote chat. Single column, full viewport, sticky composer,
+   safe-area insets for iOS. Adapted from the assistant panel's chat styles. */
+
+.rc-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  background: #0b0b0f;
+  color: #e8e8ea;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.rc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  border-bottom: 1px solid #23232b;
+  background: #101017;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.rc-header .rc-logo {
+  font-size: 18px;
+  color: #8b7cf6;
+}
+
+.rc-header .rc-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rc-header .rc-status {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1c1c26;
+  color: #9aa;
+}
+
+.rc-header .rc-status.online {
+  color: #4ade80;
+}
+
+.rc-header .rc-status.offline {
+  color: #f87171;
+}
+
+.rc-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rc-bubble {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rc-bubble.user {
+  align-self: flex-end;
+  background: #6d5cf6;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.rc-bubble.assistant {
+  align-self: flex-start;
+  background: #17171f;
+  border: 1px solid #23232b;
+  border-bottom-left-radius: 4px;
+}
+
+.rc-bubble .rc-md > *:first-child { margin-top: 0; }
+.rc-bubble .rc-md > *:last-child { margin-bottom: 0; }
+.rc-bubble .rc-md pre {
+  background: #0b0b0f;
+  border: 1px solid #23232b;
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+.rc-bubble .rc-md code { font-size: 13px; }
+.rc-bubble .rc-md a { color: #a89bff; }
+
+.rc-steps {
+  margin-top: 8px;
+  border-top: 1px dashed #2a2a34;
+  padding-top: 8px;
+}
+
+.rc-steps summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #9aa;
+  user-select: none;
+}
+
+.rc-steps ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #b8b8c0;
+}
+
+.rc-actions {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7fb3ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.rc-actions .rc-action { display: block; }
+
+.rc-thinking {
+  font-size: 12px;
+  color: #8a8a93;
+  font-style: italic;
+}
+
+.rc-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-top: 6px;
+  color: #9aa;
+}
+.rc-verify.verified { color: #4ade80; }
+
+.rc-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  background: #8b7cf6;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: rc-blink 1s steps(2, start) infinite;
+}
+@keyframes rc-blink { to { visibility: hidden; } }
+
+.rc-banner {
+  margin: 0 16px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #2a2410;
+  border: 1px solid #4a3f18;
+  color: #f5d98a;
+  font-size: 13px;
+}
+
+.rc-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid #23232b;
+  background: #101017;
+}
+
+.rc-composer textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid #2a2a34;
+  border-radius: 12px;
+  background: #17171f;
+  color: #e8e8ea;
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.4;
+  max-height: 160px;
+  font-family: inherit;
+}
+
+.rc-composer textarea:focus {
+  outline: none;
+  border-color: #6d5cf6;
+}
+
+.rc-composer button {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: #6d5cf6;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.rc-composer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rc-picker {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rc-picker h2 { font-size: 16px; margin: 0 0 4px; }
+
+.rc-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #23232b;
+  border-radius: 12px;
+  background: #17171f;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.rc-device:disabled { opacity: 0.5; cursor: default; }
+.rc-device .rc-dot { width: 8px; height: 8px; border-radius: 999px; background: #f87171; }
+.rc-device.online .rc-dot { background: #4ade80; }
+.rc-device .rc-dname { font-weight: 600; }
+.rc-device .rc-dmeta { font-size: 12px; color: #9aa; margin-left: auto; }
+
+.rc-empty { color: #9aa; font-size: 14px; text-align: center; padding: 32px 16px; }

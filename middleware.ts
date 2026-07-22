@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
+  '/chat(.*)',
 ]);
 
 const isPublicRoute = createRouteMatcher([
@@ -16,6 +17,10 @@ const isPublicRoute = createRouteMatcher([
   '/api/marketplace/install(.*)',
   '/api/billing/webhook(.*)',
   '/api/chat(.*)',
+  // Remote chat relay — device (Bearer API key) routes; handlers do their own auth.
+  '/api/plugin/chat/emit(.*)',
+  '/api/plugin/chat/poll(.*)',
+  '/api/plugin/chat/sessions/(.*)/messages(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
