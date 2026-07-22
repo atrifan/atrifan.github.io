@@ -4,21 +4,31 @@
 **Status:** Tulzo (control-plane) side is built. This is the device half.
 **Supersedes:** the "presence via `/api/verify` hourly touch" stopgap — see *Why polling is the wrong model* below.
 
+**Chosen approach (decided):** ship **Phase 1** now — keep the existing long-poll relay and add
+**presence via a keepalive heartbeat** (report on connect + ~60s tick, stop on disconnect). No new
+dependency, fully unit-testable today, works with Tulzo's existing logic unchanged. **Defer the
+Supabase Realtime unification (Phase 2)** until the Tulzo server half (Realtime Presence reader)
+exists. Both phases are specified below; build Phase 1.
+
 ---
 
 ## TL;DR
 
-The assistant's background worker must hold **one persistent Supabase Realtime connection** to
-Tulzo. That single connection does two jobs at once:
+**Phase 1 (build now):** the background worker, while the device is activated and connected,
+`POST`s `/api/plugin/report` **on connect and every ~60s**, and stops on disconnect. That keepalive
+*is* the presence signal — it keeps `device_heartbeats.updated_at` inside Tulzo's existing 10-min
+window, so "online" becomes accurate within ~a minute of a genuine connection, with **zero Tulzo
+changes and no new dependency**. The relay keeps using the existing long-poll
+(`GET /api/plugin/chat/poll` for `to_device` frames, `POST /api/plugin/chat/emit` for `to_page`).
 
-1. **Presence** — the worker's membership in a Realtime **Presence** channel *is* the device's
-   online/offline signal. Joined ⇒ online; the socket drops ⇒ Tulzo learns immediately. No
-   heartbeat polling, no 10-minute freshness window.
-2. **Relay** — the same channel carries `PanelToWorker` frames from a remote page (phone / 2nd
-   computer) into the agent loop, and streams `WorkerToPanel` frames back.
+**Phase 2 (deferred):** collapse presence + relay into **one persistent Supabase Realtime
+connection** — Presence membership on `device:<api_key_id>` becomes the exact online/offline signal
+(no window, instant `leave`), and the same channel carries the relay. This needs a Tulzo-side
+Presence reader first; do it when that lands.
 
-native-host keeps doing **only** hourly API-key validation (`GET /api/oauth/plugin/verify`). It is
-no longer responsible for presence.
+In **both** phases native-host keeps doing **only** hourly API-key validation
+(`GET /api/oauth/plugin/verify`) — it is no longer responsible for presence. The keepalive lives in
+the **background worker**, not native-host, so it reflects a real live connection rather than a timer.
 
 ---
 
@@ -46,35 +56,56 @@ needs a persistent connection for the relay. Reuse it.
 
 ## Target architecture
 
+### Phase 1 — long-poll relay + keepalive presence (BUILD NOW)
+
 ```
 [Phone / 2nd computer]            [Tulzo / Supabase]                [Device: Horia worker]
-  RemoteChat (built)  ──send──▶  POST /api/plugin/chat/send  ──┐
-                                                               │  broadcast on chat:<session_id>
-  RemoteChat          ◀─stream─  Supabase Realtime  ◀──emit──  │
-                                 Presence on device:<api_key_id> ◀── worker JOINS (online signal)
-                                                               │
-  Overview / picker   ◀──────  presence snapshot  ◀────────────┘
+  RemoteChat (built)  ──send──▶  POST /api/plugin/chat/send ─▶ chat_relay_frames (to_device)
+  RemoteChat          ◀─stream─  POST /api/plugin/chat/emit ◀── worker (to_page)              │
+                                 GET  /api/plugin/chat/poll ◀── worker long-polls to_device ──┘
+  Overview / picker   ◀── device_heartbeats (<10min) ◀── worker POSTs /api/plugin/report
+                                                          on connect + every ~60s (keepalive)
 ```
 
-- **One Realtime client in the persistent background worker** (NOT a page/content-script — a page
-  navigation must never drop presence). It authenticates to Supabase with the device's context.
-- **Presence channel per device:** `device:<api_key_id>`. The worker `track()`s itself on join.
-  Tulzo (or a Realtime-authorized reader) treats a tracked member as **online**; a Realtime
-  `leave` / socket close marks it **offline** at once.
-- **Relay channel per session:** `chat:<session_id>` (already used by Tulzo's `chat-relay-service.ts`).
-  The worker subscribes to `to_device` frames and posts `to_page` frames via `POST /api/plugin/chat/emit`.
-  Fallback when Realtime can't be held: long-poll `GET /api/plugin/chat/poll` with the Bearer key
-  (this endpoint already touches presence as a safety net).
+- **Keepalive presence.** While the device is activated **and** the worker's connection is up, the
+  worker `POST`s `/api/plugin/report` on connect and every ~60s, and **stops on disconnect**. This
+  keeps `device_heartbeats.updated_at` inside the existing 10-min window, so `computeDeviceStatus`
+  returns `online` for a genuinely-connected device with **no Tulzo change**. The keepalive lives in
+  the **background worker** (not native-host, not a page) so it tracks a real live connection and
+  survives the agent navigating tabs.
+- **Long-poll relay.** The worker long-polls `GET /api/plugin/chat/poll` (Bearer key) for
+  `to_device` frames and posts `to_page` frames via `POST /api/plugin/chat/emit`. Both endpoints
+  exist. (`poll` also touches presence as a safety net, but the keepalive is the primary signal.)
+- **No new dependency.** Everything is REST the device already speaks; unit-testable today.
+
+### Phase 2 — Supabase Realtime unification (DEFERRED, needs Tulzo server half)
+
+```
+  RemoteChat          ◀─stream─  Supabase Realtime  ◀──emit──  worker holds ONE persistent socket
+                                 Presence on device:<api_key_id> ◀── worker JOINS (exact online signal)
+  Overview / picker   ◀──────  presence snapshot  ◀────────────────  (leave = offline instantly)
+```
+
+- Collapse presence + relay into **one persistent Realtime client in the background worker** (NOT a
+  page/content-script — navigation must never drop it). Presence membership on `device:<api_key_id>`
+  becomes the exact online/offline signal (no 10-min window; `leave`/socket-close ⇒ offline at once),
+  and channel `chat:<session_id>` carries the relay frames.
+- **Blocked on Tulzo** adding a server-side Presence reader (see *Tulzo-side contract* → Phase 2).
+  Do not start this until that lands; Phase 1's keepalive is the interim presence signal.
 
 ---
 
 ## Device-side requirements
 
-1. **Persistent worker connection.** On device activation (API key present), the background worker
-   opens the Supabase Realtime connection and joins `device:<api_key_id>` with Presence `track()`.
-   It must live in the **service worker / native-host**, independent of any open tab. It must
-   survive the agent navigating tabs (the user's "interact in a different tab while the old tab
-   stays connected" requirement).
+> Requirements **1** and **8** differ by phase; the rest apply to both. Build the Phase 1 variants now.
+
+1. **Persistent worker connection.**
+   - **Phase 1:** on activation, the background worker starts the keepalive loop (report on connect
+     + ~60s tick, stop on disconnect) and the relay long-poll. Both live in the **service worker /
+     native-host**, independent of any open tab, and survive the agent navigating tabs (the user's
+     "interact in a different tab while the old tab stays connected" requirement).
+   - **Phase 2:** replace both with a single Supabase Realtime connection joining
+     `device:<api_key_id>` with Presence `track()`, same persistence/tab-independence constraints.
 
 2. **Never automate the control-plane tab.** Route agent actions to a **dedicated automation tab**
    (`chrome.tabs.create` if the only tab is the Tulzo/control-plane tab). The connection tab, if
@@ -96,14 +127,20 @@ needs a persistent connection for the relay. Reuse it.
    person at the device and the person on mobile watch one shared, live turn. Keep
    `shared/stream-parse.ts` byte-identical to Tulzo's copy (`src/views/remote-chat/shared/`).
 
-6. **Report the active model in presence/heartbeat.** Tulzo's remote-chat composer now seeds its
-   model from the device's reported `model` (heartbeat field `model`, surfaced by
-   `/api/plugin/devices`). Include the current orchestrator model in the presence payload (or keep
-   `POST /api/plugin/report` sending `model`) so the phone shows the right model, not a default.
+6. **Report the active model in the heartbeat.** Tulzo's remote-chat composer now seeds its model
+   from the device's reported `model` (heartbeat field `model`, surfaced by `/api/plugin/devices`).
+   The Phase 1 keepalive `POST /api/plugin/report` already carries `model` — just make sure it sends
+   the current orchestrator model so the phone shows the right one, not a default. (Phase 2: include
+   it in the presence payload.)
 
 7. **Auth & gating.** Reuse the device-authorized check; gate on plan (paid only) and per-session
    ownership. Consider adding a `chat`/`stream` frame family to the control-plane allow-list rather
    than a raw passthrough.
+
+8. **Keepalive lifecycle (Phase 1).** Start the ~60s report tick when the worker connection comes up;
+   **stop it on disconnect / device deactivation** so a dead device ages out of the 10-min window and
+   correctly flips to offline. Do not run it from a timer that outlives the connection (that would
+   report a dead device as online). This is the whole point — presence must track the live connection.
 
 ---
 
@@ -118,20 +155,15 @@ needs a persistent connection for the relay. Reuse it.
   the remote-chat picker. Remote-chat page re-polls `/api/plugin/devices` every 15s so it reflects
   fresh status/model.
 
-**To add on the Tulzo side when the device adopts Realtime Presence** (small, do together with the
-device work):
-- A presence reader so `computeDeviceStatus` (or a parallel `isPresent(api_key_id)`) can consult
-  the `device:<api_key_id>` Presence channel instead of only the 10-min heartbeat window. Options:
-  (a) the device keeps upserting a heartbeat on presence join + a light keepalive, so the existing
-  window logic Just Works; or (b) Tulzo subscribes to the Presence channel server-side. Option (a)
-  is the lower-risk first step and needs no new Tulzo read path — the device simply upserts on join
-  and on a ~60s keepalive while connected, and stops on disconnect.
+**Phase 1 — nothing to add.** The keepalive path reuses `POST /api/plugin/report` and the existing
+`computeDeviceStatus` 10-min window. Tulzo already reflects fresh status/model (the remote-chat page
+re-polls `/api/plugin/devices` every 15s). No server change required to ship Phase 1.
 
-> **Recommended minimal first step:** device joins `device:<api_key_id>`, and on join + every ~60s
-> while connected calls `POST /api/plugin/report` (or a lighter presence ping). That alone makes
-> "online" accurate within a minute using the *existing* Tulzo logic — no new server read path,
-> and it's driven by a real persistent connection rather than an hourly poll. Full server-side
-> Presence subscription can follow.
+**Phase 2 — Presence reader (deferred).** When the device moves to a persistent Realtime connection,
+add a server-side presence reader so `computeDeviceStatus` (or a parallel `isPresent(api_key_id)`)
+consults the `device:<api_key_id>` Presence channel instead of only the heartbeat window — giving
+exact, instant offline detection. This is the trigger to start the device-side Phase 2 work; until
+it exists, Phase 1's keepalive is the presence signal.
 
 ---
 
@@ -145,11 +177,19 @@ a bug — noting it here because it surfaces alongside presence in the same pane
 
 ---
 
-## Acceptance (manual E2E, once device side lands)
+## Acceptance (Phase 1)
 
+**Unit-testable now (no live device needed):**
+- Keepalive starts on connect and posts `/api/plugin/report` on an interval; **stops on disconnect**
+  (assert no further posts after teardown).
+- Report payload includes the current orchestrator `model`.
+- Relay long-poll drains `to_device` frames and posts `to_page` frames to `emit`.
+
+**Manual E2E (with a real device):**
 1. Activate the device; with **no Tulzo tab open on the device**, open `/chat` on a phone → the
-   device shows **online** within ~60s.
-2. Kill the assistant → the phone shows **offline** within the presence/keepalive window.
+   device shows **online** within ~60s (the panel re-polls every 15s; keepalive ticks every ~60s).
+2. Kill the assistant → the phone shows **offline** within ~10 min (heartbeat ages out of the
+   window; Phase 2 makes this instant).
 3. Send "go to example.com and summarize" from the phone → the *device's* dedicated automation tab
    navigates; the summary streams back to the phone **and** the device's local panel simultaneously.
 4. The phone's composer shows the device's **actual** model, not a hardcoded default.
