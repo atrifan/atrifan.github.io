@@ -1,161 +1,5966 @@
-/* Mobile-first remote chat. Single column, full viewport, sticky composer,
-   safe-area insets for iOS. Adapted from the assistant panel's chat styles. */
+/* RemoteChat.css — ported from the Horia browser-extension side panel (App.css).
+   AUTO-TRANSFORMED: global resets (*, html, body, #root) dropped; :root vars re-scoped
+   to .rc-root; every panel selector prefixed with ".rc-root " so styles never leak into
+   Tulzo's control panel. @keyframes left global. Do not hand-edit — regenerate instead. */
+
+.rc-root details summary:focus {
+  outline: none;
+}
 
 .rc-root {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  max-width: 720px;
-  margin: 0 auto;
-  background: #0b0b0f;
-  color: #e8e8ea;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg:         #161616;
+  --surface:    #212121;
+  --border:     #2e2e2e;
+  --accent:     #7c5cbf;
+  /* --accent as TEXT on the dark panel bg is only 3.66:1 (fails WCAG AA 4.5:1). Use this
+     lightened purple for small accent-colored TEXT (action labels, etc.); keep --accent for
+     borders/fills where contrast rules don't apply. Matches the value already used inline for
+     badges/buttons elsewhere in this file. */
+  --accent-text: #b9a3e6;
+  --accent-dim: #5a3f9a;
+  --text:       #e8e8e8;
+  --text-dim:   #888;
+  /* Muted label color that still clears WCAG AA 4.5:1 on --surface/--bg — use this for
+     small secondary labels INSTEAD of stacking a low opacity on --text (which drops
+     contrast below AA). */
+  --text-muted: #9a9a9a;
+  --user-bg:    #1e1840;
+  --error:      #c0392b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: var(--text);
 }
 
-.rc-header {
+/* ── Header ── */
+.rc-root .header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  border-bottom: 1px solid #23232b;
-  background: #101017;
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
 }
 
-.rc-header .rc-logo {
-  font-size: 18px;
-  color: #8b7cf6;
-}
-
-.rc-header .rc-title {
-  font-size: 15px;
+.rc-root .header-title {
+  font-size: 13px;
   font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.rc-header .rc-status {
-  margin-left: auto;
+.rc-root .header-title .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.rc-root .header-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.rc-root .nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 5px;
   font-size: 12px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rc-root .nav-btn:hover,
+.rc-root .nav-btn.active {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* CSS-only tooltips */
+.rc-root [data-tooltip] {
+  position: relative;
+}
+.rc-root [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  padding: 3px 7px;
+  background: #1a1a1a;
+  color: #ddd;
+  font-size: 10px;
+  white-space: nowrap;
+  border-radius: 4px;
+  border: 1px solid #333;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 9999;
+}
+.rc-root [data-tooltip]:hover::after {
+  opacity: 1;
+}
+/* Right-edge items: anchor tooltip to the right so it doesn't overflow */
+.rc-root .mode-toggles [data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.rc-root .new-chat-btn {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 7px;
+}
+
+/* ── History view ── */
+.rc-root .history-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.rc-root .history-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px 16px;
+  font-size: 12px;
+}
+.rc-root .history-group {
+  margin-bottom: 8px;
+}
+.rc-root .history-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 5px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.rc-root .history-group-header:hover {
+  background: var(--surface);
+}
+.rc-root .history-group-chevron {
+  font-size: 9px;
+  color: var(--text-dim);
+  width: 10px;
+}
+.rc-root .history-group-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-root .history-group-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--border);
+  border-radius: 8px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.rc-root .history-item {
+  position: relative;
+  padding: 8px 10px 8px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.rc-root .history-item:hover {
+  background: var(--surface);
+}
+.rc-root .history-item-title {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 20px;
+}
+.rc-root .history-item-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.rc-root .history-item-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.rc-root .history-item-delete:hover {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+}
+
+/* ── Chat view ── */
+.rc-root .chat-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rc-root .message-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  scroll-behavior: smooth;
+}
+
+.rc-root .message-list::-webkit-scrollbar {
+  width: 4px;
+}
+.rc-root .message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rc-root .message-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Chat bubbles ── */
+.rc-root .bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+.rc-root .bubble-wrap.user {
+  align-self: flex-end;
+  align-items: flex-end;
+  max-width: 88%;
+}
+
+.rc-root .bubble-wrap.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+  max-width: 100%;
+}
+
+/* Out-of-band render blocks (map/table/followups/…) sit in an assistant bubble
+   wrapper so they align left in-flow. They carry their own chrome, so the wrapper
+   itself adds no bubble background/border; it just provides alignment + full width. */
+.rc-root .bubble-wrap.assistant.render-block-wrap {
+  width: 100%;
+  /* .bubble-wrap.assistant sets align-items:flex-start, which shrink-wraps children
+     to zero width (a width:100% map then collapses). Stretch so blocks get real width.
+     Needs equal specificity to override the .bubble-wrap.assistant rule. */
+  align-items: stretch;
+}
+.rc-root .render-block-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Host of a ```html shadow-DOM card — clamp from the outside too (the shadow style clamps
+   inside). Together they keep a wide model-authored HTML card within the panel. */
+.rc-root .html-render-host {
+  display: block;
+  /* width:100% is REQUIRED, not just max-width: an html card can render INLINE inside a normal
+     .bubble.assistant, whose parent (.bubble-wrap.assistant) uses align-items:flex-start and
+     shrink-wraps children. With `contain: inline-size` (below) the host's inline size is computed
+     independently of its content, so without an explicit width it collapses to ~0 → the card
+     renders BLANK. width:100% makes it fill the bubble; max-width keeps it inside the panel. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  /* Size the host from its CONTAINER, not its (possibly 1200px) content — so a fixed-width
+     element inside the shadow can't stretch the host past the panel. Content then clips/scrolls
+     inside per the shadow style. */
+  contain: inline-size;
+}
+.rc-root .render-block-wrap > * {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+/* Wide render-block content (tables, code fences, pre, long tokens) must WRAP or SCROLL inside
+   the panel, never widen it — the min-width:0 lets flex/grid children shrink; tables/pre scroll. */
+.rc-root .render-block-wrap table,
+.rc-root .render-block-wrap pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rc-root .render-block-wrap p,
+.rc-root .render-block-wrap li,
+.rc-root .render-block-wrap code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rc-root .bubble {
+  padding: 8px 10px;
+  border-radius: 10px;
+  line-height: 1.7;
+  word-break: break-word;
+  overflow-x: hidden;
+  min-width: 0;
+  font-size: 13px;
+}
+
+/* An inline ```html card renders inside a normal .bubble.assistant, but .bubble-wrap.assistant
+   shrink-wraps (align-items:flex-start) and .bubble is display:block → the card's host (which uses
+   contain:inline-size, so it takes width FROM its container, not its content) collapses to the
+   width of the widest text run → the card renders tiny/blank. When a bubble CONTAINS an html host,
+   stretch the wrapper and give the bubble full width so the host gets real inline size. */
+.rc-root .bubble-wrap.assistant:has(.html-render-host) {
+  align-items: stretch; /* let the bubble fill the wrapper's cross axis */
+  align-self: stretch; /* AND let the wrapper fill the message column (it otherwise shrink-wraps) */
+  width: 100%;
+}
+.rc-root .bubble.assistant:has(.html-render-host) {
+  width: 100%;
+}
+
+.rc-root .bubble.user {
+  white-space: pre-wrap;
+}
+
+.rc-root .bubble.user {
+  background: var(--user-bg);
+  border-bottom-right-radius: 3px;
+}
+
+.rc-root .bubble.assistant {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
+
+.rc-root .bubble.error {
+  background: #2a0f0f;
+  border-color: var(--error);
+  color: #ff7070;
+}
+
+/* Failed-turn flag + retry affordance */
+.rc-root .bubble-wrap.failed .bubble {
+  border-color: var(--error);
+}
+.rc-root .bubble-error-flag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.rc-root .bubble-error-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--error);
+  border-radius: 4px;
+  padding: 2px 7px;
+  letter-spacing: 0.02em;
+}
+.rc-root .bubble-retry-btn {
+  font-size: 11px;
+  color: var(--error);
+  background: transparent;
+  border: 1px solid var(--error);
+  border-radius: 4px;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: #1c1c26;
-  color: #9aa;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.rc-root .bubble-retry-btn:hover {
+  background: var(--error);
+  color: #fff;
+}
+/* User-interrupted turn — a clear red notice regardless of partial bubble content. */
+.rc-root .bubble-interrupted-flag {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+.rc-root .bubble-interrupted-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--error);
+  border-radius: 4px;
+  padding: 2px 7px;
+  letter-spacing: 0.02em;
 }
 
-.rc-header .rc-status.online {
-  color: #4ade80;
+.rc-root .cursor {
+  display: inline-block;
+  width: 2px;
+  height: 13px;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.9s step-end infinite;
 }
 
-.rc-header .rc-status.offline {
-  color: #f87171;
+@keyframes blink {
+  50% { opacity: 0; }
 }
 
-.rc-messages {
+/* ── Input area ── */
+.rc-root .input-area {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px;
+  flex-shrink: 0;
+}
+
+.rc-root .wait-for-user-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #1a1200;
+  border: 1px solid #b8860b;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.rc-root .wfu-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f0c040;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.rc-root .wfu-message {
+  font-size: 12px;
+  color: #e8d080;
+  line-height: 1.4;
+}
+
+.rc-root .input-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.rc-root .input-field {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 7px 10px;
+  resize: none;
+  min-height: 34px;
+  max-height: 120px;
+  line-height: 1.4;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.rc-root .input-field:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .input-field::placeholder {
+  color: var(--text-dim);
+}
+
+.rc-root .input-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.rc-root .input-wrapper .input-field {
+  width: 100%;
+}
+
+.rc-root .input-ghost {
+  position: absolute;
+  top: 8px;
+  left: 11px;
+  right: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+  color: var(--text-dim);
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+}
+
+.rc-root .ghost-count {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.rc-root .send-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.rc-root .send-btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.rc-root .send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rc-root .context-indicator {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--error);
+}
+
+/* The context indicator lives in the bottom status bar, so the default `top:100%`
+   tooltip would render BELOW the panel edge (off-screen / clipped) — that's why only the
+   trash showed on hover, never the "X% (Yk/Zk)" tooltip. Open it UPWARD instead, and
+   right-anchor it (the indicator sits near the right edge) so it stays in view. */
+.rc-root .context-indicator[data-tooltip]::after {
+  top: auto;
+  bottom: 100%;
+  left: auto;
+  right: 0;
+  transform: none;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+/* Hover/focus reveals a red trash over the gauge; the gauge fades under it. */
+.rc-root .context-clear-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--error);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.rc-root .context-indicator:hover .context-gauge,
+.rc-root .context-indicator:focus-visible .context-gauge {
+  opacity: 0.25;
+}
+.rc-root .context-indicator:hover .context-clear-icon,
+.rc-root .context-indicator:focus-visible .context-clear-icon {
+  opacity: 1;
+}
+
+.rc-root .stop-btn {
+  background: none;
+  border: 1px solid var(--error);
+  border-radius: 7px;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+  margin-top: 5px;
+  transition: background 0.15s;
+}
+
+.rc-root .stop-btn:hover {
+  background: #2a0f0f;
+}
+
+/* ── Token footer ── */
+.rc-root .token-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.rc-root .model-select {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 5px;
+  cursor: pointer;
+  outline: none;
+}
+
+.rc-root .model-select:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .model-select option {
+  background: var(--surface);
+}
+
+.rc-root .token-stats {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rc-root .token-stat {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rc-root .token-stat .arrow {
+  font-size: 9px;
+}
+
+/* ── Settings view ── */
+.rc-root .settings-view {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  -webkit-overflow-scrolling: touch;
+  gap: 20px;
 }
 
-.rc-bubble {
-  max-width: 88%;
-  padding: 10px 14px;
-  border-radius: 16px;
-  font-size: 15px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
+.rc-root .settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.rc-bubble.user {
-  align-self: flex-end;
-  background: #6d5cf6;
-  color: #fff;
-  border-bottom-right-radius: 4px;
+.rc-root .settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.rc-bubble.assistant {
-  align-self: flex-start;
-  background: #17171f;
-  border: 1px solid #23232b;
-  border-bottom-left-radius: 4px;
-}
-
-.rc-bubble .rc-md > *:first-child { margin-top: 0; }
-.rc-bubble .rc-md > *:last-child { margin-bottom: 0; }
-.rc-bubble .rc-md pre {
-  background: #0b0b0f;
-  border: 1px solid #23232b;
-  border-radius: 8px;
-  padding: 10px;
-  overflow-x: auto;
+.rc-root .settings-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
   font-size: 13px;
-}
-.rc-bubble .rc-md code { font-size: 13px; }
-.rc-bubble .rc-md a { color: #a89bff; }
-
-.rc-steps {
-  margin-top: 8px;
-  border-top: 1px dashed #2a2a34;
-  padding-top: 8px;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: monospace;
 }
 
-.rc-steps summary {
+.rc-root .settings-input:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .settings-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rc-root .settings-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
   cursor: pointer;
   font-size: 12px;
-  color: #9aa;
-  user-select: none;
+  padding: 7px 14px;
+  align-self: flex-start;
+  transition: background 0.15s;
 }
 
-.rc-steps ol {
-  margin: 8px 0 0;
-  padding-left: 18px;
+.rc-root .settings-btn:hover {
+  background: var(--accent-dim);
+}
+
+.rc-root .settings-btn.danger {
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.rc-root .settings-btn.danger:hover {
+  background: #2a0f0f;
+}
+
+.rc-root .settings-saved {
+  font-size: 11px;
+  color: #5a9c5a;
+}
+
+/* ── Auth tabs ── */
+.rc-root .auth-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.rc-root .auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 8px;
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+}
+
+.rc-root .auth-tab.active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ── Code block (terminal command) ── */
+.rc-root .code-block {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #b5e853;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  word-break: break-all;
+  user-select: all;
+  cursor: text;
+}
+
+/* ── Token status ── */
+.rc-root .token-status {
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.rc-root .token-status.valid {
+  background: #0f2a0f;
+  color: #5a9c5a;
+  border: 1px solid #1a4a1a;
+}
+
+.rc-root .token-status.invalid {
+  background: #2a0f0f;
+  color: #c07070;
+  border: 1px solid #4a1a1a;
+}
+
+/* ── Markdown rendering ── */
+.rc-root .bubble.assistant p {
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+.rc-root .bubble.assistant p:last-child { margin-bottom: 0; }
+
+.rc-root .bubble.assistant h1,
+.rc-root .bubble.assistant h2,
+.rc-root .bubble.assistant h3,
+.rc-root .bubble.assistant h4 {
+  margin: 4px 0 2px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text);
+}
+.rc-root .bubble.assistant h1 { font-size: 14px; }
+.rc-root .bubble.assistant h2 { font-size: 13px; }
+.rc-root .bubble.assistant h3 { font-size: 12px; }
+.rc-root .bubble.assistant h4 { font-size: 12px; color: var(--text-dim); }
+
+.rc-root .bubble.assistant ul,
+.rc-root .bubble.assistant ol {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+.rc-root .bubble.assistant ol { list-style-type: decimal; }
+.rc-root .bubble.assistant li {
+  margin: 0;
+  line-height: 1.35;
+  padding-left: 1px;
+}
+.rc-root .bubble.assistant li > p { margin: 0; }
+.rc-root .bubble.assistant li > ul,
+.rc-root .bubble.assistant li > ol { margin: 1px 0; }
+
+.rc-root .bubble.assistant blockquote {
+  border-left: 3px solid var(--accent-dim);
+  margin: 8px 0;
+  padding: 4px 10px;
+  color: var(--text-dim);
+  font-style: italic;
+  background: rgba(124,92,191,0.06);
+  border-radius: 0 4px 4px 0;
+}
+
+.rc-root .bubble.assistant hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.rc-root .bubble.assistant strong { font-weight: 600; color: var(--text); }
+.rc-root .bubble.assistant em { font-style: italic; }
+
+.rc-root .bubble.assistant a {
+  color: #9b7fd4;
+  text-decoration: none;
+}
+.rc-root .bubble.assistant a:hover { text-decoration: underline; }
+
+/* Inline code */
+.rc-root .inline-code {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: #b5e853;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+/* Code blocks */
+.rc-root .bubble.assistant pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 8px 0;
+  overflow-x: hidden;
+  max-width: 100%;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.rc-root .bubble.assistant pre code {
+  background: none;
+  border: none;
+  color: #e8e8e8;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.rc-root .bubble.assistant pre::-webkit-scrollbar { height: 4px; }
+.rc-root .bubble.assistant pre::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* Tables */
+/* MCP/markdown content (e.g. a trivago hotel photo) must scale to the bubble, not push
+   it wider than the side panel. Without this an <img> renders at natural pixel width and
+   overflows, clipping the text lines to its right. */
+.rc-root .bubble img,
+.rc-root .bubble video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  /* Reserve intrinsic aspect ratio + isolate the image's layout so a late-decoding image
+     doesn't collapse→jump (0→full height) on each streaming re-render, and its reflow can't
+     ripple out to repaint the whole growing bubble. This is a big part of the streaming
+     flicker with images (#72). */
+  contain: layout paint style;
+  /* Fallback min-height while the image has no dimensions yet — avoids a 0px→tall jump. */
+  min-height: 1px;
+}
+/* While an assistant bubble is streaming, contain its layout so appending each line/chunk
+   repaints only the bubble's own box, not the whole message list (reduces the "extends on
+   every line" flicker). content-visibility is avoided here (it can hide streaming text). */
+.rc-root .bubble.assistant {
+  contain: layout style;
+}
+/* Long unbroken tokens (URLs, IDs) inside MCP output must wrap, not force a wide line. */
+.rc-root .bubble a,
+.rc-root .bubble code,
+.rc-root .bubble p,
+.rc-root .bubble li {
+  overflow-wrap: anywhere;
+}
+
+.rc-root .bubble.assistant table {
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+}
+.rc-root .bubble.assistant th,
+.rc-root .bubble.assistant td {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+}
+.rc-root .bubble.assistant th {
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.rc-root .bubble.assistant tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* Task list checkboxes */
+.rc-root .bubble.assistant input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin-right: 5px;
+}
+
+/* hljs syntax theme overrides for dark bg */
+.rc-root .hljs-keyword,
+.rc-root .hljs-built_in { color: #c678dd; }
+.rc-root .hljs-string   { color: #98c379; }
+.rc-root .hljs-comment  { color: #5c6370; font-style: italic; }
+.rc-root .hljs-number   { color: #d19a66; }
+.rc-root .hljs-function { color: #61afef; }
+.rc-root .hljs-title    { color: #e06c75; }
+.rc-root .hljs-attr     { color: #e06c75; }
+.rc-root .hljs-variable { color: #e5c07b; }
+.rc-root .hljs-type     { color: #e5c07b; }
+
+/* ── Inline code in settings hints ── */
+.rc-root .settings-code {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: #b5e853;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+}
+
+/* ── Skill folders ── */
+.rc-root .skill-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.rc-root .skill-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.rc-root .skill-folder-row.default {
+  border-color: rgba(124,92,191,0.3);
+}
+
+/* ── Loaded skills & plugins (read-only list) ── */
+.rc-root .loaded-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc-root .loaded-empty {
+  color: var(--text-dim, #888);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.rc-root .loaded-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+}
+.rc-root .loaded-row.nested {
+  margin-left: 16px;
+  background: transparent;
+}
+/* Disabled skill/plugin row: dim only the ICON (opacity on text would drop the small
+   "Skill/Plugin" tag under WCAG AA contrast — axe flags it). Text stays full-contrast;
+   the explicit "disabled" tag + unchecked switch convey state. */
+.rc-root .loaded-row-disabled .loaded-icon {
+  opacity: 0.5;
+}
+.rc-root .loaded-row-disabled .loaded-name {
+  font-style: italic;
+}
+.rc-root .loaded-disabled-tag {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #d98a8a;
+  border: 1px solid #6b2f2f;
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+/* Enable/disable toggle switch (role=switch button). */
+.rc-root .loaded-toggle {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: #3a3a3a;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: background 0.15s;
+}
+.rc-root .loaded-toggle-on {
+  background: #2f6f3f; /* green when ON; passes contrast against the knob */
+}
+.rc-root .loaded-toggle-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.rc-root .loaded-toggle-on .loaded-toggle-knob {
+  transform: translateX(16px);
+}
+.rc-root .loaded-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Gear (configure) button on a skill row with a settings_file. */
+.rc-root .loaded-gear {
+  flex: 0 0 auto;
+  align-self: center;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.rc-root .loaded-gear:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.06);
+}
+.rc-root .loaded-gear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Trash / delete (user-installed skills & plugins only). */
+.rc-root .loaded-trash {
+  flex: 0 0 auto;
+  align-self: center;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.rc-root .loaded-trash:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+.rc-root .loaded-trash:focus-visible,
+.rc-root .loaded-delete-yes:focus-visible,
+.rc-root .loaded-delete-no:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rc-root .loaded-delete-confirm {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  gap: 4px;
+}
+.rc-root .loaded-delete-yes {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rc-root .loaded-delete-yes:hover {
+  background: #ef4444;
+}
+.rc-root .loaded-delete-no {
+  background: none;
+  color: #94a3b8;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rc-root .loaded-delete-no:hover {
+  color: #e2e8f0;
+}
+
+/* Skill-settings YAML editor. */
+.rc-root .skill-settings-editor {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #0f172a;
+}
+.rc-root .skill-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.rc-root .skill-settings-title {
+  font-size: 12px;
+  color: #e2e8f0;
+}
+.rc-root .skill-settings-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
   font-size: 13px;
-  color: #b8b8c0;
 }
-
-.rc-actions {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #7fb3ff;
+.rc-root .skill-settings-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b1220;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.rc-root .skill-settings-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rc-root .skill-settings-save {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  padding: 5px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.rc-root .skill-settings-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rc-root .skill-settings-status {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.rc-root .loaded-plugin-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+.rc-root .loaded-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.rc-root .loaded-icon-placeholder {
+  background: rgba(124,92,191,0.2);
+}
+.rc-root .loaded-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.rc-root .loaded-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rc-root .loaded-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.rc-root .loaded-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+/* Badge colors chosen to clear WCAG AA 4.5:1 against the dark badge backgrounds
+   (verified by the axe scan in test/ui/skills.spec.ts). */
+.rc-root .loaded-kind-plugin {
+  background: rgba(124,92,191,0.25);
+  color: #c9b6ef; /* light lavender on the purple-tinted badge → ≥4.5:1 */
+}
+.rc-root .loaded-kind-skill {
+  background: rgba(120,120,120,0.2);
+  color: #c7c7c7; /* light grey → ≥4.5:1 on the dark badge */
+}
+.rc-root .loaded-desc {
+  font-size: 12px;
+  color: var(--text-dim, #999);
+  margin-top: 1px;
 }
 
-.rc-actions .rc-action { display: block; }
+/* Missing-secret hint on a loaded skill/plugin row + inline set control. */
+.rc-root .loaded-missing-secrets {
+  margin-top: 5px;
+  padding: 5px 7px;
+  border: 1px solid #b8860b;
+  border-radius: 6px;
+  background: #1a1200;
+}
+.rc-root .loaded-missing-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #f0c040;
+}
+.rc-root .loaded-missing-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 3px;
+}
+.rc-root .loaded-missing-name {
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+.rc-root .loaded-secret-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+}
+.rc-root .loaded-secret-input:focus {
+  border-color: var(--accent);
+}
+.rc-root .loaded-secret-set {
+  background: #15803d;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+}
+.rc-root .loaded-secret-set:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
-.rc-thinking {
+.rc-root .skill-folder-path {
+  flex: 1;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.rc-root .skill-folder-badge {
+  font-size: 10px;
+  font-weight: 600;
+  /* Lightened accent so the badge text clears WCAG AA 4.5:1 on its tinted bg
+     (--accent #7c5cbf was only 3.2:1). */
+  color: #c3a8f0;
+  background: rgba(124, 92, 191, 0.18);
+  border-radius: 3px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.rc-root .skill-folder-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.rc-root .skill-folder-remove:hover {
+  color: var(--error);
+}
+
+.rc-root .skill-folder-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rc-root .skill-folder-input {
+  flex: 1;
+  font-family: "SF Mono", "Fira Code", monospace !important;
+  font-size: 11px !important;
+}
+
+.rc-root .skill-folder-add-btn {
+  flex-shrink: 0;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+}
+
+/* ── Bedrock model list ── */
+.rc-root .bedrock-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.rc-root .bedrock-model-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.rc-root .bedrock-model-btn:hover {
+  border-color: var(--accent);
+}
+
+.rc-root .bedrock-model-btn.active {
+  border-color: var(--accent);
+  background: #1e1840;
+}
+
+.rc-root .bedrock-model-label {
   font-size: 12px;
-  color: #8a8a93;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.rc-root .bedrock-model-id {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: "SF Mono", monospace;
+}
+
+/* ── Thinking block ── */
+.rc-root .thinking-block {
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 3px;
+}
+
+.rc-root .thinking-summary {
+  font-size: 11px;
+  color: var(--accent-text); /* AA-contrast tint (was --accent @0.65 opacity → 3.17:1, failed) */
+  opacity: 0.9;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+.rc-root .thinking-summary:hover {
+  opacity: 1;
+}
+
+.rc-root .thinking-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-root .thinking-chevron {
+  font-size: 9px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.rc-root details[open] .thinking-chevron {
+  transform: rotate(90deg);
+}
+
+.rc-root .thinking-icon {
+  font-size: 8px;
+}
+
+/* Wrapper positions the copy button over the scrollable body. */
+.rc-root .thinking-body-wrap {
+  position: relative;
+  margin-top: 4px;
+}
+
+/* Copy button — top-right of the thinking block, revealed on hover (always visible on focus for
+   keyboard users). Reuses the shared .copy-btn base; this just places + tints it for the block. */
+.rc-root .thinking-copy-btn {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rc-root .thinking-block:hover .thinking-copy-btn,
+.rc-root .thinking-copy-btn:focus-visible {
+  opacity: 0.8;
+}
+.rc-root .thinking-copy-btn:hover {
+  opacity: 1;
+}
+
+.rc-root .thinking-body {
+  padding: 8px 11px;
+  background: #130f1f;
+  border-left: 2px solid var(--accent-dim);
+  border-radius: 0 5px 5px 0;
+  font-size: 11.5px;
+  color: #9a8fb0; /* lighter than the old #7a6f8f — more readable while still muted */
+  line-height: 1.6;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Markdown inside the thinking body: real paragraph spacing (so continued reasoning reads as
+   separate paragraphs, not a wall), tidy lists, subtle bold, inline code. */
+.rc-root .thinking-body > :first-child {
+  margin-top: 0;
+}
+.rc-root .thinking-body > :last-child {
+  margin-bottom: 0;
+}
+.rc-root .thinking-body p {
+  margin: 0 0 8px;
+}
+.rc-root .thinking-body ul,
+.rc-root .thinking-body ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+.rc-root .thinking-body li {
+  margin: 2px 0;
+}
+.rc-root .thinking-body strong {
+  color: #b9a3e6; /* the accent-text tint — bold stands out without shouting */
+  font-weight: 600;
+}
+.rc-root .thinking-body code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.rc-root .thinking-body pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.rc-root .thinking-body pre code {
+  background: none;
+  padding: 0;
+}
+
+/* ── Steps block (collapsed intermediary iterations) ── */
+.rc-root .steps-block {
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.rc-root .steps-summary {
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  user-select: none;
+  transition: background 0.15s;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.rc-root .steps-summary:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.rc-root .steps-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-root .steps-block[open] .steps-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.rc-root .steps-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 6px 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(0,0,0,0.15);
+}
+
+.rc-root .steps-body::-webkit-scrollbar {
+  width: 3px;
+}
+.rc-root .steps-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.rc-root .step-item-details {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  position: relative;
+}
+
+.rc-root .step-item-details:last-child {
+  border-bottom: none;
+}
+
+.rc-root .step-item-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: background 0.1s;
+  border-radius: 3px;
+}
+
+.rc-root .step-item-summary:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.rc-root .step-item-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-root .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--accent-dim);
+  color: #fff;
+}
+
+.rc-root .step-preview {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .step-copy-btn {
+  position: absolute !important;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 4px;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+
+.rc-root .step-item-details:hover .step-copy-btn,
+.rc-root .step-copy-btn:focus-visible {
+  opacity: 0.7;
+}
+
+.rc-root .step-item-body {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.6;
+  padding: 6px 8px 8px 27px;
+  border-left: 2px solid var(--accent-dim);
+  margin-left: 9px;
+  margin-bottom: 4px;
+  word-break: break-word;
+  overflow: hidden;
+  user-select: text;
+}
+
+.rc-root .step-item-body p {
+  margin: 0 0 4px;
+}
+.rc-root .step-item-body p:last-child { margin-bottom: 0; }
+
+
+.rc-root .step-item-body pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin: 4px 0;
+  overflow-x: hidden;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.rc-root .step-item-body pre code {
+  background: none;
+  border: none;
+  color: #e8e8e8;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.rc-root .step-item-body ul,
+.rc-root .step-item-body ol {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+.rc-root .step-item-body li {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.rc-root .step-item-body .code-block-wrapper {
+  position: relative;
+}
+
+.rc-root .step-item-body .code-block-wrapper .copy-btn {
+  top: 2px;
+  right: 2px;
+  font-size: 10px;
+  padding: 1px 4px;
+}
+
+/* ── Action traces (collapsed by default) ── */
+.rc-root .actions-block {
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+.rc-root .actions-summary {
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  user-select: none;
+  transition: background 0.15s;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.rc-root .actions-summary:hover {
+  background: rgba(255,255,255,0.06);
+}
+.rc-root .actions-summary::-webkit-details-marker {
+  display: none;
+}
+.rc-root .actions-block[open] .actions-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+.rc-root .actions-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 6px 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(0,0,0,0.15);
+}
+.rc-root .action-item {
+  margin: 2px 0;
+  border-radius: 4px;
+}
+.rc-root .action-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  list-style: none;
+  font-size: 11px;
+}
+.rc-root .action-item > summary::-webkit-details-marker {
+  display: none;
+}
+.rc-root .action-item > summary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.rc-root .action-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--accent-dim);
+  color: #fff;
+}
+.rc-root .action-failed .action-num {
+  background: var(--error);
+}
+.rc-root .action-title {
+  color: var(--accent-text); /* WCAG AA on the dark bg (was --accent #7c5cbf → 3.66:1, failed) */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-family: monospace;
+  font-size: 10px;
+}
+.rc-root .action-failed .action-title {
+  color: var(--error);
+}
+.rc-root .action-full {
+  padding: 4px 8px 4px 30px;
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--accent-text); /* WCAG AA on the dark bg (was --accent, failed 4.5:1) */
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-left: 2px solid var(--accent-dim);
+  margin-left: 9px;
+  margin-bottom: 4px;
+}
+.rc-root .action-failed .action-full {
+  color: var(--error);
+  border-left-color: var(--error);
+}
+
+.rc-root .thinking-body::-webkit-scrollbar {
+  width: 3px;
+}
+.rc-root .thinking-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Empty state ── */
+.rc-root .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
+}
+
+.rc-root .empty-state .logo {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+/* ── ProposalTable ── */
+.rc-root .proposal-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: stretch;
+  width: 100%;
+}
+
+.rc-root .proposal-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-root .proposal-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.rc-root .proposal-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.rc-root .proposal-row:last-child { border-bottom: none; }
+.rc-root .proposal-row.approved { background: rgba(90,156,90,0.07); }
+.rc-root .proposal-row.rejected { background: rgba(192,57,43,0.07); }
+
+.rc-root .proposal-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  grid-column: 1;
+  grid-row: 1;
+  cursor: default;
+}
+
+.rc-root .proposal-values {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.rc-root .proposal-current {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+
+.rc-root .proposal-arrow { color: var(--text-dim); }
+
+.rc-root .proposal-proposed {
+  color: #7ec882;
+  font-weight: 500;
+}
+
+.rc-root .proposal-reasoning {
+  font-size: 10px;
+  color: var(--text-dim);
+  grid-column: 1;
+  grid-row: 3;
+  padding-top: 2px;
+  font-style: italic;
+  display: none;
+}
+
+.rc-root .proposal-row:hover .proposal-reasoning { display: block; }
+
+.rc-root .proposal-actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.rc-root .proposal-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.rc-root .proposal-btn.approve:hover,
+.rc-root .proposal-btn.approve.active {
+  background: rgba(90,156,90,0.15);
+  border-color: #5a9c5a;
+  color: #7ec882;
+}
+
+.rc-root .proposal-btn.reject:hover,
+.rc-root .proposal-btn.reject.active {
+  background: rgba(192,57,43,0.15);
+  border-color: var(--error);
+  color: #ff7070;
+}
+
+.rc-root .proposal-footer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.rc-root .proposal-bulk {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 8px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.rc-root .proposal-bulk:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.rc-root .proposal-submit {
+  margin-left: auto;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: background 0.15s;
+}
+
+.rc-root .proposal-submit:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.rc-root .proposal-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rc-root .proposal-table.submitted {
+  padding: 10px 12px;
+}
+
+.rc-root .proposal-submitted-badge {
+  font-size: 12px;
+  color: #7ec882;
+}
+
+/* ── PlanSteps ── */
+.rc-root .plan-steps {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: stretch;
+  width: 100%;
+}
+
+.rc-root .plan-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-root .plan-list {
+  list-style: none;
+  padding: 6px 0;
+  margin: 0;
+  counter-reset: plan-counter;
+}
+
+.rc-root .plan-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: background 0.1s;
+}
+
+.rc-root .plan-step.running {
+  background: rgba(124,92,191,0.07);
+  color: var(--text);
+}
+
+.rc-root .plan-step.done { color: #7ec882; }
+.rc-root .plan-step.error { color: #ff7070; }
+
+.rc-root .plan-step-icon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.rc-root .plan-step-label {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.rc-root .plan-step-detail {
+  font-size: 10px;
+  color: var(--text-dim);
   font-style: italic;
 }
 
-.rc-verify {
+/* ── RenderBlock: generic table ── */
+.rc-root .render-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: stretch;
+  width: 100%;
+}
+
+.rc-root .render-table-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-root .render-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.rc-root .render-table th,
+.rc-root .render-table td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.rc-root .render-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.rc-root .render-table tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ── RenderBlock: downloads ── */
+.rc-root .render-downloads {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: stretch;
+  width: 100%;
+}
+
+.rc-root .render-downloads-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-root .render-download-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.rc-root .render-download-item:last-child { border-bottom: none; }
+
+.rc-root .render-download-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  background: rgba(124,92,191,0.12);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.rc-root .render-download-name {
+  flex: 1;
+  color: var(--text);
+  font-family: "SF Mono", monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .render-download-copy {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.rc-root .render-download-copy:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* ── RenderBlock: generated-file ── */
+.rc-root .render-generated-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  align-self: stretch;
+  width: 100%;
+}
+
+.rc-root .render-gf-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.rc-root .render-gf-type {
+  font-size: 10px;
+  font-weight: 700;
+  /* Lightened purple (not var(--accent) #7c5cbf, which fails WCAG contrast on the dark
+     translucent badge). #b9a3e6 on the dark panel bg clears the 4.5:1 threshold. */
+  color: #b9a3e6;
+  text-transform: uppercase;
+  background: rgba(124,92,191,0.18);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.rc-root .render-gf-name {
+  flex: 1;
+  color: var(--text);
+  font-family: "SF Mono", monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+
+.rc-root .render-gf-name:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.rc-root .render-gf-folder {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  transition: background 0.1s;
+  line-height: 1;
+}
+
+.rc-root .render-gf-folder:hover {
+  background: var(--border);
+}
+
+.rc-root .render-download-folder {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  transition: background 0.1s;
+  line-height: 1;
+}
+
+.rc-root .render-download-folder:hover {
+  background: var(--border);
+}
+
+/* ── RenderBlock: info ── */
+.rc-root .render-info {
+  background: rgba(124,92,191,0.07);
+  border: 1px solid rgba(124,92,191,0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  align-self: stretch;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rc-root .render-info strong {
+  display: block;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.rc-root .render-info p {
+  margin: 0;
+  color: var(--text);
+}
+
+/* ── RenderBlock: chart placeholder ── */
+.rc-root .render-chart-placeholder {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  align-self: stretch;
+  width: 100%;
+  font-size: 12px;
+}
+
+.rc-root .render-chart-placeholder span {
+  display: block;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.rc-root .render-chart-placeholder pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: #b5e853;
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
+
+/* ── ChartBlock (inline Chart.js canvas) ── */
+.rc-root .chart-block {
+  width: 100%;
+  max-width: 500px;
+  height: 250px;
+  margin: 8px 0;
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.rc-root .chart-block-error {
+  height: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.rc-root .chart-block-error-label {
+  font-size: 11px;
+  color: #ff7070;
+  margin-bottom: 6px;
+}
+
+.rc-root .chart-block-fallback {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: #b5e853;
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+/* ── MapBlock (Leaflet + OSM tiles) ── */
+.rc-root .map-block {
+  width: 100%;
+  max-width: 500px;
+  height: 260px;
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e8eef2; /* tile-load placeholder */
+}
+
+/* Inline preview: block pointer events on the map itself so the click reaches the
+   ExpandableViz wrapper (which opens the lightbox). Interactive mode re-enables. */
+.rc-root .map-block:not(.map-block-interactive) .leaflet-container {
+  cursor: zoom-in;
+}
+
+.rc-root .map-block .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #e8eef2;
+}
+
+/* Leaflet's attribution link sits on a near-white control background; the global accent
+   link color (#9b7fd4) only hits 3.19:1 there (WCAG AA needs 4.5:1). Override with a
+   darker purple that clears AA. */
+.rc-root .map-block .leaflet-control-attribution a {
+  color: #5b3fa0;
+}
+
+/* ── MermaidBlock (inline Mermaid.js diagrams) ── */
+.rc-root .mermaid-block {
+  width: 100%;
+  margin: 8px 0;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.rc-root .mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.rc-root .mermaid-block-error {
+  color: #cc0000;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  margin-bottom: 8px;
+}
+
+.rc-root .mermaid-block-fallback {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: #b5e853;
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
+
+.rc-root .mermaid-block-loading {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ── MCP Servers view ── */
+.rc-root .mcp-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-root .mcp-loading {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px 16px;
+  font-size: 12px;
+}
+
+.rc-root .mcp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.rc-root .mcp-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rc-root .mcp-reconnect-all-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rc-root .mcp-reconnect-all-btn:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.rc-root .mcp-reconnect-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rc-root .mcp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-root .mcp-add-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rc-root .mcp-add-btn:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.rc-root .mcp-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 60px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.rc-root .mcp-empty-add-btn {
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px 16px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rc-root .mcp-empty-add-btn:hover {
+  background: rgba(124, 92, 191, 0.12);
+  color: var(--text);
+}
+
+.rc-root .mcp-empty-hint {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.rc-root .mcp-empty-hint code {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: #b5e853;
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+}
+
+.rc-root .mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rc-root .mcp-server-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.rc-root .mcp-server-card:hover {
+  border-color: rgba(124, 92, 191, 0.4);
+}
+
+.rc-root .mcp-server-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  user-select: none;
+}
+
+.rc-root .mcp-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rc-root .mcp-status-dot.connected {
+  background: #4ade80;
+  box-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
+}
+
+.rc-root .mcp-status-dot.disconnected {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+}
+
+/* Connecting: enabled + handshake in flight (e.g. fiscal.ai SSE at startup). Blue,
+   gently pulsing so it reads as "working on it", distinct from red (failed) / yellow
+   (needs auth). */
+.rc-root .mcp-status-dot.connecting {
+  background: #38bdf8;
+  box-shadow: 0 0 4px rgba(56, 189, 248, 0.5);
+  animation: mcp-dot-pulse 1s ease-in-out infinite;
+}
+@keyframes mcp-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rc-root .mcp-status-dot.connecting {
+    animation: none;
+  }
+}
+
+.rc-root .mcp-server-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .mcp-transport-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.rc-root .mcp-transport-badge.stdio {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.rc-root .mcp-transport-badge.http {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.rc-root .mcp-transport-badge.sse {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fbbf24;
+}
+
+.rc-root .mcp-tool-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+/* Tool count rendered as a button so it's an obvious "show tools" affordance. */
+.rc-root .mcp-tool-count-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.rc-root .mcp-tool-count-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* The whole label area is one big toggle button — a friendly click target. Reset the
+   native button chrome and lay its contents out inline like the old row. */
+.rc-root .mcp-server-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.rc-root .mcp-server-label:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
+}
+.rc-root .mcp-server-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.rc-root .mcp-expand-caret {
+  font-size: 9px;
+  color: var(--text-dim);
+  width: 10px;
+  flex-shrink: 0;
+}
+.rc-root .mcp-server-label:hover .mcp-expand-caret {
+  color: var(--text);
+}
+
+/* Enable/disable toggle (role=switch). On = accent, Off = muted; text label keeps it
+   readable + accessible (aria-checked drives state for screen readers). */
+.rc-root .mcp-enable-toggle {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.rc-root .mcp-enable-toggle.on {
+  background: #15803d;
+  color: #fff;
+  border-color: #15803d;
+}
+.rc-root .mcp-enable-toggle.off {
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.rc-root .mcp-enable-toggle.off:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.rc-root .mcp-connect-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  flex-shrink: 0;
+}
+.rc-root .mcp-connect-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.rc-root .mcp-connect-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rc-root .mcp-reconnect-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.rc-root .mcp-reconnect-btn:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.rc-root .mcp-reconnect-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rc-root .mcp-server-details {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  background: var(--bg);
+}
+
+.rc-root .mcp-detail-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.rc-root .mcp-detail-label {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.rc-root .mcp-detail-value {
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  color: #b5e853;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Connect-failure detail (e.g. server-side 400) — red, wraps so the full reason shows.
+   Uses a lighter red than --error so it clears WCAG AA (4.5:1) on the dark panel bg
+   at this small font size (--error #c0392b is only ~3.3:1 on #161616). */
+.rc-root .mcp-server-error .mcp-error-text {
+  color: #f87171;
+  white-space: normal;
+  overflow: visible;
+}
+
+/* Server icon in the row. Many MCP servers ship a DARK/transparent monochrome logo
+   (GitHub octocat, Parallel's "dark symbol") that would vanish on the dark panel — so
+   sit it on a light rounded chip with padding. Light logos still read fine on white. */
+.rc-root .mcp-server-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: #f5f5f5;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+/* Read-only header/env chips in the expanded detail. */
+.rc-root .mcp-kv-chip {
+  display: inline-block;
+  font-family: "SF Mono", monospace;
+  font-size: 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin: 0 4px 2px 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* Missing-secret hint + inline set control. */
+.rc-root .mcp-missing-secrets {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid #b8860b;
+  border-radius: 6px;
+  background: #1a1200;
+}
+.rc-root .mcp-missing-secrets-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f0c040;
+  margin-bottom: 4px;
+}
+.rc-root .mcp-missing-secret-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 3px 0;
+}
+.rc-root .mcp-secret-set-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 6px;
+  outline: none;
+}
+.rc-root .mcp-secret-set-input:focus {
+  border-color: var(--accent);
+}
+.rc-root .mcp-secret-set-btn {
+  background: #15803d;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.rc-root .mcp-tools-list {
+  margin-top: 8px;
+}
+
+.rc-root .mcp-tools-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.rc-root .mcp-tool-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.rc-root .mcp-tool-name {
+  font-size: 11px;
+  font-family: "SF Mono", monospace;
+  color: var(--text);
+}
+
+.rc-root .mcp-tool-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .mcp-no-tools {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-top: 6px;
+}
+
+.rc-root .mcp-add-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rc-root .mcp-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rc-root .mcp-form-row label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rc-root .mcp-form-row input,
+.rc-root .mcp-form-row select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.rc-root .mcp-form-row input:focus,
+.rc-root .mcp-form-row select:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .mcp-form-row input::placeholder {
+  color: var(--text-dim);
+}
+
+.rc-root .mcp-form-row select {
+  cursor: pointer;
+}
+
+.rc-root .mcp-form-row select option {
+  background: var(--surface);
+}
+
+.rc-root .mcp-form-error {
+  font-size: 11px;
+  color: var(--error);
+  padding: 2px 0;
+}
+
+.rc-root .mcp-form-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* URL field + inline "Discover auth" button. */
+.rc-root .mcp-url-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.rc-root .mcp-url-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  font-family: inherit;
+}
+.rc-root .mcp-url-row input:focus {
+  border-color: var(--accent);
+}
+.rc-root .mcp-discover-btn {
+  white-space: nowrap;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.rc-root .mcp-discover-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.rc-root .mcp-discover-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Info box explaining the $SECRET_ convention in auth fields. */
+.rc-root .mcp-secret-info {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.rc-root .mcp-secret-info code {
+  font-size: 10px;
+  background: var(--surface);
+  border-radius: 3px;
+  padding: 0 3px;
+  color: var(--text);
+}
+.rc-root .mcp-secret-info-icon {
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* OAuth2 / CLI auth sub-fields grouped + indented under the auth selector. */
+.rc-root .mcp-auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+/* Editable key/value lists (custom headers, env vars). */
+.rc-root .mcp-kv-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rc-root .mcp-kv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rc-root .mcp-kv-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rc-root .mcp-kv-add {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 8px;
+}
+
+.rc-root .mcp-kv-add:hover {
+  border-color: var(--accent);
+}
+
+.rc-root .mcp-kv-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rc-root .mcp-kv-row .mcp-kv-name,
+.rc-root .mcp-kv-row .mcp-kv-value {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.rc-root .mcp-kv-row .mcp-kv-name:focus,
+.rc-root .mcp-kv-row .mcp-kv-value:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .mcp-kv-remove {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.rc-root .mcp-kv-remove:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.rc-root .mcp-form-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.rc-root .mcp-form-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 12px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rc-root .mcp-form-cancel:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.rc-root .mcp-form-submit {
+  background: var(--accent);
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 12px;
+  transition: background 0.15s;
+}
+
+.rc-root .mcp-form-submit:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.rc-root .mcp-form-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rc-root .mcp-server-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.rc-root .mcp-remove-btn {
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 5px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rc-root .mcp-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.rc-root .mcp-confirm-remove {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rc-root .mcp-confirm-yes {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  border-radius: 5px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 10px;
+  transition: background 0.15s;
+}
+
+.rc-root .mcp-confirm-yes:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.rc-root .mcp-confirm-no {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 10px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rc-root .mcp-confirm-no:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.rc-root .mcp-status-dot.auth-required {
+  background: #eab308;
+  box-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+}
+
+.rc-root .mcp-auth-btn {
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 4px;
+  color: #fbbf24;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rc-root .mcp-auth-btn:hover:not(:disabled) {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: #fbbf24;
+}
+
+.rc-root .mcp-auth-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rc-root .mcp-auth-ok {
+  color: #4ade80;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.rc-root .mcp-auth-expiry {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.rc-root .mcp-auth-required {
+  color: #fbbf24;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.rc-root .mcp-auth-none {
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.rc-root .mcp-revoke-btn {
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rc-root .mcp-revoke-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+/* The Auth line holds interactive buttons (Refresh/Revoke), so it must NOT clamp with
+   nowrap+ellipsis like a plain detail value (that clipped/overlapped the buttons and made
+   them unclickable). Let it wrap and lay children out inline with gaps. */
+.rc-root .mcp-auth-row {
+  align-items: center;
+}
+.rc-root .mcp-auth-value {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.rc-root .mcp-auth-value .mcp-refresh-btn,
+.rc-root .mcp-auth-value .mcp-revoke-btn {
+  margin-left: 0;
+}
+
+/* Manual token refresh — non-destructive, uses the accent color (not red like Revoke).
+   Accent chosen to clear WCAG AA on the dark panel bg at 10px. */
+.rc-root .mcp-refresh-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #7dd3fc;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.rc-root .mcp-refresh-btn:hover:not(:disabled) {
+  background: rgba(125, 211, 252, 0.12);
+  border-color: #7dd3fc;
+}
+.rc-root .mcp-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── Copy buttons ── */
+.rc-root .code-block-wrapper {
+  position: relative;
+}
+
+.rc-root .copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
   font-size: 12px;
-  margin-top: 6px;
-  color: #9aa;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  z-index: 2;
 }
-.rc-verify.verified { color: #4ade80; }
 
-.rc-cursor {
+.rc-root .code-block-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+
+.rc-root .copy-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.rc-root .copy-btn.copied {
+  background: #22c55e;
+  opacity: 1;
+}
+
+.rc-root .message-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  padding: 2px 5px;
+}
+
+.rc-root .bubble-wrap:hover .message-copy-btn {
+  opacity: 0.7;
+}
+
+.rc-root .bubble-wrap:hover .message-copy-btn:hover {
+  opacity: 1;
+}
+
+/* ── Answer feedback (like/dislike) — discrete; visible on hover or once rated ── */
+.rc-root .bubble-feedback {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.rc-root .bubble-wrap:hover .bubble-feedback {
+  opacity: 0.65;
+}
+/* Keep it visible when the user has already rated (so the state reads at a glance). */
+.rc-root .bubble-feedback:has(.active) {
+  opacity: 1;
+}
+.rc-root .bubble-feedback-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  filter: grayscale(1) opacity(0.7);
+  transition:
+    filter 0.15s,
+    background 0.15s;
+}
+.rc-root .bubble-feedback-btn:hover {
+  filter: grayscale(0) opacity(1);
+  background: rgba(255, 255, 255, 0.06);
+}
+.rc-root .bubble-feedback-btn.active {
+  filter: grayscale(0) opacity(1);
+}
+.rc-root .bubble-feedback-btn.like.active {
+  background: rgba(120, 200, 120, 0.18);
+  border-color: rgba(120, 200, 120, 0.5);
+}
+.rc-root .bubble-feedback-btn.dislike.active {
+  background: rgba(220, 120, 120, 0.18);
+  border-color: rgba(220, 120, 120, 0.5);
+}
+.rc-root .bubble-feedback-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Answer self-check chip (bubble footer) ──
+   A discreet marker on the assistant bubble showing the verify verdict. This replaces the old
+   in-stream *[✓ Verified]* / "⟳ Verifying…" action markers (which left a stuck indicator with no
+   clearing path). Verification runs SILENTLY — this chip is the only surfaced signal. */
+.rc-root .bubble-verify {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.rc-root .bubble-verify-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-weight: 500;
+}
+/* Verifying — muted, live. --text-muted keeps AA contrast on the dark bg. */
+.rc-root .bubble-verify.verify-verifying .bubble-verify-badge {
+  color: var(--text-muted, #9aa3b2);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.rc-root .verify-spinner {
   display: inline-block;
-  width: 7px;
-  height: 15px;
-  background: #8b7cf6;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  animation: rc-blink 1s steps(2, start) infinite;
+  animation: verify-pulse 1.1s ease-in-out infinite;
 }
-@keyframes rc-blink { to { visibility: hidden; } }
+@keyframes verify-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* Verified — permanent, calm green (AA on dark). */
+.rc-root .bubble-verify.verify-verified .bubble-verify-badge {
+  color: #7fcf9a;
+  background: rgba(120, 200, 120, 0.12);
+  border-color: rgba(120, 200, 120, 0.3);
+}
+/* Unverified — brief marker (host collapses the answer to a step); calm amber, not alarming. */
+.rc-root .bubble-verify.verify-unverified .bubble-verify-badge {
+  color: #e0b062;
+  background: rgba(220, 170, 90, 0.12);
+  border-color: rgba(220, 170, 90, 0.3);
+}
+/* Honor reduced-motion — freeze the pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .rc-root .verify-spinner {
+    animation: none;
+    opacity: 1;
+  }
+}
 
-.rc-banner {
+/* ── Attachments ── */
+.rc-root .attachments-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+  flex-wrap: wrap;
+}
+
+.rc-root .attachment-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #2a2a3a;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rc-root .attachment-badge img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.rc-root .attachment-badge .attachment-icon {
+  font-size: 14px;
+}
+
+.rc-root .attachment-badge .attachment-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .attachment-badge .remove {
+  cursor: pointer;
+  color: #666;
+  font-size: 10px;
+  margin-left: 2px;
+  transition: color 0.15s;
+}
+
+.rc-root .attachment-badge .remove:hover {
+  color: var(--error);
+}
+
+.rc-root .text-paste-badge {
+  position: relative;
+}
+
+.rc-root .text-paste-badge .attachment-icon {
+  cursor: pointer;
+}
+
+.rc-root .text-paste-preview {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 4px;
+  z-index: 100;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.rc-root .text-paste-preview pre {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+/* Attach button */
+.rc-root .attach-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rc-root .attach-btn:hover {
+  background: var(--border);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ── Drop zone ── */
+.rc-root .input-area.drag-over {
+  border: 2px dashed #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+  border-top: 2px dashed #3b82f6;
+}
+
+/* ── Collapsible blocks ── */
+.rc-root .collapse-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rc-root .collapse-block summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+  user-select: none;
+  list-style: none;
+}
+
+.rc-root .collapse-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-root .collapse-block summary::before {
+  content: "▸ ";
+  display: inline;
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.rc-root .collapse-block[open] summary::before {
+  content: "▾ ";
+}
+
+.rc-root .collapse-block .content {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── Diff view ── */
+.rc-root .diff-block {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 6px 0;
+}
+
+.rc-root .diff-line-add {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  padding: 1px 10px;
+}
+
+.rc-root .diff-line-remove {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  padding: 1px 10px;
+}
+
+.rc-root .diff-line-neutral {
+  color: var(--text-dim);
+  padding: 1px 10px;
+}
+
+/* ── Progress bar ── */
+.rc-root .progress-block {
+  margin: 8px 0;
+}
+
+.rc-root .progress-bar-outer {
+  background: var(--border);
+  border-radius: 8px;
+  height: 20px;
+  overflow: hidden;
+}
+
+.rc-root .progress-bar-inner {
+  background: var(--accent);
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rc-root .progress-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* ── Math/KaTeX ── */
+.rc-root .math-block {
+  margin: 8px 0;
+  overflow-x: auto;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.rc-root .math-inline {
+  display: inline;
+}
+
+/* KaTeX color overrides for dark theme */
+.rc-root .math-block .katex,
+.rc-root .math-inline .katex {
+  color: var(--text);
+}
+
+.rc-root .math-block .katex .mord,
+.rc-root .math-inline .katex .mord {
+  color: var(--text);
+}
+
+.rc-root .math-block .katex .mop,
+.rc-root .math-inline .katex .mop {
+  color: #c678dd;
+}
+
+.rc-root .math-block .katex .mrel,
+.rc-root .math-inline .katex .mrel {
+  color: #61afef;
+}
+
+/* Notifications view */
+.rc-root .notifications-view { padding: 12px; overflow-y: auto; height: calc(100vh - 80px); }
+.rc-root .notifications-view h3 { margin: 12px 0 8px; font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.rc-root .notif-channel { background: #1e293b; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.rc-root .notif-header { display: flex; align-items: center; justify-content: space-between; }
+.rc-root .notif-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.rc-root .notif-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+.rc-root .notif-icon { font-size: 16px; }
+.rc-root .notif-test-btn { font-size: 11px; padding: 2px 8px; background: #334155; border: 1px solid #475569; color: #e2e8f0; border-radius: 4px; cursor: pointer; }
+.rc-root .notif-test-btn:hover { background: #475569; }
+.rc-root .notif-test-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rc-root .notif-detail { font-size: 11px; color: #94a3b8; margin-top: 6px; padding-left: 24px; }
+.rc-root .notif-fields { margin-top: 8px; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; }
+.rc-root .notif-fields label { font-size: 11px; color: #94a3b8; display: flex; flex-direction: column; gap: 2px; }
+.rc-root .notif-fields input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+.rc-root .notif-help { font-size: 10px; color: #64748b; margin-top: 4px; line-height: 1.4; }
+.rc-root .notif-hint { font-size: 11px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4; }
+.rc-root .notif-rules { display: flex; flex-direction: column; gap: 4px; }
+.rc-root .notif-rule { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 8px; background: #1e293b; border-radius: 4px; font-size: 11px; }
+.rc-root .notif-rule-name { color: #e2e8f0; text-transform: capitalize; flex-shrink: 0; }
+.rc-root .notif-rule-channels { color: #cbd5e1; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.rc-root .notif-rule-check { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.rc-root .notif-rule-check input[type="checkbox"] { width: 13px; height: 13px; cursor: pointer; }
+.rc-root .notif-actions { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+.rc-root .notif-save-btn { background: #1d4ed8; color: white; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.rc-root .notif-save-btn:hover { background: #1e40af; }
+.rc-root .notif-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rc-root .notif-test-result { font-size: 12px; color: #22c55e; }
+
+/* ── Inline Buttons (from assistant messages) ── */
+.rc-root .buttons-block {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.rc-root .inline-btn {
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.rc-root .inline-btn:hover {
+  background: #2563eb;
+}
+
+.rc-root .inline-btn:active {
+  background: #1d4ed8;
+}
+
+/* Followup suggestion chips — lighter than inline-btn (outline, not filled) since
+   they're optional next-step hints, not primary actions. Clicking sends as a message. */
+.rc-root .followups-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+.rc-root .followup-chip {
+  padding: 5px 11px;
+  border-radius: 14px;
+  background: none;
+  /* Lighter purple than --accent (#7c5cbf) so text clears WCAG AA (4.5:1) on the dark
+     bubble bg — the raw accent is only ~3.2:1. */
+  border: 1px solid #b9a3e8;
+  color: #b9a3e8;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.rc-root .followup-chip:hover:not(:disabled) {
+  background: #b9a3e8;
+  color: #161616;
+}
+.rc-root .followup-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Mode Toggles ────────────────────────────────────────────────────────── */
+
+.rc-root .mode-toggles {
+  display: flex;
+  gap: 0;
+  align-items: center;
+}
+
+.rc-root .mode-toggle {
+  font-size: 12px;
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.rc-root .mode-toggle:hover {
+  opacity: 0.7;
+  filter: grayscale(0.3);
+}
+
+.rc-root .mode-toggle-active {
+  opacity: 1;
+  filter: grayscale(0);
+}
+
+/* ── Action Approval Card ────────────────────────────────────────────────── */
+
+.rc-root .action-approval-card {
+  margin: 8px 12px;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface, #1e1e1e);
+}
+
+.rc-root .action-approval-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rc-root .action-approval-icon {
+  font-size: 18px;
+}
+
+.rc-root .action-approval-type {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text, #eee);
+}
+
+.rc-root .action-approval-details {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.rc-root .action-approval-target,
+.rc-root .action-approval-value {
+  margin-bottom: 4px;
+}
+
+.rc-root .action-approval-label {
+  color: var(--text-muted, #888);
+  margin-right: 6px;
+}
+
+.rc-root .action-approval-details code {
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.rc-root .action-approval-reasoning {
+  color: var(--text-muted, #888);
+  font-style: italic;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.rc-root .action-approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.rc-root .action-approval-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.rc-root .action-approval-btn:hover {
+  opacity: 0.85;
+}
+
+/* Button backgrounds are darkened to meet WCAG AA 4.5:1 against white text at 12px. */
+.rc-root .action-approval-btn-approve {
+  background: #15803d;
+  color: #fff;
+}
+
+.rc-root .action-approval-btn-deny {
+  background: #b91c1c; /* red — refuse; white text passes AA at 12px */
+  color: #fff;
+}
+
+.rc-root .action-approval-btn-guide {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.rc-root .action-approval-btn-queue {
+  background: #4b5563;
+  color: #fff;
+}
+
+.rc-root .action-approval-btn-always {
+  background: #0f766e; /* teal — distinct from Approve's green, white text passes contrast */
+  color: #fff;
+}
+
+/* ── Brain Questions Card ────────────────────────────────────────────────── */
+
+.rc-root .brain-questions-card {
+  margin: 8px 12px;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface, #1e1e1e);
+}
+
+.rc-root .brain-questions-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rc-root .brain-questions-icon {
+  font-size: 18px;
+}
+
+.rc-root .brain-questions-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text, #eee);
+}
+
+.rc-root .brain-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-root .brain-question-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rc-root .brain-question-label {
+  font-size: 12px;
+  color: var(--text, #eee);
+  font-weight: 500;
+}
+
+.rc-root .brain-question-input {
+  padding: 6px 8px;
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  background: var(--bg, #121212);
+  color: var(--text, #eee);
+  font-size: 12px;
+  outline: none;
+}
+
+.rc-root .brain-question-input:focus {
+  border-color: var(--accent, #3b82f6);
+}
+
+.rc-root .brain-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 4px;
+}
+
+.rc-root .brain-question-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text, #eee);
+  cursor: pointer;
+}
+
+.rc-root .brain-questions-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.rc-root .brain-questions-btn {
+  flex: 1 1 0;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.rc-root .brain-questions-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.rc-root .brain-questions-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Secondary "Cancel" action — skip the structured questions, reply freely. */
+.rc-root .brain-questions-btn-cancel {
+  flex: 0 0 auto;
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text, #eee);
+  border: 1px solid var(--border, #333);
+}
+
+/* Freestyle "Other" row: the radio sits inline with a text input that IS the option. */
+.rc-root .brain-question-option-other {
+  align-items: center;
+}
+
+.rc-root .brain-question-other-input {
+  flex: 1 1 auto;
+  margin-left: 2px;
+}
+
+/* ── Plan view (CREATE_PLAN card: title, steps, approve/reject) ────────── */
+
+.rc-root .plan-view {
+  margin: 8px 12px;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface, #1e1e1e);
+}
+
+.rc-root .plan-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rc-root .plan-view-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text, #eee);
+}
+
+.rc-root .plan-view-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9aa);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-secondary, #2a2a2a);
+}
+
+.rc-root .plan-view-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rc-root .plan-view-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text, #eee);
+  line-height: 1.4;
+}
+
+.rc-root .plan-view-step-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  color: var(--text-secondary, #9aa);
+}
+
+.rc-root .plan-view-step-label {
+  flex: 1 1 auto;
+}
+
+.rc-root .plan-view-step.step-done .plan-view-step-icon {
+  color: #3fb950;
+}
+.rc-root .plan-view-step.step-failed .plan-view-step-icon {
+  color: #f85149;
+}
+.rc-root .plan-view-step.step-running .plan-view-step-icon {
+  color: var(--accent, #3b82f6);
+}
+.rc-root .plan-view-step.step-done .plan-view-step-label {
+  color: var(--text-secondary, #9aa);
+  text-decoration: line-through;
+}
+
+.rc-root .plan-view-step-confirm {
+  color: #c9a227;
+  font-weight: 700;
+}
+
+.rc-root .plan-view-step-result {
+  color: var(--text-secondary, #9aa);
+  font-style: italic;
+}
+
+.rc-root .plan-view-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rc-root .plan-view-btn {
+  flex: 1 1 0;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.rc-root .plan-view-btn:hover {
+  opacity: 0.85;
+}
+
+.rc-root .plan-view-btn-approve {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+}
+
+.rc-root .plan-view-btn-reject {
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text, #eee);
+  border: 1px solid var(--border, #333);
+}
+
+/* ── Interaction Block (resolved/expired cards in history) ─────────────── */
+
+.rc-root .interaction-block {
+  margin: 8px 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.rc-root .interaction-block.resolved {
+  opacity: 0.7;
+  background: var(--bg-secondary);
+}
+
+.rc-root .interaction-block.expired {
+  opacity: 0.5;
+  background: var(--bg-secondary);
+  border-color: #c9a227;
+}
+
+.rc-root .interaction-block-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-root .interaction-block-icon {
+  font-size: 14px;
+}
+
+.rc-root .interaction-block.resolved .interaction-block-icon {
+  color: #4caf50;
+}
+
+.rc-root .interaction-block.expired .interaction-block-icon {
+  color: #c9a227;
+}
+
+.rc-root .interaction-block-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rc-root .interaction-block-status {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.rc-root .interaction-block-steps,
+.rc-root .interaction-block-questions {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.rc-root .interaction-block-fields {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rc-root .interaction-block-field {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.rc-root .interaction-block-reasoning {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* ── Lightbox Modal ── */
+
+.rc-root .lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.rc-root .lightbox-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rc-root .lightbox-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 92vw;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.rc-root .lightbox-backdrop.open .lightbox-container {
+  transform: scale(1);
+}
+
+.rc-root .lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.rc-root .lightbox-toolbar-spacer {
+  flex: 1;
+}
+
+.rc-root .lightbox-zoom-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.rc-root .lightbox-zoom-btn:hover {
+  background: var(--border);
+}
+
+.rc-root .lightbox-zoom-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 36px;
+  text-align: center;
+}
+
+.rc-root .lightbox-download-btn,
+.rc-root .lightbox-copy-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rc-root .lightbox-download-btn:hover,
+.rc-root .lightbox-copy-btn:hover {
+  filter: brightness(1.15);
+}
+
+.rc-root .lightbox-close-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.rc-root .lightbox-close-btn:hover {
+  background: var(--border);
+}
+
+.rc-root .lightbox-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.rc-root .lightbox-content:active {
+  cursor: grabbing;
+}
+
+.rc-root .lightbox-pannable {
+  width: 100%;
+  height: 100%;
+  transition: none;
+}
+
+.rc-root .lightbox-chart {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.rc-root .lightbox-mermaid {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.rc-root .lightbox-mermaid svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rc-root .lightbox-map {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e8eef2;
+}
+
+.rc-root .lightbox-map .map-block {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  border-radius: 8px;
+}
+
+.rc-root .lightbox-table {
+  max-height: 100%;
+  overflow: auto;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+  color: #1a1a1a;
+}
+
+.rc-root .lightbox-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rc-root .lightbox-table th,
+.rc-root .lightbox-table td {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.rc-root .lightbox-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.rc-root .lightbox-table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+/* Expandable visualization wrapper */
+
+.rc-root .expandable-viz {
+  position: relative;
+  cursor: zoom-in;
+}
+
+.rc-root .expandable-viz::after {
+  content: "\2922";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.rc-root .expandable-viz:hover::after {
+  opacity: 1;
+}
+
+/* ── Secrets View ────────────────────────────────────────────────────────── */
+
+.rc-root .secrets-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-root .secrets-view .view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.rc-root .secrets-view .view-header h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.rc-root .secrets-view .loading {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px 16px;
+  font-size: 12px;
+}
+
+.rc-root .secrets-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 24px 16px;
+  font-size: 12px;
+}
+
+.rc-root .secrets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rc-root .secrets-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.rc-root .secrets-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.rc-root .secrets-name {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.rc-root .secrets-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rc-root .secrets-row-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-root .secrets-value {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-root .secrets-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.rc-root .secrets-icon-btn:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.rc-root .secrets-icon-btn.secrets-danger {
+  color: var(--error);
+}
+
+.rc-root .secrets-add-form,
+.rc-root .secrets-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.rc-root .secrets-edit-name {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.rc-root .secrets-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.rc-root .secrets-input:focus {
+  border-color: var(--accent);
+}
+
+.rc-root .secrets-error {
+  font-size: 11px;
+  color: var(--error);
+}
+
+.rc-root .secrets-form-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rc-root .secrets-btn {
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 12px;
+  transition: background 0.15s;
+}
+
+.rc-root .secrets-btn-add {
+  background: var(--accent);
+  color: #fff;
+}
+
+.rc-root .secrets-btn-add:hover {
+  opacity: 0.9;
+}
+
+.rc-root .secrets-btn-cancel {
+  background: var(--border);
+  color: var(--text);
+}
+
+.rc-root .secrets-btn-cancel:hover {
+  background: var(--text-dim);
+  color: var(--bg);
+}
+
+.rc-root .secrets-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 8px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.rc-root .secrets-hint code {
+  background: var(--surface);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+/* ── Variations Tabs ── */
+.rc-root .variations-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.rc-root .variations-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  border-bottom: none;
+  padding: 6px 6px 0;
+}
+.rc-root .variations-tab {
+  flex: 0 1 auto;
+  background: none;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  color: var(--accent-dim);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.rc-root .variations-tab:hover {
+  color: var(--accent);
+  background: rgba(124, 92, 191, 0.08);
+}
+.rc-root .variations-tab.active {
+  background: var(--accent-dim);
+  color: #fff;
+}
+.rc-root .variations-copy {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.rc-root .variations-copy:hover {
+  color: var(--text);
+}
+.rc-root .variations-content {
+  padding: 10px 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-wrap: break-word;
+}
+.rc-root .variations-content > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.rc-root .variations-content .chart-block {
+  max-width: 100%;
+  height: 200px;
+}
+.rc-root .variations-content .chart-block canvas {
+  max-width: 100% !important;
+  height: 100% !important;
+}
+.rc-root .variations-content .mermaid-block {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rc-root .variations-content .mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+.rc-root .variations-content .expandable-viz {
+  cursor: pointer;
+}
+.rc-root .variations-content .diff-block,
+.rc-root .variations-content .progress-block,
+.rc-root .variations-content .buttons-block {
+  margin: 6px 0;
+}
+.rc-root .variations-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rc-root .variations-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── Sub-Agent Sticky Container ── */
+.rc-root .subagent-sticky {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.rc-root .subagent-sticky::-webkit-scrollbar {
+  width: 3px;
+}
+.rc-root .subagent-sticky::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Sub-Agent Card ── */
+.rc-root .subagent-card {
+  margin: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+  font-size: 12px;
+}
+.rc-root .subagent-header {
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.rc-root .subagent-row {
+  padding: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.rc-root .subagent-row:last-child {
+  border-bottom: none;
+}
+.rc-root .subagent-icon {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+}
+.rc-root .subagent-running .subagent-icon {
+  color: var(--accent);
+  animation: spin 1s linear infinite;
+}
+.rc-root .subagent-done .subagent-icon {
+  color: #b5e853;
+}
+.rc-root .subagent-error .subagent-icon {
+  color: var(--error);
+}
+.rc-root .subagent-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.rc-root .subagent-detail {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.rc-root .subagent-current-step {
+  width: 100%;
+  padding-left: 22px;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-top: 4px;
+  word-break: break-word;
+}
+.rc-root .subagent-current-step p {
+  margin: 0 0 4px;
+}
+.rc-root .subagent-current-step p:last-child {
+  margin-bottom: 0;
+}
+.rc-root .subagent-current-step code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+.rc-root .subagent-current-step ul,
+.rc-root .subagent-current-step ol {
+  padding-left: 16px;
+  margin: 4px 0;
+}
+.rc-root .subagent-current-step li {
+  margin: 2px 0;
+}
+.rc-root .subagent-summary {
+  width: 100%;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding-left: 22px;
+  margin-top: 2px;
+  /* Findings JSON / long single-token strings must WRAP inside the card, never widen it. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Overflow containment: a flex row/child with a long unbreakable token (a findings JSON blob,
+   a URL, a file path) was expanding the card past the plugin panel. min-width:0 lets flex
+   children shrink; the card clamps to its container width. */
+.rc-root .subagent-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.rc-root .subagent-row {
+  min-width: 0;
+  max-width: 100%;
+}
+.rc-root .subagent-row > * {
+  min-width: 0;
+}
+
+/* Model + request meta line (collapsible). Preview truncates on one line; the full request
+   wraps + scrolls, never overflows. */
+.rc-root .subagent-meta {
+  width: 100%;
+  min-width: 0;
+  margin-top: 2px;
+  padding-left: 22px;
+  font-size: 11px; /* ≥11px + higher-contrast color to clear WCAG AA (4.5:1) on the dark bg */
+  color: var(--text);
+}
+.rc-root .subagent-meta > summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rc-root .subagent-meta > summary::-webkit-details-marker {
+  display: none;
+}
+.rc-root .subagent-model {
+  /* --accent (#7c5cbf) fails contrast at small size; use the app's brighter accent-text token
+     (falls back to a light lavender) so the model id is AA-legible on the dark panel. */
+  color: var(--accent-text, #c9b6f0);
+  font-family: monospace;
+}
+.rc-root .subagent-request-preview {
+  color: var(--text);
+}
+.rc-root .subagent-request-full {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: monospace;
+  color: var(--text);
+}
+.rc-root .subagent-stop {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--error);
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1;
+  margin-left: auto;
+  transition: background 0.15s;
+}
+.rc-root .subagent-stop:hover {
+  background: var(--error);
+  color: white;
+}
+.rc-root .subagent-steps-collapsed,
+.rc-root .subagent-actions-collapsed {
+  width: 100%;
+  padding-left: 22px;
+  margin-top: 4px;
+}
+.rc-root .subagent-steps-collapsed summary,
+.rc-root .subagent-actions-collapsed summary {
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  user-select: none;
+  transition: background 0.15s;
+}
+.rc-root .subagent-steps-collapsed summary:hover,
+.rc-root .subagent-actions-collapsed summary:hover {
+  background: rgba(255,255,255,0.06);
+}
+.rc-root .subagent-steps-collapsed summary::-webkit-details-marker,
+.rc-root .subagent-actions-collapsed summary::-webkit-details-marker {
+  display: none;
+}
+.rc-root .subagent-steps-collapsed[open] > summary,
+.rc-root .subagent-actions-collapsed[open] > summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+.rc-root .subagent-steps-body,
+.rc-root .subagent-actions-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  background: rgba(0,0,0,0.15);
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.rc-root .subagent-step-item,
+.rc-root .subagent-action-item {
+  margin: 2px 0;
+  border-radius: 4px;
+}
+.rc-root .subagent-step-item > summary,
+.rc-root .subagent-action-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  list-style: none;
+  font-size: 11px;
+}
+.rc-root .subagent-step-item > summary::-webkit-details-marker,
+.rc-root .subagent-action-item > summary::-webkit-details-marker {
+  display: none;
+}
+.rc-root .subagent-step-item > summary:hover,
+.rc-root .subagent-action-item > summary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.rc-root .subagent-step-num,
+.rc-root .subagent-action-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.rc-root .subagent-step-num {
+  background: var(--accent-dim);
+  color: #fff;
+}
+.rc-root .subagent-action-num {
+  background: var(--accent-dim);
+  color: #fff;
+}
+.rc-root .subagent-action-item.failed .subagent-action-num {
+  background: var(--error);
+}
+.rc-root .subagent-step-title {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.rc-root .subagent-action-title {
+  /* --accent (#7c5cbf) at 10px fails WCAG AA contrast; brighter token + 11px clears 4.5:1. */
+  color: var(--accent-text, #c9b6f0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+}
+.rc-root .subagent-action-item.failed .subagent-action-title {
+  color: var(--error);
+}
+.rc-root .subagent-step-full {
+  padding: 6px 8px 6px 30px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  border-left: 2px solid var(--accent-dim);
+  margin-left: 9px;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.rc-root .subagent-step-full p {
+  margin: 4px 0;
+}
+.rc-root .subagent-step-full p:last-child {
+  margin-bottom: 0;
+}
+.rc-root .subagent-step-full code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+.rc-root .subagent-step-full ul,
+.rc-root .subagent-step-full ol {
+  padding-left: 16px;
+  margin: 4px 0;
+}
+.rc-root .subagent-step-full li {
+  margin: 2px 0;
+}
+.rc-root .subagent-step-full pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 10px;
+  overflow-x: auto;
+  margin: 4px 0;
+}
+.rc-root .subagent-action-full {
+  padding: 4px 8px 4px 30px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--accent-text, #c9b6f0); /* AA-legible accent on the dark panel (was --accent 10px) */
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-left: 2px solid var(--accent-dim);
+  margin-left: 9px;
+  margin-bottom: 4px;
+}
+.rc-root .subagent-action-item.failed .subagent-action-full {
+  color: var(--error);
+  border-left-color: var(--error);
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Sub-Agent Groups ── */
+.rc-root .subagent-group {
+  border-left: 2px solid var(--accent);
+  margin: 4px 0;
+  padding-left: 8px;
+}
+.rc-root .subagent-group-done {
+  border-left-color: #b5e853;
+}
+.rc-root .subagent-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.rc-root .subagent-group-icon {
+  font-size: 12px;
+  color: var(--accent);
+}
+.rc-root .subagent-group-done .subagent-group-icon {
+  color: #b5e853;
+}
+.rc-root .subagent-group-progress {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Nested sub-agents: a worker that SPAWN_SUBAGENTs capability skills shows them indented
+   beneath it. Small left indent + accent rail; min-width:0 so long content wraps/scrolls
+   inside the narrow panel instead of forcing horizontal overflow. */
+.rc-root .subagent-children {
+  margin: 2px 0 2px 10px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border, #333);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Messages block (Slack/chat renderer) */
+.rc-root .messages-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+.rc-root .msg-item {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid var(--accent, #7c5cfc);
+}
+.rc-root .msg-item.msg-me {
+  border-left-color: #b5e853;
+}
+.rc-root .msg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.rc-root .msg-user {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-bright, #e0e0e0);
+}
+.rc-root .msg-me .msg-user {
+  color: #b5e853;
+}
+.rc-root .msg-time {
+  font-size: 10px;
+  color: var(--text-dim, #888);
+}
+.rc-root .msg-text {
+  color: var(--text-main, #ccc);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.rc-root .msg-text code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.rc-root .msg-text a {
+  color: var(--accent, #7c5cfc);
+  text-decoration: underline;
+}
+.rc-root .msg-mention {
+  background: rgba(124,92,252,0.2);
+  color: var(--accent, #7c5cfc);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+/* ── Workflows (list + builder) ──────────────────────────────────────────── */
+.rc-root .wf-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rc-root .wf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rc-root .wf-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.rc-root .wf-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+/* Primary action button (New workflow, Save, Run) */
+.rc-root .wf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+.rc-root .wf-btn:hover { background: var(--accent-dim); }
+.rc-root .wf-btn:active { transform: translateY(1px); }
+.rc-root .wf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rc-root .wf-btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.rc-root .wf-btn.secondary:hover { background: var(--border); }
+.rc-root .wf-btn.ghost {
+  background: none;
+  color: var(--text-dim);
+  border: none;
+  padding: 5px 7px;
+}
+.rc-root .wf-btn.ghost:hover { background: var(--border); color: var(--text); }
+
+/* Empty state */
+.rc-root .wf-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.rc-root .wf-empty svg { opacity: 0.4; }
+.rc-root .wf-empty p { font-size: 12px; line-height: 1.6; margin: 0; max-width: 240px; }
+
+/* Workflow list card */
+.rc-root .wf-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rc-root .wf-card:hover { border-color: var(--accent-dim); }
+.rc-root .wf-card-row { display: flex; align-items: center; gap: 6px; }
+.rc-root .wf-card-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-root .wf-card-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+.rc-root .wf-chip {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-right: 4px;
+}
+
+/* Icon button (run/edit/delete) */
+.rc-root .wf-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.rc-root .wf-icon-btn:hover { background: var(--border); color: var(--text); }
+.rc-root .wf-icon-btn.danger:hover { background: rgba(192,57,43,0.18); color: #e7796e; }
+.rc-root .wf-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Builder surfaces */
+.rc-root .wf-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rc-root .wf-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px;
+}
+.rc-root .wf-buffer {
+  border: 1px dashed var(--accent-dim);
+  background: rgba(124,92,191,0.05);
+  border-radius: 8px;
+  padding: 10px;
+}
+.rc-root .wf-node {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 7px;
+}
+.rc-root .wf-node.block { border-color: var(--accent-dim); }
+.rc-root .wf-row { display: flex; gap: 6px; align-items: center; }
+
+/* Inputs/textarea inside workflow builder */
+.rc-root .wf-input,
+.rc-root .wf-textarea,
+.rc-root .wf-select {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.rc-root .wf-input:focus,
+.rc-root .wf-textarea:focus,
+.rc-root .wf-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.rc-root .wf-textarea { resize: vertical; min-height: 40px; line-height: 1.4; }
+.rc-root .wf-select { cursor: pointer; }
+
+/* Capture-target chip */
+.rc-root .wf-target {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rc-root .wf-target:hover { border-color: var(--accent-dim); color: var(--text); }
+.rc-root .wf-target.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Recording indicator pill */
+.rc-root .wf-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition: all 0.15s;
+}
+.rc-root .wf-rec:hover { border-color: var(--accent-dim); }
+.rc-root .wf-rec.on {
+  background: rgba(124,92,191,0.15);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.rc-root .wf-rec .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--text-dim);
+}
+.rc-root .wf-rec.on .dot {
+  background: #b5e853;
+  box-shadow: 0 0 0 0 rgba(181,232,83,0.6);
+  animation: wf-rec-pulse 1.6s infinite;
+}
+@keyframes wf-rec-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(181,232,83,0.55); }
+  70% { box-shadow: 0 0 0 6px rgba(181,232,83,0); }
+  100% { box-shadow: 0 0 0 0 rgba(181,232,83,0); }
+}
+
+/* Info "?" badge with tooltip */
+.rc-root .wf-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+}
+.rc-root .wf-info:hover { border-color: var(--accent); color: var(--accent); }
+/* wider tooltip for info badges & zones — wraps, supports examples */
+.rc-root .wf-tip { position: relative; }
+.rc-root .wf-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 130%;
+  left: 0;
+  width: max-content;
+  max-width: 230px;
+  white-space: pre-wrap;
+  padding: 7px 9px;
+  background: #0e0e0e;
+  color: #d8d8d8;
+  font-size: 10px;
+  line-height: 1.45;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 9999;
+}
+.rc-root .wf-tip:hover::after { opacity: 1; }
+.rc-root .wf-tip.tip-right::after { left: auto; right: 0; }
+
+.rc-root .wf-breadcrumb {
+  font-size: 10px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Panel error-boundary fallback — shown instead of a silent black panel when a render
+   throws. Legible on the dark bg, with a Reload affordance. */
+.rc-root .panel-crash {
+  margin: 16px;
+  padding: 16px;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text);
+  font-size: 13px;
+}
+.rc-root .panel-crash-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.rc-root .panel-crash-msg {
+  font-family: "SF Mono", monospace;
+  font-size: 11px;
+  color: #f87171;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 12px;
+}
+.rc-root .panel-crash-actions {
+  display: flex;
+  gap: 8px;
+}
+.rc-root .panel-crash-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rc-root .panel-crash-btn.secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+/* ── Interactive form (INTERACTIVE_FORM panel card) ──────────────────────────── */
+.rc-root .interactive-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rc-root .interactive-form .form-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.rc-root .interactive-form .form-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rc-root .interactive-form .form-tab {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.rc-root .interactive-form .form-tab.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.rc-root .interactive-form .form-tab.done {
+  color: #4ade80;
+}
+.rc-root .interactive-form .form-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rc-root .interactive-form .form-step-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.rc-root .interactive-form .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc-root .interactive-form .form-field > label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.rc-root .interactive-form input[type="text"],
+.rc-root .interactive-form select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 7px 9px;
+  width: 100%;
+}
+.rc-root .interactive-form input[type="text"]:focus,
+.rc-root .interactive-form select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.rc-root .interactive-form .form-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc-root .interactive-form .form-radio,
+.rc-root .interactive-form .form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+/* Inline freestyle "Other" row — its text input fills the remaining width. */
+.rc-root .interactive-form .form-other-input {
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  background: var(--bg, #121212);
+  color: var(--text, #eee);
+  font-size: 12px;
+  outline: none;
+}
+.rc-root .interactive-form .form-other-input:focus {
+  border-color: var(--accent, #3b82f6);
+}
+.rc-root .interactive-form .form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.rc-root .interactive-form .form-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rc-root .interactive-form .form-btn.secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+/* ── Safety settings section ── */
+.rc-root .safety-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rc-root .safety-settings h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+.rc-root .safety-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.rc-root .safety-group legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+}
+.rc-root .safety-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rc-root .safety-number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.rc-root .safety-number input {
+  width: 110px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 8px;
+  outline: none;
+  font-family: monospace;
+}
+.rc-root .safety-number input:focus,
+.rc-root .safety-toggle input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.rc-root .safety-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.rc-root .safety-help {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Responsive layout layer (mobile-first) + Tulzo remote-chat wrapper chrome.
+   Appended after the ported panel styles so it wins the cascade.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.rc-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 820px;
+  margin: 0 auto;
+  background: var(--bg, #161616);
+  color: var(--text, #e8e8e8);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* Scrolling message region grows to fill; composer pins to the bottom. */
+.rc-root .message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rc-root .input-area {
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 auto;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: var(--surface, #212121);
+}
+
+/* Wide screens: keep the centered reading column. */
+@media (min-width: 900px) {
+  .rc-root {
+    max-width: 820px;
+  }
+}
+
+/* Phones: go full-bleed. */
+@media (max-width: 600px) {
+  .rc-root {
+    max-width: none;
+  }
+}
+
+/* ── Tulzo wrapper chrome (header / device picker / banners) ── */
+.rc-root .rc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border, #23232b);
+  background: var(--surface, #101017);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex: 0 0 auto;
+}
+
+.rc-root .rc-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #23232b);
+  background: transparent;
+  color: var(--text, #e8e8ea);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.rc-root .rc-back::before {
+  content: '\2039'; /* ‹ single left angle quote as a back chevron */
+  display: block;
+  font-size: 22px;
+  margin-top: -2px;
+}
+
+.rc-root .rc-back:hover {
+  background: var(--border, #23232b);
+  border-color: var(--accent, #6d5cf6);
+}
+
+.rc-root .rc-header .rc-logo {
+  font-size: 18px;
+  color: var(--accent, #8b7cf6);
+}
+
+.rc-root .rc-title,
+.rc-root .rc-header .rc-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rc-root .rc-status,
+.rc-root .rc-header .rc-status {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border, #1c1c26);
+  color: var(--text-muted, #9a9a9a);
+}
+
+.rc-root .rc-status.online,
+.rc-root .rc-header .rc-status.online {
+  color: #4ade80;
+}
+
+.rc-root .rc-status.offline,
+.rc-root .rc-header .rc-status.offline {
+  color: #f87171;
+}
+
+.rc-root .rc-banner {
   margin: 0 16px;
   padding: 8px 12px;
   border-radius: 10px;
@@ -163,81 +5968,65 @@
   border: 1px solid #4a3f18;
   color: #f5d98a;
   font-size: 13px;
-}
-
-.rc-composer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 12px 16px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-  border-top: 1px solid #23232b;
-  background: #101017;
-}
-
-.rc-composer textarea {
-  flex: 1;
-  resize: none;
-  border: 1px solid #2a2a34;
-  border-radius: 12px;
-  background: #17171f;
-  color: #e8e8ea;
-  padding: 10px 12px;
-  font-size: 15px;
-  line-height: 1.4;
-  max-height: 160px;
-  font-family: inherit;
-}
-
-.rc-composer textarea:focus {
-  outline: none;
-  border-color: #6d5cf6;
-}
-
-.rc-composer button {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  border: none;
-  background: #6d5cf6;
-  color: #fff;
-  font-size: 18px;
-  cursor: pointer;
 }
 
-.rc-composer button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.rc-picker {
+.rc-root .rc-picker {
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-y: auto;
 }
 
-.rc-picker h2 { font-size: 16px; margin: 0 0 4px; }
+.rc-root .rc-picker h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
 
-.rc-device {
+.rc-root .rc-device {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #23232b;
+  border: 1px solid var(--border, #23232b);
   border-radius: 12px;
-  background: #17171f;
+  background: var(--surface, #17171f);
   cursor: pointer;
   text-align: left;
   color: inherit;
   font: inherit;
 }
 
-.rc-device:disabled { opacity: 0.5; cursor: default; }
-.rc-device .rc-dot { width: 8px; height: 8px; border-radius: 999px; background: #f87171; }
-.rc-device.online .rc-dot { background: #4ade80; }
-.rc-device .rc-dname { font-weight: 600; }
-.rc-device .rc-dmeta { font-size: 12px; color: #9aa; margin-left: auto; }
+.rc-root .rc-device:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
-.rc-empty { color: #9aa; font-size: 14px; text-align: center; padding: 32px 16px; }
+.rc-root .rc-device .rc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #f87171;
+}
+
+.rc-root .rc-device.online .rc-dot {
+  background: #4ade80;
+}
+
+.rc-root .rc-device .rc-dname {
+  font-weight: 600;
+}
+
+.rc-root .rc-device .rc-dmeta {
+  font-size: 12px;
+  color: var(--text-muted, #9a9a9a);
+  margin-left: auto;
+}
+
+.rc-root .rc-empty {
+  color: var(--text-muted, #9a9a9a);
+  font-size: 14px;
+  text-align: center;
+  padding: 32px 16px;
+}
