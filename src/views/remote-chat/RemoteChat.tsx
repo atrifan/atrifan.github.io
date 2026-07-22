@@ -271,6 +271,8 @@ interface RemoteChatProps {
   sessionId: string;
   deviceName: string;
   deviceOnline: boolean;
+  /** The device's currently-configured model (from its heartbeat), if known. */
+  deviceModel?: string | null;
   onBack: () => void;
 }
 
@@ -288,11 +290,16 @@ function fromRelayMessage(m: RelayMessage): ChatEntry {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function RemoteChat({ sessionId, deviceName, deviceOnline, onBack }: RemoteChatProps) {
+export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, onBack }: RemoteChatProps) {
   const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const inputRef = useRef('');
-  const [model, setModel] = useState<AnyModel>(DEFAULT_MODEL);
+  // Seed the composer model from the device's actual configured model so it
+  // matches what the device will run; fall back to DEFAULT_MODEL if unknown.
+  const [model, setModel] = useState<AnyModel>((deviceModel as AnyModel) || DEFAULT_MODEL);
+  // The user may switch models in the composer; once they do, stop auto-syncing
+  // from the device so we don't clobber their choice on the next presence poll.
+  const userPickedModel = useRef(false);
   const [usage, setUsage] = useState<SessionUsage>({ inputTokens: 0, outputTokens: 0, cost: 0 });
   const [streaming, setStreaming] = useState(false);
   const [waitingForUser, setWaitingForUser] = useState<string | null>(null);
@@ -313,6 +320,14 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, onBack }: Remo
   const [pendingReplayId, setPendingReplayId] = useState<string | null>(null);
   const [brainQuestions, setBrainQuestions] = useState<{ questionId: string; questions: BrainQuestion[] } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+
+  // Keep the composer model in sync with the device's configured model as the
+  // parent refreshes it (presence poll), until the user explicitly picks one.
+  useEffect(() => {
+    if (userPickedModel.current) return;
+    if (deviceModel && deviceModel !== model) setModel(deviceModel as AnyModel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceModel]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1278,7 +1293,14 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, onBack }: Remo
           <ContextIndicator used={contextUsage.used} total={contextUsage.total} onClear={clearContext} />
         </div>
 
-        <TokenFooterRow model={model} usage={usage} onModelChange={setModel} />
+        <TokenFooterRow
+          model={model}
+          usage={usage}
+          onModelChange={(m) => {
+            userPickedModel.current = true;
+            setModel(m);
+          }}
+        />
       </div>
     </div>
   );

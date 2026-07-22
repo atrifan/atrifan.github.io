@@ -11,12 +11,15 @@ interface Device {
   status: 'online' | 'offline' | 'never_connected';
   platform: string | null;
   last_seen_at: string | null;
+  model: string | null;
 }
 
 interface ActiveChat {
   sessionId: string;
+  deviceId: string;
   deviceName: string;
   deviceOnline: boolean;
+  deviceModel: string | null;
 }
 
 export function RemoteChatPage() {
@@ -73,8 +76,10 @@ export function RemoteChatPage() {
 
       setActive({
         sessionId: session.id,
+        deviceId: device.id,
         deviceName: device.device_name,
         deviceOnline: device.status === 'online',
+        deviceModel: device.model,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to open chat');
@@ -96,12 +101,43 @@ export function RemoteChatPage() {
     }
   }, [loading, active, devices, openChat]);
 
+  // While a chat is open, keep the device's online status + active model fresh.
+  // deviceOnline/deviceModel captured at open time is a snapshot; the device can
+  // come online or switch models mid-session, so re-read /api/plugin/devices.
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch('/api/plugin/devices');
+        if (!res.ok) return;
+        const body = await res.json();
+        const d = ((body.devices as Device[]) ?? []).find((x) => x.id === active.deviceId);
+        if (!d || cancelled) return;
+        const online = d.status === 'online';
+        setActive((prev) =>
+          prev && prev.deviceId === active.deviceId && (prev.deviceOnline !== online || prev.deviceModel !== d.model)
+            ? { ...prev, deviceOnline: online, deviceModel: d.model }
+            : prev
+        );
+      } catch {
+        /* best-effort presence refresh */
+      }
+    };
+    const interval = setInterval(tick, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [active]);
+
   if (active) {
     return (
       <RemoteChat
         sessionId={active.sessionId}
         deviceName={active.deviceName}
         deviceOnline={active.deviceOnline}
+        deviceModel={active.deviceModel}
         onBack={() => {
           setActive(null);
           loadDevices();
