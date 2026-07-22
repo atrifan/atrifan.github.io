@@ -18,7 +18,12 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getApiKeyByHash, hashApiKey, computeDeviceStatus } from './supabase-services';
+import {
+  getApiKeyByHash,
+  hashApiKey,
+  computeDeviceStatus,
+  upsertDeviceHeartbeat,
+} from './supabase-services';
 
 // Untyped client against the STORAGE project — the relay tables aren't in the
 // generated Database type yet (acceptable per coding-standards.md).
@@ -91,6 +96,27 @@ export async function authenticateDevice(authHeader: string | null): Promise<Dev
       plan: record.plan as 'pro' | 'plus',
     },
   };
+}
+
+/**
+ * Refresh a device's presence marker by touching its `device_heartbeats` row.
+ *
+ * The device does not POST a real heartbeat today — it only GETs `/api/verify`
+ * (hourly) and, while a chat session is live, long-polls `/api/plugin/chat/poll`.
+ * Both call this so the control panel's "online" status reflects a device that
+ * is actually reachable. `verify` is a coarse (~hourly) signal; `poll` is a
+ * tight, live one. Best-effort — never fail the caller on a presence write.
+ */
+export async function touchDevicePresence(
+  apiKeyId: string,
+  userId: string,
+  deviceName: string
+): Promise<void> {
+  try {
+    await upsertDeviceHeartbeat(apiKeyId, userId, deviceName, {});
+  } catch {
+    // Best-effort presence only.
+  }
 }
 
 /** Fetch a session by id. Returns null if it doesn't exist. */

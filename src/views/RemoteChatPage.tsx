@@ -90,7 +90,7 @@ export function RemoteChatPage() {
     const deviceId = params.get('device');
     if (!deviceId) return;
     const target = devices.find((d) => d.id === deviceId);
-    if (target && target.status === 'online') {
+    if (target) {
       autoOpenedRef.current = true;
       openChat(target);
     }
@@ -129,7 +129,7 @@ export function RemoteChatPage() {
               key={d.id}
               className={`rc-device ${d.status === 'online' ? 'online' : ''}`}
               onClick={() => openChat(d)}
-              disabled={d.status !== 'online' || busy === d.id}
+              disabled={busy === d.id}
             >
               <span className="rc-dot" />
               <span className="rc-dname">{d.device_name}</span>

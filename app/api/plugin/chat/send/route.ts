@@ -35,9 +35,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Session not found' }, { status: authz.status });
   }
 
-  if (!(await isSessionDeviceOnline(authz.session))) {
-    return NextResponse.json({ error: 'device_offline' }, { status: 409 });
-  }
+  // Enqueue regardless of presence: the frame is durable and the device will
+  // pick it up when it next polls/subscribes. We surface presence to the UI as
+  // a banner (deviceOnline) rather than hard-failing the send.
+  const deviceOnline = await isSessionDeviceOnline(authz.session);
 
   await enqueueFrame(authz.session, 'to_device', frame);
 
@@ -46,5 +47,5 @@ export async function POST(req: NextRequest) {
     await appendMessage(authz.session, 'user', { text: frame.text });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, deviceOnline });
 }

@@ -267,23 +267,25 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, onBack }: Remo
       </div>
 
       {banner && <div className="rc-banner">{banner}</div>}
+      {!deviceOnline && !banner && (
+        <div className="rc-banner">Device appears offline — messages will queue until it reconnects.</div>
+      )}
 
       <div className="rc-composer">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={deviceOnline ? 'Message the device…' : 'Device is offline'}
+          placeholder="Message the device…"
           rows={1}
           aria-label="Message"
-          disabled={!deviceOnline}
         />
         {streaming ? (
           <button onClick={stop} aria-label="Stop">
             ■
           </button>
         ) : (
-          <button onClick={send} disabled={!input.trim() || !deviceOnline} aria-label="Send">
+          <button onClick={send} disabled={!input.trim()} aria-label="Send">
             ↑
           </button>
         )}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
+import { touchDevicePresence } from '@/src/lib/chat-relay-service';
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get('authorization');
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
     if (record.plan === 'free') {
       return NextResponse.json({ valid: false, error: 'free_plan' });
     }
+
+    // Coarse presence: the device verifies hourly, so this keeps the control
+    // panel's "reachable" status alive between real relay polls.
+    await touchDevicePresence(record.id, record.user_id, record.device_name);
 
     return NextResponse.json({ valid: true, plan: record.plan });
   } catch {

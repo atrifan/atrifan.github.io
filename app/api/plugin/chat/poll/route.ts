@@ -3,6 +3,7 @@ import {
   authenticateDevice,
   authorizeSession,
   drainFrames,
+  touchDevicePresence,
 } from '@/src/lib/chat-relay-service';
 
 /**
@@ -33,6 +34,14 @@ export async function GET(req: NextRequest) {
   if (!authz.ok) {
     return NextResponse.json({ error: 'Session not found' }, { status: authz.status });
   }
+
+  // A live poll is the tightest presence signal we have — the device is
+  // actively reachable right now.
+  await touchDevicePresence(
+    authResult.auth.apiKeyId,
+    authResult.auth.userId,
+    authResult.auth.deviceName
+  );
 
   const frames = await drainFrames(sessionId, 'to_device');
   return NextResponse.json({ frames });

@@ -2033,10 +2033,11 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                           )}
                         </div>
                         <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          {device.status === 'online' && (
+                          {plan !== 'free' && device.is_active && (
                             <a
                               href={`/chat?device=${encodeURIComponent(device.id)}`}
-                              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.85rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                              title={device.status === 'online' ? 'Chat with this device' : 'Device may be offline — messages queue until it reconnects'}
+                              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.85rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', opacity: device.status === 'online' ? 1 : 0.75 }}
                             >
                               Chat
                             </a>
