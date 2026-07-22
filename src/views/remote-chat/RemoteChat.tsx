@@ -47,7 +47,23 @@ import { applyDelta } from './shared/stream-parse';
 import { nextPausedState, shouldAutoScroll, pausedAfterSend } from './shared/autoscroll';
 import { createRelayPort, type RelayPortLike } from './relay-port';
 import type { RelayMessage } from './frames';
+import { VoiceRobot } from './panel/components/VoiceRobot';
+import { useSpeechSynthesis } from './panel/voice/useSpeechSynthesis';
+import { useVoiceCapture } from './panel/voice/useVoiceCapture';
+import { voiceInit, voiceReduce, type VoiceView, type VoiceEvent } from './shared/voice-state';
+import { speakableText } from './shared/speakable-text';
 import './RemoteChat.css';
+
+// Speak-back (TTS) preference persists per browser; default OFF (matches the plugin).
+const VOICE_SPEAKBACK_KEY = 'remoteChatVoiceSpeakBack';
+
+function loadSpeakBack(): boolean {
+  try {
+    return localStorage.getItem(VOICE_SPEAKBACK_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 // ── Draft persistence (localStorage, per base sessionId) ─────────────────────
 
@@ -321,6 +337,28 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const [brainQuestions, setBrainQuestions] = useState<{ questionId: string; questions: BrainQuestion[] } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
+  // ── Voice (STT/TTS) ──────────────────────────────────────────────────────────
+  // Ported from the plugin panel. Difference: the plugin ran STT in the active tab
+  // via a content script (a side panel can't getUserMedia) and relayed VOICE_*
+  // messages over the Chrome port; a normal web page runs recognition in-page via
+  // useVoiceCapture, so its callbacks replace those message branches. There's no
+  // DB-backed enableVoice flag here — voice UI shows whenever the browser supports
+  // it. The pure voice-state machine drives both the composer mini-robot and the
+  // big listening orb; verified answers can be read aloud (opt-in, default off).
+  const [voiceView, setVoiceView] = useState<VoiceView>(voiceInit);
+  const [voiceAmplitude, setVoiceAmplitude] = useState(0);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [speakBack, setSpeakBack] = useState(false);
+  const tts = useSpeechSynthesis();
+  const dispatchVoice = useCallback((e: VoiceEvent) => setVoiceView((v) => voiceReduce(v, e)), []);
+  // The relay-port frame handler is a useEffect closure with a narrow dep array, so
+  // it captures the first render's speakBack/tts. Mirror the live values into refs
+  // the handler reads (same pattern as streamingIdRef).
+  const speakBackRef = useRef(false);
+  const ttsRef = useRef(tts);
+  speakBackRef.current = speakBack;
+  ttsRef.current = tts;
+
   // Keep the composer model in sync with the device's configured model as the
   // parent refreshes it (presence poll), until the user explicitly picks one.
   useEffect(() => {
@@ -335,12 +373,94 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const fileInputRef = useRef<HTMLInputElement>(null);
   const portRef = useRef<RelayPortLike | null>(null);
   const draftsRef = useRef<Record<string, string>>({});
+  // Latest messages, readable SYNCHRONOUSLY from the frame handler — a setMessages
+  // updater runs on the NEXT render, so reading a var assigned inside it right after
+  // the call yields nothing (which silently skips the STREAM_DONE voice branch).
+  const messagesRef = useRef<ChatEntry[]>(messages);
+  messagesRef.current = messages;
 
   const stashDraft = useCallback((baseId: string, text: string) => {
     if (text) draftsRef.current[baseId] = text;
     else delete draftsRef.current[baseId];
     persistDrafts(draftsRef.current);
   }, []);
+
+  // Drop transcribed voice text into the composer at the cursor. MUST set
+  // inputRef.current (send() reads the ref, not the state) + the textarea value +
+  // resize + stashDraft. No auto-send — the user reviews and hits send.
+  const appendToComposer = useCallback(
+    (text: string) => {
+      if (!text) return;
+      const el = textareaRef.current;
+      const cur = inputRef.current;
+      let next: string;
+      if (el && el.selectionStart != null) {
+        const pos = el.selectionStart;
+        const needsSpace = pos > 0 && !/\s$/.test(cur.slice(0, pos));
+        next = cur.slice(0, pos) + (needsSpace ? ' ' : '') + text + cur.slice(pos);
+      } else {
+        next = cur ? `${cur} ${text}` : text;
+      }
+      inputRef.current = next;
+      setInput(next);
+      if (el) {
+        el.value = next;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+        el.focus();
+      }
+      stashDraft(sessionId, next);
+    },
+    [stashDraft, sessionId]
+  );
+
+  // In-page STT. Callbacks replace the plugin's relayed VOICE_* port messages:
+  // interim → orb transcript; final → append to composer (NOT auto-send) + close;
+  // amplitude → orb glow; error → banner + cancel; ended → finalize.
+  const voice = useVoiceCapture({
+    onInterim: (text) => dispatchVoice({ type: 'INTERIM', text }),
+    onFinal: (text) => {
+      if (text) appendToComposer(text);
+      dispatchVoice({ type: 'FINALIZE' });
+    },
+    onAmplitude: (level) => setVoiceAmplitude(level),
+    onError: (message) => {
+      setVoiceError(message);
+      dispatchVoice({ type: 'CANCEL_LISTENING' });
+    },
+    onEnded: () => dispatchVoice({ type: 'FINALIZE' }),
+  });
+
+  const toggleMic = useCallback(() => {
+    if (!voice.supported) return;
+    if (voice.listening) {
+      voice.stop(); // graceful → onFinal + onEnded
+      return;
+    }
+    setVoiceError(null);
+    dispatchVoice({ type: 'START_LISTENING' });
+    voice.start();
+  }, [voice, dispatchVoice]);
+
+  const cancelMic = useCallback(() => {
+    voice.stop();
+    dispatchVoice({ type: 'CANCEL_LISTENING' });
+  }, [voice, dispatchVoice]);
+
+  // Barge-in: the state machine's one-shot effect cancels any in-flight speech.
+  useEffect(() => {
+    if (voiceView.effect === 'cancel-speech') tts.cancel();
+  }, [voiceView.effect, tts]);
+
+  // Esc dismisses the listening orb.
+  useEffect(() => {
+    if (voiceView.state !== 'listening') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelMic();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [voiceView.state, cancelMic]);
 
   // Hydrate persisted drafts on mount.
   useEffect(() => {
@@ -351,6 +471,20 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       setInput(restored);
     }
   }, [sessionId]);
+
+  // Hydrate the speak-back (TTS) preference on mount.
+  useEffect(() => {
+    setSpeakBack(loadSpeakBack());
+  }, []);
+
+  const setSpeakBackPersisted = useCallback((on: boolean) => {
+    setSpeakBack(on);
+    try {
+      localStorage.setItem(VOICE_SPEAKBACK_KEY, on ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
 
   // Hydrate durable history.
   useEffect(() => {
@@ -404,11 +538,28 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: '', thinking: '', actions: [], steps: [] } : m)));
       } else if (msg.type === 'STREAM_DONE') {
         const id = streamingIdRef.current;
+        // Read the finishing bubble SYNCHRONOUSLY from the ref (the setMessages updater
+        // below runs later, so a var assigned inside it would still be empty here) — this
+        // is the actual answer we speak / react to.
+        const finished = id ? messagesRef.current.find((m) => m.id === id) : undefined;
         setMessages((prev) => {
           let next = id ? prev.map((m) => (m.id === id ? { ...m, streaming: false } : m)) : prev;
           next = next.filter((m) => !(m.streaming && isEmptyAssistantBubble(m)));
           return next;
         });
+        // Voice: drive the robot mood + optionally read the answer aloud. Happy on a
+        // cleanly-completed answer, sad ONLY when verification explicitly failed
+        // (unverified) — so it never smiles at a known-wrong answer. speakableText
+        // strips render fences/code so TTS reads only the human prose.
+        if (finished) {
+          const ok = finished.verifyState !== 'unverified';
+          dispatchVoice({ type: 'TURN_DONE', verified: ok });
+          const spoken = typeof finished.content === 'string' ? speakableText(finished.content) : '';
+          if (ok && speakBackRef.current && ttsRef.current.supported && spoken) {
+            dispatchVoice({ type: 'SPEAK_START' });
+            ttsRef.current.speak(spoken, { onEnd: () => dispatchVoice({ type: 'SPEAK_END' }) });
+          }
+        }
         streamingIdRef.current = null;
         setStreaming(false);
         setCurrentLoopId(null);
@@ -789,6 +940,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       return kept;
     });
     setCurrentLoopId(null);
+    dispatchVoice({ type: 'TURN_START' }); // robot → thinking for this turn
     post({ type: 'SEND_MESSAGE', text: wire, model, sessionId });
   }, [
     streaming,
@@ -804,6 +956,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     stashDraft,
     sessionId,
     post,
+    dispatchVoice,
   ]);
 
   function stop() {
@@ -843,7 +996,27 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   }, [streaming, messages, model, sessionId, post]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter') return;
+    // Alt+Enter inserts a newline (browsers don't do this natively for Alt); Shift+Enter
+    // already does. Either modifier → newline, not send.
+    if (e.altKey) {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      const next = el.value.slice(0, start) + '\n' + el.value.slice(end);
+      inputRef.current = next;
+      setInput(next);
+      stashDraft(sessionId, next);
+      // Restore caret after the inserted newline once React re-renders the value.
+      requestAnimationFrame(() => {
+        el.selectionStart = el.selectionEnd = start + 1;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+      });
+      return;
+    }
+    if (!e.shiftKey) {
       e.preventDefault();
       send();
     }
@@ -1042,6 +1215,16 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         <span className={`rc-status ${deviceOnline ? 'online' : 'offline'}`}>{deviceOnline ? 'online' : 'offline'}</span>
       </div>
 
+      {voiceView.orbVisible && (
+        <div className="voice-orb-overlay" data-testid="voice-orb" onClick={cancelMic}>
+          <VoiceRobot face={voiceView.robotFace} size="orb" amplitude={voiceAmplitude} ariaLabel="Listening" />
+          <div className="voice-transcript" aria-live="polite">
+            {voiceView.transcript}
+          </div>
+          <div className="voice-orb-hint">Tap or press Esc to stop · your words drop into the message box</div>
+        </div>
+      )}
+
       <div className="message-list rc-messages" ref={listRef} role="log" aria-live="polite" aria-label="Conversation">
         {messages.length === 0 && (
           <div className="rc-empty">Send a message to drive this device&apos;s browser.</div>
@@ -1188,6 +1371,39 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         )}
         {banner && <div className="rc-banner">{banner}</div>}
 
+        {voiceError && (
+          <div className="voice-error" role="alert" data-testid="voice-error">
+            <span className="voice-error-msg">🎤 {voiceError}</span>
+            <button
+              className="voice-error-dismiss"
+              onClick={() => setVoiceError(null)}
+              aria-label="Dismiss microphone error"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Speaking pill: visible while TTS reads the answer. ⏹ stops just the speech. */}
+        {voiceView.pillVisible && (
+          <div className="voice-speaking-pill" role="status" aria-live="polite" data-testid="voice-speaking-pill">
+            <span className="dot" />
+            <span>Speaking…</span>
+            <button
+              className="voice-stop-btn"
+              onClick={() => {
+                tts.cancel();
+                dispatchVoice({ type: 'SPEAK_END' });
+              }}
+              aria-label="Stop speaking"
+              type="button"
+            >
+              ⏹ Stop
+            </button>
+          </div>
+        )}
+
         {attachments.length > 0 && (
           <div className="attachments-bar">
             {attachments.map((att) => (
@@ -1251,6 +1467,27 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
           >
             +
           </button>
+          {voice.supported && (
+            <VoiceRobot
+              face={voiceView.robotFace}
+              size="mini"
+              pressed={voiceView.state === 'listening'}
+              ariaLabel={voiceView.state === 'listening' ? 'Stop listening' : 'Start voice input'}
+              onClick={toggleMic}
+            />
+          )}
+          {voice.supported && tts.supported && (
+            <button
+              className="attach-btn"
+              onClick={() => setSpeakBackPersisted(!speakBack)}
+              aria-pressed={speakBack}
+              title={speakBack ? 'Read answers aloud: on (click to mute)' : 'Read answers aloud: off'}
+              aria-label={speakBack ? 'Mute spoken answers' : 'Read answers aloud'}
+              type="button"
+            >
+              {speakBack ? '🔊' : '🔇'}
+            </button>
+          )}
           <input
             ref={fileInputRef}
             type="file"

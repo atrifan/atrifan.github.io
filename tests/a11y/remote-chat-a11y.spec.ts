@@ -44,4 +44,16 @@ test.describe('remote chat accessibility (/chat)', () => {
       blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
     ).toEqual([]);
   });
+
+  test('no serious violations on the device chat view (voice controls present)', async ({ page }) => {
+    // The device-open view (?device=) renders the composer with the voice mic
+    // robot + speak-back toggle; scan it so those labelled controls stay a11y-clean.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/chat?device=e2e');
+    const blocking = await scan(page);
+    expect(
+      blocking,
+      blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
+    ).toEqual([]);
+  });
 });
