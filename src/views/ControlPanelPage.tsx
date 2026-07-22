@@ -2032,7 +2032,15 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                             </div>
                           )}
                         </div>
-                        <div onClick={(e) => e.stopPropagation()}>
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          {device.status === 'online' && (
+                            <a
+                              href={`/chat?device=${encodeURIComponent(device.id)}`}
+                              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.85rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                            >
+                              Chat
+                            </a>
+                          )}
                           {confirmRevoke === device.id ? (
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                               <button onClick={() => revokeDevice(device.id)} style={{ background: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.35rem 0.75rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500 }}>Confirm</button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RemoteChat } from './remote-chat/RemoteChat';
 import type { RelaySession } from './remote-chat/frames';
 import './remote-chat/RemoteChat.css';
@@ -25,6 +25,9 @@ export function RemoteChatPage() {
   const [active, setActive] = useState<ActiveChat | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // A device id passed via ?device= auto-opens that device's chat on load.
+  const autoOpenedRef = useRef(false);
 
   const loadDevices = useCallback(async () => {
     setLoading(true);
@@ -79,6 +82,19 @@ export function RemoteChatPage() {
       setBusy(null);
     }
   }, []);
+
+  // Auto-open the device named in ?device= (e.g. the control panel "Chat" button).
+  useEffect(() => {
+    if (autoOpenedRef.current || loading || active) return;
+    const params = new URLSearchParams(window.location.search);
+    const deviceId = params.get('device');
+    if (!deviceId) return;
+    const target = devices.find((d) => d.id === deviceId);
+    if (target && target.status === 'online') {
+      autoOpenedRef.current = true;
+      openChat(target);
+    }
+  }, [loading, active, devices, openChat]);
 
   if (active) {
     return (
