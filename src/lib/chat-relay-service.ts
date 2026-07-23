@@ -413,6 +413,53 @@ export async function drainDeviceInbox(
   return rows.map((r) => ({ seq: Number(r.seq), session_id: r.session_id, sessionId: r.session_id, frame: r.frame }));
 }
 
+/**
+ * Pull outbound (to_page) frames for a session past a monotonic seq cursor, for
+ * the remote chat PAGE to poll. This is the reliable delivery path that mirrors
+ * the device's `/poll` inbox: the page is Clerk-authed (no Supabase JWT), so it
+ * cannot receive over Realtime under RLS — it polls here instead. Realtime
+ * broadcast/postgres_changes remain a best-effort low-latency optimization.
+ *
+ * Cursor-based (seq > after) rather than a consumed flag: the page may poll from
+ * multiple tabs / reconnect, and terminal frames are already persisted to
+ * `chat_relay_messages`. Returns frames oldest-first, each with its `seq` so the
+ * page can advance its cursor.
+ */
+export async function fetchPageFrames(
+  sessionId: string,
+  afterSeq: number
+): Promise<Array<{ seq: number; frame: RelayFrame }>> {
+  const db = getClient();
+  const { data } = await db
+    .from('chat_relay_frames')
+    .select('seq, frame')
+    .eq('session_id', sessionId)
+    .eq('direction', 'to_page')
+    .gt('seq', afterSeq)
+    .order('seq', { ascending: true });
+  const rows = (data as { seq: number; frame: RelayFrame }[] | null) ?? [];
+  return rows.map((r) => ({ seq: Number(r.seq), frame: r.frame }));
+}
+
+/**
+ * Highest to_page seq currently stored for a session, or 0 if none. Lets the
+ * page prime its poll cursor on open so it streams only NEW frames instead of
+ * replaying the backlog (durable history hydrates from chat_relay_messages).
+ */
+export async function latestPageSeq(sessionId: string): Promise<number> {
+  const db = getClient();
+  const { data } = await db
+    .from('chat_relay_frames')
+    .select('seq')
+    .eq('session_id', sessionId)
+    .eq('direction', 'to_page')
+    .order('seq', { ascending: false })
+    .limit(1)
+    .single();
+  const row = data as { seq: number } | null;
+  return row ? Number(row.seq) : 0;
+}
+
 /** Append a durable message to the session history and bump updated_at. */
 export async function appendMessage(
   session: RelaySession,

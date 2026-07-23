@@ -53,27 +53,60 @@ export function createRelayPort(sessionId: string): RelayPortLike {
     listeners.forEach((fn) => fn(frame as WorkerToPanel));
   };
 
-  if (client) {
-    channel = client.channel(`chat:${sessionId}`, { config: { broadcast: { ack: false } } });
-    channel
-      .on('broadcast', { event: 'frame' }, (msg) => {
-        const payload = msg.payload as { direction?: string; frame?: RelayFrame } | undefined;
-        if (payload?.direction === 'to_page' && payload.frame) {
-          dispatch(payload.frame);
+  // Reliable receive path: HTTP poll of /api/plugin/chat/receive by seq cursor.
+  // The page is Clerk-authed with no Supabase JWT, so it cannot receive to_page
+  // frames over Realtime under RLS — Realtime above is a best-effort low-latency
+  // optimization; THIS is what actually delivers. Mirrors the device's /poll.
+  let cursor = 0;
+  let polling = true;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  const IDLE_MS = 1200;
+
+  let primed = false;
+
+  const pollOnce = async () => {
+    if (!polling) return;
+    let gotFrames = false;
+    try {
+      // First poll primes the cursor to the current high-water seq so we stream
+      // only NEW frames — durable history hydrates separately from messages.
+      const after = primed ? String(cursor) : 'latest';
+      const res = await fetch(
+        `/api/plugin/chat/receive?session_id=${encodeURIComponent(sessionId)}&after=${after}`,
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (res.ok) {
+        const body = (await res.json()) as { frames?: Array<{ seq: number; frame: RelayFrame }>; cursor?: number };
+        if (!primed) {
+          cursor = typeof body?.cursor === 'number' ? body.cursor : 0;
+          primed = true;
         }
-      })
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_relay_frames', filter: `session_id=eq.${sessionId}` },
-        (msg) => {
-          const row = msg.new as { id?: string; direction?: string; frame?: RelayFrame } | undefined;
-          if (row?.direction === 'to_page' && row.frame) {
-            dispatch(row.frame, row.id);
-          }
+        const frames = Array.isArray(body?.frames) ? body.frames : [];
+        for (const { seq, frame } of frames) {
+          if (seq > cursor) cursor = seq;
+          // Dedupe by seq so a frame also delivered via Realtime isn't doubled.
+          dispatch(frame, `seq:${seq}`);
         }
-      )
-      .subscribe();
-  }
+        gotFrames = frames.length > 0;
+      }
+    } catch {
+      /* transient — retry on the next tick */
+    }
+    if (polling) {
+      // Drain promptly while frames are flowing; idle-wait when quiet.
+      pollTimer = setTimeout(() => void pollOnce(), gotFrames ? 0 : IDLE_MS);
+    }
+  };
+  void pollOnce();
+
+  // NOTE: Supabase Realtime is intentionally NOT used as the page's receive path.
+  // The page authenticates with Clerk and holds no Supabase JWT, so under RLS its
+  // `postgres_changes` subscription on `chat_relay_frames` receives nothing, and
+  // broadcast from Tulzo's serverless routes is unreliable (no held WS). The HTTP
+  // poll below (`/api/plugin/chat/receive`) is the reliable delivery path. `client`
+  // is retained only so a future JWT-bearing surface can opt back into Realtime.
+  void client;
+  void channel;
 
   const postMessage = (frame: PanelToWorker) => {
     void fetch('/api/plugin/chat/send', {
@@ -104,6 +137,9 @@ export function createRelayPort(sessionId: string): RelayPortLike {
     },
     disconnect: () => {
       listeners.clear();
+      polling = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
       if (channel && client) client.removeChannel(channel);
       channel = null;
     },
