@@ -1968,6 +1968,11 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                       extensionBridge.deviceName === device.device_name ||
                       devices.length === 1
                     );
+                    // The live in-browser bridge is fresher than the server
+                    // heartbeat's 10-min window: a device connected right here is
+                    // online now even if its last heartbeat is stale.
+                    const effectiveStatus = isLiveDevice ? 'online' : device.status;
+                    const isOnline = effectiveStatus === 'online';
                     return (
                     <div key={device.id} style={{
                       background: isExpanded ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
@@ -1990,7 +1995,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                               width: '8px',
                               height: '8px',
                               borderRadius: '50%',
-                              background: statusColor(device.status),
+                              background: statusColor(effectiveStatus),
                               display: 'inline-block',
                             }} />
                             <span style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 600 }}>
@@ -2016,7 +2021,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                               <span>{device.model.split('/').pop()?.split('.').pop() || device.model}</span>
                             )}
                             <span>
-                              {device.status === 'online' ? 'Active now' :
+                              {isOnline ? 'Active now' :
                                device.status === 'offline' ? `Last seen: ${relativeTime(device.last_seen_at)}` :
                                'Never connected'}
                             </span>
@@ -2024,7 +2029,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                               <span style={{ color: '#667eea' }}>{liveData.providers.active_provider}/{liveData.providers.active_model}</span>
                             )}
                           </div>
-                          {device.status === 'online' && (
+                          {isOnline && (
                             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'flex', gap: '0.75rem' }}>
                               <span>Tokens: {formatTokens(device.tokens_today_input)} in / {formatTokens(device.tokens_today_output)} out</span>
                               {device.schedules_count > 0 && <span>{device.schedules_count} schedules</span>}
@@ -2036,8 +2041,8 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                           {plan !== 'free' && device.is_active && (
                             <a
                               href={`/chat?device=${encodeURIComponent(device.id)}`}
-                              title={device.status === 'online' ? 'Chat with this device' : 'Device may be offline — messages queue until it reconnects'}
-                              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.85rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', opacity: device.status === 'online' ? 1 : 0.75 }}
+                              title={isOnline ? 'Chat with this device' : 'Device may be offline — messages queue until it reconnects'}
+                              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '6px', padding: '0.35rem 0.85rem', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', opacity: isOnline ? 1 : 0.75 }}
                             >
                               Chat
                             </a>
