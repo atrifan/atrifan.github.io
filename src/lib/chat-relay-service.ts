@@ -300,6 +300,26 @@ export async function appendMessage(
     .eq('id', session.id);
 }
 
+/**
+ * Record a remote-chat interaction in api_usage_log so it counts toward the
+ * dashboard's request stats + recent activity. Best-effort: a logging failure
+ * must never break the send. `event_type: 'request'` matches the "API request"
+ * label the control panel already knows.
+ */
+export async function logChatInteraction(session: RelaySession): Promise<void> {
+  try {
+    const db = getClient();
+    await db.from('api_usage_log').insert({
+      user_id: session.user_id,
+      event_type: 'request',
+      created_at: new Date().toISOString(),
+      metadata: { source: 'remote_chat', session_id: session.id, device_name: session.device_name },
+    });
+  } catch {
+    /* best-effort usage logging */
+  }
+}
+
 /** Durable history for a session, oldest first. */
 export async function getMessages(sessionId: string): Promise<RelayMessage[]> {
   const db = getClient();

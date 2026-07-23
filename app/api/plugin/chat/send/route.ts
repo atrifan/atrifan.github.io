@@ -5,6 +5,7 @@ import {
   enqueueFrame,
   isSessionDeviceOnline,
   appendMessage,
+  logChatInteraction,
 } from '@/src/lib/chat-relay-service';
 
 /**
@@ -42,9 +43,11 @@ export async function POST(req: NextRequest) {
 
   await enqueueFrame(authz.session, 'to_device', frame);
 
-  // Persist the user's message so history is complete on both surfaces.
+  // Persist the user's message so history is complete on both surfaces, and
+  // count the turn toward the dashboard's request stats.
   if (frame.type === 'SEND_MESSAGE' && typeof frame.text === 'string') {
     await appendMessage(authz.session, 'user', { text: frame.text });
+    await logChatInteraction(authz.session);
   }
 
   return NextResponse.json({ ok: true, deviceOnline });
