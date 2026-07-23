@@ -379,6 +379,39 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const messagesRef = useRef<ChatEntry[]>(messages);
   messagesRef.current = messages;
 
+  // Watchdog: the relay only enqueues frames for the device — if nothing on the
+  // device consumes them (e.g. the device-side relay client isn't running), the
+  // send lands durably but no reply ever streams back and the bubble would spin
+  // forever. Arm a timer on send; ANY inbound frame clears it; on timeout, fail
+  // the pending turn with a clear "device didn't respond" message instead of a
+  // silent, endless blink.
+  const NO_RESPONSE_TIMEOUT_MS = 45000;
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
+  const armWatchdog = useCallback(() => {
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => {
+      watchdogRef.current = null;
+      const id = streamingIdRef.current;
+      const errText =
+        "The device didn't respond. It may be offline or not running the assistant — the message is queued and will be delivered when it reconnects.";
+      setMessages((prev) => {
+        if (id && prev.some((m) => m.id === id)) {
+          return prev.map((m) => (m.id === id ? { ...m, content: m.content || errText, streaming: false, error: true } : m));
+        }
+        return prev;
+      });
+      streamingIdRef.current = null;
+      setStreaming(false);
+      dispatchVoice({ type: 'TURN_DONE', verified: false });
+    }, NO_RESPONSE_TIMEOUT_MS);
+  }, [clearWatchdog, dispatchVoice]);
+
   const stashDraft = useCallback((baseId: string, text: string) => {
     if (text) draftsRef.current[baseId] = text;
     else delete draftsRef.current[baseId];
@@ -512,6 +545,9 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     portRef.current = port;
 
     const handler = (msg: WorkerToPanel) => {
+      // Any inbound frame means the device is responding — cancel the no-response
+      // watchdog. STREAM_DONE/STREAM_ERROR also clear it below via their own paths.
+      clearWatchdog();
       if (msg.type === 'THINKING_CHUNK') {
         const id = streamingIdRef.current;
         if (!id) return;
@@ -775,9 +811,10 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       port.onMessage.removeListener(handler);
       port.disconnect();
       portRef.current = null;
+      clearWatchdog();
     };
     // model is read inside STREAM_DONE for cost; re-subscribing on model change is cheap and correct.
-  }, [sessionId, model]);
+  }, [sessionId, model, clearWatchdog]);
 
   // ── Autoscroll ───────────────────────────────────────────────────────────────
   const autoscrollPaused = useRef(false);
@@ -921,6 +958,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     if (streaming) {
       autoscrollPaused.current = false;
       post({ type: 'SEND_MESSAGE', text: wire, model, sessionId });
+      armWatchdog();
       return;
     }
 
@@ -942,8 +980,10 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     setCurrentLoopId(null);
     dispatchVoice({ type: 'TURN_START' }); // robot → thinking for this turn
     post({ type: 'SEND_MESSAGE', text: wire, model, sessionId });
+    armWatchdog();
   }, [
     streaming,
+    armWatchdog,
     waitingForUser,
     activeForm,
     activeProposals,

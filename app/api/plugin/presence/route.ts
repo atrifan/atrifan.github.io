@@ -13,12 +13,17 @@ import { getApiKeysByUser, upsertDeviceHeartbeat } from '@/src/lib/supabase-serv
  * to the shared store so every surface reads "online".
  *
  * Ownership is enforced via Clerk: the caller may only touch a device
- * (api_key_id) that belongs to their own account. Optional `model` seeds/refreshes
- * the persisted active model so remote surfaces show the real one.
+ * (api_key_id) that belongs to their own account. Optional `model` + `stats`
+ * (read from the live bridge) seed/refresh the persisted active model and
+ * telemetry so remote surfaces (a phone with no bridge) show real numbers, not
+ * just a green dot.
  *
  *   POST /api/plugin/presence
  *   (Clerk session)
- *   { api_key_id: string, model?: string }
+ *   { api_key_id: string, model?: string, stats?: {
+ *       tokens_today_input?, tokens_today_output?, schedules_count?,
+ *       active_tasks_count?, skills_loaded?, mcp_servers_connected?,
+ *       platform?, arch? } }
  */
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -41,8 +46,26 @@ export async function POST(req: NextRequest) {
 
   const model = typeof body?.model === 'string' ? body.model : undefined;
 
+  // Live telemetry from the bridge, so a phone (heartbeat-only) sees real numbers.
+  const s = (body?.stats && typeof body.stats === 'object' ? body.stats : {}) as Record<string, unknown>;
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  const stats = {
+    tokens_today_input: num(s.tokens_today_input),
+    tokens_today_output: num(s.tokens_today_output),
+    schedules_count: num(s.schedules_count),
+    active_tasks_count: num(s.active_tasks_count),
+    skills_loaded: num(s.skills_loaded),
+    mcp_servers_connected: num(s.mcp_servers_connected),
+    platform: str(s.platform),
+    arch: str(s.arch),
+  };
+  // Drop undefined so a partial beacon never zeroes out existing values.
+  const cleaned = Object.fromEntries(Object.entries(stats).filter(([, v]) => v !== undefined));
+
   await upsertDeviceHeartbeat(key.id, userId, key.device_name, {
     ...(model ? { model } : {}),
+    ...cleaned,
   });
 
   return NextResponse.json({ ok: true });

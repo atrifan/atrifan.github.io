@@ -1057,17 +1057,38 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
       const provider = liveData.providers?.active_provider;
       const activeModel = liveData.providers?.active_model;
       const model = provider && activeModel ? `${provider}/${activeModel}` : activeModel || undefined;
+      // Push the live bridge's telemetry so a phone (heartbeat-only) sees real
+      // numbers, not just a green dot.
+      const stats = {
+        tokens_today_input: liveData.usage?.tokens.input,
+        tokens_today_output: liveData.usage?.tokens.output,
+        schedules_count: liveData.schedules?.length,
+        skills_loaded: liveData.skills?.length,
+        mcp_servers_connected: liveData.mcpServers?.filter((s) => s.status === 'connected').length,
+        platform: liveData.version?.platform,
+        arch: liveData.version?.arch,
+      };
       fetch('/api/plugin/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key_id: match.id, ...(model ? { model } : {}) }),
+        body: JSON.stringify({ api_key_id: match.id, ...(model ? { model } : {}), stats }),
       }).catch(() => { /* best-effort presence beacon */ });
     };
 
     beacon();
     const interval = setInterval(beacon, 30000);
     return () => clearInterval(interval);
-  }, [extensionDetected, devices, liveData.providers?.active_provider, liveData.providers?.active_model]);
+  }, [
+    extensionDetected,
+    devices,
+    liveData.providers?.active_provider,
+    liveData.providers?.active_model,
+    liveData.usage,
+    liveData.schedules,
+    liveData.skills,
+    liveData.mcpServers,
+    liveData.version,
+  ]);
 
   // Auto-activation: extension present + not already paired + user has 0 devices + paid plan
   useEffect(() => {
