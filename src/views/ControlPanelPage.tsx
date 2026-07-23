@@ -1627,11 +1627,11 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
             {/* Quick Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))', gap: '1rem' }}>
               <div style={cardStyle}>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>Requests Today</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>API Requests Today</div>
                 <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{usage?.requestsToday ?? '—'}</div>
               </div>
               <div style={cardStyle}>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>This Month</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>API Requests This Month</div>
                 <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{usage?.requestsThisMonth ?? '—'}</div>
               </div>
               <div style={cardStyle}>
@@ -1639,6 +1639,11 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
                 <div style={{ color: '#fff', fontSize: '1.75rem', fontWeight: 700 }}>{devices.length}</div>
               </div>
             </div>
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', margin: '0.5rem 0 0', lineHeight: 1.5 }}>
+              Counts requests made through Tulzo&apos;s API keys &amp; MCP endpoints. Your assistant&apos;s own model
+              calls (e.g. Bedrock, Ollama) run on the device and aren&apos;t billed through Tulzo — see the
+              <strong style={{ color: 'rgba(255,255,255,0.5)' }}> Devices</strong> tab for that live usage.
+            </p>
 
             {/* Activity — interactions observed across API, MCP, and marketplace */}
             {activity && activity.timeline.length > 0 && (
@@ -2790,9 +2795,14 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
         {activeTab === 'usage' && (
           <>
             <div style={cardStyle}>
-              <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 1rem' }}>
-                Usage Statistics
+              <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 0.35rem' }}>
+                Tulzo API &amp; MCP Usage
               </h3>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', margin: '0 0 1rem', lineHeight: 1.5 }}>
+                Requests routed through Tulzo&apos;s API keys and MCP endpoints. This does <strong>not</strong> include
+                your assistant&apos;s own model calls, which run on the device — see <strong>Live Device Usage</strong> below
+                {hasLiveData ? '' : ' (available when a device is connected)'}.
+              </p>
               {usage ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '1.25rem' }}>
                   <div>
