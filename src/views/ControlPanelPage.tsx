@@ -1042,6 +1042,33 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
     };
   }, [addLog]);
 
+  // Presence beacon: the live bridge only proves connectivity in THIS tab. Proxy
+  // that liveness to the server heartbeat so a phone / second device — which can
+  // only read the server heartbeat — also sees the device as online. Fires on
+  // connect and every 30s while connected, for the device this bridge matches.
+  useEffect(() => {
+    if (!extensionDetected) return;
+    const match = devices.find(
+      (d) => extensionBridge.deviceName === d.device_name || devices.length === 1
+    );
+    if (!match) return;
+
+    const beacon = () => {
+      const provider = liveData.providers?.active_provider;
+      const activeModel = liveData.providers?.active_model;
+      const model = provider && activeModel ? `${provider}/${activeModel}` : activeModel || undefined;
+      fetch('/api/plugin/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key_id: match.id, ...(model ? { model } : {}) }),
+      }).catch(() => { /* best-effort presence beacon */ });
+    };
+
+    beacon();
+    const interval = setInterval(beacon, 30000);
+    return () => clearInterval(interval);
+  }, [extensionDetected, devices, liveData.providers?.active_provider, liveData.providers?.active_model]);
+
   // Auto-activation: extension present + not already paired + user has 0 devices + paid plan
   useEffect(() => {
     if (autoActivateAttempted.current) return;

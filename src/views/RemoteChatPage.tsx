@@ -93,6 +93,26 @@ export function RemoteChatPage() {
     [bridgeConnected, bridgeDeviceName, devices.length]
   );
 
+  // Presence beacon: proxy this tab's live bridge liveness to the server heartbeat
+  // so a phone / second device sees the connected device as online (the bridge
+  // itself is tab-local and never reaches the server). Fires on connect + every
+  // 30s for the matching owned device, seeding its live model too.
+  useEffect(() => {
+    if (!bridgeConnected) return;
+    const match = devices.find((d) => bridgeDeviceName === d.device_name || devices.length === 1);
+    if (!match) return;
+    const beacon = () => {
+      fetch('/api/plugin/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key_id: match.id, ...(bridgeModel ? { model: bridgeModel } : {}) }),
+      }).catch(() => { /* best-effort presence beacon */ });
+    };
+    beacon();
+    const interval = setInterval(beacon, 30000);
+    return () => clearInterval(interval);
+  }, [bridgeConnected, bridgeDeviceName, bridgeModel, devices]);
+
   // `silent` skips the loading state so the background presence poll doesn't
   // flash the picker between refreshes.
   const loadDevices = useCallback(async (silent = false) => {
