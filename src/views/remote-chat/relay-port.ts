@@ -24,8 +24,18 @@ export interface RelayPortLike {
   disconnect: () => void;
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// The relay tables + broadcast live on the STORAGE Supabase project (see
+// chat-relay-service.ts, which uses STORAGE_SUPABASE_URL). The browser must
+// subscribe to that SAME project or it receives nothing — so prefer the
+// STORAGE-prefixed public vars this app actually defines, falling back to the
+// bare names for any deployment that uses those instead.
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_STORAGE_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_STORAGE_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
 
 export function createRelayPort(sessionId: string): RelayPortLike {
   const listeners = new Set<Listener>();
