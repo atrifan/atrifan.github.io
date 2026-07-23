@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RemoteChat } from './remote-chat/RemoteChat';
 import type { RelaySession } from './remote-chat/frames';
+import { extensionBridge } from '../lib/extension-bridge';
 import './remote-chat/RemoteChat.css';
 
 interface Device {
@@ -44,8 +45,53 @@ export function RemoteChatPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Live in-browser bridge to the Horia assistant, when this page is open in the
+  // SAME browser the assistant runs in (e.g. the control-panel machine). It's the
+  // source of truth for "is it connected right now" — far fresher than the server
+  // heartbeat's 10-min window — and carries the live active model. Mirrors the
+  // control panel's `isLiveDevice` detection so a locally-connected device shows
+  // online immediately instead of waiting on (or missing) a server heartbeat.
+  const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [bridgeDeviceName, setBridgeDeviceName] = useState<string | null>(null);
+  const [bridgeModel, setBridgeModel] = useState<string | null>(null);
+
   // A device id passed via ?device= auto-opens that device's chat on load.
   const autoOpenedRef = useRef(false);
+
+  // Start the extension bridge and track its connection + live model. When it
+  // connects we ask the assistant for its active model via GET_PROVIDERS so the
+  // composer seeds the real model rather than the default.
+  useEffect(() => {
+    extensionBridge.start();
+    const sync = () => {
+      const connected = extensionBridge.state === 'connected';
+      setBridgeConnected(connected);
+      setBridgeDeviceName(extensionBridge.deviceName);
+      if (!connected) {
+        setBridgeModel(null);
+        return;
+      }
+      extensionBridge
+        .send<{ activeProvider?: string; providers?: Record<string, { models?: { orchestrator?: string } }> }>('GET_PROVIDERS')
+        .then((res) => {
+          const active = res?.activeProvider || '';
+          const model = res?.providers?.[active]?.models?.orchestrator || null;
+          setBridgeModel(model);
+        })
+        .catch(() => setBridgeModel(null));
+    };
+    sync();
+    const unsub = extensionBridge.onStateChange(sync);
+    return unsub;
+  }, []);
+
+  // True when the live bridge is connected to THIS device — deviceName match, or
+  // the sole connected device (same heuristic the control panel uses).
+  const bridgeMatches = useCallback(
+    (device: Device): boolean =>
+      bridgeConnected && (bridgeDeviceName === device.device_name || devices.length === 1),
+    [bridgeConnected, bridgeDeviceName, devices.length]
+  );
 
   // `silent` skips the loading state so the background presence poll doesn't
   // flash the picker between refreshes.
@@ -99,19 +145,20 @@ export function RemoteChatPage() {
         session = (await createRes.json()).session as RelaySession;
       }
 
+      const live = bridgeMatches(device);
       setActive({
         sessionId: session.id,
         deviceId: device.id,
         deviceName: device.device_name,
-        deviceOnline: device.status === 'online',
-        deviceModel: device.model,
+        deviceOnline: live || device.status === 'online',
+        deviceModel: (live ? bridgeModel : null) || device.model,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to open chat');
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [bridgeMatches, bridgeModel]);
 
   // Auto-open the device named in ?device= (e.g. the control panel "Chat" button).
   useEffect(() => {
@@ -139,22 +186,28 @@ export function RemoteChatPage() {
         const body = await res.json();
         const d = ((body.devices as Device[]) ?? []).find((x) => x.id === active.deviceId);
         if (!d || cancelled) return;
-        const online = d.status === 'online';
+        // Live bridge wins over the server heartbeat: a same-browser device is
+        // online now regardless of when its last heartbeat landed, and its live
+        // model is more current than the persisted one.
+        const live = bridgeMatches(d);
+        const online = live || d.status === 'online';
+        const model = (live ? bridgeModel : null) || d.model;
         setActive((prev) =>
-          prev && prev.deviceId === active.deviceId && (prev.deviceOnline !== online || prev.deviceModel !== d.model)
-            ? { ...prev, deviceOnline: online, deviceModel: d.model }
+          prev && prev.deviceId === active.deviceId && (prev.deviceOnline !== online || prev.deviceModel !== model)
+            ? { ...prev, deviceOnline: online, deviceModel: model }
             : prev
         );
       } catch {
         /* best-effort presence refresh */
       }
     };
+    tick();
     const interval = setInterval(tick, 15000);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [active]);
+  }, [active, bridgeMatches, bridgeModel]);
 
   if (active) {
     return (
@@ -171,9 +224,12 @@ export function RemoteChatPage() {
     );
   }
 
+  // Effective online status: server heartbeat OR the live in-browser bridge.
+  const isOnline = (d: Device) => d.status === 'online' || bridgeMatches(d);
+
   // Online devices first, then by most-recently-seen.
   const sortedDevices = [...devices].sort((a, b) => {
-    const onlineDelta = Number(b.status === 'online') - Number(a.status === 'online');
+    const onlineDelta = Number(isOnline(b)) - Number(isOnline(a));
     if (onlineDelta !== 0) return onlineDelta;
     return new Date(b.last_seen_at ?? 0).getTime() - new Date(a.last_seen_at ?? 0).getTime();
   });
@@ -203,11 +259,12 @@ export function RemoteChatPage() {
           <div className="rc-empty">No devices yet. Connect the Horia assistant to get started.</div>
         ) : (
           sortedDevices.map((d) => {
-            const online = d.status === 'online';
+            const online = isOnline(d);
+            const liveModel = bridgeMatches(d) ? bridgeModel : null;
             const meta = busy === d.id
               ? 'opening…'
               : online
-                ? (d.model || d.platform || 'ready')
+                ? (liveModel || d.model || d.platform || 'ready')
                 : `offline · ${relativeSeen(d.last_seen_at)}`;
             return (
               <button

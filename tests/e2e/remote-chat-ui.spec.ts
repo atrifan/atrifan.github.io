@@ -114,4 +114,38 @@ test.describe('remote chat UI (/chat)', () => {
     await refresh.click();
     await req;
   });
+
+  test('presence: a device connected in the same browser shows online via the live bridge', async ({ page }) => {
+    // The page talks to the in-browser Horia assistant over a window.postMessage
+    // handshake (extension-bridge). Simulate the extension: reply to the page's
+    // `discover` (source:'tulzo') with a `discover_ack` (source:'tex-extension').
+    // A device connected right here must read as online even if its server
+    // heartbeat is stale — the user is "linked to Tulzo" in this very browser.
+    await page.addInitScript(() => {
+      window.addEventListener('message', (e: MessageEvent) => {
+        const d = e.data;
+        if (e.source !== window || !d || d.source !== 'tulzo') return;
+        if (d.action === 'discover') {
+          window.postMessage(
+            { source: 'tex-extension', action: 'discover_ack', version: '1.0.0', capabilities: [], deviceName: 'e2e-device', activated: true },
+            '*'
+          );
+        } else if (d.action === 'heartbeat') {
+          window.postMessage({ source: 'tex-extension', action: 'heartbeat_ack' }, '*');
+        } else if (d.action === 'command') {
+          window.postMessage(
+            { source: 'tex-extension', action: 'command_response', id: d.id, ok: true, result: { activeProvider: 'anthropic', providers: { anthropic: { models: { orchestrator: 'claude-opus-4-8' } } } } },
+            '*'
+          );
+        }
+      });
+    });
+
+    await page.goto('/chat');
+    await expect(page.getByRole('heading', { name: /connected devices/i })).toBeVisible();
+
+    // At least one device tile reflects an online state once the bridge connects.
+    const onlineTile = page.locator('.rc-device.online');
+    await expect(onlineTile.first()).toBeVisible();
+  });
 });
