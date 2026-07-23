@@ -190,6 +190,59 @@ export async function createSession(
   return data as RelaySession;
 }
 
+/**
+ * Rename a session the user owns. Returns the updated row, or null if it doesn't
+ * exist / isn't theirs (caller maps to 404).
+ */
+export async function renameSession(
+  sessionId: string,
+  userId: string,
+  title: string
+): Promise<RelaySession | null> {
+  const db = getClient();
+  const { data } = await db
+    .from('chat_relay_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  return (data as RelaySession | null) ?? null;
+}
+
+/**
+ * Delete a session the user owns (its messages + frames cascade). Returns true
+ * if a row was removed.
+ */
+export async function deleteRelaySession(sessionId: string, userId: string): Promise<boolean> {
+  const db = getClient();
+  const { data } = await db
+    .from('chat_relay_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .select('id');
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Give a still-untitled session a title derived from its first user message.
+ * Called on the first SEND_MESSAGE so the history list shows something readable
+ * instead of "New chat". No-op if the session already has a title. Best-effort —
+ * a titling failure must never break the send.
+ */
+export async function maybeAutoTitleSession(session: RelaySession, text: string): Promise<void> {
+  if (session.title && session.title.trim()) return;
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!clean) return;
+  const title = clean.length > 60 ? `${clean.slice(0, 57)}…` : clean;
+  try {
+    await renameSession(session.id, session.user_id, title);
+  } catch {
+    /* best-effort auto-title */
+  }
+}
+
 /** Is the device targeted by this session currently online (recent heartbeat)? */
 export async function isSessionDeviceOnline(session: RelaySession): Promise<boolean> {
   const db = getClient();
@@ -327,7 +380,7 @@ export async function drainFrames(
  */
 export async function drainDeviceInbox(
   apiKeyId: string
-): Promise<Array<{ session_id: string; frame: RelayFrame }>> {
+): Promise<Array<{ seq: number; session_id: string; sessionId: string; frame: RelayFrame }>> {
   const db = getClient();
 
   // Sessions targeting this device.
@@ -340,20 +393,24 @@ export async function drainDeviceInbox(
 
   const { data } = await db
     .from('chat_relay_frames')
-    .select('id, session_id, frame')
+    .select('id, seq, session_id, frame')
     .in('session_id', sessionIds)
     .eq('direction', 'to_device')
     .eq('consumed', false)
-    .order('created_at', { ascending: true });
+    .order('seq', { ascending: true });
 
-  const rows = (data as { id: string; session_id: string; frame: RelayFrame }[] | null) ?? [];
+  const rows = (data as { id: string; seq: number; session_id: string; frame: RelayFrame }[] | null) ?? [];
   if (rows.length > 0) {
     await db
       .from('chat_relay_frames')
       .update({ consumed: true })
       .in('id', rows.map((r) => r.id));
   }
-  return rows.map((r) => ({ session_id: r.session_id, frame: r.frame }));
+  // Envelope shape the device long-poll client consumes: a monotonic `seq`
+  // cursor for dedup + camelCase `sessionId` (its `parsePollFrames` requires a
+  // numeric seq and reads env.sessionId). `session_id` kept for any snake_case
+  // reader.
+  return rows.map((r) => ({ seq: Number(r.seq), session_id: r.session_id, sessionId: r.session_id, frame: r.frame }));
 }
 
 /** Append a durable message to the session history and bump updated_at. */

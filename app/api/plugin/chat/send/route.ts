@@ -6,6 +6,7 @@ import {
   isSessionDeviceOnline,
   appendMessage,
   logChatInteraction,
+  maybeAutoTitleSession,
 } from '@/src/lib/chat-relay-service';
 
 /**
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
   if (frame.type === 'SEND_MESSAGE' && typeof frame.text === 'string') {
     await appendMessage(authz.session, 'user', { text: frame.text });
     await logChatInteraction(authz.session);
+    // First message names an untitled session so the history list is readable.
+    await maybeAutoTitleSession(authz.session, frame.text);
   }
 
   return NextResponse.json({ ok: true, deviceOnline });

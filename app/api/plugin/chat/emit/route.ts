@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const sessionId = body?.session_id as string | undefined;
+  // The device sends camelCase `sessionId`; accept snake_case too for parity with
+  // the rest of the relay contract. Either is fine.
+  const sessionId = (body?.session_id ?? body?.sessionId) as string | undefined;
   const frame = body?.frame as Record<string, unknown> | undefined;
   if (!sessionId || !frame || typeof frame !== 'object') {
     return NextResponse.json({ error: 'session_id and frame are required' }, { status: 400 });

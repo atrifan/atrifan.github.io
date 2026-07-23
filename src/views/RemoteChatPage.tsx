@@ -23,6 +23,28 @@ interface ActiveChat {
   deviceModel: string | null;
 }
 
+// A device whose chat history the user is browsing (the middle view between the
+// device picker and an open chat).
+interface SelectedDevice {
+  device: Device;
+  sessions: RelaySession[];
+  loading: boolean;
+}
+
+// Short, human-friendly "updated" stamp for a session row.
+function relativeUpdated(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
+
 // Short, human-friendly "last seen" for the picker meta.
 function relativeSeen(iso: string | null): string {
   if (!iso) return 'never connected';
@@ -41,6 +63,7 @@ function relativeSeen(iso: string | null): string {
 export function RemoteChatPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<SelectedDevice | null>(null);
   const [active, setActive] = useState<ActiveChat | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,31 +163,60 @@ export function RemoteChatPage() {
     return () => clearInterval(interval);
   }, [active, loadDevices]);
 
-  const openChat = useCallback(async (device: Device) => {
+  // Load a device's past chat sessions (Tulzo's durable relay history) and show
+  // the session list for it.
+  const openDevice = useCallback(async (device: Device) => {
     setBusy(device.id);
     setError(null);
+    setSelected({ device, sessions: [], loading: true });
     try {
-      // Reuse the newest existing session for this device, else create one.
       const listRes = await fetch('/api/plugin/chat/sessions');
       const listBody = listRes.ok ? await listRes.json() : { sessions: [] };
-      const existing = ((listBody.sessions as RelaySession[]) ?? []).find(
+      const sessions = ((listBody.sessions as RelaySession[]) ?? []).filter(
         (s) => s.api_key_id === device.id
       );
+      setSelected({ device, sessions, loading: false });
+    } catch {
+      setSelected({ device, sessions: [], loading: false });
+    } finally {
+      setBusy(null);
+    }
+  }, []);
 
-      let session = existing;
-      if (!session) {
-        const createRes = await fetch('/api/plugin/chat/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key_id: device.id }),
-        });
-        if (!createRes.ok) {
-          const b = await createRes.json().catch(() => ({}));
-          throw new Error(b.error || 'Failed to open chat');
-        }
-        session = (await createRes.json()).session as RelaySession;
+  // Open a specific existing session for the selected device.
+  const openSession = useCallback(
+    (session: RelaySession) => {
+      const device = selected?.device;
+      if (!device) return;
+      const live = bridgeMatches(device);
+      setActive({
+        sessionId: session.id,
+        deviceId: device.id,
+        deviceName: device.device_name,
+        deviceOnline: live || device.status === 'online',
+        deviceModel: (live ? bridgeModel : null) || device.model,
+      });
+    },
+    [selected, bridgeMatches, bridgeModel]
+  );
+
+  // Create a fresh session for the selected device and open it.
+  const startNewChat = useCallback(async () => {
+    const device = selected?.device;
+    if (!device) return;
+    setBusy('new');
+    setError(null);
+    try {
+      const createRes = await fetch('/api/plugin/chat/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key_id: device.id }),
+      });
+      if (!createRes.ok) {
+        const b = await createRes.json().catch(() => ({}));
+        throw new Error(b.error || 'Failed to start chat');
       }
-
+      const session = (await createRes.json()).session as RelaySession;
       const live = bridgeMatches(device);
       setActive({
         sessionId: session.id,
@@ -174,24 +226,58 @@ export function RemoteChatPage() {
         deviceModel: (live ? bridgeModel : null) || device.model,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to open chat');
+      setError(e instanceof Error ? e.message : 'Failed to start chat');
     } finally {
       setBusy(null);
     }
-  }, [bridgeMatches, bridgeModel]);
+  }, [selected, bridgeMatches, bridgeModel]);
+
+  const renameSession = useCallback(async (session: RelaySession) => {
+    const next = window.prompt('Rename chat', session.title ?? '');
+    if (next == null) return;
+    const title = next.trim();
+    if (!title || title === session.title) return;
+    // Optimistic update.
+    setSelected((prev) =>
+      prev
+        ? { ...prev, sessions: prev.sessions.map((s) => (s.id === session.id ? { ...s, title } : s)) }
+        : prev
+    );
+    try {
+      await fetch(`/api/plugin/chat/sessions/${session.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+    } catch {
+      /* best-effort — optimistic value stays until next load */
+    }
+  }, []);
+
+  const deleteSession = useCallback(async (session: RelaySession) => {
+    if (!window.confirm('Delete this chat and its history? This cannot be undone.')) return;
+    setSelected((prev) =>
+      prev ? { ...prev, sessions: prev.sessions.filter((s) => s.id !== session.id) } : prev
+    );
+    try {
+      await fetch(`/api/plugin/chat/sessions/${session.id}`, { method: 'DELETE' });
+    } catch {
+      /* best-effort */
+    }
+  }, []);
 
   // Auto-open the device named in ?device= (e.g. the control panel "Chat" button).
   useEffect(() => {
-    if (autoOpenedRef.current || loading || active) return;
+    if (autoOpenedRef.current || loading || active || selected) return;
     const params = new URLSearchParams(window.location.search);
     const deviceId = params.get('device');
     if (!deviceId) return;
     const target = devices.find((d) => d.id === deviceId);
     if (target) {
       autoOpenedRef.current = true;
-      openChat(target);
+      openDevice(target);
     }
-  }, [loading, active, devices, openChat]);
+  }, [loading, active, selected, devices, openDevice]);
 
   // While a chat is open, keep the device's online status + active model fresh.
   // deviceOnline/deviceModel captured at open time is a snapshot; the device can
@@ -230,6 +316,7 @@ export function RemoteChatPage() {
   }, [active, bridgeMatches, bridgeModel]);
 
   if (active) {
+    const backDevice = selected?.device ?? devices.find((d) => d.id === active.deviceId);
     return (
       <RemoteChat
         sessionId={active.sessionId}
@@ -238,9 +325,92 @@ export function RemoteChatPage() {
         deviceModel={active.deviceModel}
         onBack={() => {
           setActive(null);
-          loadDevices();
+          // Back to the device's chat list (refreshed so a new/renamed session shows).
+          if (backDevice) openDevice(backDevice);
+          loadDevices(true);
         }}
       />
+    );
+  }
+
+  // Session-list view: the chosen device's past chats + a New Chat button.
+  if (selected) {
+    const { device, sessions, loading: sessionsLoading } = selected;
+    const sorted = [...sessions].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+    return (
+      <div className="rc-root">
+        <div className="rc-header">
+          <button
+            className="rc-back"
+            onClick={() => {
+              setSelected(null);
+              setError(null);
+            }}
+            aria-label="Back to devices"
+            title="Back to devices"
+            type="button"
+          >
+            ‹
+          </button>
+          <span className="rc-title">{device.device_name}</span>
+          <button
+            className="rc-refresh"
+            onClick={() => startNewChat()}
+            disabled={busy === 'new'}
+            aria-label="New chat"
+            title="New chat"
+            type="button"
+          >
+            +
+          </button>
+        </div>
+        <div className="rc-picker">
+          <h2>Chats</h2>
+          {error && <div className="rc-banner">{error}</div>}
+          <button
+            className="rc-newchat"
+            onClick={() => startNewChat()}
+            disabled={busy === 'new'}
+            type="button"
+          >
+            {busy === 'new' ? 'Starting…' : '+ New chat'}
+          </button>
+          {sessionsLoading ? (
+            <div className="rc-empty">Loading chats…</div>
+          ) : sorted.length === 0 ? (
+            <div className="rc-empty">No chats yet. Start a new one to drive this device.</div>
+          ) : (
+            sorted.map((s) => (
+              <div key={s.id} className="rc-session">
+                <button className="rc-session-open" onClick={() => openSession(s)} type="button">
+                  <span className="rc-session-title">{s.title?.trim() || 'Untitled chat'}</span>
+                  <span className="rc-session-meta">{relativeUpdated(s.updated_at)}</span>
+                </button>
+                <button
+                  className="rc-session-action"
+                  onClick={() => renameSession(s)}
+                  aria-label="Rename chat"
+                  title="Rename"
+                  type="button"
+                >
+                  ✎
+                </button>
+                <button
+                  className="rc-session-action rc-session-delete"
+                  onClick={() => deleteSession(s)}
+                  aria-label="Delete chat"
+                  title="Delete"
+                  type="button"
+                >
+                  🗑
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -290,7 +460,7 @@ export function RemoteChatPage() {
               <button
                 key={d.id}
                 className={`rc-device ${online ? 'online' : ''}`}
-                onClick={() => openChat(d)}
+                onClick={() => openDevice(d)}
                 disabled={busy === d.id}
               >
                 <span className="rc-dot" />

@@ -6060,6 +6060,93 @@
   padding: 32px 16px;
 }
 
+/* Session (chat history) list — the middle view between device picker and chat. */
+.rc-root .rc-newchat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border, #23232b);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text, inherit);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.rc-root .rc-newchat:hover:not(:disabled) {
+  border-color: var(--accent, #6366f1);
+  color: var(--accent, #818cf8);
+}
+
+.rc-root .rc-newchat:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rc-root .rc-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border, #23232b);
+  border-radius: 12px;
+  background: var(--surface, #17171f);
+  overflow: hidden;
+}
+
+.rc-root .rc-session-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  min-width: 0;
+}
+
+.rc-root .rc-session-open:hover {
+  background: var(--surface-hover, #1e1e28);
+}
+
+.rc-root .rc-session-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rc-root .rc-session-meta {
+  font-size: 12px;
+  color: var(--text-muted, #9a9a9a);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.rc-root .rc-session-action {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #9a9a9a);
+  font-size: 14px;
+}
+
+.rc-root .rc-session-action:hover {
+  color: var(--text, #e5e5e5);
+}
+
+.rc-root .rc-session-delete:hover {
+  color: #f87171;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Voice (STT/TTS) — ported from the plugin's App.css voice block, scoped under
    .rc-root. The mic robot, listening orb overlay, speaking pill, and error banner.
