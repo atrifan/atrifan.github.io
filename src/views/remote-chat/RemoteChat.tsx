@@ -292,14 +292,25 @@ interface RemoteChatProps {
   onBack: () => void;
 }
 
+// The device may send an assistant message's content either as a rich object
+// ({ text, steps, actions }) or as a plain answer string (STREAM_DONE frames from
+// the agent loop carry `message.content: string`). Accept both.
+function messageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object' && typeof (content as { text?: unknown }).text === 'string') {
+    return (content as { text: string }).text;
+  }
+  return '';
+}
+
 function fromRelayMessage(m: RelayMessage): ChatEntry {
   const c = m.content ?? {};
   return {
     id: String(m.id),
     role: m.role,
-    content: typeof c.text === 'string' ? c.text : '',
-    steps: Array.isArray(c.steps) ? (c.steps as string[]) : undefined,
-    actions: Array.isArray(c.actions) ? (c.actions as string[]) : undefined,
+    content: messageText(c),
+    steps: !Array.isArray(c) && typeof c === 'object' && Array.isArray((c as { steps?: unknown }).steps) ? ((c as { steps: string[] }).steps) : undefined,
+    actions: !Array.isArray(c) && typeof c === 'object' && Array.isArray((c as { actions?: unknown }).actions) ? ((c as { actions: string[] }).actions) : undefined,
     streaming: false,
   };
 }
@@ -574,12 +585,29 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: '', thinking: '', actions: [], steps: [] } : m)));
       } else if (msg.type === 'STREAM_DONE') {
         const id = streamingIdRef.current;
+        // Some agent turns stream no STREAM_CHUNK deltas and deliver the whole answer only
+        // in the terminal frame's `message.content` (a string, or a { text } object). The
+        // canonical STREAM_DONE type doesn't declare `message`, so read it defensively and
+        // fold it into the bubble — otherwise the empty-bubble cleanup below would drop the
+        // answer entirely.
+        const doneMessage = (msg as unknown as { message?: { content?: unknown } }).message;
+        const finalText = doneMessage ? messageText(doneMessage.content) : '';
         // Read the finishing bubble SYNCHRONOUSLY from the ref (the setMessages updater
         // below runs later, so a var assigned inside it would still be empty here) — this
         // is the actual answer we speak / react to.
-        const finished = id ? messagesRef.current.find((m) => m.id === id) : undefined;
+        const finishedRaw = id ? messagesRef.current.find((m) => m.id === id) : undefined;
+        const finished =
+          finishedRaw && !finishedRaw.content && finalText
+            ? { ...finishedRaw, content: finalText }
+            : finishedRaw;
         setMessages((prev) => {
-          let next = id ? prev.map((m) => (m.id === id ? { ...m, streaming: false } : m)) : prev;
+          let next = id
+            ? prev.map((m) =>
+                m.id === id
+                  ? { ...m, streaming: false, content: m.content || finalText }
+                  : m
+              )
+            : prev;
           next = next.filter((m) => !(m.streaming && isEmptyAssistantBubble(m)));
           return next;
         });
