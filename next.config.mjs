@@ -98,8 +98,6 @@ const nextConfig = {
     '@react-spectrum/tooltip',
     '@react-spectrum/view',
     '@react-spectrum/well',
-    '@spectrum-icons/illustrations',
-    '@spectrum-icons/workflow',
   ],
 };
 

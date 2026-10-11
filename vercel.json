@@ -5,10 +5,6 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/ai/automations/cron",
-      "schedule": "0 10 * * *"
-    },
-    {
       "path": "/api/notifications/dispatch",
       "schedule": "*/5 * * * *"
     }
@@ -27,4 +23,3 @@
     }
   ]
 }
-
