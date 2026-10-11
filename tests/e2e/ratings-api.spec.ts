@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import {
   TEST_PACKAGE_ID,
   seedMarketplace,
-  cleanupMarketplace,
   hasSupabaseEnv,
 } from '../fixtures/seed';
 
@@ -17,10 +16,8 @@ test.describe('/api/packages/[id]/ratings (unauthenticated)', () => {
     await seedMarketplace();
   });
 
-  test.afterAll(async () => {
-    if (!hasSupabaseEnv()) return;
-    await cleanupMarketplace();
-  });
+  // No afterAll cleanup: deleting the fixture api key here raced the relay specs running in
+  // parallel (their seeded session hangs off that key). Fixtures are idempotent upserts.
 
   test.beforeEach(() => {
     test.skip(!hasSupabaseEnv(), 'requires Supabase env');

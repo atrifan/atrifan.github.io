@@ -12,7 +12,8 @@ const BLOCKING = ['serious', 'critical'];
 for (const { path, name } of PAGES) {
   test(`${name} (${path}) has no serious or critical axe violations`, async ({ page }) => {
     await openSettled(page, path);
-    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+    // Clerk's dev-instance footer ("Secured by Clerk" logo link) is third-party chrome we can't label.
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).exclude('.cl-footer').analyze();
     const blocking = results.violations.filter((v) => BLOCKING.includes(v.impact ?? ''));
     expect(
       blocking,
