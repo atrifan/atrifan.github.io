@@ -3,6 +3,8 @@ import { streamText } from 'ai';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createGateway, calculateCost, resolveGenerationCost } from '@/src/lib/ai-gateway';
+import { creditValueUsdFromEnv } from '@/src/config/qa.config';
+import { remainingCredits, usdToCredits } from '@/src/lib/qa/qa-credits';
 
 export const runtime = 'edge';
 
@@ -18,6 +20,54 @@ function getSupabase() {
     process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
+}
+
+function jsonError(status: number, body: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+interface ReviewBilling {
+  submissionId: string;
+  capCredits: number;
+}
+
+/**
+ * QA review keys (api_keys.purpose = 'qa_review', issued by the Admin QA MCP): usage is
+ * metered against the submission's QA reserve (paid by the customer, basic by the
+ * platform), never the key owner's balance. Expired or revoked keys get 403; an exhausted
+ * reserve gets 402.
+ */
+async function checkReviewKey(
+  supabase: ReturnType<typeof getSupabase>,
+  key: { is_active: boolean; revoked_at?: string | null; expires_at?: string | null; submission_id?: string | null; cap_credits?: number | string | null },
+): Promise<ReviewBilling | Response> {
+  if (!key.is_active || key.revoked_at) {
+    return jsonError(403, { error: 'This QA review key has been revoked.', code: 'review_key_revoked' });
+  }
+  if (!key.expires_at || Date.parse(key.expires_at) <= Date.now()) {
+    return jsonError(403, { error: 'This QA review key has expired. Call qa_credentials_get for a new one.', code: 'review_key_expired' });
+  }
+  const { data: req } = await supabase
+    .from('qa_requests')
+    .select('status, platform_credits, reserved_credits, used_credits')
+    .eq('subject_type', 'contract_submission')
+    .eq('subject_id', key.submission_id)
+    .maybeSingle();
+  if (!req || req.status !== 'reserved') {
+    return jsonError(403, { error: 'The QA reserve for this submission is closed.', code: 'review_key_revoked' });
+  }
+  const capCredits = Math.min(Number(req.platform_credits) + Number(req.reserved_credits), Number(key.cap_credits ?? 0));
+  const usedCredits = Number(req.used_credits);
+  if (remainingCredits(capCredits, usedCredits) <= 0) {
+    return jsonError(402, {
+      error: `The QA credit reserve for this submission is used up (${usedCredits} of ${capCredits} credits). Finish the review and call qa_mark.`,
+      code: 'qa_reserve_exhausted',
+      submission_id: key.submission_id,
+      cap_credits: capCredits,
+      used_credits: usedCredits,
+    });
+  }
+  return { submissionId: key.submission_id as string, capCredits };
 }
 
 async function validateClerkToken(apiKey: string): Promise<{ userId: string; sessionId: string } | null> {
@@ -46,12 +96,14 @@ export async function POST(request: NextRequest) {
   let userId: string;
   let sessionId: string;
   let apiKeyId: string | null = null;
+  let review: ReviewBilling | null = null;
 
   if (apiKey.startsWith('ak_')) {
     const hash = await sha256Hex(apiKey);
+    // '*' so this keeps working whether or not the QA columns (purpose, …) exist yet
     const { data: keyRecord } = await supabase
       .from('api_keys')
-      .select('id, user_id, is_active, plan')
+      .select('*')
       .eq('api_key_hash', hash)
       .single();
 
@@ -62,7 +114,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (!keyRecord.is_active) {
+    if (keyRecord.purpose === 'qa_review') {
+      const checked = await checkReviewKey(supabase, keyRecord);
+      if (checked instanceof Response) return checked;
+      review = checked;
+    } else if (!keyRecord.is_active) {
       const msg = keyRecord.plan === 'free'
         ? 'Your subscription has expired. Re-subscribe at tulzo.online/pricing to reactivate your API key.'
         : 'API key has been revoked. Please generate a new one from your dashboard.';
@@ -96,17 +152,19 @@ export async function POST(request: NextRequest) {
     apiKeyId = keyRecord?.id || null;
   }
 
-  const { data: budget } = await supabase
-    .from('user_budgets')
-    .select('remaining_balance, status')
-    .eq('user_id', userId)
-    .single();
+  if (!review) {
+    const { data: budget } = await supabase
+      .from('user_budgets')
+      .select('remaining_balance, status')
+      .eq('user_id', userId)
+      .single();
 
-  if (!budget || budget.remaining_balance <= 0 || budget.status !== 'active') {
-    return new Response(JSON.stringify({ error: 'Insufficient balance' }), {
-      status: 402,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (!budget || budget.remaining_balance <= 0 || budget.status !== 'active') {
+      return new Response(JSON.stringify({ error: 'Insufficient balance' }), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   const body = await request.json();
@@ -153,7 +211,20 @@ export async function POST(request: NextRequest) {
 
       const generationId = response?.headers?.['x-vercel-ai-generation-id'] || null;
 
-      if (cost > 0) {
+      if (cost > 0 && review) {
+        const finalCost = await resolveGenerationCost(generationId, cost);
+        const { data: metered, error: meterError } = await supabase.rpc('qa_meter_usage', {
+          p_api_key_id: apiKeyId,
+          p_credits: usdToCredits(finalCost, creditValueUsdFromEnv()),
+          p_cost_usd: finalCost,
+          p_model: model,
+          p_input_tokens: inputTokens,
+          p_output_tokens: outputTokens,
+        });
+        if (meterError || !metered?.ok) {
+          console.error('[chat] QA review usage not metered:', review.submissionId, meterError?.code ?? metered?.error);
+        }
+      } else if (cost > 0) {
         const finalCost = await resolveGenerationCost(generationId, cost);
 
         await supabase.rpc('deduct_user_balance', {

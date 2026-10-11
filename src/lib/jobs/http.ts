@@ -20,7 +20,7 @@ function safeEqual(a: string, b: string): boolean {
  * matches. `next build` inlines NODE_ENV=production, so production bundles never take
  * this path. Never set JOBS_E2E_AUTH_SECRET in Vercel.
  */
-function e2eUser(request: Request): string | null {
+export function e2eUser(request: Request): string | null {
   if (process.env.NODE_ENV === 'production') return null;
   const secret = process.env.JOBS_E2E_AUTH_SECRET;
   if (!secret || secret.length < 16) return null;
