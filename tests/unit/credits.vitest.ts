@@ -37,6 +37,7 @@ describe('credit conversion', () => {
     expect(balanceCredits(0.29)).toBe(29); // 0.29 / 0.01 = 28.999999999999996
     expect(balanceCredits(0)).toBe(0);
     expect(balanceCredits(Number.NaN)).toBe(0);
+    expect(balanceCredits(Number.POSITIVE_INFINITY)).toBe(0);
   });
 });
 
@@ -87,6 +88,7 @@ describe('checkoutReturnUrls', () => {
     expect(checkoutReturnUrls({ NEXT_PUBLIC_APP_URL: 'https://preview.test/' }).successUrl).toBe(
       'https://preview.test/credits?topup=success',
     );
+    expect(checkoutReturnUrls({ NEXT_PUBLIC_APP_URL: 'https://p.test//' }).successUrl).toBe('https://p.test/credits?topup=success');
     expect(checkoutReturnUrls({ NEXT_PUBLIC_URL: 'https://u.test' }).cancelUrl).toBe('https://u.test/credits?topup=canceled');
     expect(checkoutReturnUrls({}).successUrl).toBe('http://localhost:3000/credits?topup=success');
     expect(checkoutReturnUrls({ NEXT_PUBLIC_ROOT_DOMAIN: '  ' }).successUrl).toBe('http://localhost:3000/credits?topup=success');
@@ -99,6 +101,8 @@ describe('formatting', () => {
     expect(formatCredits(1)).toBe('1 credit');
     expect(formatCredits(0)).toBe('0 credits');
     expect(formatCredits(-1)).toBe('-1 credits');
+    expect(formatCredits(1234.6)).toBe('1,235 credits');
+    expect(formatSignedCredits(20.4)).toBe('+20');
   });
 
   it('formats signed credit changes', () => {
@@ -125,6 +129,7 @@ describe('formatting', () => {
   it('formats dates in UTC as day month year', () => {
     expect(formatDate('2026-10-01T10:00:00Z')).toBe('1 Oct 2026');
     expect(formatDate('2026-10-01T23:30:00-05:00')).toBe('2 Oct 2026');
+    expect(formatDate('2026-03-09T00:00:00Z')).toBe('9 Mar 2026');
     expect(formatDate('not a date')).toBe('—');
     expect(formatDate(null)).toBe('—');
   });

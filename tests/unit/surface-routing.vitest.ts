@@ -274,6 +274,11 @@ describe('wwwRedirect', () => {
     expect(wwwRedirect({ host: 'WWW.Tulzo.Online:443', pathAndQuery: '/', rootDomain: 'tulzo.online' })).toBe('https://tulzo.online/');
   });
 
+  it('tolerates padding and trailing slashes', () => {
+    expect(wwwRedirect({ host: ' www.tulzo.online ', pathAndQuery: '/', rootDomain: ' tulzo.online/ ' })).toBe('https://tulzo.online/');
+    expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/x', rootDomain: 'tulzo.online//' })).toBe('https://tulzo.online/x');
+  });
+
   it('keeps a scheme and port given in the root domain', () => {
     expect(wwwRedirect({ host: 'www.lvh.me:3000', pathAndQuery: '/a', rootDomain: 'http://lvh.me:3000' })).toBe('http://lvh.me:3000/a');
   });

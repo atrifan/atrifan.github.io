@@ -53,5 +53,9 @@ describe('what credits buy', () => {
     expect(formatTokenCount(1_250_000)).toBe('1.3M');
     expect(formatTokenCount(999)).toBe('999');
     expect(formatTokenCount(1000)).toBe('1K');
+    expect(formatTokenCount(1_000_000)).toBe('1M');
+    expect(formatTokenCount(999_999)).toBe('1M');
+    expect(formatTokenCount(999_499)).toBe('999K');
+    expect(formatTokenCount(999_500)).toBe('1M');
   });
 });

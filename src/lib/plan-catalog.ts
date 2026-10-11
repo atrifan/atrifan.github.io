@@ -83,7 +83,8 @@ export function outputTokensForCredits(
 
 /** "385K", "1.3M", "999". */
 export function formatTokenCount(n: number): string {
-  if (n >= 1_000_000) return `${Number((n / 1_000_000).toFixed(1))}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  const thousands = Math.round(n / 1_000);
+  if (thousands >= 1_000) return `${Number((n / 1_000_000).toFixed(1))}M`;
+  if (n >= 1_000) return `${thousands}K`;
   return String(n);
 }
