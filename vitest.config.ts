@@ -2,8 +2,9 @@ import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
 /**
- * Unit tests for pure modules (no network, no DB, no Next runtime).
- * Run: `npm run test:unit`. Integration tests use vitest.int.config.ts.
+ * Vitest unit tests for pure modules (no network, no DB, no Next runtime): the *.vitest.ts
+ * files in tests/unit. `npm run test:unit` runs these after the node:test suites (*.test.ts).
+ * Route-handler integration tests use vitest.int.config.ts.
  */
 export default defineConfig({
   resolve: {
@@ -11,6 +12,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.vitest.ts'],
   },
 });

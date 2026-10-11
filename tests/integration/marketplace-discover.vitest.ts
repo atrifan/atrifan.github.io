@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { dbReady, req } from './env';
+import { dbReady, req } from './vitest-env';
 import { seedMarketplace, TEST_PACKAGE_ID, TEST_PRO_KEY } from '../fixtures/seed';
 
 /**

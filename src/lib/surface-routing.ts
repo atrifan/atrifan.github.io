@@ -48,7 +48,8 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
     '/api/billing/checkout',
   ],
   marketplace: ['/api/marketplace', '/api/packages', '/api/admin/downloads'],
-  gigs: [],
+  // Stripe Connect onboarding (/api/connect) and the billing webhook stay on the hub.
+  gigs: ['/api/jobs', '/api/offers', '/api/bids'],
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 

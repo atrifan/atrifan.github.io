@@ -49,7 +49,8 @@ const themed = /(visual|a11y)\/.*\.spec\.ts$/;
 
 export default defineConfig({
   testDir: 'tests',
-  testIgnore: ['unit/**', 'integration/**'],
+  // Only Playwright specs; tests/**/*.test.ts and *.vitest.ts belong to node:test and Vitest.
+  testMatch: '**/*.spec.ts',
   globalSetup: './tests/global-setup.ts',
   timeout: 60_000,
   expect: {
@@ -76,6 +77,12 @@ export default defineConfig({
     { name: 'dark-desktop', testMatch: themed, use: { ...desktop, colorScheme: 'dark' } },
     { name: 'dark-mobile', testMatch: themed, use: { ...mobile, colorScheme: 'dark' } },
     {
+      // tests/integration/*.spec.ts (e.g. notify.spec.ts, `npm run test:integration:notify`).
+      name: 'integration',
+      testMatch: /integration\/.*\.spec\.ts$/,
+      use: desktop,
+    },
+    {
       name: 'surface-ai',
       testMatch: /\.surface-ai\.spec\.ts$/,
       use: { ...desktop, baseURL: 'http://localhost:3001' },
@@ -97,7 +104,7 @@ export default defineConfig({
             timeout: 180_000,
           },
         ]),
-    surfaceServer('ai', 3001),
-    surfaceServer('hub', 3002),
+    // Against an external server (PLAYWRIGHT_BASE_URL, e.g. the gigs runner) the surface servers aren't started.
+    ...(process.env.PLAYWRIGHT_BASE_URL ? [] : [surfaceServer('ai', 3001), surfaceServer('hub', 3002)]),
   ],
 });

@@ -7,7 +7,7 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
 
 /**
- * Run: `npm run test:int`.
+ * Run: `npm run test:int`. (The Docker-backed node:test suites are `npm run test:integration`.)
  */
 export default defineConfig({
   resolve: {
@@ -15,8 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/integration/**/*.int.test.ts'],
-    setupFiles: ['tests/integration/setup.ts'],
+    include: ['tests/integration/**/*.vitest.ts'],
+    setupFiles: ['tests/integration/vitest-setup.ts'],
     testTimeout: 30_000,
     // Specs share seeded rows; run files one at a time.
     fileParallelism: false,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { req } from './env';
+import { req } from './vitest-env';
 
 /**
  * The Clerk OAuth proxy routes must not fall back to hard-coded credentials.

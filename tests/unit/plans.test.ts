@@ -1,4 +1,4 @@
-import { test } from 'vitest';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePlan, planFromClaims, planFromSubscription, PLAN_KEYS } from '../../src/lib/plans.ts';
 

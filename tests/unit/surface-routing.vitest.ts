@@ -159,6 +159,14 @@ describe('routeRequest: non-hub surfaces', () => {
     expect(route('ai', '/api/plugin/chat/poll')).toEqual({ action: 'notFound' });
   });
 
+  it('gigs serves the jobs, offers and bids APIs; Connect onboarding stays on the hub', () => {
+    for (const p of ['/api/jobs', '/api/jobs/1/bids', '/api/offers', '/api/bids/1/accept']) {
+      expect(route('gigs', p)).toEqual({ action: 'next' });
+    }
+    expect(route('gigs', '/api/connect/onboard')).toEqual({ action: 'notFound' });
+    expect(route('gigs', '/api/jobsx')).toEqual({ action: 'notFound' });
+  });
+
   it('marketplace serves the catalog APIs', () => {
     for (const p of ['/api/marketplace/discover', '/api/packages', '/api/packages/x/ratings']) {
       expect(route('marketplace', p)).toEqual({ action: 'next' });
@@ -174,7 +182,7 @@ describe('routeRequest: non-hub surfaces', () => {
   it('lists an allow-list for every surface, hub as all', () => {
     expect(SURFACE_API_ALLOWLIST.hub).toBe('all');
     expect(SURFACE_API_ALLOWLIST.chat).toContain('/api/plugin/chat');
-    expect(SURFACE_API_ALLOWLIST.gigs).toEqual([]);
+    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids']);
   });
 });
 
