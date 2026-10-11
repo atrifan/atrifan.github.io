@@ -8,6 +8,7 @@ import {
   updateApiKey,
 } from '@/src/lib/supabase-services';
 import { normalizePlan, planFromSubscription } from '@/src/lib/plans';
+import { deleteContact, syncContactFromClerk } from '@/src/lib/notify/notify';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
 
@@ -151,10 +152,16 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
+      case 'user.created': {
+        await syncContactFromClerk(event.data);
+        break;
+      }
+
       case 'user.updated': {
         const userId = event.data.id;
         const newPlan = extractPlan(event.data as unknown as Record<string, unknown>);
         await handlePlanChange(userId, newPlan);
+        await syncContactFromClerk(event.data);
         break;
       }
 
@@ -167,6 +174,7 @@ export async function POST(request: NextRequest) {
           for (const apiKey of apiKeys) {
             await deleteApiKey(apiKey.id);
           }
+          await deleteContact(userId);
         }
         break;
       }
