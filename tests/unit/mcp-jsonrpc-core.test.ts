@@ -12,6 +12,7 @@ import {
   dispatchMcpRequest,
   extractAuth,
   toolResult,
+  toolDescriptor,
   type McpServer,
 } from '../../src/lib/mcp/jsonrpc-core.ts';
 
@@ -39,7 +40,7 @@ test('error codes match the JSON-RPC and Tulzo MCP conventions', () => {
     SERVER_ERROR: -32000,
     AUTH_REQUIRED: -32001,
     TOOL_NOT_ENABLED: -32002,
-    PLAN_REQUIRED: -32003,
+    NOT_ALLOWED: -32003,
   });
 });
 
@@ -198,4 +199,24 @@ test('toolResult: text content mirrors structuredContent; isError only on failur
     structuredContent: { error: 'x', message: 'y' },
     isError: true,
   });
+});
+
+test('toolResult can write compact JSON text', () => {
+  assert.deepEqual(toolResult({ a: [1, 2] }, false, { pretty: false }), {
+    content: [{ type: 'text', text: '{"a":[1,2]}' }],
+    structuredContent: { a: [1, 2] },
+  });
+  assert.equal(toolResult({ a: 1 }, true, { pretty: false }).isError, true);
+  assert.equal(toolResult({ a: 1 }, false, { pretty: true }).content[0].text, JSON.stringify({ a: 1 }, null, 2));
+});
+
+test('toolDescriptor lists name, description, schema and annotations only when present', () => {
+  const handler = async () => ({});
+  assert.deepEqual(toolDescriptor({ name: 'a', description: 'd', inputSchema: { type: 'object' }, handler }), {
+    name: 'a', description: 'd', inputSchema: { type: 'object' },
+  });
+  assert.deepEqual(
+    toolDescriptor({ name: 'a', description: 'd', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true }, handler }),
+    { name: 'a', description: 'd', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } },
+  );
 });

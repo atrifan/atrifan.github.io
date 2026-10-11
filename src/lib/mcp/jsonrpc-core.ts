@@ -32,8 +32,8 @@ export const JSONRPC_ERROR = {
   AUTH_REQUIRED: -32001,
   /** The tool exists but is not enabled for the caller's server. */
   TOOL_NOT_ENABLED: -32002,
-  /** The caller's plan does not include this surface (Free on /api/mcp). */
-  PLAN_REQUIRED: -32003,
+  /** The caller may not use this (Free plan on /api/mcp, non-admins on the Admin QA MCP). */
+  NOT_ALLOWED: -32003,
 } as const;
 
 /** Throw from a handler to answer with a specific JSON-RPC error. */
@@ -188,12 +188,31 @@ export interface ToolCallResult {
   isError?: true;
 }
 
-/** An MCP tools/call result: the payload as JSON text and as structuredContent. */
-export function toolResult(payload: Record<string, unknown>, isError = false): ToolCallResult {
+/**
+ * An MCP tools/call result: the payload as JSON text and as structuredContent.
+ * `pretty: false` writes compact JSON text (the Admin QA MCP's format).
+ */
+export function toolResult(payload: Record<string, unknown>, isError = false, opts: { pretty?: boolean } = {}): ToolCallResult {
+  const text = opts.pretty === false ? JSON.stringify(payload) : JSON.stringify(payload, null, 2);
   const result: ToolCallResult = {
-    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+    content: [{ type: 'text', text }],
     structuredContent: payload,
   };
   if (isError) result.isError = true;
   return result;
+}
+
+/** A tool with a `(ctx, args)` handler that validates its own arguments. */
+export interface SimpleMcpTool<Ctx> {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  annotations?: Record<string, unknown>;
+  handler: (ctx: Ctx, args: Record<string, unknown>) => Promise<unknown>;
+}
+
+/** The tools/list entry for a tool: name, description, inputSchema and annotations if any. */
+export function toolDescriptor(tool: SimpleMcpTool<unknown>): Record<string, unknown> {
+  const { name, description, inputSchema, annotations } = tool;
+  return { name, description, inputSchema, ...(annotations ? { annotations } : {}) };
 }

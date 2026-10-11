@@ -188,7 +188,8 @@ export async function validateApiKey(key: string, serverName: string = 'default'
 /**
  * Get Clerk frontend API URL from publishable key
  */
-export function getClerkFrontendApi(): string {
+/** The Clerk Frontend API origin from the publishable key, else CLERK_HOST, else null. */
+export function clerkFrontendApiFromEnv(): string | null {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
   if (publishableKey) {
     try {
@@ -203,8 +204,54 @@ export function getClerkFrontendApi(): string {
       // Use default
     }
   }
-  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
+  return process.env.CLERK_HOST || null;
 }
+
+export function getClerkFrontendApi(): string {
+  return clerkFrontendApiFromEnv() || 'https://quick-adder-16.clerk.accounts.dev';
+}
+
+export type ClerkBearerIdentity =
+  | { ok: true; userId: string }
+  | { ok: false; reason: 'userinfo_rejected' | 'userinfo_no_sub' | 'userinfo_unreachable' | 'no_frontend_api' };
+
+/**
+ * The Clerk user behind a bearer token: a Clerk session JWT (verifyToken), else a Clerk
+ * OAuth access token (Frontend API /oauth/userinfo). Shared by every MCP server
+ * (/api/mcp, /api/jobs/mcp, /api/admin/qa/mcp); each maps a failure to its own message.
+ */
+export async function identifyClerkBearer(
+  token: string,
+  opts: { frontendApi: string | null; noStore?: boolean },
+): Promise<ClerkBearerIdentity> {
+  try {
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    if (payload && payload.sub) return { ok: true, userId: payload.sub };
+  } catch {
+    // Not a Clerk session JWT; try it as an OAuth access token
+  }
+  if (!opts.frontendApi) return { ok: false, reason: 'no_frontend_api' };
+  try {
+    const res = await fetch(`${opts.frontendApi}/oauth/userinfo`, {
+      headers: { Authorization: `Bearer ${token}` },
+      ...(opts.noStore ? { cache: 'no-store' as const } : {}),
+    });
+    if (!res.ok) return { ok: false, reason: 'userinfo_rejected' };
+    const userinfo = (await res.json()) as { sub?: string };
+    if (!userinfo.sub) return { ok: false, reason: 'userinfo_no_sub' };
+    return { ok: true, userId: userinfo.sub };
+  } catch (error) {
+    console.error('Error validating OAuth access token:', error);
+    return { ok: false, reason: 'userinfo_unreachable' };
+  }
+}
+
+const BEARER_ERRORS: Record<Exclude<ClerkBearerIdentity, { ok: true }>['reason'], string> = {
+  userinfo_rejected: 'Invalid OAuth access token',
+  userinfo_no_sub: 'Invalid userinfo response',
+  userinfo_unreachable: 'Invalid or expired bearer token',
+  no_frontend_api: 'Invalid or expired bearer token',
+};
 
 /**
  * Validate OAuth bearer token
@@ -222,52 +269,11 @@ export async function validateBearerToken(token: string, serverName: string = 'd
     return cached;
   }
 
-  let userId: string | null = null;
-
-  // First, try to verify as a Clerk session JWT
-  try {
-    const payload = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY,
-    });
-
-    if (payload && payload.sub) {
-      userId = payload.sub;
-    }
-  } catch (jwtError) {
-    // Not a valid JWT, try as OAuth access token
-    console.log('Token is not a JWT, trying as OAuth access token...');
+  const identity = await identifyClerkBearer(token, { frontendApi: getClerkFrontendApi() });
+  if (!identity.ok) {
+    return { authenticated: false, authMethod: 'none', error: BEARER_ERRORS[identity.reason] };
   }
-
-  // If not a JWT, try OAuth access token via userinfo endpoint
-  if (!userId) {
-    try {
-      const clerkApi = getClerkFrontendApi();
-      const userinfoResponse = await fetch(`${clerkApi}/oauth/userinfo`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!userinfoResponse.ok) {
-        return { authenticated: false, authMethod: 'none', error: 'Invalid OAuth access token' };
-      }
-
-      const userinfo = await userinfoResponse.json();
-
-      if (!userinfo.sub) {
-        return { authenticated: false, authMethod: 'none', error: 'Invalid userinfo response' };
-      }
-
-      userId = userinfo.sub;
-    } catch (error) {
-      console.error('Error validating OAuth access token:', error);
-      return { authenticated: false, authMethod: 'none', error: 'Invalid or expired bearer token' };
-    }
-  }
-
-  if (!userId) {
-    return { authenticated: false, authMethod: 'none', error: 'Could not determine user identity' };
-  }
+  const userId = identity.userId;
 
   // Now check Supabase for user's API key
   try {

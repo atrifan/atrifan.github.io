@@ -15,6 +15,7 @@ const EXPECTED_TOOLS = [
   'jobs_search', 'jobs_get', 'offers_post', 'offers_list_mine', 'jobs_bid', 'jobs_withdraw_bid',
   'contracts_list', 'contract_get', 'contract_accept_version', 'progress_post', 'milestone_update',
   'steering_list', 'steering_respond', 'whoami',
+  'send_project', 'qa_status', 'qa_report_get',
 ];
 
 function sha(k: string) {

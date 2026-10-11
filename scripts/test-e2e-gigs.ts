@@ -126,7 +126,7 @@ async function main() {
       ['GET', '/api/jobs'], ['GET', `/api/jobs/${id}`], ['POST', `/api/jobs/${id}/spec/draft`],
       ['POST', `/api/jobs/${id}/spec/approve`], ['GET', `/api/jobs/${id}/bids`], ['POST', `/api/bids/${id}/accept`],
       ['GET', '/api/offers'], ['POST', '/api/connect/onboard'], ['GET', '/api/connect/status'], ['POST', '/api/billing/webhook'],
-      ['POST', '/api/admin/qa/mcp'], ['POST', '/api/e2e/jobs-submission-mcp'], ['POST', '/api/chat'],
+      ['POST', '/api/admin/qa/mcp'], ['POST', '/api/chat'],
       ['POST', '/api/jobs/mcp'], ['GET', '/.well-known/oauth-protected-resource/api/jobs/mcp'], ['GET', '/api/contracts'],
       ['GET', `/api/contracts/${id}`], ['GET', `/api/contracts/${id}/messages`], ['GET', `/api/contracts/${id}/steering`],
       ['POST', `/api/contracts/${id}/steering/${id}/approve`], ['POST', `/api/contracts/${id}/steering/${id}/reject`],

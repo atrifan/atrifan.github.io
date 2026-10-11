@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { FAKE_TOKENS, FAKE_REPOS, FAKE_SHA_HEAD, FAKE_SHA_OTHER } from '../support/fake-github';
 
 // Behaviour-only contract tests for the provider submission tools (send_project,
-// qa_status, qa_report_get) served by the test-only Jobs MCP stand-in. Runs against a
+// qa_status, qa_report_get) served by the Jobs MCP at /api/jobs/mcp. Runs against a
 // throwaway DB, a fake Stripe and a fake GitHub; auth uses the e2e header bypass.
 
 test.skip(
@@ -14,7 +14,7 @@ test.skip(
 const E2E_SECRET = process.env.JOBS_E2E_AUTH_SECRET ?? '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? '';
 const stripe = new Stripe('sk_test_x');
-const MCP = '/api/e2e/jobs-submission-mcp';
+const MCP = '/api/jobs/mcp';
 const DUMMY_ID = '00000000-0000-4000-8000-000000000000';
 const DAY = 86_400_000;
 
@@ -400,4 +400,5 @@ test.describe('submission MCP: send_project and qa_status', () => {
     });
     expect(sc.contract_status).toBe('in_qa');
   });
+
 });
