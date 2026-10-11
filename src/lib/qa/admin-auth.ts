@@ -67,7 +67,7 @@ async function userFromBearer(token: string): Promise<string | null> {
   }
 }
 
-async function clerkAdmin(userId: string): Promise<boolean> {
+export async function clerkAdmin(userId: string): Promise<boolean> {
   const policy = { adminEmails: getAdminEmails(), adminUserIds: adminUserIdsFromEnv() };
   if (isQaAdmin({ userId }, policy)) return true;
   try {
