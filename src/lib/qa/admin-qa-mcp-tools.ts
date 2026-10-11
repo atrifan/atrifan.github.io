@@ -2,7 +2,7 @@
  * Admin QA MCP tools. Thin wrappers over src/lib/qa/qa-review-service.ts; the route
  * (app/api/admin/qa/mcp) only lists or runs them for admins.
  */
-import type { McpTool } from './mcp-jsonrpc';
+import type { SimpleMcpTool } from '../mcp/jsonrpc-core';
 import { getCredentials, getSubmissionDetail, listQueue, markSubmission } from './qa-review-service';
 
 export interface AdminQaContext {
@@ -11,7 +11,7 @@ export interface AdminQaContext {
 
 const submissionId = { type: 'string', format: 'uuid', description: 'The submission' };
 
-export const ADMIN_QA_TOOLS: McpTool<AdminQaContext>[] = [
+export const ADMIN_QA_TOOLS: SimpleMcpTool<AdminQaContext>[] = [
   {
     name: 'qa_queue_list',
     description:

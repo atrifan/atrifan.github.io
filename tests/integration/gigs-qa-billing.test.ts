@@ -72,19 +72,19 @@ async function usedCredits(submissionId: string): Promise<number> {
   return Number(r.used_credits);
 }
 
-test('a review key bills the customer reserve, not the admin; stops at the cap with 402', async () => {
+test('a review key bills the customer reserve at cost × CREDIT_MARKUP, not the admin; stops at the cap with 402', async () => {
   await seedBalance(CUSTOMER, 10);
   await seedBalance(ADMIN, 0); // the admin's own balance is not needed and not touched
   const { submissionId, key, keyId } = await reviewKeyFor(['code_review']); // cap 60 + 300
   assert.equal(await balance(CUSTOMER), 7);
 
-  gatewayUses(100_000, 50_000); // $0.25 + $0.50 = $0.75 = 75 credits per call
-  for (let i = 1; i <= 4; i += 1) {
+  gatewayUses(100_000, 50_000); // $0.25 + $0.50 = $0.75 raw × 1.3 = 97.5 credits per call
+  for (let i = 1; i <= 3; i += 1) {
     const r = await chatWith(key);
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.equal(await usedCredits(submissionId), 75 * i);
+    assert.equal(await usedCredits(submissionId), 97.5 * i);
   }
-  const last = await chatWith(key); // only 60 left: clamped
+  const last = await chatWith(key); // 67.5 left, more than this call's hold: runs, charge clamped
   assert.equal(last.status, 200);
   assert.equal(await usedCredits(submissionId), 360);
 
@@ -94,15 +94,16 @@ test('a review key bills the customer reserve, not the admin; stops at the cap w
   assert.match(capped.body.error, /reserve/i);
   assert.equal(capped.body.cap_credits, 360);
   assert.equal(capped.body.used_credits, 360);
-  assert.equal(streamState.calls.length, 5, 'the gateway is not called once the cap is reached');
+  assert.equal(streamState.calls.length, 4, 'the gateway is not called once the cap is reached');
+  assert.equal((await sql('SELECT 1 FROM qa_credit_holds')).length, 0, 'every hold is released after its call');
 
   assert.equal(await balance(ADMIN), 0);
   assert.equal(await balance(CUSTOMER), 7);
   const log = await sql<any>('SELECT * FROM qa_usage_log WHERE submission_id = $1 ORDER BY id', [submissionId]);
-  assert.equal(log.length, 5);
-  assert.deepEqual(log.map((l) => Number(l.credits_charged)), [75, 75, 75, 75, 60]);
+  assert.equal(log.length, 4);
+  assert.deepEqual(log.map((l) => Number(l.credits_charged)), [97.5, 97.5, 97.5, 67.5]);
   assert.ok(log.every((l) => l.api_key_id === keyId && l.reviewer_user_id === ADMIN && l.model === MODEL));
-  assert.equal(Number(log[0].cost_usd), 0.75);
+  assert.equal(Number(log[0].cost_usd), 0.75, 'the raw gateway cost is logged; the markup is in the credits');
   const analytics = await sql('SELECT 1 FROM paid_usage_analytics WHERE user_id = $1', [ADMIN]);
   assert.equal(analytics.length, 0, 'review usage is not billed as the admin\'s own usage');
 
@@ -119,10 +120,10 @@ test('partial usage: the customer pays only beyond basic and gets the rest back'
   const { submissionId, key } = await reviewKeyFor(['code_review']);
   gatewayUses(100_000, 50_000);
   await chatWith(key);
-  await chatWith(key); // 150 used
+  await chatWith(key); // 2 × 97.5 = 195 used
   const mark = await toolCall(adminMcp.POST, '/api/admin/qa/mcp', 'qa_mark', { submission_id: submissionId, verdict: 'requires_changes', reason: 'Add tests' }, { 'x-api-key': adminKey });
-  assert.deepEqual(mark.data.credits, { used: 150, platform_charged: 60, customer_charged: 90, customer_released: 210 });
-  assert.equal(await balance(CUSTOMER), 9.1);
+  assert.deepEqual(mark.data.credits, { used: 195, platform_charged: 60, customer_charged: 135, customer_released: 165 });
+  assert.equal(await balance(CUSTOMER), 8.65);
 });
 
 test('a revoked review key (after the verdict) is rejected with 403', async () => {
@@ -162,4 +163,68 @@ test('normal device keys still bill the key owner exactly as before', async () =
   const broke = await chatWith(key);
   assert.equal(broke.status, 402);
   assert.equal(broke.body.error, 'Insufficient balance');
+});
+
+test('CREDIT_MARKUP overrides the markup on review usage', async () => {
+  await seedBalance(CUSTOMER, 10);
+  const { submissionId, key } = await reviewKeyFor(['code_review']);
+  process.env.CREDIT_MARKUP = '1';
+  try {
+    gatewayUses(100_000, 50_000);
+    assert.equal((await chatWith(key)).status, 200);
+    assert.equal(await usedCredits(submissionId), 75);
+  } finally {
+    delete process.env.CREDIT_MARKUP;
+  }
+});
+
+test('a review call is capped in output tokens and refused with 402 when the reserve cannot cover its estimate', async () => {
+  const { submissionId, key } = await reviewKeyFor(null); // cap 60 (basic)
+  gatewayUses(10, 10);
+  assert.equal((await chatWith(key)).status, 200);
+  assert.equal(streamState.calls.at(-1)?.maxOutputTokens, 8192, 'review calls get an output cap');
+
+  // worst case for this request: ~10 input tokens + 8192 output on gpt-4o ($10/1M) × 1.3 ≈ 10.7 credits
+  await sql('UPDATE qa_requests SET used_credits = 55 WHERE subject_id = $1', [submissionId]);
+  const calls = streamState.calls.length;
+  const r = await chatWith(key);
+  assert.equal(r.status, 402, JSON.stringify(r.body));
+  assert.equal(r.body.code, 'qa_reserve_insufficient');
+  assert.equal(r.body.available_credits, 5);
+  assert.ok(r.body.estimate_credits > 5 && r.body.estimate_credits < 12, String(r.body.estimate_credits));
+  assert.equal(streamState.calls.length, calls, 'the gateway is not called');
+  assert.equal(await usedCredits(submissionId), 55);
+});
+
+test('in-flight holds count against the reserve; expired holds do not', async () => {
+  const { submissionId, key, keyId } = await reviewKeyFor(null); // cap 60
+  const [req] = await sql<{ id: string }>('SELECT id FROM qa_requests WHERE subject_id = $1', [submissionId]);
+  await sql(
+    `INSERT INTO qa_credit_holds (qa_request_id, api_key_id, credits, expires_at) VALUES ($1, $2, 55, NOW() + INTERVAL '5 minutes')`,
+    [req.id, keyId],
+  );
+  gatewayUses(10, 10);
+  const blocked = await chatWith(key);
+  assert.equal(blocked.status, 402);
+  assert.equal(blocked.body.code, 'qa_reserve_insufficient');
+  assert.equal(blocked.body.held_credits, 55);
+
+  await sql(`UPDATE qa_credit_holds SET expires_at = NOW() - INTERVAL '1 second' WHERE qa_request_id = $1`, [req.id]);
+  assert.equal((await chatWith(key)).status, 200, 'an expired hold (a crashed call) no longer blocks the reserve');
+  assert.equal((await sql('SELECT 1 FROM qa_credit_holds WHERE qa_request_id = $1', [req.id])).length, 0);
+});
+
+test('concurrent holds on one reserve never add up to more than what is left', async () => {
+  const { submissionId, keyId } = await reviewKeyFor(null); // cap 60
+  await sql('UPDATE qa_requests SET used_credits = 35 WHERE subject_id = $1', [submissionId]); // 25 left
+  const results = await Promise.all(
+    Array.from({ length: 6 }, () => sql<{ r: { ok: boolean } }>('SELECT qa_hold_credits($1, 10) AS r', [keyId])),
+  );
+  const granted = results.filter(([row]) => row.r.ok).length;
+  assert.equal(granted, 2);
+  const [{ held }] = await sql<{ held: string }>(
+    `SELECT COALESCE(SUM(h.credits), 0)::text AS held FROM qa_credit_holds h JOIN qa_requests q ON q.id = h.qa_request_id WHERE q.subject_id = $1`,
+    [submissionId],
+  );
+  assert.equal(Number(held), 20);
 });

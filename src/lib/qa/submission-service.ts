@@ -13,6 +13,7 @@ import { jobsDb } from '../jobs/db';
 import { JobsError, dbError, isUniqueViolation, notFound } from '../jobs/errors';
 import { loadContract, loadContractVersion, transitionContract } from '../jobs/contracts-service';
 import { loadJob } from '../jobs/jobs-service';
+import { isWorkPaused } from '../jobs/room-service';
 import type { ContractRow } from '../jobs/types';
 import { verifyPatForRepo } from '../jobs/github-pat';
 import { seal } from '../crypto/secret-box';
@@ -87,6 +88,9 @@ export async function sendProject(
   }
   const version = contract.current_version_id ? await loadContractVersion(contract.current_version_id) : null;
   if (!version) throw new JobsError('invalid_state', 409, 'The contract has no signed version');
+  if (await isWorkPaused(contract.id)) {
+    throw new JobsError('work_paused', 409, 'Work is paused by a pending scope change; wait until the customer approves it (and pays any top-up)');
+  }
 
   const pat = await verifyPatForRepo({ token: input.pat_token, gitRepo: input.git_repo, commitSha: input.commit_sha });
 
@@ -144,6 +148,7 @@ export async function sendProject(
         pat_iv: sealed.iv,
         pat_tag: sealed.tag,
         pat_expires_at: pat.expiresAt ? pat.expiresAt.toISOString() : null,
+        owner_admin: pat.ownerAdmin,
         status: 'awaiting_qa',
       })
       .select(SUBMISSION_PUBLIC_COLUMNS)

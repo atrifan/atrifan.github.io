@@ -8,7 +8,13 @@ import { JobsError, dbError } from './errors';
 import { ensureProviderProfile, getProviderProfile } from './principals';
 import { connectStatusFromAccount, isSupportedConnectCountry, type ConnectStatus } from './connect-rules';
 import { getStripe, appBaseUrl, stripeFailure } from './stripe';
+import { appUrl } from '@/src/lib/notify/urls';
 import type { ProviderProfileRow } from './types';
+
+/** Where a provider finishes Stripe Connect onboarding: the Connect card on the hub profile. */
+export function connectOnboardingUrl(): string {
+  return process.env.JOBS_CONNECT_ONBOARDING_URL || appUrl('hub', '/profile#connect');
+}
 
 export interface ConnectStatusView {
   connected: boolean;

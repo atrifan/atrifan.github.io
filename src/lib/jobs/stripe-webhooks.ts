@@ -12,7 +12,7 @@ import { setBidStatus } from './bids-service';
 import { loadContract, loadContractVersion, transitionContract, moveContractIfAllowed } from './contracts-service';
 import { syncAccount } from './stripe-connect';
 import { canTransitionJob } from './job-state';
-import type { ContractRow, PaymentRow } from './types';
+import type { ContractRow, PaymentRow, SteeringRequestRow } from './types';
 
 type Outcome = 'processed' | 'ignored';
 
@@ -35,7 +35,7 @@ const OTHER_EVENTS = new Set(['account.updated', 'charge.refunded', 'charge.disp
 export function isJobsEvent(event: Pick<Stripe.Event, 'type' | 'data'>): boolean {
   if (CHECKOUT_EVENTS.has(event.type)) {
     const session = event.data.object as Stripe.Checkout.Session;
-    return session.metadata?.kind === 'contract';
+    return session.metadata?.kind === 'contract' || session.metadata?.kind === 'contract_topup';
   }
   return OTHER_EVENTS.has(event.type);
 }
@@ -92,10 +92,15 @@ export async function processJobsStripeEvent(event: Stripe.Event): Promise<{ dup
 async function dispatch(event: Stripe.Event): Promise<Outcome> {
   switch (event.type) {
     case 'checkout.session.completed':
-    case 'checkout.session.async_payment_succeeded':
-      return onContractCheckoutPaid(event.data.object as Stripe.Checkout.Session);
-    case 'checkout.session.expired':
-      return onContractCheckoutExpired(event.data.object as Stripe.Checkout.Session);
+    case 'checkout.session.async_payment_succeeded': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      return session.metadata?.kind === 'contract_topup' ? onTopupPaid(session) : onContractCheckoutPaid(session);
+    }
+    case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      // An expired top-up leaves the scope change approved but unpaid (work stays paused).
+      return session.metadata?.kind === 'contract_topup' ? 'ignored' : onContractCheckoutExpired(session);
+    }
     case 'account.updated':
       return (await syncAccount(event.data.object as Stripe.Account)) ? 'processed' : 'ignored';
     case 'charge.refunded':
@@ -162,6 +167,50 @@ async function onContractCheckoutPaid(session: Stripe.Checkout.Session): Promise
       .eq('job_id', job.id)
       .eq('status', 'active');
   }
+  return 'processed';
+}
+
+/** The customer paid the top-up for an approved scope change: record it and resume the work. */
+async function onTopupPaid(session: Stripe.Checkout.Session): Promise<Outcome> {
+  if (session.payment_status !== 'paid') return 'ignored';
+  const db = jobsDb();
+  const { data: steering, error } = await db
+    .from('steering_requests')
+    .select('*')
+    .eq('topup_checkout_session_id', session.id)
+    .maybeSingle();
+  if (error) throw dbError(error, 'find top-up');
+  if (!steering) throw new PermanentWebhookError(`unknown top-up session ${session.id}`);
+  const s = steering as SteeringRequestRow;
+  const contract = await loadContract(s.contract_id);
+  if (!contract) throw new PermanentWebhookError(`unknown contract ${s.contract_id}`);
+  const version = s.new_contract_version_id ? await loadContractVersion(s.new_contract_version_id) : null;
+  if (!version) throw new PermanentWebhookError(`top-up ${s.id} has no contract version`);
+  if (session.amount_total !== s.topup_amount_cents || session.currency !== version.currency) {
+    throw new PermanentWebhookError(
+      `top-up amount mismatch for ${s.id}: paid ${session.amount_total} ${session.currency}, expected ${s.topup_amount_cents} ${version.currency}`,
+    );
+  }
+  const { error: payError } = await db.from('payments').upsert(
+    {
+      contract_id: contract.id,
+      contract_version_id: version.id,
+      user_id: contract.customer_user_id,
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id: idOf(session.payment_intent as string | Stripe.PaymentIntent | null),
+      amount_cents: session.amount_total,
+      currency: session.currency,
+      status: 'succeeded',
+    },
+    { onConflict: 'stripe_checkout_session_id', ignoreDuplicates: true },
+  );
+  if (payError) throw dbError(payError, 'record top-up payment');
+  const { error: updError } = await db
+    .from('steering_requests')
+    .update({ topup_status: 'paid' })
+    .eq('id', s.id)
+    .eq('topup_status', 'pending');
+  if (updError) throw dbError(updError, 'mark top-up paid');
   return 'processed';
 }
 

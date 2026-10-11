@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateQaCaller } from '@/src/lib/qa/admin-auth';
 import { ADMIN_QA_TOOLS, type AdminQaContext } from '@/src/lib/qa/admin-qa-mcp-tools';
-import { handleMcpRequest, rpcError, RPC_UNAUTHENTICATED, type McpReply } from '@/src/lib/qa/mcp-jsonrpc';
+import { handleAdminMcpRequest, type McpReply } from '@/src/lib/qa/admin-qa-server';
+import { JSONRPC_ERROR, rpcError } from '@/src/lib/mcp/jsonrpc-core';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,19 +29,18 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return reply(rpcError(null, -32700, 'Parse error', 400));
+    return reply({ status: 400, body: rpcError(null, JSONRPC_ERROR.PARSE_ERROR, 'Parse error') });
   }
-  const id = (body as { id?: unknown } | null)?.id ?? null;
+  const id = (body as { id?: string | number | null } | null)?.id ?? null;
   const caller = await authenticateQaCaller(request);
-  if (!caller.authenticated) return reply(rpcError(id, RPC_UNAUTHENTICATED, caller.error, 401));
+  if (!caller.authenticated) return reply({ status: 401, body: rpcError(id, JSONRPC_ERROR.AUTH_REQUIRED, caller.error) });
 
   const ctx: AdminQaContext = { adminUserId: caller.userId };
   return reply(
-    await handleMcpRequest(body, {
+    await handleAdminMcpRequest(body, ctx, {
       serverInfo: SERVER_INFO,
       instructions: INSTRUCTIONS,
       tools: ADMIN_QA_TOOLS,
-      ctx,
       allowed: caller.isAdmin,
       forbiddenMessage: 'Admin access required',
     }),

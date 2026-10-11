@@ -6,6 +6,10 @@ import {
   qaCostsFromEnv,
   creditValueUsdFromEnv,
   autoAcceptDaysFromEnv,
+  creditMarkupFromEnv,
+  reviewMaxOutputTokensFromEnv,
+  DEFAULT_CREDIT_MARKUP,
+  DEFAULT_REVIEW_MAX_OUTPUT_TOKENS,
   REVIEW_KEY_TTL_HOURS,
 } from '../../src/config/qa.config.ts';
 import {
@@ -16,6 +20,9 @@ import {
   remainingCredits,
   meterCall,
   settleReserve,
+  chargedCredits,
+  estimateInputTokens,
+  reviewOutputCap,
 } from '../../src/lib/qa/qa-credits.ts';
 
 test('default check caps are 60/150/300/450/600/900 credits', () => {
@@ -140,4 +147,55 @@ test('blank env values fall back to defaults; 1 auto-accept day is allowed', () 
   assert.equal(creditValueUsdFromEnv({ CREDIT_VALUE_USD: ' 0.05 ' }), 0.05);
   assert.equal(autoAcceptDaysFromEnv({ JOBS_AUTO_ACCEPT_DAYS: '   ' }), 7);
   assert.equal(autoAcceptDaysFromEnv({ JOBS_AUTO_ACCEPT_DAYS: '1' }), 1);
+});
+
+test('CREDIT_MARKUP defaults to 1.3 and must be a number >= 1', () => {
+  assert.equal(DEFAULT_CREDIT_MARKUP, 1.3);
+  assert.equal(creditMarkupFromEnv({}), 1.3);
+  assert.equal(creditMarkupFromEnv({ CREDIT_MARKUP: ' ' }), 1.3);
+  assert.equal(creditMarkupFromEnv({ CREDIT_MARKUP: '1' }), 1);
+  assert.equal(creditMarkupFromEnv({ CREDIT_MARKUP: '1.5' }), 1.5);
+  for (const bad of ['0.9', '0', '-1', 'abc', 'Infinity']) {
+    assert.throws(() => creditMarkupFromEnv({ CREDIT_MARKUP: bad }), /CREDIT_MARKUP/, bad);
+  }
+});
+
+test('QA_REVIEW_MAX_OUTPUT_TOKENS defaults to 8192 and must be a whole number >= 1', () => {
+  assert.equal(DEFAULT_REVIEW_MAX_OUTPUT_TOKENS, 8192);
+  assert.equal(reviewMaxOutputTokensFromEnv({}), 8192);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '1000' }), 1000);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '1' }), 1);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '   ' }), 8192);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: ' 2048 ' }), 2048);
+  for (const bad of ['0', '1.5', 'x', '-3']) {
+    assert.throws(() => reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: bad }), /QA_REVIEW_MAX_OUTPUT_TOKENS/, bad);
+  }
+});
+
+test('chargedCredits applies the markup to the metered cost, rounded up to 0.01 credit', () => {
+  // $0.75 raw at 1.3 = $0.975 = 97.5 credits at $0.01
+  assert.equal(chargedCredits(0.75, 1.3, 0.01), 97.5);
+  assert.equal(chargedCredits(0.75, 1, 0.01), 75);
+  assert.equal(chargedCredits(0.000001, 1.3, 0.01), 0.01);
+  assert.equal(chargedCredits(0, 1.3, 0.01), 0);
+  assert.equal(chargedCredits(-1, 1.3, 0.01), 0);
+});
+
+test('estimateInputTokens over-counts: one token per 3 characters, rounded up', () => {
+  assert.equal(estimateInputTokens(''), 0);
+  assert.equal(estimateInputTokens('a'), 1);
+  assert.equal(estimateInputTokens('abc'), 1);
+  assert.equal(estimateInputTokens('abcd'), 2);
+  assert.equal(estimateInputTokens('x'.repeat(3000)), 1000);
+});
+
+test('reviewOutputCap: the requested max tokens when smaller than the cap, else the cap', () => {
+  assert.equal(reviewOutputCap(undefined, 8192), 8192);
+  assert.equal(reviewOutputCap(1000, 8192), 1000);
+  assert.equal(reviewOutputCap(8192, 8192), 8192);
+  assert.equal(reviewOutputCap(9000, 8192), 8192);
+  assert.equal(reviewOutputCap(0, 8192), 8192);
+  assert.equal(reviewOutputCap(-5, 8192), 8192);
+  assert.equal(reviewOutputCap(10.5, 8192), 8192);
+  assert.equal(reviewOutputCap('100', 8192), 8192);
 });

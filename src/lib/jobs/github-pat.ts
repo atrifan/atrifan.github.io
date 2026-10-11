@@ -3,7 +3,7 @@
  * GitHub REST API at GITHUB_API_BASE (default https://api.github.com; tests point it at a
  * fake). The pure rules live in ./github-pat-policy.ts.
  *
- * Calls, in order: GET /repos/{o}/{r} (private, pull, not admin; the response's
+ * Calls, in order: GET /repos/{o}/{r} (private, pull; admin is recorded as ownerAdmin; the response's
  * `github-authentication-token-expiration` header gives the expiry), GET /user/repos
  * (the token must not list any other repo), GET /repos/{o}/{r}/commits/{sha|default branch}.
  *
@@ -15,6 +15,7 @@ import {
   checkRepo,
   checkScope,
   checkTokenFormat,
+  isOwnerAdmin,
   normalizeShaInput,
   parseExpirationHeader,
   parseRepoRef,
@@ -29,6 +30,8 @@ export interface VerifiedPat {
   defaultBranch: string;
   /** null when GitHub reported no expiry for the token. */
   expiresAt: Date | null;
+  /** GitHub reports the user as an admin of the repo (their role, not the token's). */
+  ownerAdmin: boolean;
 }
 
 const MAX_REPO_PAGES = 5;
@@ -115,5 +118,5 @@ export async function verifyPatForRepo(input: {
   if (!/^([0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) throw unexpected(commitRes, 'commit');
   if (wantedSha && !sha.startsWith(wantedSha)) throw reject('commit_not_found');
 
-  return { repoFullName: fullName, commitSha: sha, defaultBranch, expiresAt };
+  return { repoFullName: fullName, commitSha: sha, defaultBranch, expiresAt, ownerAdmin: isOwnerAdmin(repo) };
 }

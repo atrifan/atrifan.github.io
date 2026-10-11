@@ -10,10 +10,12 @@
  * Admin = src/lib/admin.ts allow-list (seed + ADMIN_EMAILS), Clerk publicMetadata.role
  * 'admin', or ADMIN_USER_IDS. For the e2e identity only ADMIN_USER_IDS counts (no Clerk call).
  *
- * The minimal Clerk pieces below are copied from app/api/mcp/route.ts (not exported there).
+ * Bearer tokens go through the shared identifyClerkBearer (src/lib/mcp/auth.ts).
  */
 import { createHash } from 'node:crypto';
-import { clerkClient, verifyToken } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
+import { identifyClerkBearer } from '../mcp/auth';
+import { resolveClerkFrontendApi } from '../clerk-oauth-config';
 import { jobsDb } from '../jobs/db';
 import { e2eUser } from '../jobs/http';
 import { getAdminEmails } from '../admin';
@@ -22,19 +24,6 @@ import { adminUserIdsFromEnv, isQaAdmin } from './admin-check';
 export type QaCaller =
   | { authenticated: true; userId: string; isAdmin: boolean; method: 'api_key' | 'bearer' | 'e2e' }
   | { authenticated: false; error: string };
-
-function clerkFrontendApi(): string | null {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-  if (publishableKey) {
-    try {
-      const decoded = Buffer.from(publishableKey.replace(/^pk_(test|live)_/, ''), 'base64').toString('utf-8').replace(/\$+$/, '');
-      if (decoded.includes('.clerk.')) return `https://${decoded}`;
-    } catch {
-      // fall through
-    }
-  }
-  return process.env.CLERK_HOST || null;
-}
 
 async function userFromApiKey(key: string): Promise<string | null> {
   const { data, error } = await jobsDb()
@@ -49,22 +38,8 @@ async function userFromApiKey(key: string): Promise<string | null> {
 }
 
 async function userFromBearer(token: string): Promise<string | null> {
-  try {
-    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
-    if (payload?.sub) return payload.sub;
-  } catch {
-    // not a Clerk session JWT; try as an OAuth access token
-  }
-  const fapi = clerkFrontendApi();
-  if (!fapi) return null;
-  try {
-    const res = await fetch(`${fapi}/oauth/userinfo`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-    if (!res.ok) return null;
-    const info = (await res.json()) as { sub?: string };
-    return info.sub || null;
-  } catch {
-    return null;
-  }
+  const identity = await identifyClerkBearer(token, { frontendApi: resolveClerkFrontendApi(process.env), noStore: true });
+  return identity.ok ? identity.userId : null;
 }
 
 async function clerkAdmin(userId: string): Promise<boolean> {

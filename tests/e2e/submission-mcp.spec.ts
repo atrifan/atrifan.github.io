@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { FAKE_TOKENS, FAKE_REPOS, FAKE_SHA_HEAD, FAKE_SHA_OTHER } from '../support/fake-github';
 
 // Behaviour-only contract tests for the provider submission tools (send_project,
-// qa_status, qa_report_get) served by the test-only Jobs MCP stand-in. Runs against a
+// qa_status, qa_report_get) served by the Jobs MCP at /api/jobs/mcp. Runs against a
 // throwaway DB, a fake Stripe and a fake GitHub; auth uses the e2e header bypass.
 
 test.skip(
@@ -14,7 +14,7 @@ test.skip(
 const E2E_SECRET = process.env.JOBS_E2E_AUTH_SECRET ?? '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? '';
 const stripe = new Stripe('sk_test_x');
-const MCP = '/api/e2e/jobs-submission-mcp';
+const MCP = '/api/jobs/mcp';
 const DUMMY_ID = '00000000-0000-4000-8000-000000000000';
 const DAY = 86_400_000;
 
@@ -296,7 +296,6 @@ test.describe('submission MCP: send_project and qa_status', () => {
         message: /private/i,
       },
       { name: 'PAT reaching two repos', args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.broad }, code: 'pat_too_broad' },
-      { name: 'PAT with admin', args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin }, code: 'pat_admin' },
       {
         name: 'PAT expiring in 90 days',
         args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.longExpiry },
@@ -398,6 +397,16 @@ test.describe('submission MCP: send_project and qa_status', () => {
       repo_full_name: FAKE_REPOS.private,
       commit_sha: FAKE_SHA_OTHER,
     });
+    expect(sc.contract_status).toBe('in_qa');
+    expect(sc.submission.owner_admin).toBe(false);
+  });
+
+  test('a repo owner\'s token (GitHub reports admin) is accepted and flagged owner_admin', async ({ request }) => {
+    const contractC = await makeActiveContract(request, customer, provider);
+    const sc = await expectToolOk(
+      callTool(request, provider, 'send_project', { contract_id: contractC, git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin }),
+    );
+    expect(sc.submission).toMatchObject({ contract_id: contractC, status: 'awaiting_qa', owner_admin: true });
     expect(sc.contract_status).toBe('in_qa');
   });
 });

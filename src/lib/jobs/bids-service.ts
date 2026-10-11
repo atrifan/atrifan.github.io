@@ -7,6 +7,8 @@ import { ensureUserPrincipal, getProviderProfile, getProviderProfiles } from './
 import { loadJob, loadSpecVersion, isUuid } from './jobs-service';
 import { checkBidEligibility, bidBoundsFromEnv } from './bid-eligibility';
 import { computeCommission, commissionBpsFromEnv } from './commission';
+import { notifyUser } from './notifications';
+import { connectOnboardingUrl } from './stripe-connect';
 import type { CreateBidInput } from './schemas';
 import type { BidRow, Pricing } from './types';
 
@@ -21,10 +23,17 @@ export function pricingFor(bidCents: number, commissionBps: number = commissionB
   };
 }
 
+function connectMessage(code: string): string | undefined {
+  return code === 'connect_required'
+    ? 'Finish Stripe Connect onboarding on your Tulzo profile before bidding, so you can be paid'
+    : undefined;
+}
+
 export async function placeBid(
   userId: string,
   jobId: string,
   input: CreateBidInput,
+  opts: { agentIdentityId?: string | null } = {},
 ): Promise<{ bid: BidRow; pricing: Pricing }> {
   const job = await loadJob(jobId);
   if (!job) throw notFound('Job not found');
@@ -40,7 +49,10 @@ export async function placeBid(
     priceCents: input.price_cents,
     bounds: bidBoundsFromEnv(),
   });
-  if (!verdict.ok) throw new JobsError(verdict.code, verdict.status);
+  if (!verdict.ok) {
+    const details = verdict.code === 'connect_required' ? { onboarding_url: connectOnboardingUrl() } : undefined;
+    throw new JobsError(verdict.code, verdict.status, connectMessage(verdict.code), details);
+  }
 
   const principal = await ensureUserPrincipal(userId);
   const { data, error } = await jobsDb()
@@ -50,6 +62,7 @@ export async function placeBid(
       spec_version_id: spec!.id,
       user_id: userId,
       provider_principal_id: principal.id,
+      agent_identity_id: opts.agentIdentityId ?? null,
       price_cents: input.price_cents,
       eta_days: input.eta_days,
       plan: input.plan ?? null,
@@ -64,7 +77,25 @@ export async function placeBid(
     if (isUniqueViolation(error)) throw new JobsError('bid_exists', 409, 'You already have an active bid on this job');
     throw dbError(error, 'place bid');
   }
-  return { bid: data as BidRow, pricing: pricingFor(input.price_cents) };
+  const bid = data as BidRow;
+  await notifyUser(job.user_id, 'bid_received', {
+    jobId: job.id,
+    jobTitle: job.title,
+    bidderName: provider?.headline?.trim() || 'A provider',
+    amountCents: bid.price_cents,
+    currency: bid.currency,
+  }, `bid_received:${bid.id}`);
+  return { bid, pricing: pricingFor(input.price_cents) };
+}
+
+/** Withdraw your own active bid. Someone else's bid is reported as not found. */
+export async function withdrawBid(userId: string, bidId: string): Promise<BidRow> {
+  const bid = await loadBid(bidId);
+  if (!bid || bid.user_id !== userId) throw notFound('Bid not found');
+  if (bid.status !== 'active') throw new JobsError('bid_not_active', 409, `This bid is ${bid.status}`);
+  const withdrawn = await setBidStatus(bid.id, 'active', 'withdrawn');
+  if (!withdrawn) throw new JobsError('bid_not_active', 409, 'The bid is no longer active');
+  return withdrawn;
 }
 
 export type BidForComparison = BidRow & {

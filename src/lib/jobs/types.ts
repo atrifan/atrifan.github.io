@@ -1,5 +1,6 @@
 import type { JobStatus, ContractStatus } from './job-state';
 import type { ConnectStatus } from './connect-rules';
+import type { SteeringKind, SteeringStatus, TopupStatus } from './steering';
 
 export interface PrincipalRow {
   id: string;
@@ -134,6 +135,8 @@ export interface ContractVersionRow {
   currency: string;
   deadline: string | null;
   steering_allowance: number;
+  /** QA checks the customer pays for (src/config/qa.config.ts); null on versions from before Phase 4. */
+  qa_checks: string[] | null;
   signed_by_customer_at: string | null;
   signed_by_provider_at: string | null;
   created_at: string;
@@ -163,4 +166,95 @@ export interface Pricing {
   customer_total_cents: number;
   provider_net_cents: number;
   commission_bps: number;
+}
+
+export interface AgentIdentityRow {
+  id: string;
+  user_id: string;
+  owner_principal_id: string;
+  name: string;
+  version: string | null;
+  model: string | null;
+  oauth_client_id: string | null;
+  client_kind: 'oauth' | 'api_key' | 'test';
+  api_key_id: string | null;
+  last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PartyRole = 'customer' | 'provider';
+
+export interface JobMessageRow {
+  id: string;
+  seq: number;
+  contract_id: string;
+  user_id: string | null;
+  author_principal_id: string | null;
+  agent_identity_id: string | null;
+  author_role: PartyRole | 'system';
+  kind: 'message' | 'progress' | 'system';
+  body: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export type MilestoneStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
+
+export interface MilestoneRow {
+  id: string;
+  contract_id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  status: MilestoneStatus;
+  position: number;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SteeringRequestRow {
+  id: string;
+  contract_id: string;
+  user_id: string;
+  requested_by_principal_id: string;
+  message: string;
+  requested_kind: SteeringKind | null;
+  kind: SteeringKind;
+  classifier_output: Record<string, unknown>;
+  credit_cost: number;
+  spec_changes: string[];
+  proposed_price_cents: number | null;
+  proposed_deadline: string | null;
+  status: SteeringStatus;
+  response: string | null;
+  responded_by: string | null;
+  responded_at: string | null;
+  estimate_delta_cents: number | null;
+  estimate_eta_days: number | null;
+  deliverable_changes: string[];
+  base_contract_version_id: string;
+  new_contract_version_id: string | null;
+  topup_amount_cents: number;
+  topup_status: TopupStatus;
+  topup_checkout_session_id: string | null;
+  topup_checkout_url: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActivityEventRow {
+  id: string;
+  seq: number;
+  contract_id: string;
+  user_id: string | null;
+  actor_role: PartyRole | 'system';
+  agent_identity_id: string | null;
+  type: string;
+  summary: string;
+  data: Record<string, unknown>;
+  created_at: string;
 }

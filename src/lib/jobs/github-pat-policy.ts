@@ -4,8 +4,10 @@
  *
  * Rules:
  *  - fine-grained `github_pat_` tokens only; classic `ghp_` (and other gh?_) tokens are rejected
- *  - the repo must be private (paid work never sits in a public repo), readable (pull),
- *    and the token must not carry admin
+ *  - the repo must be private (paid work never sits in a public repo) and readable (pull).
+ *    `permissions.admin` on GET /repos is the *user's* role on the repo, not the token's
+ *    (a fine-grained PAT can't widen it), so a repo owner always sees admin: true. It is
+ *    recorded on the submission (owner_admin), not rejected.
  *  - the token must not reach any repo besides the submitted one
  *  - the token must not be expired, and must expire within 30 days (when GitHub reports it)
  */
@@ -19,7 +21,6 @@ export const PAT_REJECTIONS = [
   'invalid_repo',
   'public_repo',
   'repo_not_accessible',
-  'pat_admin',
   'pat_too_broad',
   'pat_expired',
   'pat_expiry_too_long',
@@ -37,7 +38,6 @@ const MESSAGES: Record<PatRejection, string> = {
   public_repo:
     'This repository is public. Paid work must be delivered from a private repository: make it private (or push the work to a new private repo) and submit again.',
   repo_not_accessible: 'The token cannot read this repository. Grant it read access (Contents: read) to the repository you are submitting.',
-  pat_admin: 'The token grants admin on the repository. Use a fine-grained token with read-only access (Contents: read, Metadata: read).',
   pat_too_broad:
     'The token reaches other repositories too. Create a fine-grained token with "Only select repositories" set to only the submitted repository.',
   pat_expired: 'The token has expired. Create a new fine-grained token that expires within 30 days.',
@@ -116,12 +116,16 @@ export interface GithubRepoInfo {
   permissions?: { admin?: boolean; push?: boolean; pull?: boolean };
 }
 
-/** `GET /repos/{o}/{r}` as seen with the token: private, pull, no admin. */
+/** `GET /repos/{o}/{r}` as seen with the token: private and readable. */
 export function checkRepo(repo: GithubRepoInfo): PatRejection | null {
   if (repo.private !== true) return 'public_repo';
   if (repo.permissions?.pull !== true) return 'repo_not_accessible';
-  if (repo.permissions.admin === true) return 'pat_admin';
   return null;
+}
+
+/** The submitting user administers the repo (their role, reported by GitHub; not the token's scope). */
+export function isOwnerAdmin(repo: GithubRepoInfo): boolean {
+  return repo.permissions?.admin === true;
 }
 
 /** The repos the token can list must be only the target (case-insensitive). */

@@ -110,8 +110,21 @@ test('an over-broad PAT (reaches another repo) is rejected', async () => {
   assert.equal(await submissionCount(c.contractId), 0);
 });
 
-test('admin, long-lived, revoked and unknown-repo tokens are rejected', async () => {
-  await expectCode(send({ git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin }), 'pat_admin');
+test('a repo owner\'s token (GitHub reports admin) is accepted and recorded as owner_admin', async () => {
+  // permissions.admin on GET /repos is the user's role on the repo, not the token's scope
+  const out = await send({ git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin });
+  assert.equal(out.submission.owner_admin, true);
+  assert.equal(await contractStatus(c.contractId), 'in_qa');
+  const [row] = await sql<{ owner_admin: boolean }>('SELECT owner_admin FROM submissions WHERE contract_id = $1', [c.contractId]);
+  assert.equal(row.owner_admin, true);
+});
+
+test('a non-admin token is recorded as owner_admin false', async () => {
+  const out = await send({ git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.good });
+  assert.equal(out.submission.owner_admin, false);
+});
+
+test('long-lived, revoked and unknown-repo tokens are rejected', async () => {
   await expectCode(send({ git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.longExpiry }), 'pat_expiry_too_long');
   await expectCode(send({ git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.revoked }), 'invalid_pat');
   await expectCode(send({ git_repo: 'acme/nope', pat_token: FAKE_TOKENS.good }), 'repo_not_accessible');

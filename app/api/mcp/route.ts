@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
-import { clerkClient, verifyToken } from '@clerk/nextjs/server';
-import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
-import { isHigherOrEqualTo } from '@/src/config/billing.config';
 // Supabase services for API key validation and connection logging
 import {
-  getApiKeyByHash,
-  getApiKeyByUserAndServer,
-  hashApiKey,
   logMcpConnection,
   getEnabledServerTools,
   getRestEndpointWithDetails,
@@ -29,6 +22,18 @@ import {
   executeMarketplaceTool,
 } from '@/src/lib/marketplace-mcp-tools';
 import type { EnvironmentRow, MCPServerAuthType } from '@/src/types/supabase';
+import {
+  JSONRPC_ERROR,
+  JsonRpcError,
+  dispatchMcpRequest,
+  extractAuth,
+  initializeResult,
+  type McpServer,
+  type AuthMethod,
+  type JsonRpcRequest as MCPRequest,
+  type JsonRpcResponse as MCPResponse,
+} from '@/src/lib/mcp/jsonrpc-core';
+import { validateApiKey, validateBearerToken } from '@/src/lib/mcp/auth';
 
 /**
  * Get the base URL for internal API calls.
@@ -47,311 +52,7 @@ function getInternalBaseUrl(): string {
   return 'https://tulzo.com';
 }
 
-// Auth types
-type AuthMethod = 'oauth' | 'header' | 'path' | 'internal' | 'none';
-
-interface AuthResult {
-  authenticated: boolean;
-  userId?: string;
-  apiKeyId?: string;
-  serverName?: string;
-  plan?: string;
-  isSubscribed?: boolean;
-  authMethod: AuthMethod;
-  error?: string;
-}
-
-// Simple in-memory cache for OAuth token validation
-// Cache entries expire after 5 minutes
-const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
-const authCache = new Map<string, { result: AuthResult; expiresAt: number }>();
-
-function getCachedAuth(token: string): AuthResult | null {
-  const cached = authCache.get(token);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.result;
-  }
-  if (cached) {
-    authCache.delete(token); // Clean up expired entry
-  }
-  return null;
-}
-
-function setCachedAuth(token: string, result: AuthResult): void {
-  // Limit cache size to prevent memory issues
-  if (authCache.size > 1000) {
-    // Clear oldest entries (first 100)
-    const keys = Array.from(authCache.keys()).slice(0, 100);
-    keys.forEach(k => authCache.delete(k));
-  }
-  authCache.set(token, { result, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
-}
-
-/**
- * Check if user has Pro or higher subscription
- * Checks user metadata which is updated by billing webhooks
- */
-async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<{ isPro: boolean; plan: string }> {
-  try {
-    const user = await client.users.getUser(userId);
-
-    // Check publicMetadata first (set by billing webhooks)
-    if (user.publicMetadata?.plan) {
-      const plan = user.publicMetadata.plan as string;
-      return { isPro: isHigherOrEqualTo(plan, 'pro'), plan };
-    }
-
-    // Check for active subscription
-    if (user.publicMetadata?.subscription === 'active') {
-      return { isPro: true, plan: 'pro' };
-    }
-
-    return { isPro: false, plan: 'free' };
-  } catch (error) {
-    console.error('Error checking subscription:', error);
-    return { isPro: false, plan: 'free' };
-  }
-}
-
-/**
- * Validate API key against Supabase first, then Clerk if provider is clerk
- *
- * Flow:
- * 1. Hash the key and look it up in Supabase api_keys table
- * 2. If found and active, get plan from DB
- * 3. If provider is 'clerk', also verify with Clerk API
- * 4. If not in Supabase, try legacy validation (Clerk or custom encryption)
- */
-async function validateApiKey(key: string, _serverName: string = 'default'): Promise<AuthResult> {
-  // First, check Supabase by hash
-  try {
-    const keyHash = hashApiKey(key);
-    const supabaseKey = await getApiKeyByHash(keyHash);
-
-    if (supabaseKey) {
-      // Key found in Supabase
-      if (!supabaseKey.is_active) {
-        return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
-      }
-
-      // Check plan - free users cannot use MCP
-      if (supabaseKey.plan === 'free') {
-        return {
-          authenticated: true,
-          userId: supabaseKey.user_id,
-          apiKeyId: supabaseKey.id,
-          serverName: supabaseKey.server_name,
-          plan: 'free',
-          isSubscribed: false,
-          authMethod: 'header',
-        };
-      }
-
-      // If Clerk provider, also verify with Clerk
-      if (supabaseKey.provider === 'clerk' && useClerkApiKeys()) {
-        try {
-          const client = await clerkClient();
-          const clerkKey = await client.apiKeys.verify(key);
-          if (!clerkKey || clerkKey.revoked || clerkKey.expired) {
-            return { authenticated: false, authMethod: 'none', error: 'API key has been revoked or expired' };
-          }
-        } catch (e) {
-          console.error('Clerk verification failed:', e);
-          return { authenticated: false, authMethod: 'none', error: 'API key verification failed' };
-        }
-      }
-
-      // Valid key with pro/plus plan
-      return {
-        authenticated: true,
-        userId: supabaseKey.user_id,
-        apiKeyId: supabaseKey.id,
-        serverName: supabaseKey.server_name,
-        plan: supabaseKey.plan,
-        isSubscribed: true,
-        authMethod: 'header',
-      };
-    }
-  } catch (error) {
-    console.error('Error checking Supabase for API key:', error);
-    // Continue to legacy validation
-  }
-
-  // Legacy validation for keys not in Supabase
-  const client = await clerkClient();
-
-  // Try Clerk API Keys if enabled
-  if (useClerkApiKeys()) {
-    try {
-      const apiKey = await client.apiKeys.verify(key);
-
-      if (!apiKey) {
-        return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
-      }
-
-      if (apiKey.revoked) {
-        return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
-      }
-
-      if (apiKey.expired) {
-        return { authenticated: false, authMethod: 'none', error: 'API key has expired' };
-      }
-
-      const userId = apiKey.subject;
-
-      // Legacy Clerk key - assume Pro (only Pro+ could generate)
-      return {
-        authenticated: true,
-        userId,
-        plan: 'pro',
-        isSubscribed: true,
-        authMethod: 'header',
-      };
-    } catch (error) {
-      console.error('Error validating API key with Clerk:', error);
-    }
-  }
-
-  // Try custom encryption (legacy)
-  const payload = decryptApiKey(key);
-  if (!payload) {
-    return { authenticated: false, authMethod: 'none', error: 'Invalid API key' };
-  }
-  if (isApiKeyExpired(payload)) {
-    return { authenticated: false, authMethod: 'none', error: 'API key expired' };
-  }
-
-  // Legacy custom key - assume Pro
-  return {
-    authenticated: true,
-    userId: payload.userId,
-    plan: 'pro',
-    isSubscribed: true,
-    authMethod: 'header',
-  };
-}
-
-
-/**
- * Validate OAuth bearer token
- *
- * For bearer tokens: First try as Clerk session JWT, then as OAuth access token.
- * After validating identity, check Supabase for API key and plan.
- * If no API key in Supabase, user cannot use MCP (even if Pro).
- *
- * Results are cached for 5 minutes to avoid repeated API calls.
- */
-async function validateBearerToken(token: string, serverName: string = 'default'): Promise<AuthResult> {
-  // Check cache first
-  const cached = getCachedAuth(token);
-  if (cached) {
-    return cached;
-  }
-
-  let userId: string | null = null;
-
-  // First, try to verify as a Clerk session JWT
-  try {
-    const payload = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY,
-    });
-
-    if (payload && payload.sub) {
-      userId = payload.sub;
-    }
-  } catch (jwtError) {
-    // Not a valid JWT, try as OAuth access token
-    console.log('Token is not a JWT, trying as OAuth access token...');
-  }
-
-  // If not a JWT, try OAuth access token via userinfo endpoint
-  if (!userId) {
-    try {
-      const clerkApi = resolveClerkFrontendApi(process.env);
-      if (!clerkApi) {
-        console.error('[mcp] Clerk frontend API env is not configured');
-        return { authenticated: false, authMethod: 'none', error: 'server_misconfigured' };
-      }
-      const userinfoResponse = await fetch(`${clerkApi}/oauth/userinfo`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!userinfoResponse.ok) {
-        return { authenticated: false, authMethod: 'none', error: 'Invalid OAuth access token' };
-      }
-
-      const userinfo = await userinfoResponse.json();
-
-      if (!userinfo.sub) {
-        return { authenticated: false, authMethod: 'none', error: 'Invalid userinfo response' };
-      }
-
-      userId = userinfo.sub;
-    } catch (error) {
-      console.error('Error validating OAuth access token:', error);
-      return { authenticated: false, authMethod: 'none', error: 'Invalid or expired bearer token' };
-    }
-  }
-
-  if (!userId) {
-    return { authenticated: false, authMethod: 'none', error: 'Could not determine user identity' };
-  }
-
-  // Now check Supabase for user's API key
-  try {
-    const apiKey = await getApiKeyByUserAndServer(userId, serverName);
-
-    if (!apiKey) {
-      // No API key in Supabase - user needs to generate one
-      return {
-        authenticated: true,
-        userId,
-        plan: 'unknown',
-        isSubscribed: false,
-        authMethod: 'oauth',
-        error: 'No API key found. Please generate an API key from your dashboard.',
-      };
-    }
-
-    if (!apiKey.is_active) {
-      return { authenticated: false, authMethod: 'none', error: 'API key has been revoked' };
-    }
-
-    // Check plan - free users cannot use MCP
-    const isSubscribed = apiKey.plan !== 'free';
-
-    const result: AuthResult = {
-      authenticated: true,
-      userId,
-      apiKeyId: apiKey.id,
-      serverName: apiKey.server_name,
-      plan: apiKey.plan,
-      isSubscribed,
-      authMethod: 'oauth',
-    };
-
-    setCachedAuth(token, result);
-    return result;
-  } catch (error) {
-    console.error('Error checking Supabase for API key:', error);
-
-    // Fallback to Clerk metadata check
-    const client = await clerkClient();
-    const subscription = await checkProSubscription(client, userId);
-
-    const result: AuthResult = {
-      authenticated: true,
-      userId,
-      plan: subscription.plan,
-      isSubscribed: subscription.isPro,
-      authMethod: 'oauth',
-    };
-    setCachedAuth(token, result);
-    return result;
-  }
-}
+// Auth types and credential validation are shared with the Jobs MCP (src/lib/mcp).
 
 /**
  * Log MCP connection to Supabase mcp_connections table and Google Analytics
@@ -425,52 +126,6 @@ async function trackMCPEvent(
   } catch {
     // Silently ignore errors
   }
-}
-
-/**
- * Extract auth from request headers
- */
-function extractAuth(request: NextRequest): { apiKey?: string; authMethod: AuthMethod } {
-  // Check for internal forwarded headers (from path-based route)
-  const internalUserId = request.headers.get('X-User-Id');
-  if (internalUserId) {
-    return { authMethod: 'internal' };
-  }
-
-  // Check x-api-key header
-  const xApiKey = request.headers.get('x-api-key');
-  if (xApiKey) {
-    return { apiKey: xApiKey, authMethod: 'header' };
-  }
-
-  // Check Authorization: Bearer header
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    // If it's a tlz_ key, treat as API key
-    if (token.startsWith('tlz_')) {
-      return { apiKey: token, authMethod: 'header' };
-    }
-    // Otherwise it might be an OAuth token (future support)
-    return { apiKey: token, authMethod: 'oauth' };
-  }
-
-  return { authMethod: 'none' };
-}
-
-// MCP Protocol Types
-interface MCPRequest {
-  jsonrpc: '2.0';
-  id: string | number;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-interface MCPResponse {
-  jsonrpc: '2.0';
-  id: string | number;
-  result?: unknown;
-  error?: { code: number; message: string; data?: unknown };
 }
 
 // Standard annotations for read-only tools (all our calculators are read-only)
@@ -1739,390 +1394,356 @@ interface MCPContext {
   mcpSessionId?: string; // MCP session ID for A2A context continuity
 }
 
-// Handle MCP requests
-async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Promise<MCPResponse> {
-  const { id, method, params } = mcpRequest;
+// The Tulzo tools MCP server; JSON-RPC dispatch and error mapping come from src/lib/mcp/jsonrpc-core.
+const mcpServer: McpServer<MCPContext> = {
+  initialize() {
+    // Track MCP connection initialization
+    trackMCPEvent('mcp_initialize', {
+      event_category: 'mcp',
+      event_label: 'connection',
+      protocol_version: '2024-11-05',
+    });
+    return initializeResult({
+      protocolVersion: '2024-11-05',
+      capabilities: {
+        tools: {},
+        resources: { subscribe: false, listChanged: false }
+      },
+      serverInfo: { name: 'tulzo-mcp', version: '1.0.0' },
+    });
+  },
 
-  try {
-    switch (method) {
-      case 'initialize':
-        // Track MCP connection initialization
-        trackMCPEvent('mcp_initialize', {
-          event_category: 'mcp',
-          event_label: 'connection',
-          protocol_version: '2024-11-05',
-        });
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: {},
-              resources: { subscribe: false, listChanged: false }
-            },
-            serverInfo: { name: 'tulzo-mcp', version: '1.0.0' },
-          },
-        };
+  methods: {
+    // Return pre-computed list of widget template resources
+    'resources/list': () => ({ resources: RESOURCES_LIST }),
 
-      case 'resources/list': {
-        // Return pre-computed list of widget template resources
-        return { jsonrpc: '2.0', id, result: { resources: RESOURCES_LIST } };
+    'resources/read': (params) => {
+      const uri = (params as { uri: string }).uri;
+      // Parse tool name from URI: ui://widget/{toolName}.html
+      const match = uri.match(/ui:\/\/widget\/([a-z_]+)\.html/);
+      if (!match) {
+        throw new JsonRpcError(JSONRPC_ERROR.INVALID_PARAMS, `Invalid resource URI: ${uri}`);
+      }
+      const toolName = match[1];
+      const tool = TOOLS.find(t => t.name === toolName);
+      if (!tool) {
+        throw new JsonRpcError(JSONRPC_ERROR.INVALID_PARAMS, `Unknown tool: ${toolName}`);
       }
 
-      case 'resources/read': {
-        const uri = (params as { uri: string }).uri;
-        // Parse tool name from URI: ui://widget/{toolName}.html
-        const match = uri.match(/ui:\/\/widget\/([a-z_]+)\.html/);
-        if (!match) {
-          return { jsonrpc: '2.0', id, error: { code: -32602, message: `Invalid resource URI: ${uri}` } };
-        }
-        const toolName = match[1];
-        const tool = TOOLS.find(t => t.name === toolName);
-        if (!tool) {
-          return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName}` } };
-        }
+      // Generate placeholder data for each tool type
+      const templateData = getTemplateData(toolName);
+      const widgetHtml = generateWidgetHtml(toolName, templateData);
 
-        // Generate placeholder data for each tool type
-        const templateData = getTemplateData(toolName);
-        const widgetHtml = generateWidgetHtml(toolName, templateData);
+      return {
+        contents: [{
+          uri,
+          mimeType: 'text/html',
+          text: widgetHtml,
+        }]
+      };
+    },
+  },
 
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            contents: [{
-              uri,
-              mimeType: 'text/html',
-              text: widgetHtml,
-            }]
-          }
-        };
-      }
+  async listTools(context) {
+    // Build tools list - start with NATIVE tools, add REST tools if authenticated
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let toolsList: any[] = [...TOOLS];
 
-      case 'tools/list': {
-        // Build tools list - start with NATIVE tools, add REST tools if authenticated
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let toolsList: any[] = [...TOOLS];
+    if (context.isAuthenticated && context.userId) {
+      try {
+        const serverTools = await getEnabledServerTools(context.userId, context.serverName);
+        if (serverTools.length > 0) {
+          // Separate NATIVE and REST tools
+          const filteredNativeTools: typeof TOOLS = [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const restTools: any[] = [];
 
-        if (context.isAuthenticated && context.userId) {
-          try {
-            const serverTools = await getEnabledServerTools(context.userId, context.serverName);
-            if (serverTools.length > 0) {
-              // Separate NATIVE and REST tools
-              const filteredNativeTools: typeof TOOLS = [];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const restTools: any[] = [];
-
-              for (const st of serverTools) {
-                if (st.tool.tool_type === 'NATIVE') {
-                  const nativeTool = TOOLS.find(t => t.name === st.tool.name);
-                  if (nativeTool) {
-                    filteredNativeTools.push(nativeTool);
-                  }
-                } else if (st.tool.tool_type === 'REST') {
-                  // Convert REST tool to MCP format - use stored annotations or fallback to defaults
-                  // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
-                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
-                  // Infer from tool name if not stored (rest_env-server-METHOD-op format)
-                  const toolNameLower = st.tool.name.toLowerCase();
-                  const isGetMethod = toolNameLower.includes('-get-');
-                  const isDestructiveMethod = toolNameLower.includes('-delete-') || toolNameLower.includes('-put-') || toolNameLower.includes('-patch-');
-                  const restTool = {
-                    name: st.tool.name,
-                    description: st.tool.description,
-                    inputSchema: st.tool.input_schema,
-                    outputSchema: st.tool.output_schema,
-                    annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? isGetMethod,
-                      destructiveHint: storedAnnotations?.destructiveHint ?? isDestructiveMethod,
-                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
-                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
-                    },
-                    _meta: {
-                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling API...',
-                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'API call complete',
-                      'openai/widgetAccessible': st.tool.has_widget,
-                      'openai/resultCanProduceWidget': st.tool.has_widget,
-                      'openai/widgetPrefersBorder': true,
-                    },
-                  };
-                  restTools.push(restTool);
-                } else if (st.tool.tool_type === 'GQL') {
-                  // Convert GraphQL tool to MCP format - use stored annotations or fallback to defaults
-                  // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
-                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
-                  // Infer from tool name if not stored (gql_env-server-query/mutation-op format)
-                  const toolNameLower = st.tool.name.toLowerCase();
-                  const isQuery = toolNameLower.includes('-query-');
-                  const isMutation = toolNameLower.includes('-mutation-');
-                  const gqlTool = {
-                    name: st.tool.name,
-                    description: st.tool.description,
-                    inputSchema: st.tool.input_schema,
-                    outputSchema: st.tool.output_schema,
-                    annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? isQuery,
-                      destructiveHint: storedAnnotations?.destructiveHint ?? isMutation,
-                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
-                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
-                    },
-                    _meta: {
-                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Executing GraphQL...',
-                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'GraphQL complete',
-                      'openai/widgetAccessible': st.tool.has_widget,
-                      'openai/resultCanProduceWidget': st.tool.has_widget,
-                      'openai/widgetPrefersBorder': true,
-                    },
-                  };
-                  restTools.push(gqlTool); // Add to same array as REST tools
-                } else if (st.tool.tool_type === 'MCP') {
-                  // Convert MCP proxy tool to MCP format - use stored annotations from source server
-                  // For MCP, we trust the source server's annotations, fallback to safe defaults
-                  const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
-                  const mcpTool = {
-                    name: st.tool.name,
-                    description: st.tool.description,
-                    inputSchema: st.tool.input_schema,
-                    outputSchema: st.tool.output_schema,
-                    annotations: {
-                      readOnlyHint: storedAnnotations?.readOnlyHint ?? true,
-                      destructiveHint: storedAnnotations?.destructiveHint ?? false,
-                      idempotentHint: storedAnnotations?.idempotentHint ?? true,
-                      openWorldHint: storedAnnotations?.openWorldHint ?? true,
-                    },
-                    _meta: {
-                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling MCP server...',
-                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'MCP call complete',
-                      'openai/widgetAccessible': st.tool.has_widget,
-                      'openai/resultCanProduceWidget': st.tool.has_widget,
-                      'openai/widgetPrefersBorder': true,
-                    },
-                  };
-                  restTools.push(mcpTool); // Add to same array as other external tools
-                } else if (st.tool.tool_type === 'A2A') {
-                  // Convert A2A agent tool to MCP format
-                  // A2A agents use safe defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
-                  const a2aTool = {
-                    name: st.tool.name,
-                    description: st.tool.description,
-                    inputSchema: st.tool.input_schema,
-                    outputSchema: st.tool.output_schema,
-                    annotations: {
-                      readOnlyHint: true,
-                      destructiveHint: false,
-                      idempotentHint: true,
-                      openWorldHint: true,
-                    },
-                    _meta: {
-                      'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling A2A agent...',
-                      'openai/toolInvocation/invoked': st.tool.invoked_message || 'Agent response received',
-                      'openai/widgetAccessible': false, // A2A tools don't have widgets
-                      'openai/resultCanProduceWidget': false,
-                      'openai/widgetPrefersBorder': true,
-                    },
-                  };
-                  restTools.push(a2aTool); // Add to same array as other external tools
-                }
+          for (const st of serverTools) {
+            if (st.tool.tool_type === 'NATIVE') {
+              const nativeTool = TOOLS.find(t => t.name === st.tool.name);
+              if (nativeTool) {
+                filteredNativeTools.push(nativeTool);
               }
-
-              // If we have enabled tools, use them; otherwise fall back to defaults
-              if (filteredNativeTools.length > 0 || restTools.length > 0) {
-                toolsList = [...filteredNativeTools, ...restTools];
-              }
+            } else if (st.tool.tool_type === 'REST') {
+              // Convert REST tool to MCP format - use stored annotations or fallback to defaults
+              // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
+              const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
+              // Infer from tool name if not stored (rest_env-server-METHOD-op format)
+              const toolNameLower = st.tool.name.toLowerCase();
+              const isGetMethod = toolNameLower.includes('-get-');
+              const isDestructiveMethod = toolNameLower.includes('-delete-') || toolNameLower.includes('-put-') || toolNameLower.includes('-patch-');
+              const restTool = {
+                name: st.tool.name,
+                description: st.tool.description,
+                inputSchema: st.tool.input_schema,
+                outputSchema: st.tool.output_schema,
+                annotations: {
+                  readOnlyHint: storedAnnotations?.readOnlyHint ?? isGetMethod,
+                  destructiveHint: storedAnnotations?.destructiveHint ?? isDestructiveMethod,
+                  idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                  openWorldHint: storedAnnotations?.openWorldHint ?? true,
+                },
+                _meta: {
+                  'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling API...',
+                  'openai/toolInvocation/invoked': st.tool.invoked_message || 'API call complete',
+                  'openai/widgetAccessible': st.tool.has_widget,
+                  'openai/resultCanProduceWidget': st.tool.has_widget,
+                  'openai/widgetPrefersBorder': true,
+                },
+              };
+              restTools.push(restTool);
+            } else if (st.tool.tool_type === 'GQL') {
+              // Convert GraphQL tool to MCP format - use stored annotations or fallback to defaults
+              // Defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
+              const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
+              // Infer from tool name if not stored (gql_env-server-query/mutation-op format)
+              const toolNameLower = st.tool.name.toLowerCase();
+              const isQuery = toolNameLower.includes('-query-');
+              const isMutation = toolNameLower.includes('-mutation-');
+              const gqlTool = {
+                name: st.tool.name,
+                description: st.tool.description,
+                inputSchema: st.tool.input_schema,
+                outputSchema: st.tool.output_schema,
+                annotations: {
+                  readOnlyHint: storedAnnotations?.readOnlyHint ?? isQuery,
+                  destructiveHint: storedAnnotations?.destructiveHint ?? isMutation,
+                  idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                  openWorldHint: storedAnnotations?.openWorldHint ?? true,
+                },
+                _meta: {
+                  'openai/toolInvocation/invoking': st.tool.invoking_message || 'Executing GraphQL...',
+                  'openai/toolInvocation/invoked': st.tool.invoked_message || 'GraphQL complete',
+                  'openai/widgetAccessible': st.tool.has_widget,
+                  'openai/resultCanProduceWidget': st.tool.has_widget,
+                  'openai/widgetPrefersBorder': true,
+                },
+              };
+              restTools.push(gqlTool); // Add to same array as REST tools
+            } else if (st.tool.tool_type === 'MCP') {
+              // Convert MCP proxy tool to MCP format - use stored annotations from source server
+              // For MCP, we trust the source server's annotations, fallback to safe defaults
+              const storedAnnotations = st.tool.annotations as { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } | null;
+              const mcpTool = {
+                name: st.tool.name,
+                description: st.tool.description,
+                inputSchema: st.tool.input_schema,
+                outputSchema: st.tool.output_schema,
+                annotations: {
+                  readOnlyHint: storedAnnotations?.readOnlyHint ?? true,
+                  destructiveHint: storedAnnotations?.destructiveHint ?? false,
+                  idempotentHint: storedAnnotations?.idempotentHint ?? true,
+                  openWorldHint: storedAnnotations?.openWorldHint ?? true,
+                },
+                _meta: {
+                  'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling MCP server...',
+                  'openai/toolInvocation/invoked': st.tool.invoked_message || 'MCP call complete',
+                  'openai/widgetAccessible': st.tool.has_widget,
+                  'openai/resultCanProduceWidget': st.tool.has_widget,
+                  'openai/widgetPrefersBorder': true,
+                },
+              };
+              restTools.push(mcpTool); // Add to same array as other external tools
+            } else if (st.tool.tool_type === 'A2A') {
+              // Convert A2A agent tool to MCP format
+              // A2A agents use safe defaults: readOnlyHint=true, destructiveHint=false, idempotentHint=true, openWorldHint=true
+              const a2aTool = {
+                name: st.tool.name,
+                description: st.tool.description,
+                inputSchema: st.tool.input_schema,
+                outputSchema: st.tool.output_schema,
+                annotations: {
+                  readOnlyHint: true,
+                  destructiveHint: false,
+                  idempotentHint: true,
+                  openWorldHint: true,
+                },
+                _meta: {
+                  'openai/toolInvocation/invoking': st.tool.invoking_message || 'Calling A2A agent...',
+                  'openai/toolInvocation/invoked': st.tool.invoked_message || 'Agent response received',
+                  'openai/widgetAccessible': false, // A2A tools don't have widgets
+                  'openai/resultCanProduceWidget': false,
+                  'openai/widgetPrefersBorder': true,
+                },
+              };
+              restTools.push(a2aTool); // Add to same array as other external tools
             }
-          } catch (error) {
-            console.error('Error fetching server tools, using defaults:', error);
-            // Fall back to all TOOLS
+          }
+
+          // If we have enabled tools, use them; otherwise fall back to defaults
+          if (filteredNativeTools.length > 0 || restTools.length > 0) {
+            toolsList = [...filteredNativeTools, ...restTools];
           }
         }
-
-        // Marketplace tools (discover/install/publish) are available to any
-        // authenticated (paid) caller, independent of their enabled tool set.
-        if (context.isAuthenticated && context.userId) {
-          toolsList = [...toolsList, ...MARKETPLACE_TOOLS];
-        }
-
-        // Track tools/list event
-        trackMCPEvent('mcp_tools_list', {
-          tool_count: toolsList.length,
-          event_category: 'mcp',
-          event_label: 'tools_list',
-        });
-        return { jsonrpc: '2.0', id, result: { tools: toolsList } };
+      } catch (error) {
+        console.error('Error fetching server tools, using defaults:', error);
+        // Fall back to all TOOLS
       }
-      case 'tools/call': {
-        const toolName = (params as { name: string }).name;
-        const toolArgs = (params as { arguments?: Record<string, unknown> }).arguments || {};
+    }
 
-        console.log('[MCP Route] ===== RECEIVED tools/call =====');
-        console.log('[MCP Route] Tool Name:', toolName);
-        console.log('[MCP Route] Arguments:', JSON.stringify(toolArgs, null, 2));
-        console.log('[MCP Route] Context:', JSON.stringify({
-          isAuthenticated: context.isAuthenticated,
-          userId: context.userId ? `${context.userId.substring(0, 8)}...` : 'none',
-          serverName: context.serverName,
-          hasApiKey: !!context.apiKey,
-        }, null, 2));
+    // Marketplace tools (discover/install/publish) are available to any
+    // authenticated (paid) caller, independent of their enabled tool set.
+    if (context.isAuthenticated && context.userId) {
+      toolsList = [...toolsList, ...MARKETPLACE_TOOLS];
+    }
 
-        // Marketplace tools (discover/install/publish) — require an
-        // authenticated paid caller; handled outside the widget/native path.
-        if (isMarketplaceTool(toolName)) {
-          if (!context.isAuthenticated || !context.userId) {
-            return {
-              jsonrpc: '2.0',
-              id,
-              error: { code: -32001, message: 'Authentication required to call this tool' },
-            };
-          }
-          const mpResult = await executeMarketplaceTool(toolName, toolArgs, {
-            userId: context.userId,
-            plan: (context.plan as 'pro' | 'plus') || 'pro',
-          });
-          trackMCPEvent('mcp_tool_call', {
-            tool_name: toolName,
-            event_category: 'mcp',
-            event_label: toolName,
-            has_args: Object.keys(toolArgs).length > 0,
-            is_rest_tool: false,
-          });
-          return {
-            jsonrpc: '2.0',
-            id,
-            result: {
-              content: [{ type: 'text', text: JSON.stringify(mpResult, null, 2) }],
-              structuredContent: mpResult,
-            },
-          };
-        }
+    // Track tools/list event
+    trackMCPEvent('mcp_tools_list', {
+      tool_count: toolsList.length,
+      event_category: 'mcp',
+      event_label: 'tools_list',
+    });
+    return toolsList;
+  },
 
-        // Validate tool access - prevent tool call spoofing
-        // For non-NATIVE tools, verify the tool is enabled for this user's server
-        const toolDef = getToolDefinition(toolName);
-        if (!toolDef || toolDef.type !== TOOL_TYPES.NATIVE) {
-          // Non-NATIVE tool - must validate ownership
-          if (!context.isAuthenticated || !context.userId) {
-            return {
-              jsonrpc: '2.0',
-              id,
-              error: { code: -32001, message: 'Authentication required to call this tool' }
-            };
-          }
+  async callTool(toolName, toolArgs, context) {
+    console.log('[MCP Route] ===== RECEIVED tools/call =====');
+    console.log('[MCP Route] Tool Name:', toolName);
+    console.log('[MCP Route] Arguments:', JSON.stringify(toolArgs, null, 2));
+    console.log('[MCP Route] Context:', JSON.stringify({
+      isAuthenticated: context.isAuthenticated,
+      userId: context.userId ? `${context.userId.substring(0, 8)}...` : 'none',
+      serverName: context.serverName,
+      hasApiKey: !!context.apiKey,
+    }, null, 2));
 
-          const serverTool = await validateToolForServer(toolName, context.userId, context.serverName);
-          if (!serverTool) {
-            return {
-              jsonrpc: '2.0',
-              id,
-              error: { code: -32002, message: `Tool '${toolName}' is not enabled for your server` }
-            };
-          }
-        }
+    // Marketplace tools (discover/install/publish) — require an
+    // authenticated paid caller; handled outside the widget/native path.
+    if (isMarketplaceTool(toolName)) {
+      if (!context.isAuthenticated || !context.userId) {
+        throw new JsonRpcError(JSONRPC_ERROR.AUTH_REQUIRED, 'Authentication required to call this tool');
+      }
+      const mpResult = await executeMarketplaceTool(toolName, toolArgs, {
+        userId: context.userId,
+        plan: (context.plan as 'pro' | 'plus') || 'pro',
+      });
+      trackMCPEvent('mcp_tool_call', {
+        tool_name: toolName,
+        event_category: 'mcp',
+        event_label: toolName,
+        has_args: Object.keys(toolArgs).length > 0,
+        is_rest_tool: false,
+      });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(mpResult, null, 2) }],
+        structuredContent: mpResult,
+      };
+    }
 
-        // Execute tool (async to support REST tools)
-        const execContext: ExtendedToolContext = {
-          apiKey: context.apiKey,
-          authToken: context.authToken,
-          mcpSessionId: context.mcpSessionId, // Pass MCP session ID for A2A context
-          userId: context.userId, // Pass user ID for OAuth token lookup
-          serverName: context.serverName, // Pass server name for OAuth login URL
-        };
+    // Validate tool access - prevent tool call spoofing
+    // For non-NATIVE tools, verify the tool is enabled for this user's server
+    const toolDef = getToolDefinition(toolName);
+    if (!toolDef || toolDef.type !== TOOL_TYPES.NATIVE) {
+      // Non-NATIVE tool - must validate ownership
+      if (!context.isAuthenticated || !context.userId) {
+        throw new JsonRpcError(JSONRPC_ERROR.AUTH_REQUIRED, 'Authentication required to call this tool');
+      }
 
-        const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);
+      const serverTool = await validateToolForServer(toolName, context.userId, context.serverName);
+      if (!serverTool) {
+        throw new JsonRpcError(JSONRPC_ERROR.TOOL_NOT_ENABLED, `Tool '${toolName}' is not enabled for your server`);
+      }
+    }
 
-        // Track tool call event
-        trackMCPEvent('mcp_tool_call', {
-          tool_name: toolName,
-          event_category: 'mcp',
-          event_label: toolName,
-          has_args: Object.keys(toolArgs).length > 0,
-          is_rest_tool: isRestTool,
-        });
+    // Execute tool (async to support REST tools)
+    const execContext: ExtendedToolContext = {
+      apiKey: context.apiKey,
+      authToken: context.authToken,
+      mcpSessionId: context.mcpSessionId, // Pass MCP session ID for A2A context
+      userId: context.userId, // Pass user ID for OAuth token lookup
+      serverName: context.serverName, // Pass server name for OAuth login URL
+    };
 
-        // Prepare widget data with input args for context
-        const widgetData: Record<string, unknown> = result as Record<string, unknown>;
+    const { result, isRestTool, toolInfo } = await executeToolAsync(toolName, toolArgs, execContext);
 
-        // Build response text - use generic formatter for REST tools
-        const responseText = isRestTool
-          ? formatRestResultText(toolName, result)
-          : formatResultText(toolName, result);
+    // Track tool call event
+    trackMCPEvent('mcp_tool_call', {
+      tool_name: toolName,
+      event_category: 'mcp',
+      event_label: toolName,
+      has_args: Object.keys(toolArgs).length > 0,
+      is_rest_tool: isRestTool,
+    });
 
-        // Generate widget HTML - use generic widget for REST tools
-        const widgetHtmlContent = isRestTool
-          ? generateRestWidgetHtml(toolName, widgetData, toolInfo?.hasWidget ?? false)
-          : generateWidgetHtml(toolName, widgetData);
+    // Prepare widget data with input args for context
+    const widgetData: Record<string, unknown> = result as Record<string, unknown>;
 
-        // Get invocation messages
-        const invocationMessages = isRestTool && toolInfo
-          ? { invoking: toolInfo.invokingMessage || 'Calling API...', invoked: toolInfo.invokedMessage || 'API call complete' }
-          : getInvocationMessages(toolName);
+    // Build response text - use generic formatter for REST tools
+    const responseText = isRestTool
+      ? formatRestResultText(toolName, result)
+      : formatResultText(toolName, result);
 
-        // Build OpenAI widget resource (EmbeddedResource style)
-        const widgetResource = {
-          type: 'resource',
-          resource: {
-            uri: `ui://widget/${toolName}.html`,
-            mimeType: 'text/html',
-            text: widgetHtmlContent,
-            title: toolName.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-          }
-        };
+    // Generate widget HTML - use generic widget for REST tools
+    const widgetHtmlContent = isRestTool
+      ? generateRestWidgetHtml(toolName, widgetData, toolInfo?.hasWidget ?? false)
+      : generateWidgetHtml(toolName, widgetData);
 
-        // Build _meta with OpenAI widget hints
-        const meta = {
-          'openai.com/widget': widgetResource,
-          'openai/toolInvocation/invoking': invocationMessages.invoking,
-          'openai/toolInvocation/invoked': invocationMessages.invoked,
-          'openai/widgetAccessible': toolInfo?.hasWidget ?? true,
-          'openai/resultCanProduceWidget': toolInfo?.hasWidget ?? true,
-          'openai/widgetPrefersBorder': true,
-        };
+    // Get invocation messages
+    const invocationMessages = isRestTool && toolInfo
+      ? { invoking: toolInfo.invokingMessage || 'Calling API...', invoked: toolInfo.invokedMessage || 'API call complete' }
+      : getInvocationMessages(toolName);
 
-        // Build content array with text result
-        const content: Array<{ type: string; text?: string; resource?: unknown }> = [
-          { type: 'text', text: responseText },
-        ];
+    // Build OpenAI widget resource (EmbeddedResource style)
+    const widgetResource = {
+      type: 'resource',
+      resource: {
+        uri: `ui://widget/${toolName}.html`,
+        mimeType: 'text/html',
+        text: widgetHtmlContent,
+        title: toolName.split('_').filter(w => w.length > 0).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+      }
+    };
 
-        // Add widget HTML for Claude artifact rendering (if widget enabled)
-        if (!isRestTool || toolInfo?.hasWidget) {
-          const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
+    // Build _meta with OpenAI widget hints
+    const meta = {
+      'openai.com/widget': widgetResource,
+      'openai/toolInvocation/invoking': invocationMessages.invoking,
+      'openai/toolInvocation/invoked': invocationMessages.invoked,
+      'openai/widgetAccessible': toolInfo?.hasWidget ?? true,
+      'openai/resultCanProduceWidget': toolInfo?.hasWidget ?? true,
+      'openai/widgetPrefersBorder': true,
+    };
+
+    // Build content array with text result
+    const content: Array<{ type: string; text?: string; resource?: unknown }> = [
+      { type: 'text', text: responseText },
+    ];
+
+    // Add widget HTML for Claude artifact rendering (if widget enabled)
+    if (!isRestTool || toolInfo?.hasWidget) {
+      const widgetHtml = `Here is a complete, production-ready visualization widget. This should be displayed as an interactive artifact:
 \`\`\`html
 ${widgetHtmlContent}
 \`\`\`
 This component is fully functional and ready for immediate use.`;
-          content.push({ type: 'text', text: widgetHtml });
+      content.push({ type: 'text', text: widgetHtml });
 
-          // Add embedded resource for OpenAI widget rendering
-          content.push({
-            type: 'resource',
-            resource: widgetResource.resource
-          });
-        }
-
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            content,
-            // structuredContent with query args and result data
-            structuredContent: {
-              query: toolArgs,
-              result: widgetData,
-              display: {
-                type: 'html',
-                content: widgetHtmlContent,
-              }
-            },
-            _meta: meta,
-          }
-        };
-      }
-      default:
-        return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
+      // Add embedded resource for OpenAI widget rendering
+      content.push({
+        type: 'resource',
+        resource: widgetResource.resource
+      });
     }
-  } catch (error) {
-    return { jsonrpc: '2.0', id, error: { code: -32000, message: String(error) } };
-  }
+
+    return {
+      content,
+      // structuredContent with query args and result data
+      structuredContent: {
+        query: toolArgs,
+        result: widgetData,
+        display: {
+          type: 'html',
+          content: widgetHtmlContent,
+        }
+      },
+      _meta: meta,
+    };
+  },
+};
+
+// Handle MCP requests
+async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Promise<MCPResponse> {
+  return dispatchMcpRequest(mcpRequest, context, mcpServer);
 }
 
 export async function POST(request: NextRequest) {
@@ -2168,7 +1789,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for header-based auth (x-api-key or Bearer token)
-    const { apiKey, authMethod } = extractAuth(request);
+    const { apiKey, authMethod } = extractAuth(request.headers);
 
     if (apiKey) {
       // Use different validation based on auth method

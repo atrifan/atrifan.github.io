@@ -87,3 +87,18 @@ export function settleReserve({ platformCredits, customerCredits, usedCredits }:
     customerReleased: round2(customerCredits - customerCharged),
   };
 }
+
+/** Credits for a metered call: cost × markup, in credits, rounded up to 0.01. */
+export function chargedCredits(costUsd: number, markup: number, creditValueUsd: number): number {
+  return usdToCredits(costUsd * markup, creditValueUsd);
+}
+
+/** Deliberately high input-token estimate for a request body: 1 token per 3 characters. */
+export function estimateInputTokens(serialized: string): number {
+  return Math.ceil(serialized.length / 3);
+}
+
+/** Output cap for a review call: the client's max_tokens if it is a smaller positive integer. */
+export function reviewOutputCap(requested: unknown, cap: number): number {
+  return typeof requested === 'number' && Number.isInteger(requested) && requested > 0 && requested < cap ? requested : cap;
+}
