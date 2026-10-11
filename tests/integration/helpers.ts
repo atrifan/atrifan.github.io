@@ -8,6 +8,7 @@
 import { mock } from 'node:test';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import path from 'node:path';
 import Stripe from 'stripe';
 import { Client } from 'pg';
 import { resetGigsTables } from '../support/gigs-test-db';
@@ -78,6 +79,9 @@ export function installMocks(): void {
   mock.module(pathToFileURL(path.resolve(__dirname, '../../src/lib/notify/index.ts')).href, {
     namedExports: {
       enqueue: async (userId: string, type: string, payload: Record<string, unknown>, dedupeKey: string) => {
+        // Like the real enqueue, an invalid payload is a programmer error.
+        const { payloadSchemas } = await import('../../src/lib/notify/types.ts');
+        payloadSchemas[type as keyof typeof payloadSchemas].parse(payload);
         notifyState.sent.push({ userId, type, payload, dedupeKey });
         return { status: 'queued', id: `n_${notifyState.sent.length}` };
       },
