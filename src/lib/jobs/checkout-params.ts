@@ -17,6 +17,8 @@ export interface ContractCheckoutInput {
   currency: string;
   successUrl: string;
   cancelUrl: string;
+  /** Shown above the pay button, e.g. the QA credit reserve. */
+  note?: string;
 }
 
 export function transferGroupFor(contractId: string): string {
@@ -87,5 +89,6 @@ export function buildContractCheckoutParams(input: ContractCheckoutInput): Strip
     metadata,
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
+    ...(input.note ? { custom_text: { submit: { message: input.note.slice(0, 1200) } } } : {}),
   };
 }

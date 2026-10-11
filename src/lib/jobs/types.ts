@@ -135,6 +135,8 @@ export interface ContractVersionRow {
   currency: string;
   deadline: string | null;
   steering_allowance: number;
+  /** QA checks the customer pays for (src/config/qa.config.ts); null on versions from before Phase 4. */
+  qa_checks: string[] | null;
   signed_by_customer_at: string | null;
   signed_by_provider_at: string | null;
   created_at: string;

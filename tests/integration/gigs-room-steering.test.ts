@@ -150,6 +150,7 @@ test('scope change: provider re-estimates, a new contract version awaits approva
   assert.equal(v2.price_cents, 40000);
   assert.equal(v2.customer_total_cents, v2.price_cents + v2.fee_cents);
   assert.equal(v2.steering_allowance, 1);
+  assert.deepEqual(v2.qa_checks, ['basic'], 'the QA checks carry over to the new version');
   assert.ok(v2.signed_by_provider_at);
   assert.equal(v2.signed_by_customer_at, null);
   const note = notifyState.sent.find((c) => c.type === 'scope_change_awaiting_approval' && c.userId === customer);

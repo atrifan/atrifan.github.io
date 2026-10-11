@@ -13,14 +13,43 @@ import { computeCommission, commissionBpsFromEnv } from './commission';
 import { assertContractTransition, canTransitionContract, type ContractStatus } from './job-state';
 import { buildContractCheckoutParams, transferGroupFor } from './checkout-params';
 import { getStripe, appBaseUrl, stripeFailure } from './stripe';
+import { creditValueUsdFromEnv, qaCostsFromEnv, type QaCheck } from '@/src/config/qa.config';
+import { computeReserve, creditsToUsd, normalizeChecks } from '@/src/lib/qa/qa-credits';
 import type { ContractRow, ContractVersionRow } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface QaReserveView {
+  checks: QaCheck[];
+  reserve: { platform_credits: number; customer_credits: number; cap_credits: number; customer_usd: number };
+}
 
 export interface AcceptBidResult {
   contract: ContractRow;
   version: ContractVersionRow;
   checkout_url: string;
+  /** QA the customer chose: held from their credits at submission (basic is paid by the platform). */
+  qa: QaReserveView;
+}
+
+export function qaReserveView(qaChecks: readonly string[] | null | undefined): QaReserveView {
+  const checks = normalizeChecks(qaChecks ?? null);
+  const r = computeReserve(checks, qaCostsFromEnv());
+  return {
+    checks,
+    reserve: {
+      platform_credits: r.platformCredits,
+      customer_credits: r.customerCredits,
+      cap_credits: r.capCredits,
+      customer_usd: creditsToUsd(r.customerCredits, creditValueUsdFromEnv()),
+    },
+  };
+}
+
+function qaCheckoutNote(qa: QaReserveView): string {
+  if (qa.reserve.customer_credits === 0) return 'Basic QA is included. No QA credits are reserved from your balance.';
+  const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(qa.reserve.customer_usd);
+  return `QA checks (${qa.checks.join(', ')}): ${qa.reserve.customer_credits} credits (${usd}) will be reserved from your Tulzo credit balance when the work is submitted for QA; unused credits are released. Basic QA is included.`;
 }
 
 export function contractCheckoutUrls(contractId: string): { successUrl: string; cancelUrl: string } {
@@ -67,7 +96,12 @@ export async function moveContractIfAllowed(contract: ContractRow, to: ContractS
   return (await transitionContract(contract.id, contract.status, to)) !== null;
 }
 
-export async function acceptBid(userId: string, bidId: string): Promise<AcceptBidResult> {
+export async function acceptBid(
+  userId: string,
+  bidId: string,
+  opts: { qaChecks?: readonly string[] } = {},
+): Promise<AcceptBidResult> {
+  const qa = qaReserveView(opts.qaChecks);
   const bid = await loadBid(bidId);
   if (!bid) throw notFound('Bid not found');
   const job = await loadJob(bid.job_id);
@@ -143,6 +177,7 @@ export async function acceptBid(userId: string, bidId: string): Promise<AcceptBi
         steering_allowance: bid.included_steering_credits,
         signed_by_customer_at: now.toISOString(),
         signed_by_provider_at: bid.created_at, // placing the bid is the provider's signature on these terms
+        qa_checks: qa.checks,
       })
       .select('*')
       .single();
@@ -161,6 +196,7 @@ export async function acceptBid(userId: string, bidId: string): Promise<AcceptBi
           currency: bid.currency,
           successUrl,
           cancelUrl,
+          note: qaCheckoutNote(qa),
         }),
         { idempotencyKey: `contract_checkout_${contractId}` },
       );
@@ -178,7 +214,7 @@ export async function acceptBid(userId: string, bidId: string): Promise<AcceptBi
       .single();
     if (updateError) throw dbError(updateError, 'link checkout');
 
-    return { contract: updated as ContractRow, version: version as ContractVersionRow, checkout_url: session.url };
+    return { contract: updated as ContractRow, version: version as ContractVersionRow, checkout_url: session.url, qa };
   } catch (err) {
     try {
       await rollback();

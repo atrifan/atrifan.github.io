@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { JOB_STATUSES, type JobStatus } from './job-state.ts';
+import { QA_CHECKS, type QaCheck } from '../../config/qa.config.ts';
 
 const cents = z.number().int().min(0);
 const isoDateTime = z.string().datetime({ offset: true });
@@ -137,6 +138,12 @@ export const CreateBidSchema = z
   })
   .strict();
 export type CreateBidInput = z.infer<typeof CreateBidSchema>;
+
+/** Accepting a bid: the QA checks the customer pays for (basic is always included). */
+export const AcceptBidSchema = z
+  .object({ qa_checks: z.array(z.enum(QA_CHECKS as unknown as [QaCheck, ...QaCheck[]])).max(QA_CHECKS.length * 2).optional() })
+  .strict();
+export type AcceptBidInput = z.infer<typeof AcceptBidSchema>;
 
 export const CreateOfferSchema = z
   .object({

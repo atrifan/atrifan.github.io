@@ -106,6 +106,7 @@ async function createVersion(
         currency: base.currency,
         deadline: terms.deadline,
         steering_allowance: base.steering_allowance,
+        qa_checks: base.qa_checks ?? null,
         signed_by_customer_at: terms.signedBy === 'customer' ? now : null,
         signed_by_provider_at: terms.signedBy === 'provider' ? now : null,
       })
