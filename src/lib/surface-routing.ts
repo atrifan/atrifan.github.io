@@ -53,8 +53,8 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 
-/** Pages that require a signed-in user (unchanged from before surfaces). */
-const PROTECTED_PREFIXES = ['/dashboard', '/chat'];
+/** Pages that require a signed-in user. */
+const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/marketplace/publish', '/marketplace/admin'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
 const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits'];

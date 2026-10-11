@@ -381,6 +381,12 @@ export interface PublisherPackageStats {
   install_count: number;
   avg_rating: number | null;
   rating_count: number;
+  /** For "New version" in the publisher page. */
+  description: string;
+  config_json: Record<string, unknown> | null;
+  tags: string[];
+  category: string | null;
+  long_description: string | null;
 }
 
 /**
@@ -409,6 +415,11 @@ export async function getPublisherStats(userId: string): Promise<PublisherPackag
     install_count: p.install_count ?? 0,
     avg_rating: stats.get(p.id)?.avg_rating != null ? Number(stats.get(p.id)!.avg_rating) : null,
     rating_count: stats.get(p.id)?.rating_count ?? 0,
+    description: p.description ?? '',
+    config_json: p.config_json ?? null,
+    tags: p.tags ?? [],
+    category: p.category ?? null,
+    long_description: p.long_description ?? null,
   }));
 }
 
