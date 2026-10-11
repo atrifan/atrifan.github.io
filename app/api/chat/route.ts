@@ -3,8 +3,8 @@ import { streamText } from 'ai';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createGateway, calculateCost, resolveGenerationCost } from '@/src/lib/ai-gateway';
-import { creditValueUsdFromEnv } from '@/src/config/qa.config';
-import { remainingCredits, usdToCredits } from '@/src/lib/qa/qa-credits';
+import { creditMarkupFromEnv, creditValueUsdFromEnv, reviewMaxOutputTokensFromEnv } from '@/src/config/qa.config';
+import { chargedCredits, estimateInputTokens, remainingCredits, reviewOutputCap } from '@/src/lib/qa/qa-credits';
 
 export const runtime = 'edge';
 
@@ -68,6 +68,41 @@ async function checkReviewKey(
     });
   }
   return { submissionId: key.submission_id as string, capCredits };
+}
+
+/**
+ * Hold the worst case for one review call before it runs: the input estimate plus the output
+ * cap, priced by the local model table, × CREDIT_MARKUP. qa_hold_credits locks the reserve
+ * row, so concurrent calls on one submission each hold their own worst case and together can
+ * never start more spend than what is left. Returns the hold id, or a 402 Response.
+ */
+async function holdReviewCredits(
+  supabase: ReturnType<typeof getSupabase>,
+  apiKeyId: string | null,
+  estimateCredits: number,
+  submissionId: string,
+): Promise<string | Response> {
+  const { data, error } = await supabase.rpc('qa_hold_credits', { p_api_key_id: apiKeyId, p_credits: estimateCredits });
+  if (error) {
+    console.error('[chat] QA credit hold failed:', submissionId, error.code);
+    return jsonError(503, { error: 'Could not reserve QA credits for this call; try again.', code: 'qa_hold_failed' });
+  }
+  if (!data?.ok) {
+    if (data?.error === 'no_open_reserve') {
+      return jsonError(403, { error: 'The QA reserve for this submission is closed.', code: 'review_key_revoked' });
+    }
+    return jsonError(402, {
+      error: `The QA credit reserve for this submission cannot cover this call (about ${estimateCredits} credits at most; ${Number(data?.available ?? 0)} left). Finish the review and call qa_mark.`,
+      code: 'qa_reserve_insufficient',
+      submission_id: submissionId,
+      estimate_credits: estimateCredits,
+      available_credits: Number(data?.available ?? 0),
+      held_credits: Number(data?.held ?? 0),
+      cap_credits: Number(data?.cap ?? 0),
+      used_credits: Number(data?.used ?? 0),
+    });
+  }
+  return data.hold_id as string;
 }
 
 async function validateClerkToken(apiKey: string): Promise<{ userId: string; sessionId: string } | null> {
@@ -177,6 +212,26 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // QA review calls: cap the output and hold the call's worst-case credits first.
+  let maxOutputTokens: number | undefined;
+  let holdId: string | null = null;
+  const markup = review ? creditMarkupFromEnv() : 1;
+  if (review) {
+    maxOutputTokens = reviewOutputCap(body.max_tokens, reviewMaxOutputTokensFromEnv());
+    const inputTokens = estimateInputTokens(JSON.stringify({ messages, tools: tools ?? null }));
+    const estimate = chargedCredits(calculateCost(model, inputTokens, maxOutputTokens), markup, creditValueUsdFromEnv());
+    const held = await holdReviewCredits(supabase, apiKeyId, estimate, review.submissionId);
+    if (held instanceof Response) return held;
+    holdId = held;
+  }
+  let holdReleased = false;
+  const releaseHold = async () => {
+    if (!holdId || holdReleased) return;
+    holdReleased = true;
+    const { error } = await supabase.rpc('qa_release_hold', { p_hold_id: holdId });
+    if (error) console.error('[chat] QA credit hold not released (it expires):', review?.submissionId, error.code);
+  };
+
   const gateway = createGateway();
 
   // Build tool definitions for Vercel AI SDK if tools provided
@@ -199,6 +254,7 @@ export async function POST(request: NextRequest) {
     model: gateway(model),
     messages,
     tools: aiTools,
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
     headers: {
       'x-vercel-ai-user-id': userId,
       'x-vercel-ai-tag': sessionId,
@@ -215,7 +271,7 @@ export async function POST(request: NextRequest) {
         const finalCost = await resolveGenerationCost(generationId, cost);
         const { data: metered, error: meterError } = await supabase.rpc('qa_meter_usage', {
           p_api_key_id: apiKeyId,
-          p_credits: usdToCredits(finalCost, creditValueUsdFromEnv()),
+          p_credits: chargedCredits(finalCost, markup, creditValueUsdFromEnv()),
           p_cost_usd: finalCost,
           p_model: model,
           p_input_tokens: inputTokens,
@@ -242,11 +298,25 @@ export async function POST(request: NextRequest) {
           cost_deducted: finalCost,
         });
       }
+      // after metering, so the hold and the usage never both disappear for a moment
+      await releaseHold();
+    },
+    async onError() {
+      await releaseHold();
+    },
+    async onAbort() {
+      await releaseHold();
     },
   });
 
   if (!stream) {
-    const text = await result.text;
+    let text: string;
+    try {
+      text = await result.text;
+    } catch (err) {
+      await releaseHold();
+      throw err;
+    }
     return new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: text } }] }), {
       headers: { 'Content-Type': 'application/json' },
     });
@@ -301,6 +371,7 @@ export async function POST(request: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk)}\n\n`));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err: any) {
+        await releaseHold();
         const errorChunk = { error: { message: err?.message || 'Stream error' } };
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
       } finally {

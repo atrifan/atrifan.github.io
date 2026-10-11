@@ -8,7 +8,7 @@
  *
  * Env overrides: QA_COST_BASIC, QA_COST_DEEP_REQUIREMENTS, QA_COST_CODE_REVIEW,
  * QA_COST_SECURITY, QA_COST_JOURNEY, QA_COST_ADVERSARIAL (whole credits),
- * CREDIT_VALUE_USD, JOBS_AUTO_ACCEPT_DAYS.
+ * CREDIT_VALUE_USD, CREDIT_MARKUP, QA_REVIEW_MAX_OUTPUT_TOKENS, JOBS_AUTO_ACCEPT_DAYS.
  */
 
 export const QA_CHECKS = ['basic', 'deep_requirements', 'code_review', 'security', 'journey', 'adversarial'] as const;
@@ -24,6 +24,10 @@ export const DEFAULT_QA_COSTS: Readonly<Record<QaCheck, number>> = {
 };
 
 export const DEFAULT_CREDIT_VALUE_USD = 0.01;
+/** Metered AI cost × CREDIT_MARKUP is what a call costs in credits (covers fees, failed calls, margin). */
+export const DEFAULT_CREDIT_MARKUP = 1.3;
+/** Output-token cap on a QA review call through /api/chat; bounds the per-call credit hold. */
+export const DEFAULT_REVIEW_MAX_OUTPUT_TOKENS = 8192;
 export const DEFAULT_AUTO_ACCEPT_DAYS = 7;
 /** Lifetime of a QA review key. */
 export const REVIEW_KEY_TTL_HOURS = 24;
@@ -56,4 +60,21 @@ export function autoAcceptDaysFromEnv(env: Env = process.env): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) throw new RangeError(`JOBS_AUTO_ACCEPT_DAYS must be a whole number >= 1, got "${raw}"`);
   return value;
+}
+
+export function creditMarkupFromEnv(env: Env = process.env): number {
+  const raw = (env.CREDIT_MARKUP ?? '').trim();
+  if (!raw) return DEFAULT_CREDIT_MARKUP;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) throw new RangeError(`CREDIT_MARKUP must be a number >= 1, got "${raw}"`);
+  return value;
+}
+
+export function reviewMaxOutputTokensFromEnv(env: Env = process.env): number {
+  const raw = (env.QA_REVIEW_MAX_OUTPUT_TOKENS ?? '').trim();
+  if (!raw) return DEFAULT_REVIEW_MAX_OUTPUT_TOKENS;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1) {
+    throw new RangeError(`QA_REVIEW_MAX_OUTPUT_TOKENS must be a whole number >= 1, got "${raw}"`);
+  }
+  return Number(raw);
 }
