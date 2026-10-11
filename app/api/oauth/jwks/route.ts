@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { MISCONFIGURED, resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
+import { resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
 
 /**
  * JWKS Proxy endpoint

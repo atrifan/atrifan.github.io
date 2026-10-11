@@ -1,12 +1,10 @@
 /**
  * Clerk OAuth configuration, read from env only. There are deliberately no
  * hard-coded fallbacks: a missing value means the deploy is misconfigured, and
- * callers answer 500 `{ error: 'server_misconfigured' }` (see MISCONFIGURED).
+ * callers answer 500 `{ error: 'server_misconfigured' }` (see src/lib/misconfigured.ts).
  */
 
 type Env = Record<string, string | undefined>;
-
-export const MISCONFIGURED = { error: 'server_misconfigured' } as const;
 
 /** A hostname with a `clerk` label that isn't the last one. */
 const CLERK_HOST_RE = /^([a-z0-9-]+\.)*clerk\.[a-z0-9-]+(\.[a-z0-9-]+)*$/i;

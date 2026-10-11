@@ -3,7 +3,8 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { isJobsEvent, processJobsStripeEvent } from '@/src/lib/jobs/stripe-webhooks';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from '@/src/lib/stripe';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
 
 function getSupabase() {
   return createClient(
@@ -33,6 +34,9 @@ function verifyEvent(body: string, signature: string): Stripe.Event {
 }
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe();
+  if (!stripe) return NextResponse.json(MISCONFIGURED, { status: 500 });
+
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');

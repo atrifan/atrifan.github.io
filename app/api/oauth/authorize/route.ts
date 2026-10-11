@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
-import { MISCONFIGURED, resolveClerkFrontendApi, resolveClerkOAuthClient } from '@/src/lib/clerk-oauth-config';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
+import { resolveClerkFrontendApi, resolveClerkOAuthClient } from '@/src/lib/clerk-oauth-config';
 
 /**
  * OAuth Authorization Proxy
