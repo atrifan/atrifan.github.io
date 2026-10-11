@@ -56,7 +56,14 @@ export function parseBody<S extends z.ZodTypeAny>(schema: S, data: unknown): z.i
   return r.data;
 }
 
+/** Next.js control-flow errors (dynamic usage, redirects, notFound) must propagate. */
+function isNextInternalError(err: unknown): boolean {
+  const digest = (err as { digest?: unknown } | null)?.digest;
+  return typeof digest === 'string' && (digest === 'DYNAMIC_SERVER_USAGE' || digest.startsWith('NEXT_'));
+}
+
 export function errorResponse(err: unknown): NextResponse {
+  if (isNextInternalError(err)) throw err;
   if (err instanceof JobsError) {
     const body: Record<string, unknown> = { error: err.code, message: err.message };
     if (err.code === 'invalid_request' && err.details) body.issues = err.details;

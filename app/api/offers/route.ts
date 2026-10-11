@@ -4,6 +4,9 @@ import { JobsError } from '@/src/lib/jobs/errors';
 import { CreateOfferSchema, parseOfferListQuery } from '@/src/lib/jobs/schemas';
 import { createOffer, listOffers } from '@/src/lib/jobs/offers-service';
 
+// Per-user data behind Clerk auth: never prerender or cache.
+export const dynamic = 'force-dynamic';
+
 /** Post an offer of service. */
 export async function POST(request: NextRequest) {
   return withUser(request, async (userId) => {
