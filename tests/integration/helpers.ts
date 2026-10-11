@@ -8,7 +8,6 @@
 import { mock } from 'node:test';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import path from 'node:path';
 import Stripe from 'stripe';
 import { Client } from 'pg';
 import { resetGigsTables } from '../support/gigs-test-db';

@@ -1,7 +1,7 @@
 /**
  * Run the gigs Playwright API suite against a dev server wired to throwaway backends.
  *
- *   npm run test:e2e:gigs [-- <extra playwright args>]
+ *   npm run test:e2e:gigs [-- <extra playwright args, or specific spec files>]
  *
  * - Postgres + PostgREST in Docker (tests/support/gigs-test-db.ts), never the shared project
  * - a fake Stripe API (tests/support/fake-stripe.ts) via STRIPE_API_BASE, test keys only
@@ -11,16 +11,44 @@
  * - a random PAT_ENCRYPTION_KEY and one admin (ADMIN_USER_IDS, passed to the specs as
  *   QA_E2E_ADMIN_USER)
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
+ * - two seeded API keys for the Jobs MCP spec (an active Free-plan key and a revoked key)
+ * Runs tests/e2e/gigs-api.spec.ts and tests/e2e/jobs-mcp.spec.ts.
  * Everything is torn down afterwards.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
 import { startFakeGithub } from '../tests/support/fake-github';
+import { Client } from 'pg';
 
-const SPECS = ['tests/e2e/gigs-api.spec.ts', 'tests/e2e/submission-mcp.spec.ts', 'tests/e2e/admin-qa-mcp.spec.ts'];
+const SPECS = [
+  'tests/e2e/gigs-api.spec.ts', 'tests/e2e/submission-mcp.spec.ts', 'tests/e2e/admin-qa-mcp.spec.ts',
+  'tests/e2e/jobs-mcp.spec.ts',
+];
+
+/** Seed the API keys the Jobs MCP spec uses: an active Free-plan key and a revoked one. */
+async function seedApiKeys(pgUrl: string, schema: string): Promise<{ free: string; freeUser: string; revoked: string }> {
+  const keys = {
+    free: `tlz_e2e_free_${randomBytes(12).toString('hex')}`,
+    freeUser: `user_e2e_mcp_free_${randomBytes(4).toString('hex')}`,
+    revoked: `tlz_e2e_revoked_${randomBytes(12).toString('hex')}`,
+  };
+  const sha = (k: string) => createHash('sha256').update(k).digest('hex');
+  const c = new Client({ connectionString: pgUrl });
+  await c.connect();
+  try {
+    await c.query(
+      `INSERT INTO ${schema}.api_keys (user_id, api_key_hash, api_key_suffix, name, plan, is_active)
+       VALUES ($1, $2, right($3, 4), 'e2e free', 'free', TRUE), ($4, $5, right($6, 4), 'e2e revoked', 'pro', FALSE)`,
+      [keys.freeUser, sha(keys.free), keys.free, `${keys.freeUser}_revoked`, sha(keys.revoked), keys.revoked],
+    );
+  } finally {
+    await c.end();
+  }
+  return keys;
+}
 
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.GIGS_E2E_PORT || 3100);
@@ -52,6 +80,12 @@ async function main() {
   const stripe = await startFakeStripe();
   const github = await startFakeGithub();
   const qaAdmin = `e2e_qa_admin_${randomBytes(4).toString('hex')}`;
+  const apiKeys = await seedApiKeys(db.pgUrl, db.schema).catch(async (err) => {
+    await stripe.close();
+    await github.close();
+    await db.stop();
+    throw err;
+  });
   const authSecret = randomBytes(24).toString('hex');
   const webhookSecret = `whsec_e2e_${randomBytes(12).toString('hex')}`;
   let server: ChildProcess | null = null;
@@ -93,16 +127,25 @@ async function main() {
       ['POST', `/api/jobs/${id}/spec/approve`], ['GET', `/api/jobs/${id}/bids`], ['POST', `/api/bids/${id}/accept`],
       ['GET', '/api/offers'], ['POST', '/api/connect/onboard'], ['GET', '/api/connect/status'], ['POST', '/api/billing/webhook'],
       ['POST', '/api/admin/qa/mcp'], ['POST', '/api/e2e/jobs-submission-mcp'], ['POST', '/api/chat'],
+      ['POST', '/api/jobs/mcp'], ['GET', '/.well-known/oauth-protected-resource/api/jobs/mcp'], ['GET', '/api/contracts'],
+      ['GET', `/api/contracts/${id}`], ['GET', `/api/contracts/${id}/messages`], ['GET', `/api/contracts/${id}/steering`],
+      ['POST', `/api/contracts/${id}/steering/${id}/approve`], ['POST', `/api/contracts/${id}/steering/${id}/reject`],
+      ['GET', `/api/contracts/${id}/milestones`], ['GET', `/api/contracts/${id}/activity`],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }
 
-    code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...SPECS, ...process.argv.slice(2)], {
+    const args = process.argv.slice(2);
+    const specs = args.some((a) => a.endsWith('.spec.ts')) ? [] : SPECS;
+    code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...specs, ...args], {
       ...process.env,
       PLAYWRIGHT_BASE_URL: baseUrl,
       JOBS_E2E_AUTH_SECRET: authSecret,
       STRIPE_WEBHOOK_SECRET: webhookSecret,
       QA_E2E_ADMIN_USER: qaAdmin,
+      JOBS_MCP_E2E_API_KEY: apiKeys.free,
+      JOBS_MCP_E2E_API_KEY_USER: apiKeys.freeUser,
+      JOBS_MCP_E2E_REVOKED_KEY: apiKeys.revoked,
       // Keep tests/global-setup.ts from seeding the shared Supabase project.
       STORAGE_SUPABASE_URL: '',
       NEXT_PUBLIC_STORAGE_SUPABASE_URL: '',
