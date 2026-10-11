@@ -10,8 +10,10 @@ alwaysApply: false
 
 `app/api/mcp/route.ts` is the JSON-RPC server. Auth via `validateApiKey()` (Bearer/x-api-key →
 Supabase hash → optional Clerk) or `validateBearerToken()` (JWT). Free plan blocked (`-32003`).
-`/api/mcp/[key]` and `/api/mcp/[key]/[serverName]` are path-key surfaces that forward with `X-User-Id`,
-`X-User-Plan`, `X-Auth-Method`, `X-Server-Name`, `X-Api-Key-Id`, `X-Original-Api-Key`.
+`/api/mcp/[key]` and `/api/mcp/[key]/[serverName]` are path-key surfaces: they validate the key in the URL
+and call the `/api/mcp` POST handler in process with a `pathKey` identity as its second argument
+(`src/lib/mcp/path-key-identity.ts`). There is no HTTP self-call. Client-sent `X-User-Id`, `X-User-Plan`,
+`X-Auth-Method`, `X-Server-Name`, `X-Api-Key-Id` and `X-Original-Api-Key` are stripped and never trusted.
 
 Native tools come from `src/config/tools-definitions.ts` (handlers in `src/config/tool-handlers.ts`).
 Marketplace tools are handled separately — see [[marketplace]].

@@ -34,6 +34,7 @@ import {
   type JsonRpcResponse as MCPResponse,
 } from '@/src/lib/mcp/jsonrpc-core';
 import { validateApiKey, validateBearerToken } from '@/src/lib/mcp/auth';
+import { stripClientIdentityHeaders, type McpRouteContext } from '@/src/lib/mcp/path-key-identity';
 
 /**
  * Get the base URL for internal API calls.
@@ -1746,41 +1747,32 @@ async function handleMCPRequest(mcpRequest: MCPRequest, context: MCPContext): Pr
   return dispatchMcpRequest(mcpRequest, context, mcpServer);
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest, routeContext?: McpRouteContext) {
   try {
     const body = await request.json();
+    // Client-supplied identity headers (X-User-Id & co.) are never credentials.
+    const headers = stripClientIdentityHeaders(request.headers);
+    const clientIp = headers.get('x-forwarded-for')?.split(',')[0] ||
+                     headers.get('x-real-ip') ||
+                     'unknown';
+    const userAgent = headers.get('user-agent') || 'unknown';
+    // Extract MCP session ID for A2A context continuity
+    const mcpSessionId = headers.get('mcp-session-id') || undefined;
 
-    // Check for internal forwarded request (from path-based auth)
-    const internalUserId = request.headers.get('X-User-Id');
-    const internalAuthMethod = request.headers.get('X-Auth-Method') as AuthMethod | null;
-    const internalApiKeyId = request.headers.get('X-Api-Key-Id');
-    const internalServerName = request.headers.get('X-Server-Name') || 'default';
-
-    if (internalUserId) {
-      // Request forwarded from /api/mcp/[key] route - already authenticated
-      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
-                       request.headers.get('x-real-ip') ||
-                       'unknown';
-      const userAgent = request.headers.get('user-agent') || 'unknown';
-
-      // Log connection asynchronously (don't await)
-      logConnection(internalApiKeyId || undefined, internalServerName, internalAuthMethod || 'path', clientIp, userAgent);
-
-      // Extract API key from path (forwarded in X-Original-Api-Key header)
-      const originalApiKey = request.headers.get('X-Original-Api-Key');
-      const authorizationHeader = request.headers.get('Authorization');
+    // Called in process by /api/mcp/[key] and /api/mcp/[key]/[serverName], which
+    // authenticated the key in the URL. Unreachable over HTTP.
+    const pathKey = routeContext?.pathKey;
+    if (pathKey) {
+      logConnection(pathKey.apiKeyId, pathKey.serverName, 'path', clientIp, userAgent);
+      const authorizationHeader = headers.get('Authorization');
       const bearerToken = authorizationHeader?.startsWith('Bearer ') ? authorizationHeader.slice(7) : undefined;
-
-      // Extract MCP session ID for A2A context continuity
-      const mcpSessionId = request.headers.get('mcp-session-id') || undefined;
-
       const context: MCPContext = {
-        userId: internalUserId,
-        apiKeyId: internalApiKeyId || undefined,
-        serverName: internalServerName,
+        userId: pathKey.userId,
+        apiKeyId: pathKey.apiKeyId,
+        serverName: pathKey.serverName,
         isAuthenticated: true,
-        plan: request.headers.get('X-User-Plan') || undefined,
-        apiKey: originalApiKey || undefined,
+        plan: pathKey.plan,
+        apiKey: pathKey.apiKey,
         authToken: bearerToken,
         mcpSessionId,
       };
@@ -1789,7 +1781,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for header-based auth (x-api-key or Bearer token)
-    const { apiKey, authMethod } = extractAuth(request.headers);
+    const { apiKey, authMethod } = extractAuth(headers);
 
     if (apiKey) {
       // Use different validation based on auth method
@@ -1822,18 +1814,11 @@ export async function POST(request: NextRequest) {
       }
 
       // Log connection
-      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
-                       request.headers.get('x-real-ip') ||
-                       'unknown';
-      const userAgent = request.headers.get('user-agent') || 'unknown';
       logConnection(authResult.apiKeyId, authResult.serverName || 'default', authResult.authMethod, clientIp, userAgent);
 
       // Determine API key and auth token for REST calls
       const isApiKeyAuth = authMethod === 'header' && !apiKey.startsWith('ey'); // JWT tokens start with 'ey'
       const isBearerAuth = authMethod === 'oauth' || apiKey.startsWith('ey');
-
-      // Extract MCP session ID for A2A context continuity
-      const mcpSessionId = request.headers.get('mcp-session-id') || undefined;
 
       const context: MCPContext = {
         userId: authResult.userId,

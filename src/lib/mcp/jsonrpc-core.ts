@@ -165,12 +165,11 @@ export interface AuthResult {
 
 /**
  * Where the caller's credentials are:
- *   X-User-Id (forwarded by /api/mcp/[key]) → internal
  *   x-api-key → API key
  *   Authorization: Bearer tlz_… → API key; any other Bearer → OAuth / Clerk JWT
+ * Identity headers such as X-User-Id are never credentials (see ./path-key-identity.ts).
  */
 export function extractAuth(headers: { get(name: string): string | null }): { apiKey?: string; authMethod: AuthMethod } {
-  if (headers.get('X-User-Id')) return { authMethod: 'internal' };
   const xApiKey = headers.get('x-api-key');
   if (xApiKey) return { apiKey: xApiKey, authMethod: 'header' };
   const authHeader = headers.get('authorization');

@@ -170,8 +170,9 @@ test('JsonRpcError is an Error with a code', () => {
   assert.equal(e.name, 'JsonRpcError');
 });
 
-test('extractAuth: internal forwarded header wins', () => {
-  assert.deepEqual(extractAuth(headers({ 'X-User-Id': 'u', 'x-api-key': 'k' })), { authMethod: 'internal' });
+test('extractAuth: identity headers are not credentials', () => {
+  assert.deepEqual(extractAuth(headers({ 'X-User-Id': 'u', 'x-api-key': 'k' })), { apiKey: 'k', authMethod: 'header' });
+  assert.deepEqual(extractAuth(headers({ 'X-User-Id': 'u', 'X-Auth-Method': 'path', 'X-Original-Api-Key': 'tlz_x' })), { authMethod: 'none' });
 });
 
 test('extractAuth: x-api-key header', () => {

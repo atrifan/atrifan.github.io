@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { POST as mcpPost } from '@/app/api/mcp/route';
 import { clerkClient } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import { getApiKeyByHash, hashApiKey, getApiKeyByUserAndServer } from '@/src/lib/supabase-services';
@@ -82,65 +83,18 @@ async function validateApiKeyForServer(
   };
 }
 
-// Forward request to main MCP handler with user context
+// Hand the request to the /api/mcp handler in process, with the identity this route
+// authenticated from the key in the URL. No HTTP self-call, no identity headers.
 async function forwardToMCP(request: NextRequest, user: ApiKeyUser, key: string) {
-  const body = await request.text();
-  const baseUrl = request.nextUrl.origin;
-
-  const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
-                   request.headers.get('x-real-ip') ||
-                   'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-User-Id': user.userId,
-    'X-User-Plan': user.plan,
-    'X-Auth-Method': 'path',
-    'X-Server-Name': user.serverName,
-    'x-forwarded-for': clientIp,
-    'user-agent': userAgent,
-  };
-
-  if (user.apiKeyId) {
-    headers['X-Api-Key-Id'] = user.apiKeyId;
-  }
-
-  // Forward the original API key for RAG CSV search and other features that need it
-  headers['X-Original-Api-Key'] = key;
-
-  // Parse body to check method for logging
-  let parsedBody;
-  try {
-    parsedBody = JSON.parse(body);
-  } catch {
-    parsedBody = {};
-  }
-
-  console.log('[MCP Path Route] ===== FORWARDING REQUEST =====');
-  console.log('[MCP Path Route] Method:', parsedBody.method);
-  console.log('[MCP Path Route] Params:', JSON.stringify(parsedBody.params, null, 2));
-  console.log('[MCP Path Route] User:', JSON.stringify({
-    userId: user.userId.substring(0, 8) + '...',
-    serverName: user.serverName,
-    plan: user.plan,
-  }, null, 2));
-  console.log('[MCP Path Route] Forward URL:', `${baseUrl}/api/mcp`);
-  console.log('[MCP Path Route] Headers:', JSON.stringify(headers, null, 2));
-
-  const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
-    method: 'POST',
-    headers,
-    body,
+  return mcpPost(request, {
+    pathKey: {
+      userId: user.userId,
+      apiKeyId: user.apiKeyId,
+      serverName: user.serverName,
+      plan: user.plan,
+      apiKey: key,
+    },
   });
-
-  const result = await mcpResponse.json();
-
-  console.log('[MCP Path Route] Response Status:', mcpResponse.status);
-  console.log('[MCP Path Route] Response:', JSON.stringify(result, null, 2).substring(0, 500));
-  console.log('[MCP Path Route] ===== END FORWARD =====');
-
-  return NextResponse.json(result);
 }
 
 export async function POST(

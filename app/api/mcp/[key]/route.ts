@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { POST as mcpPost } from '@/app/api/mcp/route';
 import { clerkClient } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
@@ -132,51 +133,18 @@ async function validateApiKey(key: string, serverName: string = 'default'): Prom
   };
 }
 
-// Forward request to main MCP handler with user context
+// Hand the request to the /api/mcp handler in process, with the identity this route
+// authenticated from the key in the URL. No HTTP self-call, no identity headers.
 async function forwardToMCP(request: NextRequest, user: ApiKeyUser, key: string) {
-  const body = await request.text();
-
-  // Get the base URL for internal request
-  // Use localhost for internal requests - going through external URL (ngrok/proxy) causes SSL issues
-  const externalOrigin = request.nextUrl.origin;
-  const isLocalDev = process.env.NODE_ENV === 'development';
-  const port = process.env.PORT || '3000';
-  const baseUrl = isLocalDev ? `http://localhost:${port}` : externalOrigin;
-
-  console.log('[MCP Key Route] Forwarding to:', `${baseUrl}/api/mcp`, '(external origin was:', externalOrigin, ')');
-
-  // Forward client info for connection logging
-  const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
-                   request.headers.get('x-real-ip') ||
-                   'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-User-Id': user.userId,
-    'X-User-Plan': user.plan,
-    'X-Auth-Method': 'path',
-    'X-Server-Name': user.serverName,
-    'x-forwarded-for': clientIp,
-    'user-agent': userAgent,
-  };
-
-  // Pass API key ID if available (from Supabase)
-  if (user.apiKeyId) {
-    headers['X-Api-Key-Id'] = user.apiKeyId;
-  }
-
-  // Forward the original API key for RAG CSV search and other features that need it
-  headers['X-Original-Api-Key'] = key;
-
-  const mcpResponse = await fetch(`${baseUrl}/api/mcp`, {
-    method: 'POST',
-    headers,
-    body,
+  return mcpPost(request, {
+    pathKey: {
+      userId: user.userId,
+      apiKeyId: user.apiKeyId,
+      serverName: user.serverName,
+      plan: user.plan,
+      apiKey: key,
+    },
   });
-
-  const result = await mcpResponse.json();
-  return NextResponse.json(result);
 }
 
 export async function POST(
