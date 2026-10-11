@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SignedIn, SignedOut, UserButton, useAuth } from '@clerk/nextjs';
+import { ClerkLoading, SignedIn, SignedOut, UserButton, useAuth } from '@clerk/nextjs';
 import { TulzoMark } from '../brand/TulzoMark';
 import { SURFACE_ICON } from '../brand/SurfaceIcons';
 import { ThemeToggle } from '../theme/ThemeToggle';
@@ -162,6 +162,10 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
 
             <div className="shell-tools">
               <ThemeToggle />
+              {/* Holds the account slot while Clerk loads, so neither "Sign in" nor the avatar flashes in. */}
+              <ClerkLoading>
+                <span className="user-button user-button-pending" aria-hidden="true" />
+              </ClerkLoading>
               <SignedOut>
                 <a href={surfaceUrl('hub', '/sign-in')} className="btn btn-primary btn-sm">
                   Sign in
@@ -199,6 +203,12 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
             <a href="https://www.iubenda.com/terms-and-conditions/11077306" className="iubenda-noiframe">
               Terms
             </a>
+            {/* iubenda reopens the consent preferences on elements with this class. */}
+            <button type="button" className="footer-link-button iubenda-cs-preferences-link">
+              Cookie settings
+            </button>
+            <a href={surfaceUrl('hub', '/legal')}>Legal</a>
+            <a href={surfaceUrl('hub', '/docs')}>Docs</a>
             <a href={surfaceUrl('hub', '/pricing')}>Pricing</a>
           </nav>
           <p className="footer-copy">© {year} Tulzo</p>
