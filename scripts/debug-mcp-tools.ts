@@ -11,7 +11,6 @@
  */
 
 import * as dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { createMCPClient } from '@ai-sdk/mcp';
 
 dotenv.config({ path: '.env.local' });

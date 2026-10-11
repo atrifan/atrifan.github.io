@@ -3,10 +3,6 @@ import { resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
 import { clerkClient, verifyToken } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import { isHigherOrEqualTo } from '@/src/config/billing.config';
-// Wheel colors needed for widget rendering
-import { WHEEL_COLORS } from '@/src/utils/SpinCalculator';
-// Zodiac signs needed for widget rendering
-import { ZODIAC_SIGNS } from '@/src/data/zodiac';
 // Supabase services for API key validation and connection logging
 import {
   getApiKeyByHash,
@@ -126,7 +122,7 @@ async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClien
  * 3. If provider is 'clerk', also verify with Clerk API
  * 4. If not in Supabase, try legacy validation (Clerk or custom encryption)
  */
-async function validateApiKey(key: string, serverName: string = 'default'): Promise<AuthResult> {
+async function validateApiKey(key: string, _serverName: string = 'default'): Promise<AuthResult> {
   // First, check Supabase by hash
   try {
     const keyHash = hashApiKey(key);
@@ -485,17 +481,8 @@ const READ_ONLY_ANNOTATIONS = {
   openWorldHint: false,
 };
 
-// OpenAI widget metadata for tool definitions
-const OPENAI_WIDGET_META = {
-  'openai/toolInvocation/invoking': 'Calculating...',
-  'openai/toolInvocation/invoked': 'Calculation complete',
-  'openai/widgetAccessible': true,
-  'openai/resultCanProduceWidget': true,
-  'openai/widgetPrefersBorder': true,
-};
-
 // Import shared tool definitions with invocation messages
-import { TOOL_DEFINITIONS, TOTAL_TOOL_COUNT, getInvocationMessages } from '@/src/config/tools-definitions';
+import { TOOL_DEFINITIONS, getInvocationMessages } from '@/src/config/tools-definitions';
 
 // Helper to generate _meta for a tool
 function generateToolMeta(toolName: string) {
@@ -558,7 +545,7 @@ const RESOURCES_LIST = TOOLS.map(tool => {
 
 // Import tool definitions for dynamic lookup
 import { getToolDefinition, TOOL_TYPES, ToolExecutionContext } from '@/src/config/tools-definitions';
-import { executeHandlers, widgetRenderers, widgetRenderersOpenAI, textFormatters, templateData as handlerTemplateData } from '@/src/config/tool-handlers';
+import { executeHandlers, textFormatters, templateData as handlerTemplateData } from '@/src/config/tool-handlers';
 
 // Extended context for tool execution including auth info
 interface ExtendedToolContext extends ToolExecutionContext {
@@ -568,24 +555,6 @@ interface ExtendedToolContext extends ToolExecutionContext {
   mcpSessionId?: string; // MCP session ID for A2A context continuity
   userId?: string; // User ID for OAuth token lookup
   serverName?: string; // Server name for OAuth login URL
-}
-
-// Tool execution - looks up handler in registry (sync for NATIVE tools)
-function executeTool(name: string, args: Record<string, unknown>, context?: ToolExecutionContext): unknown {
-  // Get tool definition to check type
-  const toolDef = getToolDefinition(name);
-
-  // For NATIVE tools, use the handler registry
-  if (!toolDef || toolDef.type === TOOL_TYPES.NATIVE) {
-    const handler = executeHandlers[name];
-    if (handler) {
-      return handler(args, context);
-    }
-    throw new Error(`Unknown tool: ${name}`);
-  }
-
-  // For non-NATIVE tools, throw - they should use executeToolAsync
-  throw new Error(`Tool ${name} requires async execution`);
 }
 
 // Async tool execution - handles REST, MCP, GQL, A2A tools
@@ -1208,31 +1177,6 @@ function generateIframeWidgetHtml(toolName: string, data: Record<string, unknown
 // Generate self-contained widget HTML (inline mode)
 function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown>): string {
   const widgetType = getWidgetType(toolName);
-
-  // Get content from registry or use generic fallback
-  let content = '';
-  const renderer = widgetRenderers[toolName];
-  if (renderer) {
-    content = renderer(data);
-  } else {
-    // Generic fallback for tools not in registry
-    const entries = Object.entries(data).filter(([k]) => k !== 'message');
-    const hasData = entries.length > 0 && !data.message;
-    if (hasData) {
-      content = `
-        <div class="header">🔧 Result</div>
-        <div class="stats" style="grid-template-columns:1fr">
-          ${entries.slice(0, 6).map(([k, v]) => `<div class="stat-box"><div class="stat-label">${k.replace(/([A-Z])/g, ' $1').trim()}</div><div class="stat-value">${typeof v === 'object' ? JSON.stringify(v) : v}</div></div>`).join('')}
-        </div>`;
-    } else {
-      content = `
-        <div class="header">⏳ Awaiting Data</div>
-        <div style="text-align:center;padding:2rem 1rem;color:rgba(255,255,255,0.6)">
-          <div style="font-size:2.5rem;margin-bottom:0.5rem">🔄</div>
-          <div>Waiting for tool execution...</div>
-        </div>`;
-    }
-  }
 
   // Generate HTML with OpenAI SDK support and Claude fallback
   // Start with LOADING state, then:
@@ -2187,7 +2131,6 @@ export async function POST(request: NextRequest) {
 
     // Check for internal forwarded request (from path-based auth)
     const internalUserId = request.headers.get('X-User-Id');
-    const internalPlan = request.headers.get('X-User-Plan');
     const internalAuthMethod = request.headers.get('X-Auth-Method') as AuthMethod | null;
     const internalApiKeyId = request.headers.get('X-Api-Key-Id');
     const internalServerName = request.headers.get('X-Server-Name') || 'default';

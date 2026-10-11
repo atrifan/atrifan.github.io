@@ -912,7 +912,7 @@ async function executeTriggerAutomation(
  */
 async function executeDelay(
   step: DelayStep,
-  state: ExecutionState
+  _state: ExecutionState
 ): Promise<ExecutionResult> {
   const seconds = step.delay;
 

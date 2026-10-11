@@ -90,7 +90,7 @@ function calculateMoodBasedTip(serviceQuality: number, mood: number, budgetSitua
   // Budget modifier: very_tight=-5, tight=-2, normal=0, comfortable=+1, generous=+2
   const budgetMod = budgetSituation === 1 ? -5 : budgetSituation === 2 ? -2 : budgetSituation === 3 ? 0 : budgetSituation === 4 ? 1 : 2;
   
-  let suggested = serviceBase + moodMod + budgetMod;
+  const suggested = serviceBase + moodMod + budgetMod;
   // Clamp to reasonable range (5% - 30%)
   return Math.max(5, Math.min(30, Math.round(suggested)));
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
 import { Footer } from '../components/Footer';
 import { AdBanner } from '../components/AdBanner';
 import { ADS_CONFIG } from '../config/ads.config';
@@ -737,7 +736,6 @@ interface ControlPanelPageProps {
 }
 
 export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownloads }) => {
-  const { user } = useUser();
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'publisher' | 'budget'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);

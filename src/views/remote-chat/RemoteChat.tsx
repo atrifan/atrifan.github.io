@@ -346,7 +346,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const [pendingReplay, setPendingReplay] = useState<ReplayNetworkPayload | null>(null);
   const [pendingReplayId, setPendingReplayId] = useState<string | null>(null);
   const [brainQuestions, setBrainQuestions] = useState<{ questionId: string; questions: BrainQuestion[] } | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner] = useState<string | null>(null);
 
   // ── Voice (STT/TTS) ──────────────────────────────────────────────────────────
   // Ported from the plugin panel. Difference: the plugin ran STT in the active tab

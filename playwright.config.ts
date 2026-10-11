@@ -7,34 +7,97 @@ loadEnv({ path: '.env.local' });
 /**
  * Playwright config for Tulzo.
  *
- * - tests/e2e  — API/integration + UI end-to-end
- * - tests/a11y — accessibility scans (@axe-core/playwright)
+ * Projects
+ * - chromium        tests/e2e/**  (desktop, path-prefix mode on :3000)
+ * - light-desktop / light-mobile / dark-desktop / dark-mobile
+ *                   tests/visual/** and tests/a11y/**, colorScheme light|dark at
+ *                   1280x800 and 390x844
+ * - surface-ai      tests/e2e/**\/*.surface-ai.spec.ts  on :3001 (TULZO_SURFACE=ai)
+ * - surface-hub     tests/e2e/**\/*.surface-hub.spec.ts on :3002 (TULZO_SURFACE=hub)
  *
- * The dev server is started automatically unless one is already running.
- * Base URL can be overridden with PLAYWRIGHT_BASE_URL.
+ * The surface servers run with NEXT_PUBLIC_ROOT_DOMAIN=tulzo.test, so
+ * cross-surface redirects point at https://<surface>.tulzo.test (asserted from
+ * the Location header, never followed). Each uses its own NEXT_DIST_DIR so it
+ * can run next to the main dev server.
+ *
+ * Locally the main server is `npm run dev` (reused if already running). In CI
+ * it is `npm run start`, so run `npm run build` first.
+ * PLAYWRIGHT_BASE_URL overrides the main server URL (then no server is started for it).
  */
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+const PORT = 3000;
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`;
+const CI = !!process.env.CI;
+
+export const SURFACE_TEST_ROOT_DOMAIN = 'tulzo.test';
+
+const surfaceServer = (surface: 'ai' | 'hub', port: number) => ({
+  command: `npx next dev -p ${port}`,
+  url: `http://localhost:${port}/robots.txt`,
+  reuseExistingServer: !CI,
+  timeout: 180_000,
+  env: {
+    TULZO_SURFACE: surface,
+    NEXT_PUBLIC_ROOT_DOMAIN: SURFACE_TEST_ROOT_DOMAIN,
+    NEXT_DIST_DIR: `.next-surface-${surface}`,
+  },
+});
+
+const desktop = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } };
+// Chromium with a phone viewport and touch; Playwright's iPhone presets need WebKit.
+const mobile = { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } };
+const themed = /(visual|a11y)\/.*\.spec\.ts$/;
 
 export default defineConfig({
   testDir: 'tests',
+  testIgnore: ['unit/**', 'integration/**'],
   globalSetup: './tests/global-setup.ts',
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  timeout: 60_000,
+  expect: {
+    timeout: 10_000,
+    toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled', caret: 'hide' },
+  },
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  forbidOnly: CI,
+  retries: CI ? 1 : 0,
+  reporter: CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      testMatch: /e2e\/.*\.spec\.ts$/,
+      testIgnore: /\.surface-(ai|hub)\.spec\.ts$/,
+      use: desktop,
+    },
+    { name: 'light-desktop', testMatch: themed, use: { ...desktop, colorScheme: 'light' } },
+    { name: 'light-mobile', testMatch: themed, use: { ...mobile, colorScheme: 'light' } },
+    { name: 'dark-desktop', testMatch: themed, use: { ...desktop, colorScheme: 'dark' } },
+    { name: 'dark-mobile', testMatch: themed, use: { ...mobile, colorScheme: 'dark' } },
+    {
+      name: 'surface-ai',
+      testMatch: /\.surface-ai\.spec\.ts$/,
+      use: { ...desktop, baseURL: 'http://localhost:3001' },
+    },
+    {
+      name: 'surface-hub',
+      testMatch: /\.surface-hub\.spec\.ts$/,
+      use: { ...desktop, baseURL: 'http://localhost:3002' },
+    },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    ...(process.env.PLAYWRIGHT_BASE_URL
+      ? []
+      : [
+          {
+            command: CI ? `npx next start -p ${PORT}` : `npx next dev -p ${PORT}`,
+            url: baseURL,
+            reuseExistingServer: !CI,
+            timeout: 180_000,
+          },
+        ]),
+    surfaceServer('ai', 3001),
+    surfaceServer('hub', 3002),
+  ],
 });

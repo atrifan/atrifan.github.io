@@ -299,7 +299,6 @@ export class BudgetCalculator {
 
     // For yearly compounding: track months in current year cycle
     let monthsInCurrentYear = 0;
-    let yearStartBalance = input.currentSavings; // Balance at start of current year cycle
 
     for (let i = 0; i < maxMonths; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -351,7 +350,6 @@ export class BudgetCalculator {
 
             // Reset for next year
             monthsInCurrentYear = 0;
-            yearStartBalance = nextMonthStart;
           } else {
             // Before year end: next month starts with just the principal (no interest yet)
             nextMonthStart = principalBalance;

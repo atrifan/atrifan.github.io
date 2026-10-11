@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import Stripe from 'stripe';
 
 import { getStripe } from '@/src/lib/stripe';
 import { MISCONFIGURED } from '@/src/lib/misconfigured';
