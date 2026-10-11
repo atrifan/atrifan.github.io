@@ -68,3 +68,13 @@ describe('surfaceUrl with no root domain (path-prefix mode)', () => {
     expect(surfaceUrl('gigs', '/', { rootDomain: undefined })).toBe('/gigs');
   });
 });
+
+describe('surfaceUrl edge cases (from mutation testing)', () => {
+  it('drops several trailing slashes from the root domain', () => {
+    expect(surfaceUrl('ai', '/', { rootDomain: 'tulzo.online//' })).toBe('https://ai.tulzo.online/');
+  });
+
+  it('keeps a trailing slash on a non-home path in path-prefix mode', () => {
+    expect(surfaceUrl('ai', '/keys/', { rootDomain: '' })).toBe('/ai/keys/');
+  });
+});

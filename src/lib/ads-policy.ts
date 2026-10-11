@@ -1,4 +1,4 @@
-import { SURFACE_PREFIX, type Surface } from './surface-url';
+import type { Surface } from './surface-url';
 
 /**
  * Where the single footer ad may appear. Kept to the minimum: signed-out
@@ -27,8 +27,6 @@ export function footerAdAllowed({
   if (surface === 'hub') return pathname === '/' || pathname === '/docs' || pathname.startsWith('/docs/');
   if (surface !== 'marketplace' && surface !== 'gigs') return false;
 
-  const prefix = SURFACE_PREFIX[surface];
-  const local = pathname === prefix || pathname.startsWith(`${prefix}/`) ? pathname.slice(prefix.length) : pathname;
-  const segments = local.split('/').filter(Boolean);
-  return !segments.some((s) => BLOCKED_SEGMENTS[surface]!.includes(s));
+  // The surface prefix (path-prefix mode) is never a blocked segment, so the full path can be checked as is.
+  return !pathname.split('/').some((s) => BLOCKED_SEGMENTS[surface]!.includes(s));
 }

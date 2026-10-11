@@ -76,3 +76,21 @@ describe('resolveClerkOAuthClient', () => {
     expect(resolveClerkOAuthClient({ NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID: '' }, { requireSecret: false })).toBeNull();
   });
 });
+
+describe('resolveClerkFrontendApi host validation (from mutation testing)', () => {
+  const key = (decoded: string) => `pk_live_${Buffer.from(`${decoded}$`).toString('base64')}`;
+
+  it('accepts a production host with several labels after clerk', () => {
+    expect(resolveClerkFrontendApi({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key('clerk.app.tulzo.online') })).toBe(
+      'https://clerk.app.tulzo.online',
+    );
+  });
+
+  it('rejects a decoded value with a path or junk before the host', () => {
+    expect(resolveClerkFrontendApi({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key('evil.example/x.clerk.accounts.dev') })).toBeNull();
+  });
+
+  it('rejects a decoded value with a path after the host', () => {
+    expect(resolveClerkFrontendApi({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key('a.clerk.accounts.dev/evil') })).toBeNull();
+  });
+});

@@ -249,3 +249,18 @@ describe('routeRequest without an explicit rootDomain', () => {
     });
   });
 });
+
+describe('routeRequest edge cases (from mutation testing)', () => {
+  it('names the valid surfaces in the error', () => {
+    expect(() => resolveSurface('x')).toThrow('expected one of hub, ai, marketplace, gigs, chat');
+  });
+
+  it('only treats root-level files as static', () => {
+    expect(route('ai', '/docs/v1.2')).toEqual({ action: 'rewrite', destination: '/ai/docs/v1.2' });
+    expect(route('ai', '/v1.2/notes')).toEqual({ action: 'rewrite', destination: '/ai/v1.2/notes' });
+  });
+
+  it('drops every trailing slash from a /dashboard deep link', () => {
+    expect(route('hub', '/dashboard/keys//')).toEqual({ action: 'redirect', destination: '/ai/keys' });
+  });
+});

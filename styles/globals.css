@@ -520,6 +520,10 @@ ol[role='list'] {
   margin-bottom: var(--space-3);
 }
 
+.card-center .actions {
+  margin-top: var(--space-5);
+}
+
 .card-title {
   font-size: var(--text-lg);
   margin-bottom: var(--space-2);

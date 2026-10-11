@@ -20,3 +20,17 @@ describe('absoluteSurfaceUrl', () => {
     expect(absoluteSurfaceUrl('marketplace', '/', { PORT: '3002' })).toBe('http://localhost:3002/marketplace');
   });
 });
+
+describe('absoluteSurfaceUrl edge cases (from mutation testing)', () => {
+  it('defaults the path to /', () => {
+    expect(absoluteSurfaceUrl('gigs', undefined, { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' })).toBe('https://gigs.tulzo.online/');
+  });
+
+  it('keeps an http root domain absolute instead of prefixing an origin', () => {
+    expect(absoluteSurfaceUrl('ai', '/x', { NEXT_PUBLIC_ROOT_DOMAIN: 'http://lvh.me:3000' })).toBe('http://ai.lvh.me:3000/x');
+  });
+
+  it('still adds the origin when a relative path merely contains a URL', () => {
+    expect(absoluteSurfaceUrl('hub', '/r?u=https://x', {})).toBe('http://localhost:3000/r?u=https://x');
+  });
+});

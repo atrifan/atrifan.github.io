@@ -13,7 +13,7 @@ frontmatter (`description`, `appliesTo` globs, `alwaysApply`). Read the ones rel
 | [database](.claude/rules/database.md) | Supabase tables, RLS, marketplace schema, service helpers |
 | [coding-standards](.claude/rules/coding-standards.md) | TypeScript conventions, file org, error handling |
 | [tdd](.claude/rules/tdd.md) | **Write behavior-only failing tests first, via a QA agent** |
-| [testing](.claude/rules/testing.md) | Playwright + axe layout, scripts, auth-in-tests |
+| [testing](.claude/rules/testing.md) | Test suites and runners, Playwright projects, visual baselines, auth-in-tests |
 | [marketplace](.claude/rules/marketplace.md) | Discover / publish / install — API + MCP contracts, moderation |
 | [ai-config](.claude/rules/ai-config.md) | Models, pricing, token budgets, subscription tiers |
 | [automation-yaml](.claude/rules/automation-yaml.md) | Workflow YAML schema, step types, execution |
@@ -33,8 +33,13 @@ npm install
 npm run dev          # dev server
 npm run build        # production build
 npm run type-check   # tsc --noEmit
-npm test             # Playwright (see testing rule)
+npm run lint         # next lint (.eslintrc.json)
+npm run test:unit    # node:test + Vitest
+npm test             # Playwright: e2e, surfaces, a11y + visual in light/dark (see testing rule)
 ```
+
+`.env.local` is not in the repo; copy it from a teammate. Leave `TULZO_SURFACE` unset locally (see the
+[surfaces-and-design](.claude/rules/surfaces-and-design.md) rule).
 
 ## Conventions worth stating up front
 

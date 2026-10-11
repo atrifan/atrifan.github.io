@@ -44,9 +44,8 @@ export function surfaceUrl(surface: Surface, path: string = '/', opts?: SurfaceU
     return prefix + normalized;
   }
 
-  const match = /^(https?:\/\/)?(.*)$/.exec(root);
-  const scheme = match?.[1] ?? 'https://';
-  const host = match?.[2] ?? root;
+  const scheme = /^https?:\/\//.exec(root)?.[0];
+  const host = scheme ? root.slice(scheme.length) : root;
   const fullHost = surface === 'hub' ? host : `${surface}.${host}`;
-  return `${scheme}${fullHost}${normalized}`;
+  return `${scheme ?? 'https://'}${fullHost}${normalized}`;
 }
