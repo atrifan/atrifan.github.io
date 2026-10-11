@@ -21,20 +21,27 @@ alwaysApply: true
 
 ```
 app/                    # Next.js App Router
-├── api/                # API routes (ai, mcp, marketplace, oauth, plugin, packages, push, webhooks)
-├── (auth)/             # Sign-in / sign-up
-├── automation/ chat/ dashboard/   # Pages
+├── api/                # API routes (mcp, marketplace, oauth, plugin, packages, billing, webhooks, …)
+├── page.tsx pricing/ sign-in/ sign-up/   # hub pages
+├── dashboard/          # control panel (ai surface, moves to app/(ai)/ai later)
+├── ai/ marketplace/ gigs/ chat/          # surface homes under their prefix (see surfaces-and-design)
+├── robots.txt/ sitemap.ts icon.svg opengraph-image.tsx
+├── layout.tsx providers.tsx              # no-flash theme script, Clerk + Spectrum + AppShell
 
 src/
+├── components/         # shell/AppShell, theme/, brand/ (TulzoMark, SurfaceIcons), AdBanner
 ├── config/             # ai-tokens.config.ts (⭐ models/pricing), tools-definitions.ts, billing.config.ts
-├── lib/                # automation/, mcp-client.ts, supabase-services.ts, marketplace-service.ts, admin.ts
-├── views/              # Large page components (ControlPanelPage, AutomationPage, ChatPage, PackageAdminPage)
+├── lib/                # surface-routing, surface-url, theme, seo, mcp-client, supabase-services, marketplace-service, admin
+├── views/              # Page components (HomePage, PricingPage, ControlPanelPage, PackageAdminPage, RemoteChatPage, remote-chat/)
 └── types/supabase.ts   # DB types
+
+styles/tokens.css       # design tokens (light/dark); styles/globals.css: reset + shared classes
 
 supabase/migrations/    # Schema (run in order)
 ```
 
-Note: `src/views/DashboardPage.tsx` is legacy/orphaned — the live control panel is `src/views/ControlPanelPage.tsx`, mounted at `/dashboard`.
+The live control panel is `src/views/ControlPanelPage.tsx`, mounted at `/dashboard`. Views no `app/` page
+reaches get deleted, not kept around.
 
 ## Path aliases
 

@@ -21,6 +21,7 @@ frontmatter (`description`, `appliesTo` globs, `alwaysApply`). Read the ones rel
 | [plugin-control-plane](.claude/rules/plugin-control-plane.md) | Assistant ↔ Tulzo, API keys, observability |
 | [plugin-admin](.claude/rules/plugin-admin.md) | Skill enable/disable, settings, notification channels, schedules, plugin catalog |
 | [api-routes](.claude/rules/api-routes.md) | API route reference |
+| [surfaces-and-design](.claude/rules/surfaces-and-design.md) | `TULZO_SURFACE` routing, `surfaceUrl`, AppShell, tokens, theme, brand icons, ads |
 
 ## Quick start
 

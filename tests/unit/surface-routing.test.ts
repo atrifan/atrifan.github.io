@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   activeSurface,
   isProtectedPath,
@@ -221,5 +221,23 @@ describe('activeSurface', () => {
     expect(activeSurface({ surface: null, pathname: '/' })).toBe('hub');
     expect(activeSurface({ surface: null, pathname: '/pricing' })).toBe('hub');
     expect(activeSurface({ surface: null, pathname: '/airport' })).toBe('hub');
+  });
+});
+
+describe('routeRequest without an explicit rootDomain', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('reads NEXT_PUBLIC_ROOT_DOMAIN, as middleware calls it', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'tulzo.test');
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard' })).toEqual({
+      action: 'redirect',
+      destination: 'https://ai.tulzo.test/',
+    });
+    expect(routeRequest({ surface: 'ai', pathname: '/sign-in' })).toEqual({
+      action: 'redirect',
+      destination: 'https://tulzo.test/sign-in',
+    });
   });
 });

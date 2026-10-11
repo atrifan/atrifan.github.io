@@ -1,10 +1,10 @@
-'use client';
+import type { Metadata } from 'next';
+import { NotFoundPage } from '@/src/views/NotFoundPage';
 
-import dynamic from 'next/dynamic';
-
-const NotFoundPage = dynamic(() => import('@/src/views/NotFoundPage').then(mod => mod.NotFoundPage), {
-  ssr: false,
-});
+export const metadata: Metadata = {
+  title: 'Page not found',
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return <NotFoundPage />;

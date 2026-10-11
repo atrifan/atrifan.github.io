@@ -14,7 +14,8 @@ assistant uses these over HTTP **and** as MCP tools. Core logic lives in `src/li
 
 API-key routes reuse `authenticateApiKey(authHeader)` from `marketplace-service.ts`:
 Bearer → `hashApiKey` → `getApiKeyByHash` → reject `plan==='free'` with 403 `plan_required`.
-These routes are listed in `middleware.ts` `isPublicRoute` so Clerk doesn't intercept them.
+`middleware.ts` never blocks API routes for auth (handlers authenticate), and the marketplace surface serves
+`/api/marketplace/*` and `/api/packages/*` (`SURFACE_API_ALLOWLIST`).
 
 ## HTTP contract
 

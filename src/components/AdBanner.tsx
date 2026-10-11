@@ -1,159 +1,62 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View } from '@adobe/react-spectrum';
-import { ADS_CONFIG, getAdClient, shouldShowAds } from '../config/ads.config';
+'use client';
 
-interface AdBannerProps {
-  slot: string;
-  format?: 'auto' | 'horizontal' | 'vertical';
-  style?: React.CSSProperties;
-  /** Delay in ms before showing ad - ensures content loads first */
-  delay?: number;
-  /** Only show ad when this condition is true (e.g., when results are available) */
-  showWhen?: boolean;
+import { useEffect, useRef, useState } from 'react';
+import { ADS_CONFIG } from '../config/ads.config';
+
+declare global {
+  interface Window {
+    adsbygoogle?: unknown[];
+  }
 }
 
 /**
- * Google AdSense Banner Component
- * Matches AdSense's expected code structure:
- * - <ins> element with required data attributes
- * - Push call to initialize the ad
- *
- * AdSense Policy Compliance:
- * - Delays ad loading to ensure content is present (2s default)
- * - Can conditionally show ads only when meaningful content exists
+ * The single footer ad slot. Small (max 100px tall), reserved space so it
+ * never shifts the layout, and lazy: the AdSense <ins> is only created once
+ * the slot scrolls into view. The AppShell decides whether to render it.
  */
-export const AdBanner: React.FC<AdBannerProps> = ({
-  slot,
-  format = 'auto',
-  style = {},
-  delay = 2000,
-  showWhen = true
-}) => {
-  const adRef = useRef<HTMLModElement>(null);
-  const isAdLoaded = useRef(false);
-  const [isReady, setIsReady] = useState(false);
-
-  // Delay ad rendering to ensure page content loads first
-  useEffect(() => {
-    if (!showWhen) {
-      setIsReady(false);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [delay, showWhen]);
+export function AdBanner({ slot = ADS_CONFIG.footerSlot }: { slot?: string }) {
+  const ref = useRef<HTMLElement>(null);
+  const [inView, setInView] = useState(false);
 
   useEffect(() => {
-    // Only load ads when enabled, ready, and only once per component
-    // Note: Google won't serve real ads on localhost, but we can test the containers
-    if (!shouldShowAds() || ADS_CONFIG.testMode || !isReady) {
-      return;
-    }
-
-    // Prevent double-loading
-    if (isAdLoaded.current) {
-      return;
-    }
-
-    try {
-      const adsbygoogle = (window as any).adsbygoogle;
-      if (adsbygoogle && adRef.current) {
-        adsbygoogle.push({});
-        isAdLoaded.current = true;
-      }
-    } catch (err) {
-      console.error('AdSense error:', err);
-    }
-  }, [slot, isReady]);
-
-  // Don't render if ads are disabled or showWhen condition is false
-  if (!shouldShowAds() || !showWhen) {
-    return null;
-  }
-
-  // Show placeholder in test mode only
-  if (ADS_CONFIG.testMode) {
-    if (!isReady) return null;
-
-    // Match production dimensions in dev mode
-    const isVertical = format === 'vertical';
-    const height = isVertical ? '250px' : '90px';
-
-    return (
-      <View
-        borderRadius="medium"
-        marginY="size-200"
-        UNSAFE_style={{
-          width: '100%',
-          maxWidth: '38rem',
-          height,
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)',
-          border: '2px dashed rgba(255, 255, 255, 0.2)',
-          borderRadius: '12px',
-          position: 'relative',
-          zIndex: 10,
-          ...style
-        }}
-      >
-        <div style={{
-          textAlign: 'center',
-          color: 'rgba(255, 255, 255, 0.4)',
-          padding: '0.5rem'
-        }}>
-          <span style={{ fontSize: '1rem', display: 'block', marginBottom: '0.15rem' }}>📢</span>
-          <span style={{ fontSize: '0.7rem' }}>Ad: {slot} ({isVertical ? 'vertical' : 'horizontal'} - {height})</span>
-        </div>
-      </View>
+    const el = ref.current;
+    if (!el || inView) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '0px 0px 0px 0px' },
     );
-  }
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
 
-  // Don't render production ad until ready (content has loaded)
-  if (!isReady) {
-    return null;
-  }
+  useEffect(() => {
+    if (!inView) return;
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch {
+      // Blocked or not loaded: the slot stays empty.
+    }
+  }, [inView]);
 
-  // Production ad - matches AdSense code structure exactly
-  // Use horizontal format with constrained height like SideAds (6rem = 96px)
-  const isVertical = format === 'vertical';
-  const horizontalHeight = '90px'; // Similar to SideAds 6rem
+  if (!ADS_CONFIG.enabled) return null;
 
   return (
-    <View
-      marginY="size-200"
-      UNSAFE_style={{
-        width: '100%',
-        maxWidth: '38rem',
-        margin: '0 auto',
-        height: isVertical ? '250px' : horizontalHeight,
-        maxHeight: isVertical ? undefined : horizontalHeight,
-        overflow: 'hidden',
-        position: 'relative',
-        zIndex: 10,
-        ...style
-      }}
-    >
-      <ins
-        ref={adRef}
-        className="adsbygoogle"
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-        }}
-        data-ad-client={getAdClient()}
-        data-ad-slot={slot}
-        data-ad-format={isVertical ? 'vertical' : 'horizontal'}
-        data-full-width-responsive="true"
-      />
-    </View>
+    <aside ref={ref} className="ad-slot" data-ad-slot={slot} aria-label="Advertisement">
+      {inView && (
+        <ins
+          className="adsbygoogle"
+          style={{ display: 'block', width: '100%', height: '100%' }}
+          data-ad-client={ADS_CONFIG.publisherId}
+          data-ad-slot={slot}
+          data-ad-format="horizontal"
+          data-full-width-responsive="false"
+        />
+      )}
+    </aside>
   );
-};
-
+}

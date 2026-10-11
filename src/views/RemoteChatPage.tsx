@@ -5,6 +5,7 @@ import { RemoteChat } from './remote-chat/RemoteChat';
 import type { RelaySession } from './remote-chat/frames';
 import { extensionBridge } from '../lib/extension-bridge';
 import './remote-chat/RemoteChat.css';
+import { ClientOnly } from '../components/ClientOnly';
 
 interface Device {
   id: string; // api_key_id
@@ -60,7 +61,18 @@ function relativeSeen(iso: string | null): string {
   return `${days}d ago`;
 }
 
+/** Remote chat keeps its own dark panel styling (RemoteChat.css) until the chat track restyles it. */
 export function RemoteChatPage() {
+  return (
+    <ClientOnly>
+      <div data-theme="dark" className="dark-island">
+        <RemoteChatPageInner />
+      </div>
+    </ClientOnly>
+  );
+}
+
+function RemoteChatPageInner() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SelectedDevice | null>(null);

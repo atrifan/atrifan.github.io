@@ -1,6 +1,6 @@
 ---
 description: AI models, pricing, token budgets, and subscription tiers
-appliesTo: ["src/config/ai-tokens.config.ts", "app/api/ai/**"]
+appliesTo: ["src/config/ai-tokens.config.ts", "app/api/chat/**"]
 alwaysApply: false
 ---
 

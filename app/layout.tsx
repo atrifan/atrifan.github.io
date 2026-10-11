@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from 'next';
-import { ClerkProvider } from '@clerk/nextjs';
-import { dark } from '@clerk/themes';
 import Script from 'next/script';
 import { Providers } from './providers';
+import { resolveSurface } from '@/src/lib/surface-routing';
+import { absoluteSurfaceUrl } from '@/src/lib/site-url';
+import { noFlashThemeScript } from '@/src/lib/theme';
+import '@/styles/tokens.css';
 import '@/styles/globals.css';
 
+const surface = resolveSurface(process.env.TULZO_SURFACE);
+const siteUrl = absoluteSurfaceUrl(surface ?? 'hub', '/');
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://tulzo.vercel.app'),
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'Tex by Tulzo - Your Personal AI Assistant',
     template: '%s | Tex by Tulzo',
@@ -30,40 +35,31 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://tulzo.vercel.app',
+    url: siteUrl,
     siteName: 'Tulzo',
     title: 'Tex by Tulzo - Your Personal AI Assistant',
     description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
-    images: [
-      {
-        url: '/tulzo-og.svg',
-        width: 1200,
-        height: 630,
-        alt: 'Tex by Tulzo - Personal AI Assistant',
-      },
-    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Tex by Tulzo - Your Personal AI Assistant',
     description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
-    images: ['/tulzo-og.svg'],
   },
+  // app/icon.svg is the favicon (Next file convention); the PNG stays for Apple touch icons.
   icons: {
-    icon: '/tulzo-logo.png',
     apple: '/tulzo-logo.png',
   },
   manifest: '/manifest.json',
-  verification: {
-    google: 'G-QSNTL3PGRJ',
-  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: '#667eea',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fbfaf8' },
+    { media: '(prefers-color-scheme: dark)', color: '#161616' },
+  ],
   // iOS notch/safe area handling
   viewportFit: 'cover',
   // Android keyboard behavior - resizes content instead of panning
@@ -78,6 +74,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Sets data-theme before first paint (no flash of the wrong theme). */}
+        <script dangerouslySetInnerHTML={{ __html: noFlashThemeScript() }} />
         {/* Google AdSense - account verification only, ads are manually rendered */}
         <meta name="google-adsense-account" content="ca-pub-7299057534028491" />
 
@@ -101,10 +99,6 @@ export default function RootLayout({
           strategy="afterInteractive"
           crossOrigin="anonymous"
         />
-
-        {/* Preconnect for performance */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
         {/* Suppress hydration warnings from browser extensions */}
         <Script id="extension-cleanup" strategy="beforeInteractive">
@@ -142,19 +136,7 @@ export default function RootLayout({
         </Script>
       </head>
       <body suppressHydrationWarning>
-        <ClerkProvider
-          appearance={{
-            baseTheme: dark,
-            variables: {
-              colorPrimary: '#667eea',
-              colorBackground: '#1e293b',
-              colorInputBackground: '#0f172a',
-              colorText: '#ffffff',
-            },
-          }}
-        >
-          <Providers>{children}</Providers>
-        </ClerkProvider>
+        <Providers surface={surface}>{children}</Providers>
 
         {/* iubenda - dynamically loaded based on domain */}
         <Script id="iubenda-dynamic" strategy="afterInteractive">

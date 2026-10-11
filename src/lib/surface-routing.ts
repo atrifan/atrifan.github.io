@@ -104,7 +104,8 @@ export function routeRequest({ surface, pathname, rootDomain }: RouteInput): Rou
     return next;
   }
 
-  const url = (s: Surface, p: string) => surfaceUrl(s, p, { rootDomain });
+  // Omitted rootDomain means "read NEXT_PUBLIC_ROOT_DOMAIN" (surfaceUrl's default).
+  const url = (s: Surface, p: string) => surfaceUrl(s, p, rootDomain === undefined ? undefined : { rootDomain });
 
   if (underPrefix(pathname, '/api')) {
     const allow = SURFACE_API_ALLOWLIST[surface];
