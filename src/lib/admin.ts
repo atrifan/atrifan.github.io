@@ -7,7 +7,7 @@ import { currentUser } from '@clerk/nextjs/server';
  */
 const SEED_ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
 
-function getAdminEmails(): string[] {
+export function getAdminEmails(): string[] {
   const fromEnv = (process.env.ADMIN_EMAILS || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
