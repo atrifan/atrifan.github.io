@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
+    "@clerk/testing": "^2.2.45",
     "@playwright/test": "^1.49.1",
     "@types/katex": "^0.16.8",
     "@types/node": "^20.17.12",

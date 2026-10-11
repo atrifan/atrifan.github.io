@@ -45,3 +45,6 @@ tsconfig.tsbuildinfo
 /playwright-report/
 /blob-report/
 /.playwright/
+
+# Playwright signed-in sessions
+tests/.auth/

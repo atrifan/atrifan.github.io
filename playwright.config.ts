@@ -66,16 +66,20 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
+    // Signs in the Clerk E2E users once (tests/setup/auth.setup.spec.ts); signed-in
+    // specs depend on it and use storageState from tests/fixtures/clerk-users.ts.
+    { name: 'setup', testMatch: /setup\/auth\.setup\.spec\.ts$/, use: desktop },
     {
       name: 'chromium',
+      dependencies: ['setup'],
       testMatch: /e2e\/.*\.spec\.ts$/,
       testIgnore: /\.surface-(ai|hub)\.spec\.ts$/,
       use: desktop,
     },
-    { name: 'light-desktop', testMatch: themed, use: { ...desktop, colorScheme: 'light' } },
-    { name: 'light-mobile', testMatch: themed, use: { ...mobile, colorScheme: 'light' } },
-    { name: 'dark-desktop', testMatch: themed, use: { ...desktop, colorScheme: 'dark' } },
-    { name: 'dark-mobile', testMatch: themed, use: { ...mobile, colorScheme: 'dark' } },
+    { name: 'light-desktop', dependencies: ['setup'], testMatch: themed, use: { ...desktop, colorScheme: 'light' } },
+    { name: 'light-mobile', dependencies: ['setup'], testMatch: themed, use: { ...mobile, colorScheme: 'light' } },
+    { name: 'dark-desktop', dependencies: ['setup'], testMatch: themed, use: { ...desktop, colorScheme: 'dark' } },
+    { name: 'dark-mobile', dependencies: ['setup'], testMatch: themed, use: { ...mobile, colorScheme: 'dark' } },
     {
       // tests/integration/*.spec.ts (e.g. notify.spec.ts, `npm run test:integration:notify`).
       name: 'integration',
