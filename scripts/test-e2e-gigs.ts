@@ -5,7 +5,11 @@
  *
  * - Postgres + PostgREST in Docker (tests/support/gigs-test-db.ts), never the shared project
  * - a fake Stripe API (tests/support/fake-stripe.ts) via STRIPE_API_BASE, test keys only
- * - AI Gateway key blanked, so nothing can call a model
+ * - a fake GitHub API (tests/support/fake-github.ts) via GITHUB_API_BASE, for send_project
+ * - AI Gateway key blanked, so nothing can call a model; Resend and the notify Postgres
+ *   URLs blanked, so no email is queued in or sent from a real system
+ * - a random PAT_ENCRYPTION_KEY and one admin (ADMIN_USER_IDS, passed to the specs as
+ *   QA_E2E_ADMIN_USER)
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
  * Everything is torn down afterwards.
  */
@@ -14,6 +18,9 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
+import { startFakeGithub } from '../tests/support/fake-github';
+
+const SPECS = ['tests/e2e/gigs-api.spec.ts', 'tests/e2e/submission-mcp.spec.ts', 'tests/e2e/admin-qa-mcp.spec.ts'];
 
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.GIGS_E2E_PORT || 3100);
@@ -43,6 +50,8 @@ function run(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<numbe
 async function main() {
   const db = await startGigsTestDb();
   const stripe = await startFakeStripe();
+  const github = await startFakeGithub();
+  const qaAdmin = `e2e_qa_admin_${randomBytes(4).toString('hex')}`;
   const authSecret = randomBytes(24).toString('hex');
   const webhookSecret = `whsec_e2e_${randomBytes(12).toString('hex')}`;
   let server: ChildProcess | null = null;
@@ -61,6 +70,14 @@ async function main() {
       AI_GATEWAY_API_KEY: '',
       JOBS_E2E_AUTH_SECRET: authSecret,
       NEXT_PUBLIC_APP_URL: baseUrl,
+      GITHUB_API_BASE: github.url,
+      PAT_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+      PAT_ENCRYPTION_KEY_PREV: '',
+      ADMIN_USER_IDS: qaAdmin,
+      ADMIN_EMAILS: '',
+      RESEND_API_KEY: '',
+      STORAGE_POSTGRES_URL: '',
+      STORAGE_POSTGRES_URL_NON_POOLING: '',
     };
     server = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '-p', String(port)], {
       cwd: root,
@@ -75,15 +92,17 @@ async function main() {
       ['GET', '/api/jobs'], ['GET', `/api/jobs/${id}`], ['POST', `/api/jobs/${id}/spec/draft`],
       ['POST', `/api/jobs/${id}/spec/approve`], ['GET', `/api/jobs/${id}/bids`], ['POST', `/api/bids/${id}/accept`],
       ['GET', '/api/offers'], ['POST', '/api/connect/onboard'], ['GET', '/api/connect/status'], ['POST', '/api/billing/webhook'],
+      ['POST', '/api/admin/qa/mcp'], ['POST', '/api/e2e/jobs-submission-mcp'], ['POST', '/api/chat'],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }
 
-    code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', 'tests/e2e/gigs-api.spec.ts', ...process.argv.slice(2)], {
+    code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...SPECS, ...process.argv.slice(2)], {
       ...process.env,
       PLAYWRIGHT_BASE_URL: baseUrl,
       JOBS_E2E_AUTH_SECRET: authSecret,
       STRIPE_WEBHOOK_SECRET: webhookSecret,
+      QA_E2E_ADMIN_USER: qaAdmin,
       // Keep tests/global-setup.ts from seeding the shared Supabase project.
       STORAGE_SUPABASE_URL: '',
       NEXT_PUBLIC_STORAGE_SUPABASE_URL: '',
@@ -96,6 +115,7 @@ async function main() {
       if (server.exitCode === null) server.kill('SIGKILL');
     }
     await stripe.close();
+    await github.close();
     await db.stop();
   }
   process.exit(code);
