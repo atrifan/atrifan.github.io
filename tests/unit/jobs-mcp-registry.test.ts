@@ -77,8 +77,17 @@ test('rejects bad names, empty descriptions and non-object schemas', () => {
   assert.throws(() => buildRegistry([bad({ name: 'Bad-Name' })]), /Invalid tool name/);
   assert.throws(() => buildRegistry([bad({ name: '' })]), /Invalid tool name/);
   assert.throws(() => buildRegistry([bad({ name: 'x'.repeat(65) })]), /Invalid tool name/);
+  assert.throws(() => buildRegistry([bad({ name: undefined })]), /Invalid tool name: undefined/);
+  assert.throws(() => buildRegistry([bad({ name: 7 })]), /Invalid tool name: 7/);
   assert.throws(() => buildRegistry([bad({ description: '  ' })]), /needs a description/);
+  assert.throws(() => buildRegistry([bad({ description: 42 })]), /needs a description/);
+  assert.throws(() => buildRegistry([bad({ description: undefined })]), /needs a description/);
   assert.throws(() => buildRegistry([bad({ inputSchema: { type: 'string' } })]), /inputSchema must be an object schema/);
+  assert.throws(() => buildRegistry([bad({ inputSchema: { type: 'array', properties: {} } })]), /inputSchema must be an object schema/);
+  assert.throws(() => buildRegistry([bad({ inputSchema: undefined })]), /inputSchema must be an object schema/);
+  assert.throws(() => buildRegistry([bad({ inputSchema: { type: 'object' } })]), /inputSchema must be an object schema/);
+  assert.throws(() => buildRegistry([bad({ inputSchema: { type: 'object', properties: null } })]), /inputSchema must be an object schema/);
+  assert.throws(() => buildRegistry([bad({ inputSchema: { type: 'object', properties: 'x' } })]), /inputSchema must be an object schema/);
   assert.throws(
     () => buildRegistry([bad({ inputSchema: { type: 'object', properties: { a: {} }, required: ['b'] } })]),
     /requires unknown property b/,
@@ -153,6 +162,13 @@ test('JobsError array details are reported as issues', async () => {
   });
 });
 
+test('non-object JobsError details add nothing', async () => {
+  const reg = buildRegistry([
+    { tools: [tool('gate', async () => { throw new JobsError('forbidden', 403, 'No', 'just a string'); })] },
+  ]);
+  assert.deepEqual((await reg.call('gate', {}, ctx)).structuredContent, { error: 'forbidden', message: 'No', status: 403 });
+});
+
 test('an invalid state transition is reported as invalid_state', async () => {
   const reg = buildRegistry([
     { tools: [tool('move', async () => { throw new InvalidTransitionError('contract', 'completed', 'active'); })] },
@@ -170,4 +186,5 @@ test('an unexpected error is a generic internal_error that leaks nothing', async
   assert.equal(res.isError, true);
   assert.deepEqual(res.structuredContent, { error: 'internal_error', message: 'Something went wrong', status: 500 });
   assert.equal(logged.length, 1);
+  assert.match(String((logged[0] as unknown[])[0]), /\[jobs-mcp\] unexpected tool error/);
 });

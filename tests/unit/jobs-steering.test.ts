@@ -110,6 +110,9 @@ test('pausesWork: only an unresolved or unpaid scope change pauses work', () => 
   }
   assert.equal(pausesWork({ kind: 'revision', status: 'open', topup_status: 'none' }), false);
   assert.equal(pausesWork({ kind: 'clarification', status: 'open', topup_status: 'none' }), false);
+  // an unpaid top-up only pauses an approved scope change
+  assert.equal(pausesWork({ kind: 'scope_change', status: 'rejected', topup_status: 'pending' }), false);
+  assert.equal(pausesWork({ kind: 'scope_change', status: 'declined', topup_status: 'pending' }), false);
   // a non-scope request never pauses, even with odd data
   assert.equal(pausesWork({ kind: 'revision', status: 'approved', topup_status: 'pending' }), false);
 });
@@ -126,6 +129,13 @@ test('remainingCredits never goes below zero', () => {
   assert.equal(remainingCredits(2, 2), 0);
   assert.equal(remainingCredits(2, 5), 0);
   assert.equal(remainingCredits(0, 0), 0);
+});
+
+test('buildClassifierPrompt lays out terms then the message, one item per line', () => {
+  assert.equal(
+    buildClassifierPrompt({ message: 'Add XLSX', requirements: ['R1', 'R2'], deliverables: ['D1'], priceCents: 500, deadline: null }),
+    ['Agreed requirements:', '- R1', '- R2', 'Agreed deliverables:', '- D1', 'Agreed price (cents): 500', 'Agreed deadline: none', '', 'Customer message:', 'Add XLSX'].join('\n'),
+  );
 });
 
 test('buildClassifierPrompt carries the request and the current terms', () => {

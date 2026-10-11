@@ -165,6 +165,8 @@ test('QA_REVIEW_MAX_OUTPUT_TOKENS defaults to 8192 and must be a whole number >=
   assert.equal(reviewMaxOutputTokensFromEnv({}), 8192);
   assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '1000' }), 1000);
   assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '1' }), 1);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: '   ' }), 8192);
+  assert.equal(reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: ' 2048 ' }), 2048);
   for (const bad of ['0', '1.5', 'x', '-3']) {
     assert.throws(() => reviewMaxOutputTokensFromEnv({ QA_REVIEW_MAX_OUTPUT_TOKENS: bad }), /QA_REVIEW_MAX_OUTPUT_TOKENS/, bad);
   }
