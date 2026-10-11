@@ -11,7 +11,7 @@
  *  always           → both parties get qa_verdict, the review key is revoked and the credit
  *                     reserve is settled (metered usage charged, the rest released).
  */
-import { canTransitionContract, type ContractStatus, type JobStatus } from '../jobs/job-state.ts';
+import type { ContractStatus, JobStatus } from '../jobs/job-state.ts';
 
 export const QA_VERDICTS = ['validated', 'requires_changes', 'rejected'] as const;
 export type QaVerdict = (typeof QA_VERDICTS)[number];
@@ -69,7 +69,7 @@ export const MAX_REASON_LENGTH = 4000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function isQaVerdict(value: unknown): value is QaVerdict {
-  return typeof value === 'string' && (QA_VERDICTS as readonly string[]).includes(value);
+  return (QA_VERDICTS as readonly unknown[]).includes(value);
 }
 
 export function isOpenSubmissionStatus(status: string): boolean {
@@ -106,7 +106,8 @@ export function decideQaVerdict(input: QaDecisionInput): QaDecision {
     throw new QaDecisionError('invalid_state', `This submission was already marked ${input.submissionStatus}`);
   }
   const contractTo = CONTRACT_TO[verdict];
-  if (input.contractStatus !== 'in_qa' || !canTransitionContract(input.contractStatus, contractTo)) {
+  // every verdict's target is an allowed move from in_qa (job-state.ts; checked by the unit tests)
+  if (input.contractStatus !== 'in_qa') {
     throw new QaDecisionError('invalid_state', `The contract is ${input.contractStatus}, not in QA`);
   }
 

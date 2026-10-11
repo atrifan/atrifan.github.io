@@ -106,3 +106,24 @@ test('empty and unicode plaintexts round-trip', () => {
     assert.equal(open(seal(s, { env: env(KEY) }), { env: env(KEY) }), s);
   }
 });
+
+test('keys must be strict base64: stray characters are not silently skipped; padding is optional', () => {
+  for (const bad of [`!${KEY}`, `${KEY}!`, `${KEY.slice(0, 10)}!${KEY.slice(10)}`]) {
+    assert.throws(() => parseKey(bad, 'PAT_ENCRYPTION_KEY'), (e: unknown) => e instanceof SecretBoxError && e.code === 'key_invalid', bad);
+  }
+  assert.equal(parseKey(KEY.replace(/=+$/, ''), 'PAT_ENCRYPTION_KEY').length, 32);
+});
+
+test('errors say what went wrong without leaking anything', () => {
+  assert.throws(() => seal('x', { env: env(undefined) }), (e: unknown) =>
+    e instanceof SecretBoxError && e.name === 'SecretBoxError' && /PAT_ENCRYPTION_KEY is not configured/.test((e as Error).message));
+  const sealed = seal('x', { env: env(KEY) });
+  assert.throws(() => open({ ...sealed, iv: Buffer.alloc(8).toString('base64') }, { env: env(KEY) }), /malformed/);
+  assert.throws(() => open({ ...sealed, tag: Buffer.alloc(8).toString('base64') }, { env: env(KEY) }), /malformed/);
+  assert.throws(() => open(sealed, { env: env(OLD) }), /could not decrypt/i);
+});
+
+test('opening without the current key names the missing variable', () => {
+  const sealed = seal('x', { env: env(KEY) });
+  assert.throws(() => open(sealed, { env: env(undefined, KEY) }), /PAT_ENCRYPTION_KEY is not configured/);
+});

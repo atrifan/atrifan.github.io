@@ -17,7 +17,7 @@ const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
 /** Known checks in canonical order, de-duplicated; basic is always included. */
 export function normalizeChecks(input: readonly unknown[] | null | undefined): QaCheck[] {
-  const wanted = new Set<unknown>(input ?? []);
+  const wanted = new Set<unknown>(input);
   wanted.add('basic');
   return QA_CHECKS.filter((c) => wanted.has(c));
 }

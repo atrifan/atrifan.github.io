@@ -73,11 +73,11 @@ const NAME = /^[A-Za-z0-9._-]{1,100}$/;
 export function parseRepoRef(input: string): RepoRef | null {
   if (typeof input !== 'string') return null;
   let s = input.trim();
-  const ssh = s.match(/^git@github\.com:(.+)$/);
+  const ssh = s.match(/^git@github\.com:(.+)/);
   if (ssh) {
     s = ssh[1];
   } else {
-    const url = s.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i);
+    const url = s.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)/i);
     if (url) s = url[1];
     else if (s.includes(':') || s.includes('github.com')) return null;
   }
@@ -127,7 +127,7 @@ export function checkRepo(repo: GithubRepoInfo): PatRejection | null {
 /** The repos the token can list must be only the target (case-insensitive). */
 export function checkScope(listed: Array<{ full_name?: string }>, targetFullName: string): PatRejection | null {
   const target = targetFullName.toLowerCase();
-  const other = listed.some((r) => (r.full_name ?? '').toLowerCase() !== target);
+  const other = listed.some((r) => r.full_name?.toLowerCase() !== target);
   return other ? 'pat_too_broad' : null;
 }
 

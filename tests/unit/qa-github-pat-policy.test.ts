@@ -130,3 +130,19 @@ test('every rejection has a human message; public repos explain that paid work m
   assert.match(patRejectionMessage('pat_expiry_too_long'), /30 days/);
   assert.equal(new Set(PAT_REJECTIONS.map(patRejectionMessage)).size, PAT_REJECTIONS.length);
 });
+
+test('format and repo parsing are anchored at both ends', () => {
+  assert.equal(checkTokenFormat(`github_pat_ghp_${'x'.repeat(20)}`), null);
+  assert.equal(checkTokenFormat(`xgithub_pat_${'x'.repeat(20)}`), 'invalid_pat');
+  assert.deepEqual(parseRepoRef('a/repo'), { owner: 'a', repo: 'repo', fullName: 'a/repo' });
+  assert.equal(parseRepoRef('xgit@github.com:acme/r'), null);
+  assert.equal(parseRepoRef('notgithub.com/repo'), null);
+  assert.deepEqual(parseRepoRef('acme/my.github-tools'), { owner: 'acme', repo: 'my.github-tools', fullName: 'acme/my.github-tools' });
+});
+
+test('the expiration header is trimmed and must match the whole format', () => {
+  assert.equal(parseExpirationHeader('  2026-10-20 12:30:45 UTC  ').expiresAt?.toISOString(), '2026-10-20T12:30:45.000Z');
+  for (const bad of ['2026-10-20 12:30:45 UTC extra', 'x2026-10-20 12:30:45 UTC', '2026-13-45 99:00:00 UTC']) {
+    assert.deepEqual(parseExpirationHeader(bad), { present: true, expiresAt: null }, bad);
+  }
+});

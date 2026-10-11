@@ -28,5 +28,5 @@ export function isQaAdmin(subject: AdminSubject, policy: AdminPolicy): boolean {
   if (subject.userId && policy.adminUserIds.includes(subject.userId)) return true;
   if (subject.publicMetadata?.role === 'admin') return true;
   const admins = policy.adminEmails.map((e) => e.toLowerCase());
-  return (subject.emails ?? []).some((e) => !!e && admins.includes(e.toLowerCase()));
+  return subject.emails?.some((e) => !!e && admins.includes(e.toLowerCase())) ?? false;
 }

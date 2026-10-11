@@ -141,3 +141,11 @@ test('the reason is capped and errors carry a readable message', () => {
     assert.equal((e as Error).name, 'QaDecisionError');
   }
 });
+
+test('a contract outside QA cannot take any verdict, even one its status could move to', () => {
+  // active -> disputed is a legal contract move, but not through QA
+  assert.throws(() => decideQaVerdict({ ...base, contractStatus: 'active', verdict: 'rejected', reason: 'x' }), (e: unknown) =>
+    e instanceof QaDecisionError && e.code === 'invalid_state' && /active, not in QA/.test((e as Error).message));
+  assert.throws(() => decideQaVerdict({ ...base, submissionStatus: 'rejected' }), /already marked rejected/);
+  assert.throws(() => decideQaVerdict({ ...base, verdict: 'nope' as never }), /validated, requires_changes or rejected/);
+});

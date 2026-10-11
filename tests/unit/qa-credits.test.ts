@@ -134,3 +134,10 @@ test('settleReserve: platform covers usage up to basic, the customer pays the re
     usedCredits: 70, platformCharged: 70, customerCharged: 0, customerReleased: 0,
   });
 });
+
+test('blank env values fall back to defaults; 1 auto-accept day is allowed', () => {
+  assert.equal(creditValueUsdFromEnv({ CREDIT_VALUE_USD: '   ' }), 0.01);
+  assert.equal(creditValueUsdFromEnv({ CREDIT_VALUE_USD: ' 0.05 ' }), 0.05);
+  assert.equal(autoAcceptDaysFromEnv({ JOBS_AUTO_ACCEPT_DAYS: '   ' }), 7);
+  assert.equal(autoAcceptDaysFromEnv({ JOBS_AUTO_ACCEPT_DAYS: '1' }), 1);
+});

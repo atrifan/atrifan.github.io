@@ -47,22 +47,17 @@ const KEY_BYTES = 32;
 export function parseKey(value: string | undefined, name: string): Buffer {
   const trimmed = (value ?? '').trim();
   if (!trimmed) throw new SecretBoxError('key_missing', `${name} is not configured`);
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) {
-    throw new SecretBoxError('key_invalid', `${name} must be base64 of ${KEY_BYTES} bytes`);
-  }
-  const key = Buffer.from(trimmed, 'base64');
-  if (key.length !== KEY_BYTES) throw new SecretBoxError('key_invalid', `${name} must be base64 of ${KEY_BYTES} bytes`);
+  const key = /^[A-Za-z0-9+/]+={0,2}$/.test(trimmed) ? Buffer.from(trimmed, 'base64') : null;
+  if (key?.length !== KEY_BYTES) throw new SecretBoxError('key_invalid', `${name} must be base64 of ${KEY_BYTES} bytes`);
   return key;
 }
 
 function decryptionKeys(env: Env): Buffer[] {
   const keys = [parseKey(env.PAT_ENCRYPTION_KEY, 'PAT_ENCRYPTION_KEY')];
-  if ((env.PAT_ENCRYPTION_KEY_PREV ?? '').trim()) {
-    try {
-      keys.push(parseKey(env.PAT_ENCRYPTION_KEY_PREV, 'PAT_ENCRYPTION_KEY_PREV'));
-    } catch {
-      // a broken previous key must not stop secrets sealed with the current key
-    }
+  try {
+    keys.push(parseKey(env.PAT_ENCRYPTION_KEY_PREV, 'PAT_ENCRYPTION_KEY_PREV'));
+  } catch {
+    // no previous key, or a broken one: secrets sealed with the current key still open
   }
   return keys;
 }
@@ -70,9 +65,9 @@ function decryptionKeys(env: Env): Buffer[] {
 export function seal(plaintext: string, { aad, env = process.env }: SecretBoxOptions = {}): SealedSecret {
   const key = parseKey(env.PAT_ENCRYPTION_KEY, 'PAT_ENCRYPTION_KEY');
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_BYTES });
-  if (aad !== undefined) cipher.setAAD(Buffer.from(aad, 'utf8'));
-  const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  if (aad !== undefined) cipher.setAAD(Buffer.from(aad));
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   return {
     ciphertext: ciphertext.toString('base64'),
     iv: iv.toString('base64'),
@@ -90,10 +85,11 @@ export function open(sealed: SealedSecret, { aad, env = process.env }: SecretBox
   const data = Buffer.from(sealed.ciphertext, 'base64');
   for (const key of keys) {
     try {
-      const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_BYTES });
-      if (aad !== undefined) decipher.setAAD(Buffer.from(aad, 'utf8'));
+      // IV and tag lengths are checked above, so GCM never accepts a truncated tag
+      const decipher = createDecipheriv(ALGORITHM, key, iv);
+      if (aad !== undefined) decipher.setAAD(Buffer.from(aad));
       decipher.setAuthTag(tag);
-      return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+      return Buffer.concat([decipher.update(data), decipher.final()]).toString();
     } catch {
       // wrong key or tampered data: try the next key
     }
