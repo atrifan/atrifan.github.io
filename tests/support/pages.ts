@@ -13,7 +13,6 @@ export const PAGES = [
   { path: '/chat', name: 'chat' },
   { path: '/dashboard', name: 'dashboard' },
   { path: '/ai', name: 'ai' },
-  { path: '/marketplace', name: 'marketplace' },
   { path: '/gigs', name: 'gigs' },
   { path: '/sign-in', name: 'sign-in' },
 ] as const;

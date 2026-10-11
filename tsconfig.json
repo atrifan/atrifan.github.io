@@ -36,7 +36,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next-surface-ai/types/**/*.ts",
-    ".next-surface-hub/types/**/*.ts"
+    ".next-surface-hub/types/**/*.ts",
+    ".next-marketplace-e2e/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
