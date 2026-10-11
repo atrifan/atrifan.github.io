@@ -23,7 +23,24 @@ export type JobsErrorCode =
   | 'ai_error'
   | 'stripe_error'
   | 'stripe_not_configured'
-  | 'db_error';
+  | 'db_error'
+  // submissions and QA (Phase 4)
+  | 'classic_pat'
+  | 'invalid_pat'
+  | 'invalid_repo'
+  | 'public_repo'
+  | 'repo_not_accessible'
+  | 'pat_admin'
+  | 'pat_too_broad'
+  | 'pat_expired'
+  | 'pat_expiry_too_long'
+  | 'invalid_commit_sha'
+  | 'commit_not_found'
+  | 'scope_unverifiable'
+  | 'github_error'
+  | 'pat_purged'
+  | 'reason_required'
+  | 'config_error';
 
 export class JobsError extends Error {
   readonly code: JobsErrorCode;

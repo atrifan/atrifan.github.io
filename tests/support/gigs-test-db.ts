@@ -5,7 +5,8 @@
  *   - postgres:16 (with Supabase-like roles anon / service_role / authenticator)
  *   - postgrest (the REST layer supabase-js talks to)
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
- * migration and supabase/migrations/20261101_jobs_core.sql into it, and serves it through
+ * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql and
+ * 20261201_qa.sql into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
  * `stop()` drops the schema and removes both containers.
  */
@@ -94,6 +95,31 @@ function startRestProxy(targetPort: number, schema: string): Promise<Server> {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
+/**
+ * api_keys as it stands in Supabase before 20261201_qa.sql (001 + 002 + 20250123 +
+ * 20260514 + 20261011), without the RLS policies that need Supabase's auth schema.
+ */
+const API_KEYS_PREREQ_SQL = `
+  CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    api_key_hash TEXT NOT NULL UNIQUE,
+    api_key_suffix TEXT NOT NULL,
+    api_key TEXT,
+    name TEXT,
+    server_name TEXT NOT NULL DEFAULT 'default',
+    device_name TEXT NOT NULL DEFAULT 'default',
+    provider TEXT NOT NULL DEFAULT 'custom',
+    plan TEXT NOT NULL CHECK (plan IN ('free', 'pro', 'plus', 'super')),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    CONSTRAINT uq_api_keys_user_server_device UNIQUE (user_id, server_name, device_name)
+  );
+  ALTER TABLE paid_usage_analytics ADD COLUMN IF NOT EXISTS api_key_id UUID;
+`;
+
 export async function startGigsTestDb(): Promise<GigsTestDb> {
   const id = randomBytes(4).toString('hex');
   const schema = `test_gigs_${id}`;
@@ -150,6 +176,9 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(`SET search_path TO ${schema}`);
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20260525_paid_proxy_tables.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261101_jobs_core.sql'), 'utf8'));
+    await admin.query(API_KEYS_PREREQ_SQL);
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261102_notifications.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261201_qa.sql'), 'utf8'));
     await admin.query(`
       GRANT ALL ON ALL TABLES IN SCHEMA ${schema} TO service_role;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA ${schema} TO service_role;
@@ -196,6 +225,8 @@ export async function resetGigsTables(pgUrl: string, schema: string): Promise<vo
       'stripe_events', 'refunds', 'transfers', 'payments', 'contract_versions', 'contracts', 'bids',
       'offers', 'job_spec_versions', 'jobs', 'provider_profiles', 'agent_identities', 'principals',
       'user_budgets', 'paid_usage_analytics',
+      'qa_usage_log', 'qa_reviews', 'qa_requests', 'audit_events', 'submissions', 'api_keys',
+      'user_contacts', 'notifications', 'notification_preferences',
     ].map((t) => `${schema}.${t}`).join(', ')} CASCADE
   `);
   await c.end();

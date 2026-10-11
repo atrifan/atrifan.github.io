@@ -4,8 +4,9 @@
  * Job:      draft → open (spec approved) → awarded (bid accepted, awaiting payment)
  *           → in_progress (paid) → delivered → completed.
  *           awarded → open when the checkout expires; disputes and cancellation per table.
- * Contract: pending_payment → active (paid) → submitted → delivered → completed,
- *           with rework, disputed, cancelled and refunded branches.
+ * Contract: pending_payment → active (paid) → in_qa (send_project) → delivered (QA validated)
+ *           → completed, with rework (QA requires changes), disputed (QA rejected),
+ *           cancelled and refunded branches. `submitted` is the pre-QA path, kept for compatibility.
  */
 
 export const JOB_STATUSES = [
@@ -24,6 +25,7 @@ export const CONTRACT_STATUSES = [
   'pending_payment',
   'active',
   'submitted',
+  'in_qa',
   'rework',
   'delivered',
   'completed',
@@ -46,9 +48,10 @@ const JOB_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = {
 
 const CONTRACT_TRANSITIONS: Readonly<Record<ContractStatus, readonly ContractStatus[]>> = {
   pending_payment: ['active', 'cancelled'],
-  active: ['submitted', 'disputed', 'cancelled', 'refunded'],
+  active: ['submitted', 'in_qa', 'disputed', 'cancelled', 'refunded'],
   submitted: ['rework', 'delivered', 'disputed', 'refunded'],
-  rework: ['submitted', 'disputed', 'cancelled', 'refunded'],
+  in_qa: ['delivered', 'rework', 'disputed', 'refunded'],
+  rework: ['submitted', 'in_qa', 'disputed', 'cancelled', 'refunded'],
   delivered: ['completed', 'disputed', 'refunded'],
   disputed: ['active', 'completed', 'refunded'],
   completed: [],

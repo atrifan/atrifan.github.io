@@ -6,6 +6,7 @@
  * it replaces Clerk's auth() and the ai SDK's generateObject.
  */
 import { mock } from 'node:test';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Stripe from 'stripe';
 import { Client } from 'pg';
@@ -22,11 +23,44 @@ export const aiState: { generateObject: GenerateObjectFn; calls: Array<Record<st
   calls: [],
 };
 
+/** Clerk users and bearer tokens the mocked Clerk SDK knows. */
+export const clerkState: {
+  users: Map<string, { emailAddresses: Array<{ emailAddress: string }>; publicMetadata: Record<string, unknown> }>;
+  tokens: Map<string, string>;
+} = { users: new Map(), tokens: new Map() };
+
+type StreamTextFn = (args: Record<string, any>) => unknown;
+export const streamState: { streamText: StreamTextFn; calls: Array<Record<string, unknown>> } = {
+  streamText: () => {
+    throw new Error('streamText not stubbed');
+  },
+  calls: [],
+};
+
+/** Notifications the code under test enqueued (src/lib/notify is mocked). */
+export const notifyState: { sent: Array<{ userId: string; type: string; payload: Record<string, unknown>; dedupeKey: string }> } = {
+  sent: [],
+};
+
 export function installMocks(): void {
   mock.module(pathToFileURL(require.resolve('@clerk/nextjs/server')).href, {
     namedExports: {
       auth: async () => ({ userId: authState.userId }),
       currentUser: async () => null,
+      verifyToken: async (token: string) => {
+        const sub = clerkState.tokens.get(token);
+        if (!sub) throw new Error('invalid token');
+        return { sub };
+      },
+      clerkClient: async () => ({
+        users: {
+          getUser: async (id: string) => {
+            const u = clerkState.users.get(id);
+            if (!u) throw new Error('user not found');
+            return { id, ...u };
+          },
+        },
+      }),
     },
   });
   mock.module(pathToFileURL(require.resolve('ai')).href, {
@@ -34,6 +68,18 @@ export function installMocks(): void {
       generateObject: async (args: Record<string, unknown>) => {
         aiState.calls.push(args);
         return aiState.generateObject(args);
+      },
+      streamText: (args: Record<string, any>) => {
+        streamState.calls.push(args);
+        return streamState.streamText(args);
+      },
+    },
+  });
+  mock.module(pathToFileURL(path.resolve(__dirname, '../../src/lib/notify/index.ts')).href, {
+    namedExports: {
+      enqueue: async (userId: string, type: string, payload: Record<string, unknown>, dedupeKey: string) => {
+        notifyState.sent.push({ userId, type, payload, dedupeKey });
+        return { status: 'queued', id: `n_${notifyState.sent.length}` };
       },
     },
   });

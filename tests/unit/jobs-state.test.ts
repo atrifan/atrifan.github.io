@@ -27,9 +27,10 @@ const JOB_ALLOWED: Record<string, string[]> = {
 
 const CONTRACT_ALLOWED: Record<string, string[]> = {
   pending_payment: ['active', 'cancelled'],
-  active: ['submitted', 'disputed', 'cancelled', 'refunded'],
+  active: ['submitted', 'in_qa', 'disputed', 'cancelled', 'refunded'],
   submitted: ['rework', 'delivered', 'disputed', 'refunded'],
-  rework: ['submitted', 'disputed', 'cancelled', 'refunded'],
+  in_qa: ['delivered', 'rework', 'disputed', 'refunded'],
+  rework: ['submitted', 'in_qa', 'disputed', 'cancelled', 'refunded'],
   delivered: ['completed', 'disputed', 'refunded'],
   disputed: ['active', 'completed', 'refunded'],
   completed: [],
