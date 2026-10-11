@@ -19,7 +19,8 @@
     "test:ui": "playwright test --ui",
     "test:unit": "node --test 'tests/unit/**/*.test.ts'",
     "test:integration": "tsx scripts/test-integration.ts",
-    "test:e2e:gigs": "tsx scripts/test-e2e-gigs.ts"
+    "test:e2e:gigs": "tsx scripts/test-e2e-gigs.ts",
+    "test:integration:notify": "playwright test tests/integration/notify.spec.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.8",

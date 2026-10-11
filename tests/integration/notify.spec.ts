@@ -1,7 +1,7 @@
 /**
  * Integration tests for email notifications against a real Postgres, in a throwaway schema.
  *
- * Run: npx playwright test tests/integration
+ * Run: npm run test:integration:notify
  * Needs STORAGE_POSTGRES_URL_NON_POOLING (.env.local). Creates `test_notify_<random>`, applies
  * supabase/migrations/20261102_notifications.sql inside it, and drops it afterwards.
  * Email goes through an in-memory transport; nothing is sent.
