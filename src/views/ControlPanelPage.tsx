@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { Footer } from '../components/Footer';
-import { AdBanner } from '../components/AdBanner';
-import { ADS_CONFIG } from '../config/ads.config';
+import { ClientOnly } from '../components/ClientOnly';
 import { extensionBridge } from '../lib/extension-bridge';
 
 interface DeviceItem {
@@ -736,8 +733,20 @@ interface ControlPanelPageProps {
   showDownloads?: boolean;
 }
 
-export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownloads }) => {
-  const { user } = useUser();
+/**
+ * The control panel keeps its dark styling in both themes for now: it is a dark
+ * island (data-theme="dark") until the ai track
+ * restyles it on the tokens. No ads here (ai. surface).
+ */
+export const ControlPanelPage: React.FC<ControlPanelPageProps> = (props) => (
+  <ClientOnly>
+    <div data-theme="dark" className="dark-island">
+      <ControlPanel {...props} />
+    </div>
+  </ClientOnly>
+);
+
+const ControlPanel: React.FC<ControlPanelPageProps> = ({ showDownloads }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'usage' | 'logs' | 'docs' | 'packages' | 'publisher' | 'budget'>('overview');
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [deviceLimit, setDeviceLimit] = useState(1);
@@ -1572,11 +1581,8 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
   );
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-    }}>
-      <main style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1.5rem' }}>
+    <div>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1.5rem' }}>
         {/* Header */}
         <div style={{ marginBottom: '2rem' }}>
           <h1 style={{
@@ -3727,7 +3733,6 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
               </details>
             </div>
 
-            <AdBanner slot={ADS_CONFIG.slots.pricingFooter} style={{ marginTop: '1rem' }} />
           </>
         )}
 
@@ -4124,9 +4129,7 @@ export const ControlPanelPage: React.FC<ControlPanelPageProps> = ({ showDownload
             </div>
           </div>
         )}
-      </main>
-
-      <Footer />
+      </div>
     </div>
   );
 };

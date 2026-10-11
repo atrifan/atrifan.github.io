@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { ClientOnly } from '../components/ClientOnly';
 
 interface PackageItem {
   id: string;
@@ -166,7 +167,16 @@ function DownloadsSection() {
   );
 }
 
-export const PackageAdminPage: React.FC = () => {
+/** Admin view; a dark island like the control panel until the marketplace track restyles it. */
+export const PackageAdminPage: React.FC = () => (
+  <ClientOnly>
+    <div data-theme="dark" className="dark-island">
+      <PackageAdmin />
+    </div>
+  </ClientOnly>
+);
+
+const PackageAdmin: React.FC = () => {
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -471,8 +481,8 @@ export const PackageAdminPage: React.FC = () => {
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
-      <main style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1.5rem' }}>
+    <div>
+      <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1.5rem' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <div>
@@ -756,7 +766,7 @@ export const PackageAdminPage: React.FC = () => {
         )}
 
         <DownloadsSection />
-      </main>
+      </div>
     </div>
   );
 };

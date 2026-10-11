@@ -1,59 +1,55 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { Suspense } from 'react';
+import { ClerkProvider } from '@clerk/nextjs';
+import { dark } from '@clerk/themes';
 import { Provider, defaultTheme } from '@adobe/react-spectrum';
 import { Analytics } from '@/src/components/Analytics';
-import { Header } from '@/src/components/Header';
+import { AppShell } from '@/src/components/shell/AppShell';
+import { ThemeProvider, useTheme } from '@/src/components/theme/ThemeProvider';
+import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
+import type { Scheme } from '@/src/lib/theme';
 
 interface ProvidersProps {
+  /** TULZO_SURFACE of this deploy, resolved on the server (null = path-prefix mode). */
+  surface: Surface | null;
   children: React.ReactNode;
 }
 
-export function Providers({ children }: ProvidersProps) {
-  const [mounted, setMounted] = useState(false);
+/** Clerk styling that follows the resolved theme and the design tokens. */
+function clerkAppearance(scheme: Scheme) {
+  return {
+    baseTheme: scheme === 'dark' ? dark : undefined,
+    variables:
+      scheme === 'dark'
+        ? { colorPrimary: '#b9a3e6', colorTextOnPrimaryBackground: '#17141f', colorBackground: '#1f1f1f', colorInputBackground: '#161616', colorText: '#ececec' }
+        : { colorPrimary: '#6b4fb3', colorTextOnPrimaryBackground: '#ffffff', colorBackground: '#ffffff', colorInputBackground: '#ffffff', colorText: '#1c1a22' },
+    elements: { card: { boxShadow: 'none', border: '1px solid var(--color-border)' } },
+  };
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div
-        id="app-loading"
-        style={{
-          minHeight: '100vh',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f472b6 100%)',
-            animation: 'pulse 1.5s ease-in-out infinite',
-          }}
-        />
-        <style>{`
-          @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.1); opacity: 0.8; }
-          }
-        `}</style>
-      </div>
-    );
-  }
-
+function ThemedProviders({ surface, children }: ProvidersProps) {
+  const { scheme } = useTheme();
   return (
-    <Provider theme={defaultTheme} colorScheme="dark">
-      <Suspense fallback={null}>
-        <Analytics />
-      </Suspense>
-      <Header />
-      {children}
-    </Provider>
+    <ClerkProvider
+      appearance={clerkAppearance(scheme)}
+      signInUrl={surfaceUrl('hub', '/sign-in')}
+      signUpUrl={surfaceUrl('hub', '/sign-up')}
+    >
+      <Provider theme={defaultTheme} colorScheme={scheme} UNSAFE_style={{ background: 'transparent' }} UNSAFE_className="spectrum-root">
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
+        <AppShell surface={surface}>{children}</AppShell>
+      </Provider>
+    </ClerkProvider>
+  );
+}
+
+export function Providers(props: ProvidersProps) {
+  return (
+    <ThemeProvider>
+      <ThemedProviders {...props} />
+    </ThemeProvider>
   );
 }

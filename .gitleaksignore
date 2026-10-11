@@ -1,0 +1,6 @@
+# False positives: curl snippets with ${apiKey} placeholders, and a fixed test token.
+src/lib/automation/notification-templates.ts:curl-auth-header:56
+src/lib/automation/notification-templates.ts:curl-auth-header:96
+src/lib/automation/notification-templates.ts:curl-auth-header:124
+src/lib/automation/notification-templates.ts:curl-auth-header:130
+tests/unit/notify/token.test.ts:generic-api-key:6

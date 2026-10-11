@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
-import { isHigherOrEqualTo } from '@/src/config/billing.config';
 import { getApiKeyByHash, hashApiKey } from '@/src/lib/supabase-services';
 
 interface ApiKeyUser {
@@ -11,31 +10,6 @@ interface ApiKeyUser {
   plan: string;
   email?: string;
   isSubscribed: boolean;
-}
-
-/**
- * Get user's plan from metadata
- */
-async function getUserPlan(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<string> {
-  try {
-    const user = await client.users.getUser(userId);
-    // Check publicMetadata.plan (set by billing webhooks)
-    if (user.publicMetadata?.plan) {
-      return user.publicMetadata.plan as string;
-    }
-    return 'free';
-  } catch (error) {
-    console.error('Error getting user plan:', error);
-    return 'free';
-  }
-}
-
-/**
- * Check if user has Pro or higher subscription
- */
-async function checkProSubscription(client: Awaited<ReturnType<typeof clerkClient>>, userId: string): Promise<boolean> {
-  const plan = await getUserPlan(client, userId);
-  return isHigherOrEqualTo(plan, 'pro');
 }
 
 /**

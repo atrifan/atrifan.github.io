@@ -319,7 +319,6 @@ export async function storeOAuthToken(
 
   // Only store server-specific token if we have a valid UUID
   // Temp IDs (used during import before agent is created) will only use provider hash
-  let serverTokenStored = false;
   if (isValidServerId) {
     const tokenRecord: OAuthTokenInsert = {
       user_id: userId,
@@ -369,8 +368,6 @@ export async function storeOAuthToken(
       if (error) {
         console.error('[OAuth] Failed to store server-specific token:', error);
         // Don't return false - try provider hash storage as fallback
-      } else {
-        serverTokenStored = true;
       }
   } else {
     console.log('[OAuth] Skipping server-specific token storage (temp ID):', server.id);

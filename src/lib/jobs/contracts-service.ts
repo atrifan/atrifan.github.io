@@ -102,7 +102,7 @@ export async function acceptBid(userId: string, bidId: string): Promise<AcceptBi
     }
     bidAccepted = true;
 
-    const { data: contract, error: contractError } = await db
+    const { error: contractError } = await db
       .from('contracts')
       .insert({
         id: contractId,

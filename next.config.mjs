@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Lets the Playwright surface servers (TULZO_SURFACE=ai|hub) run beside the main dev server.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Keeps the dev build indicator out of visual snapshots.
+  devIndicators: { buildActivity: false },
 
   // Production optimizations
   poweredByHeader: false,
@@ -98,8 +102,6 @@ const nextConfig = {
     '@react-spectrum/tooltip',
     '@react-spectrum/view',
     '@react-spectrum/well',
-    '@spectrum-icons/illustrations',
-    '@spectrum-icons/workflow',
   ],
 };
 

@@ -1,0 +1,115 @@
+/*
+ * Tulzo design tokens. One set of names, two themes.
+ *
+ * <html data-theme="light|dark"> is set before first paint by the inline script
+ * in app/layout.tsx (src/lib/theme.ts). Without it (JS off) the
+ * prefers-color-scheme block below applies.
+ *
+ * Seeded from the flat palette of src/views/remote-chat/RemoteChat.css. Every
+ * text colour passes WCAG AA (4.5:1) on --color-bg, --color-surface,
+ * --color-surface-2 and --color-accent-soft; --color-accent-contrast passes on
+ * --color-accent. tests/unit/tokens-contrast.test.ts enforces this: change a
+ * colour, run `npm run test:unit`.
+ *
+ * Use the tokens; don't hard-code colours in components.
+ */
+
+:root {
+  /* Type */
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(2rem, 1.4rem + 2.4vw, 2.75rem);
+  --leading: 1.55;
+
+  /* Space (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* Layout */
+  --container-max: 72rem;
+  --header-height: 4rem;
+  --touch-target: 44px;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root,
+[data-theme='light'] {
+  --color-bg: #fbfaf8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f3f1f7;
+  --color-border: #dedbe6;
+  --color-text: #1c1a22;
+  --color-text-muted: #5d5968;
+  --color-accent: #6b4fb3;
+  --color-accent-contrast: #ffffff;
+  --color-accent-soft: #eee9fa;
+  --color-success: #17713f;
+  --color-warning: #8a5300;
+  --color-danger: #b4231a;
+  --color-focus-ring: #6b4fb3;
+  --shadow-sm: 0 1px 2px rgb(28 26 34 / 0.06);
+  --shadow-md: 0 6px 24px rgb(28 26 34 / 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-bg: #161616;
+    --color-surface: #1f1f1f;
+    --color-surface-2: #2a2a2a;
+    --color-border: #3a3a3a;
+    --color-text: #ececec;
+    --color-text-muted: #a6a6a6;
+    --color-accent: #b9a3e6;
+    --color-accent-contrast: #17141f;
+    --color-accent-soft: #2b2540;
+    --color-success: #5fd08f;
+    --color-warning: #f0b45a;
+    --color-danger: #ff8a80;
+    --color-focus-ring: #b9a3e6;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 8px 28px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+}
+
+[data-theme='dark'] {
+  --color-bg: #161616;
+  --color-surface: #1f1f1f;
+  --color-surface-2: #2a2a2a;
+  --color-border: #3a3a3a;
+  --color-text: #ececec;
+  --color-text-muted: #a6a6a6;
+  --color-accent: #b9a3e6;
+  --color-accent-contrast: #17141f;
+  --color-accent-soft: #2b2540;
+  --color-success: #5fd08f;
+  --color-warning: #f0b45a;
+  --color-danger: #ff8a80;
+  --color-focus-ring: #b9a3e6;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 8px 28px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}

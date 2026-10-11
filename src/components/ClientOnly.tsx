@@ -1,28 +1,14 @@
 'use client';
 
-import { useState, useEffect, ReactNode } from 'react';
-
-interface ClientOnlyProps {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
+import { useEffect, useState } from 'react';
 
 /**
- * ClientOnly wrapper component
- * Only renders children on the client side to avoid hydration mismatches
- * Useful for components that use browser APIs or dynamic content
+ * Renders children only after mount. Used by the large signed-in views
+ * (control panel, package admin, remote chat) that read browser APIs during
+ * render; they were client-only before the shell became server-rendered.
  */
-export function ClientOnly({ children, fallback = null }: ClientOnlyProps) {
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  if (!hasMounted) {
-    return <>{fallback}</>;
-  }
-
-  return <>{children}</>;
+export function ClientOnly({ children, fallback = null }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return <>{mounted ? children : fallback}</>;
 }
-

@@ -4,9 +4,8 @@ import AxeBuilder from '@axe-core/playwright';
 /**
  * Accessibility scans.
  *
- * The control panel lives behind Clerk auth. Until Clerk test tokens are wired
- * up (E2E_CLERK_STORAGE_STATE), we scan the public pages that render the same
- * design system, and gate the authenticated dashboard scan behind that env.
+ * The control panel lives behind Clerk auth: these scans run only with a saved
+ * Clerk session (E2E_CLERK_STORAGE_STATE).
  *
  * Fails on any serious or critical axe violation.
  */
@@ -21,24 +20,7 @@ async function scan(page: import('@playwright/test').Page) {
   return blocking;
 }
 
-test('home page has no serious accessibility violations', async ({ page }) => {
-  await page.goto('/');
-  const blocking = await scan(page);
-  expect(
-    blocking,
-    blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
-  ).toEqual([]);
-});
-
-test('pricing page has no serious accessibility violations', async ({ page }) => {
-  const res = await page.goto('/pricing');
-  test.skip(!res || res.status() >= 400, 'pricing page not available');
-  const blocking = await scan(page);
-  expect(
-    blocking,
-    blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
-  ).toEqual([]);
-});
+// Public pages (home, pricing, …) are scanned in every theme and viewport by pages.a11y.spec.ts.
 
 test.describe('authenticated dashboard', () => {
   test.skip(!process.env.E2E_CLERK_STORAGE_STATE, 'requires Clerk test session (E2E_CLERK_STORAGE_STATE)');

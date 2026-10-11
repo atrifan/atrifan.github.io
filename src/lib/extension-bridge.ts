@@ -168,7 +168,7 @@ class ExtensionBridge {
   }
 
   private rejectAll(reason: string) {
-    for (const [id, pending] of this.pending) {
+    for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error(reason));
     }

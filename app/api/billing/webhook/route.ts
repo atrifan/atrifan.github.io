@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { isJobsEvent, processJobsStripeEvent } from '@/src/lib/jobs/stripe-webhooks';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from '@/src/lib/stripe';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
 
 function getSupabase() {
   return createClient(
@@ -17,7 +17,7 @@ function getSupabase() {
  * Verify against the platform webhook secret, then the Connect endpoint secret if one is
  * configured (Connect events such as account.updated may come from a separate endpoint).
  */
-function verifyEvent(body: string, signature: string): Stripe.Event {
+function verifyEvent(stripe: Stripe, body: string, signature: string): Stripe.Event {
   const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET].filter(
     (s): s is string => !!s
   );
@@ -33,6 +33,9 @@ function verifyEvent(body: string, signature: string): Stripe.Event {
 }
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe();
+  if (!stripe) return NextResponse.json(MISCONFIGURED, { status: 500 });
+
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     let event: Stripe.Event;
     try {
-      event = verifyEvent(body, signature);
+      event = verifyEvent(stripe, body, signature);
     } catch (err) {
       console.error('[billing/webhook] Signature verification failed:', err);
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });

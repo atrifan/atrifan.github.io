@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
+import { resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
 
 /**
  * OAuth UserInfo Proxy
@@ -6,25 +8,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * Proxies userinfo requests to Clerk.
  */
 
-function getClerkFrontendApi(): string {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-  if (publishableKey) {
-    try {
-      const base64Part = publishableKey.replace(/^pk_(test|live)_/, '');
-      let decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
-      // Remove trailing $ that Clerk adds to the encoded domain
-      decoded = decoded.replace(/\$+$/, '');
-      if (decoded && decoded.includes('.clerk.')) {
-        return `https://${decoded}`;
-      }
-    } catch {
-      // Use default
-    }
-  }
-  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
-}
-
 export async function GET(request: NextRequest) {
+  const clerkApi = resolveClerkFrontendApi(process.env);
+  if (!clerkApi) {
+    console.error('[oauth/userinfo] Clerk frontend API env is not configured');
+    return NextResponse.json(MISCONFIGURED, { status: 500 });
+  }
   const authHeader = request.headers.get('authorization');
   
   if (!authHeader) {
@@ -35,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${getClerkFrontendApi()}/oauth/userinfo`, {
+    const response = await fetch(`${clerkApi}/oauth/userinfo`, {
       headers: {
         'Authorization': authHeader,
       },

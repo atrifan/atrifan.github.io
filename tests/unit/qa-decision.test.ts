@@ -21,8 +21,6 @@ const base: QaDecisionInput = {
   autoAcceptDays: 7,
 };
 
-const types = (effects: { type: string }[]) => effects.map((e) => e.type);
-
 test('verdicts are validated, requires_changes and rejected', () => {
   assert.deepEqual([...QA_VERDICTS], ['validated', 'requires_changes', 'rejected']);
   for (const v of QA_VERDICTS) assert.equal(isQaVerdict(v), true);

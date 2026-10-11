@@ -1,13 +1,15 @@
 ---
 description: Workflow automation YAML schema, step types, and execution flow
-appliesTo: ["src/lib/automation/**", "app/api/ai/automations/**", "scripts/**"]
+appliesTo: ["src/lib/automation/**", "scripts/run-workflow.ts"]
 alwaysApply: false
 ---
 
 # Workflow Automation
 
-YAML is the source of truth (`src/lib/automation/types.ts`). Parsed → `executeWorkflow()` →
-`runtime-executor.ts` → `tool-executor-service.ts` → MCP client, with logs in `automation_logs`.
+YAML is the source of truth (`src/lib/automation/types.ts`). Only the local runner is left:
+`npm run automation <workflow.yaml>` (`scripts/run-workflow.ts` → `executeWorkflow()` in
+`src/lib/automation/executor.ts`). The `/api/ai/automations/*` routes, the runtime executor, the automation
+UI and the daily cron were removed as dead code; the `automations*` tables remain.
 
 ## Schema
 
@@ -43,8 +45,9 @@ outputs:
 
 ## Triggers
 
-Manual (button), webhook (`/api/ai/automations/[name]/hook/[apiKey]`), cron (Vercel cron →
-`/api/ai/automations/cron`), automation chain.
+Declared in YAML (`manual`, `webhook`, `cron`, `automation`), but no server route runs them now; the local
+runner executes a workflow on demand. The curl snippets in `notification-templates.ts` still name the old
+routes.
 
 Not yet implemented: event triggers (use webhooks + `trigger_automation` as a workaround), approval
 workflows (`requireApprovalFor` unwired).

@@ -1,18 +1,20 @@
 ---
-description: API route reference (AI, automations, MCP, marketplace, OAuth, plugin)
+description: API route reference (MCP, marketplace, OAuth, plugin, billing)
 appliesTo: ["app/api/**"]
 alwaysApply: false
 ---
 
 # API Routes
 
-## AI (`/api/ai/`)
-`chat` (POST, stream), `budget` (GET), `rags` (GET/POST), `rags/[id]` (GET/DELETE),
-`rags/[id]/documents` (POST), `rags/[id]/search` (POST).
+There is no `/api/ai/*` any more (the automation and RAG routes were removed; their UI callers were deleted
+in the foundation cleanup). Which surface serves which route is decided by `SURFACE_API_ALLOWLIST` in
+`src/lib/surface-routing.ts`; the hub serves all of them. See [[surfaces-and-design]].
 
-## Automations (`/api/ai/automations/`)
-`` (GET/POST), `[name]` (GET/PUT/DELETE), `[name]/executions[/…]`, `[name]/hook/[apiKey]` (POST webhook),
-`execute` (POST), `cron` (GET), `prompt` (POST — AI YAML gen).
+A route that needs an env var it doesn't have answers 500 `{ error: 'server_misconfigured' }`
+(`src/lib/misconfigured.ts`); never fall back to a hard-coded secret or host.
+
+## Chat (`/api/chat`)
+POST, streaming; the assistant's chat endpoint (hub).
 
 ## MCP (`/api/mcp/`)
 `route` (JSON-RPC), `[key]` + `[key]/[serverName]` (path-key surfaces), `oauth-source`,

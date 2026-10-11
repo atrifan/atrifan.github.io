@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from '@/src/lib/stripe';
+import { MISCONFIGURED } from '@/src/lib/misconfigured';
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe();
+  if (!stripe) return NextResponse.json(MISCONFIGURED, { status: 500 });
+
   try {
     const { userId } = await auth();
     if (!userId) {

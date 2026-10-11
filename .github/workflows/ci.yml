@@ -1,0 +1,92 @@
+name: CI
+
+# Vercel does the deploys; this workflow only checks the code.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Specs that need these skip themselves when they are empty (e.g. on forks).
+  STORAGE_SUPABASE_URL: ${{ secrets.STORAGE_SUPABASE_URL }}
+  STORAGE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STORAGE_SUPABASE_SERVICE_ROLE_KEY }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+  CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+  E2E_CLERK_STORAGE_STATE: ''
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Integration tests (Docker Postgres + PostgREST)
+        run: npm run test:integration
+      - name: Route-handler integration tests (skip without Supabase secrets)
+        run: npm run test:int
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build
+      - name: Gigs API e2e (Docker backends, fake Stripe)
+        run: npm run test:e2e:gigs
+      - name: Playwright e2e, surface routing, a11y and visual (light/dark x desktop/mobile)
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+      - name: Upload screenshots and diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: |
+            test-results/
+            tests/visual/**/*-snapshots/*-linux.png
+          retention-days: 14
