@@ -1,0 +1,202 @@
+/**
+ * Throwaway database for gigs integration and e2e tests.
+ *
+ * Never touches the shared Supabase project. It starts two local Docker containers:
+ *   - postgres:16 (with Supabase-like roles anon / service_role / authenticator)
+ *   - postgrest (the REST layer supabase-js talks to)
+ * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
+ * migration and supabase/migrations/20261101_jobs_core.sql into it, and serves it through
+ * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
+ * `stop()` drops the schema and removes both containers.
+ */
+import { execFileSync } from 'node:child_process';
+import { createServer, request as httpRequest, type Server } from 'node:http';
+import { createHmac, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { Client } from 'pg';
+
+const PG_IMAGE = process.env.GIGS_TEST_PG_IMAGE || 'postgres:16';
+const POSTGREST_IMAGE = process.env.GIGS_TEST_POSTGREST_IMAGE || 'postgrest/postgrest:v12.2.3';
+const ROOT = path.resolve(__dirname, '..', '..');
+
+export interface GigsTestDb {
+  /** Base URL to use as STORAGE_SUPABASE_URL. */
+  supabaseUrl: string;
+  /** A service_role JWT to use as STORAGE_SUPABASE_SERVICE_ROLE_KEY. */
+  serviceRoleKey: string;
+  /** Direct Postgres URL (superuser), for seeding and assertions. */
+  pgUrl: string;
+  schema: string;
+  stop(): Promise<void>;
+}
+
+function docker(args: string[]): string {
+  return execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+}
+
+function hostPort(container: string, port: number): number {
+  const out = docker(['port', container, `${port}/tcp`]).split('\n')[0];
+  return Number(out.slice(out.lastIndexOf(':') + 1));
+}
+
+function b64url(input: Buffer | string): string {
+  return Buffer.from(input).toString('base64url');
+}
+
+export function signJwt(payload: Record<string, unknown>, secret: string): string {
+  const head = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64url(JSON.stringify(payload));
+  const sig = createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+
+async function waitFor<T>(fn: () => Promise<T>, label: string, timeoutMs = 60_000): Promise<T> {
+  const start = Date.now();
+  let lastErr: unknown;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+  throw new Error(`Timed out waiting for ${label}: ${String(lastErr)}`);
+}
+
+/**
+ * Proxy `/rest/v1/*` → PostgREST `/*`, the way Supabase's gateway does, and map the
+ * client's `public` schema profile onto the throwaway test schema.
+ */
+function startRestProxy(targetPort: number, schema: string): Promise<Server> {
+  const server = createServer((req, res) => {
+    const url = req.url || '/';
+    const stripped = url.startsWith('/rest/v1') ? url.slice('/rest/v1'.length) || '/' : url;
+    const headers = { ...req.headers };
+    for (const h of ['accept-profile', 'content-profile']) {
+      if (headers[h] === 'public') headers[h] = schema;
+    }
+    const upstream = httpRequest(
+      { host: '127.0.0.1', port: targetPort, method: req.method, path: stripped, headers },
+      (up) => {
+        res.writeHead(up.statusCode || 502, up.headers);
+        up.pipe(res);
+      },
+    );
+    upstream.on('error', (err) => {
+      res.writeHead(502, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: String(err) }));
+    });
+    req.pipe(upstream);
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+}
+
+export async function startGigsTestDb(): Promise<GigsTestDb> {
+  const id = randomBytes(4).toString('hex');
+  const schema = `test_gigs_${id}`;
+  const pgName = `tulzo-gigs-pg-${id}`;
+  const restName = `tulzo-gigs-rest-${id}`;
+  const password = randomBytes(12).toString('hex');
+  const jwtSecret = randomBytes(32).toString('hex');
+
+  docker([
+    'run', '-d', '--rm', '--name', pgName,
+    '-e', `POSTGRES_PASSWORD=${password}`,
+    '-p', '127.0.0.1::5432',
+    PG_IMAGE,
+  ]);
+  let restServer: Server | null = null;
+  let restStarted = false;
+  const pgPort = hostPort(pgName, 5432);
+  const pgUrl = `postgres://postgres:${password}@127.0.0.1:${pgPort}/postgres`;
+
+  const stop = async () => {
+    try {
+      const c = new Client({ connectionString: pgUrl });
+      await c.connect();
+      await c.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await c.end();
+    } catch {
+      // container may already be gone
+    }
+    if (restServer) await new Promise((r) => restServer!.close(() => r(null)));
+    if (restStarted) {
+      try { docker(['rm', '-f', restName]); } catch { /* ignore */ }
+    }
+    try { docker(['rm', '-f', pgName]); } catch { /* ignore */ }
+  };
+
+  try {
+    await waitFor(async () => {
+      const c = new Client({ connectionString: pgUrl });
+      await c.connect();
+      await c.query('select 1');
+      await c.end();
+    }, 'postgres');
+
+    const admin = new Client({ connectionString: pgUrl });
+    await admin.connect();
+    await admin.query(`
+      CREATE ROLE anon NOLOGIN;
+      CREATE ROLE service_role NOLOGIN BYPASSRLS;
+      CREATE ROLE authenticator LOGIN NOINHERIT PASSWORD '${password}';
+      GRANT anon, service_role TO authenticator;
+      CREATE SCHEMA ${schema};
+      GRANT USAGE ON SCHEMA ${schema} TO anon, service_role;
+    `);
+    await admin.query(`SET search_path TO ${schema}`);
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20260525_paid_proxy_tables.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261101_jobs_core.sql'), 'utf8'));
+    await admin.query(`
+      GRANT ALL ON ALL TABLES IN SCHEMA ${schema} TO service_role;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA ${schema} TO service_role;
+      GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ${schema} TO service_role;
+    `);
+    await admin.end();
+
+    docker([
+      'run', '-d', '--rm', '--name', restName,
+      '-e', `PGRST_DB_URI=postgres://authenticator:${password}@host.docker.internal:${pgPort}/postgres`,
+      '-e', `PGRST_DB_SCHEMAS=${schema}`,
+      '-e', 'PGRST_DB_ANON_ROLE=anon',
+      '-e', `PGRST_JWT_SECRET=${jwtSecret}`,
+      '-p', '127.0.0.1::3000',
+      POSTGREST_IMAGE,
+    ]);
+    restStarted = true;
+    const restPort = hostPort(restName, 3000);
+    const serviceRoleKey = signJwt({ role: 'service_role', iss: 'gigs-test' }, jwtSecret);
+
+    await waitFor(async () => {
+      const res = await fetch(`http://127.0.0.1:${restPort}/jobs?select=id&limit=1`, {
+        headers: { Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!res.ok) throw new Error(`postgrest ${res.status} ${await res.text()}`);
+    }, 'postgrest');
+
+    restServer = await startRestProxy(restPort, schema);
+    const proxyPort = (restServer.address() as AddressInfo).port;
+
+    return { supabaseUrl: `http://127.0.0.1:${proxyPort}`, serviceRoleKey, pgUrl, schema, stop };
+  } catch (err) {
+    await stop();
+    throw err;
+  }
+}
+
+/** Truncate every gigs table plus the budget tables (between test files). */
+export async function resetGigsTables(pgUrl: string, schema: string): Promise<void> {
+  const c = new Client({ connectionString: pgUrl });
+  await c.connect();
+  await c.query(`
+    TRUNCATE ${[
+      'stripe_events', 'refunds', 'transfers', 'payments', 'contract_versions', 'contracts', 'bids',
+      'offers', 'job_spec_versions', 'jobs', 'provider_profiles', 'agent_identities', 'principals',
+      'user_budgets', 'paid_usage_analytics',
+    ].map((t) => `${schema}.${t}`).join(', ')} CASCADE
+  `);
+  await c.end();
+}

@@ -34,8 +34,12 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, 
 /**
  * Create a Supabase client for a specific request.
  * Useful if you need request-scoped clients.
+ *
+ * `noStore` sends every request with `cache: 'no-store'`, so Next.js never serves a
+ * PostgREST read from its fetch data cache (Next 14 caches GET fetches by default when a
+ * route has not called headers()/cookies() first).
  */
-export function createSupabaseClient() {
+export function createSupabaseClient(options: { noStore?: boolean } = {}) {
   if (!supabaseUrl || !supabaseServiceKey) {
     throw new Error('Supabase environment variables not configured');
   }
@@ -45,6 +49,9 @@ export function createSupabaseClient() {
       autoRefreshToken: false,
       persistSession: false,
     },
+    ...(options.noStore
+      ? { global: { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: 'no-store' }) } }
+      : {}),
   });
 }
 

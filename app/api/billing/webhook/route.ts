@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { isJobsEvent, processJobsStripeEvent } from '@/src/lib/jobs/stripe-webhooks';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -10,6 +11,25 @@ function getSupabase() {
     process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
+}
+
+/**
+ * Verify against the platform webhook secret, then the Connect endpoint secret if one is
+ * configured (Connect events such as account.updated may come from a separate endpoint).
+ */
+function verifyEvent(body: string, signature: string): Stripe.Event {
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET].filter(
+    (s): s is string => !!s
+  );
+  let lastError: unknown = new Error('No webhook secret configured');
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(body, signature, secret);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 export async function POST(request: NextRequest) {
@@ -23,14 +43,20 @@ export async function POST(request: NextRequest) {
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(
-        body,
-        signature,
-        process.env.STRIPE_WEBHOOK_SECRET!
-      );
+      event = verifyEvent(body, signature);
     } catch (err) {
       console.error('[billing/webhook] Signature verification failed:', err);
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+    }
+
+    // Gigs: contract checkouts (metadata.kind=contract), Connect accounts, refunds, disputes.
+    // Idempotent through stripe_events. Credit top-ups fall through to the code below unchanged.
+    if (isJobsEvent(event)) {
+      const result = await processJobsStripeEvent(event);
+      return NextResponse.json(
+        result.duplicate ? { received: true, duplicate: true } : { received: true },
+        { status: 200 }
+      );
     }
 
     if (event.type === 'checkout.session.completed') {
