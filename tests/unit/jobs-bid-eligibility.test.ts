@@ -134,3 +134,16 @@ test('bad bounds are rejected', () => {
     minCents: 1000, maxCents: 1000,
   });
 });
+
+test('a bound of 1 cent is allowed', () => {
+  assert.deepEqual(bidBoundsFromEnv({ JOBS_MIN_BID_CENTS: '1', JOBS_MAX_BID_CENTS: '1' }), { minCents: 1, maxCents: 1 });
+});
+
+test('bound errors name the variable', () => {
+  assert.throws(() => bidBoundsFromEnv({ JOBS_MIN_BID_CENTS: 'x' }), /JOBS_MIN_BID_CENTS must be a positive integer number of cents, got x/);
+  assert.throws(() => bidBoundsFromEnv({ JOBS_MAX_BID_CENTS: '0' }), /JOBS_MAX_BID_CENTS must be a positive integer number of cents, got 0/);
+  assert.throws(
+    () => bidBoundsFromEnv({ JOBS_MIN_BID_CENTS: '2000', JOBS_MAX_BID_CENTS: '1000' }),
+    /JOBS_MIN_BID_CENTS \(2000\) is above JOBS_MAX_BID_CENTS \(1000\)/,
+  );
+});

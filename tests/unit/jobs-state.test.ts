@@ -91,6 +91,7 @@ test('assert helpers throw a typed error naming the transition', () => {
     () => assertJobTransition('draft', 'in_progress'),
     (err: unknown) =>
       err instanceof InvalidTransitionError &&
+      err.name === 'InvalidTransitionError' &&
       err.entity === 'job' &&
       err.from === 'draft' &&
       err.to === 'in_progress' &&

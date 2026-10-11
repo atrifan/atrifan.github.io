@@ -106,3 +106,22 @@ test('env: garbage is rejected rather than silently defaulted', () => {
   assert.throws(() => commissionBpsFromEnv({ MARKETPLACE_COMMISSION_PERCENT: '15%' }), RangeError);
   assert.throws(() => commissionBpsFromEnv({ MARKETPLACE_COMMISSION_PERCENT: '-5' }), RangeError);
 });
+
+test('env: only plain decimal numbers are accepted (no hex, exponent or sign)', () => {
+  assert.equal(commissionBpsFromEnv({ MARKETPLACE_COMMISSION_PERCENT: '12.55' }), 1255);
+  for (const raw of ['0x10', '1e1', '+15', '15e0', '.5', '5.']) {
+    assert.throws(
+      () => commissionBpsFromEnv({ MARKETPLACE_COMMISSION_PERCENT: raw }),
+      /MARKETPLACE_COMMISSION_PERCENT is not a number/,
+      raw,
+    );
+  }
+});
+
+test('error messages name the bad value', () => {
+  assert.throws(() => computeCommission(-1, 1500), /Bid must be a non-negative integer number of cents, got -1/);
+  assert.throws(() => computeCommission(1, 10001), /Commission bps must be an integer between 0 and 10000, got 10001/);
+  assert.throws(() => computeCommission(Number.MAX_SAFE_INTEGER, 0), /Bid is too large/);
+  assert.throws(() => commissionBpsFromPercent(101), /Commission percent must be between 0 and 100, got 101/);
+  assert.throws(() => commissionBpsFromPercent(15.005), /Commission percent 15.005 is finer than one basis point/);
+});
