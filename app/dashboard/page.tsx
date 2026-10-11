@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ControlPanelPage } from '@/src/views/ControlPanelPage';
 import { isPreferenced } from '@/src/lib/preferenced';
+import { planFromClaims, type PlanKey } from '@/src/lib/plans';
 
 export const metadata: Metadata = {
   title: 'Control Panel - Tulzo',
@@ -10,16 +11,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function getPlanFromClaims(sessionClaims: Record<string, unknown> | null): string {
-  if (!sessionClaims) return 'free';
-  const pla = sessionClaims.pla as string | undefined;
-  if (!pla) return 'free';
-  if (pla.includes(':')) {
-    const plan = pla.split(':')[1];
-    if (plan === 'pro' || plan === 'plus' || plan === 'free') return plan;
-  }
-  if (pla === 'pro' || pla === 'plus' || pla === 'free') return pla;
-  return 'free';
+function getPlanFromClaims(sessionClaims: Record<string, unknown> | null): PlanKey {
+  return planFromClaims(sessionClaims);
 }
 
 export default async function Dashboard() {

@@ -5,18 +5,10 @@ import {
   computeDeviceStatus,
   DEVICE_LIMITS,
 } from '@/src/lib/supabase-services';
+import { planFromClaims, type PlanKey } from '@/src/lib/plans';
 
-function getUserPlanFromClaims(sessionClaims: Record<string, unknown> | null): string {
-  if (!sessionClaims) return 'free';
-  const plaClaim = sessionClaims.pla as string | undefined;
-  if (plaClaim) {
-    if (plaClaim.includes(':')) {
-      const plan = plaClaim.split(':')[1];
-      if (plan === 'pro' || plan === 'plus' || plan === 'free') return plan;
-    }
-    if (plaClaim === 'pro' || plaClaim === 'plus' || plaClaim === 'free') return plaClaim;
-  }
-  return 'free';
+function getUserPlanFromClaims(sessionClaims: Record<string, unknown> | null): PlanKey {
+  return planFromClaims(sessionClaims);
 }
 
 export async function GET() {

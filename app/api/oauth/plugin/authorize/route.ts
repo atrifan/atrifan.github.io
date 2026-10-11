@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getApiKeyByUserAndServer } from '@/src/lib/supabase-services';
+import { planFromClaims } from '@/src/lib/plans';
 
 /**
  * OAuth-like authorization endpoint for the native-host/plugin.
@@ -28,12 +29,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Get user's plan from session claims
-  const plaClaim = (sessionClaims as Record<string, unknown>)?.pla as string | undefined;
-  let plan = 'free';
-  if (plaClaim) {
-    const extracted = plaClaim.includes(':') ? plaClaim.split(':')[1] : plaClaim;
-    if (extracted === 'pro' || extracted === 'plus') plan = extracted;
-  }
+  const plan = planFromClaims(sessionClaims as Record<string, unknown> | null);
 
   // Get existing API key
   const existingKey = await getApiKeyByUserAndServer(userId, 'default');

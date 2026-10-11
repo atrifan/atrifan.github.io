@@ -1,3 +1,5 @@
+import { normalizePlan } from '../lib/plans';
+
 /**
  * Billing Configuration
  *
@@ -31,6 +33,7 @@ export const PLAN_RANKINGS = {
   free: 0,
   pro: 1,
   plus: 2,
+  super: 3,
 } as const;
 
 export type PlanName = keyof typeof PLAN_RANKINGS;
@@ -39,8 +42,7 @@ export type PlanName = keyof typeof PLAN_RANKINGS;
  * Get the numeric rank for a plan name
  */
 export const getPlanRank = (plan: string): number => {
-  const normalizedPlan = plan.toLowerCase() as PlanName;
-  return PLAN_RANKINGS[normalizedPlan] ?? PLAN_RANKINGS.free;
+  return PLAN_RANKINGS[normalizePlan(plan)];
 };
 
 /**

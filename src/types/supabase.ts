@@ -37,7 +37,7 @@ export interface ApiKeyRow {
   /** API key provider: 'clerk' or 'custom' */
   provider: 'clerk' | 'custom';
   /** User's plan at time of key creation */
-  plan: 'free' | 'pro' | 'plus';
+  plan: 'free' | 'pro' | 'plus' | 'super';
   /** Whether the key is active */
   is_active: boolean;
   /** When the key was created */
@@ -62,7 +62,7 @@ export interface ApiKeyInsert {
   server_name?: string;
   device_name?: string;
   provider: 'clerk' | 'custom';
-  plan: 'free' | 'pro' | 'plus';
+  plan: 'free' | 'pro' | 'plus' | 'super';
   is_active?: boolean;
 }
 

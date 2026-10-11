@@ -7,17 +7,10 @@ import {
   deleteApiKey,
   updateApiKey,
 } from '@/src/lib/supabase-services';
+import { normalizePlan, planFromSubscription } from '@/src/lib/plans';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
 
-// Plan mapping from Clerk Billing plan IDs to our plan names
-const PLAN_MAPPING: Record<string, string> = {
-  'free': 'free',
-  'pro': 'pro',
-  'plus': 'plus',
-  // Add your actual Clerk Billing plan IDs here
-  // e.g., 'plan_abc123': 'pro',
-};
 
 /**
  * Subscription event data structure from Clerk Billing
@@ -25,8 +18,10 @@ const PLAN_MAPPING: Record<string, string> = {
 interface SubscriptionEventData {
   id: string;
   user_id: string;
-  plan_id: string;
-  status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
+  plan_id?: string;
+  plan?: { slug?: string } | null;
+  items?: Array<{ status?: string; plan?: { slug?: string } | null }> | null;
+  status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
   current_period_start?: number;
   current_period_end?: number;
   canceled_at?: number;
@@ -81,13 +76,13 @@ function extractPlan(userData: Record<string, unknown>): string {
   // Check publicMetadata.plan (if configured via Clerk dashboard)
   const publicMetadata = userData.public_metadata as Record<string, unknown> | undefined;
   if (publicMetadata?.plan) {
-    return publicMetadata.plan as string;
+    return normalizePlan(publicMetadata.plan);
   }
 
   // Check privateMetadata.plan (alternative configuration)
   const privateMetadata = userData.private_metadata as Record<string, unknown> | undefined;
   if (privateMetadata?.plan) {
-    return privateMetadata.plan as string;
+    return normalizePlan(privateMetadata.plan);
   }
 
   // Check for subscription status
@@ -181,14 +176,15 @@ export async function POST(request: NextRequest) {
       case 'subscription.updated': {
         const subData = event.data as unknown as SubscriptionEventData;
         const userId = subData.user_id;
-        const planId = subData.plan_id;
         const status = subData.status;
+        const newPlan = planFromSubscription(subData);
 
-        console.log(`[webhook] Subscription ${event.type}: user=${userId}, plan=${planId}, status=${status}`);
+        console.log(`[webhook] Subscription ${event.type}: user=${userId}, plan=${newPlan}, status=${status}`);
 
-        if (status === 'active' || status === 'trialing') {
-          // Map plan ID to our plan name
-          const newPlan = PLAN_MAPPING[planId] || 'pro';
+        if (status === 'active' || status === 'trialing' || status === undefined) {
+          if (newPlan === 'free') {
+            console.warn(`[webhook] No known paid plan in subscription for user ${userId}; treating as free`);
+          }
           await handlePlanChange(userId, newPlan);
         } else if (status === 'canceled' || status === 'incomplete') {
           // Subscription canceled or failed - downgrade to free

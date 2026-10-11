@@ -204,6 +204,7 @@ export const DEVICE_LIMITS: Record<string, number> = {
   free: 1,
   pro: 3,
   plus: 10,
+  super: 25,
 };
 
 export async function getActiveDeviceCount(

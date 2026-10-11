@@ -26,7 +26,7 @@ function getClient() {
 
 export interface MarketplaceAuth {
   userId: string;
-  plan: 'free' | 'pro' | 'plus';
+  plan: 'free' | 'pro' | 'plus' | 'super';
 }
 
 export type AuthOutcome =

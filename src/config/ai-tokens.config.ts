@@ -1,3 +1,5 @@
+import type { PlanKey } from '../lib/plans';
+
 // AI Token Configuration for Subscription Tiers
 // Note: This file is shared between client and server - do not add 'use client'
 
@@ -404,7 +406,7 @@ export const EMBEDDING_MODEL = {
 };
 
 // Get embedding models available for a tier
-export function getEmbeddingModelsForTier(tier: 'free' | 'pro' | 'plus'): EmbeddingModel[] {
+export function getEmbeddingModelsForTier(tier: PlanKey): EmbeddingModel[] {
   if (tier === 'free') {
     // Free tier: only local embedding
     return [LOCAL_EMBEDDING_MODEL];
@@ -426,7 +428,7 @@ export function calculateEmbeddingCost(modelId: string, inputTokens: number): nu
 
 // Token quotas per tier - budget-based (no static monthlyTokens)
 export interface TokenQuota {
-  tier: 'free' | 'pro' | 'plus';
+  tier: PlanKey;
   models: string[]; // chat model IDs allowed
   embeddingModels: string[]; // embedding model IDs allowed
   features: string[];
@@ -451,21 +453,29 @@ export const TOKEN_QUOTAS: Record<string, TokenQuota> = {
       'alibaba/qwen3-embedding-0.6b', // Cheapest remote
     ],
     features: ['ai-chat', 'mcp-server', 'embeddings', 'ads'],
-    price: 7,
-    aiCostBudget: 5, // $5 budget
+    price: 10,
+    aiCostBudget: 7.7, // 1,000 credits at $0.01 with 1.3x markup
   },
   plus: {
     tier: 'plus',
     models: AI_MODELS.map(m => m.id), // All chat models
     embeddingModels: EMBEDDING_MODELS.map(m => m.id), // All embedding models
     features: ['ai-chat', 'mcp-server', 'embeddings', 'agents', 'priority-support', 'ads'],
-    price: 14,
-    aiCostBudget: 5, // $5 budget
+    price: 25,
+    aiCostBudget: 21.5, // 2,800 credits at $0.01 with 1.3x markup
+  },
+  super: {
+    tier: 'super',
+    models: AI_MODELS.map(m => m.id), // All chat models
+    embeddingModels: EMBEDDING_MODELS.map(m => m.id), // All embedding models
+    features: ['ai-chat', 'mcp-server', 'embeddings', 'agents', 'priority-support', 'ads'],
+    price: 60,
+    aiCostBudget: 54, // 7,000 credits at $0.01 with 1.3x markup
   },
 };
 
 // Calculate estimated messages per month based on budget and model
-export function estimateMessagesPerMonth(tier: 'free' | 'pro' | 'plus', modelId?: string): number {
+export function estimateMessagesPerMonth(tier: PlanKey, modelId?: string): number {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota || quota.aiCostBudget === 0) return 0;
 
@@ -495,14 +505,14 @@ export function calculateTokenCost(
 }
 
 // Get usage percentage based on cost spent vs budget
-export function getUsagePercentage(costSpent: number, tier: 'free' | 'pro' | 'plus'): number {
+export function getUsagePercentage(costSpent: number, tier: PlanKey): number {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota || quota.aiCostBudget === 0) return 100;
   return Math.min(100, (costSpent / quota.aiCostBudget) * 100);
 }
 
 // Check if user can send message based on budget
-export function canSendMessage(costSpent: number, tier: 'free' | 'pro' | 'plus'): boolean {
+export function canSendMessage(costSpent: number, tier: PlanKey): boolean {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota) return false;
   if (tier === 'free') return false;
@@ -510,7 +520,7 @@ export function canSendMessage(costSpent: number, tier: 'free' | 'pro' | 'plus')
 }
 
 // Get remaining tokens for a specific model based on remaining budget
-export function getRemainingTokens(costSpent: number, tier: 'free' | 'pro' | 'plus', modelId: string): number {
+export function getRemainingTokens(costSpent: number, tier: PlanKey, modelId: string): number {
   const quota = TOKEN_QUOTAS[tier];
   if (!quota) return 0;
   const remainingBudget = Math.max(0, quota.aiCostBudget - costSpent);
