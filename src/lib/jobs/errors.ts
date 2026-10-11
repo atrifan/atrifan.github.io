@@ -24,6 +24,8 @@ export type JobsErrorCode =
   | 'stripe_error'
   | 'stripe_not_configured'
   | 'db_error'
+  // job room (Phase 3)
+  | 'work_paused'
   // submissions and QA (Phase 4)
   | 'classic_pat'
   | 'invalid_pat'

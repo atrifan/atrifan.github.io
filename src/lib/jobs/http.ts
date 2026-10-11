@@ -67,6 +67,10 @@ export function errorResponse(err: unknown): NextResponse {
   if (err instanceof JobsError) {
     const body: Record<string, unknown> = { error: err.code, message: err.message };
     if (err.code === 'invalid_request' && err.details) body.issues = err.details;
+    else if (err.details && typeof err.details === 'object' && !Array.isArray(err.details)) {
+      // e.g. connect_required's onboarding_url; never overrides error/message
+      Object.assign(body, err.details, { error: err.code, message: err.message });
+    }
     return NextResponse.json(body, { status: err.status });
   }
   if (err instanceof InvalidTransitionError) {
