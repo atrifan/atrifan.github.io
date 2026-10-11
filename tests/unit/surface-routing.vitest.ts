@@ -3,6 +3,7 @@ import {
   activeSurface,
   isProtectedPath,
   resolveSurface,
+  wwwRedirect,
   routeRequest,
   SURFACE_API_ALLOWLIST,
 } from '@/src/lib/surface-routing';
@@ -117,7 +118,7 @@ describe('routeRequest: non-hub surfaces', () => {
   });
 
   it.each(NON_HUB)('%s: returns 404 for hub-only pages', (s) => {
-    for (const p of ['/pricing', '/profile', '/credits', '/dashboard']) {
+    for (const p of ['/pricing', '/profile', '/credits', '/dashboard', '/admin/qa']) {
       expect(route(s, p)).toEqual({ action: 'notFound' });
     }
   });
@@ -195,15 +196,15 @@ describe('routeRequest uses surfaceUrl for cross-surface destinations', () => {
   });
 });
 
-describe('isProtectedPath (existing protection: /dashboard and /chat)', () => {
-  it('protects /dashboard and /chat and everything below them', () => {
-    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat', '/chat/x']) {
+describe('isProtectedPath', () => {
+  it('protects /dashboard, /chat and the hub account and admin pages, and everything below them', () => {
+    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat', '/chat/x', '/profile', '/profile/account', '/credits', '/admin', '/admin/qa']) {
       expect(isProtectedPath(p)).toBe(true);
     }
   });
 
   it('leaves public pages and lookalikes alone', () => {
-    for (const p of ['/', '/pricing', '/ai', '/marketplace', '/gigs', '/sign-in', '/chatter', '/dashboards', '/api/chat']) {
+    for (const p of ['/', '/pricing', '/docs', '/legal', '/ai', '/marketplace', '/gigs', '/sign-in', '/chatter', '/dashboards', '/api/chat', '/profiles', '/administrator']) {
       expect(isProtectedPath(p)).toBe(false);
     }
   });
@@ -262,5 +263,29 @@ describe('routeRequest edge cases (from mutation testing)', () => {
 
   it('drops every trailing slash from a /dashboard deep link', () => {
     expect(route('hub', '/dashboard/keys//')).toEqual({ action: 'redirect', destination: '/ai/keys' });
+  });
+});
+
+describe('wwwRedirect', () => {
+  it('sends www.<root> to the apex, keeping path and query', () => {
+    expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/pricing?x=1', rootDomain: 'tulzo.online' })).toBe(
+      'https://tulzo.online/pricing?x=1',
+    );
+    expect(wwwRedirect({ host: 'WWW.Tulzo.Online:443', pathAndQuery: '/', rootDomain: 'tulzo.online' })).toBe('https://tulzo.online/');
+  });
+
+  it('keeps a scheme and port given in the root domain', () => {
+    expect(wwwRedirect({ host: 'www.lvh.me:3000', pathAndQuery: '/a', rootDomain: 'http://lvh.me:3000' })).toBe('http://lvh.me:3000/a');
+  });
+
+  it('leaves the apex, subdomains and other hosts alone', () => {
+    for (const host of ['tulzo.online', 'ai.tulzo.online', 'www.example.com', 'wwwtulzo.online', '', null]) {
+      expect(wwwRedirect({ host, pathAndQuery: '/', rootDomain: 'tulzo.online' })).toBeNull();
+    }
+  });
+
+  it('does nothing without a root domain', () => {
+    expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/', rootDomain: '' })).toBeNull();
+    expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/', rootDomain: undefined })).toBeNull();
   });
 });

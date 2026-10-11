@@ -16,7 +16,7 @@ describe('robotsFor', () => {
     expect(r.rules).toEqual({
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/dashboard', '/sign-in', '/sign-up', '/profile', '/credits'],
+      disallow: ['/api/', '/dashboard', '/sign-in', '/sign-up', '/profile', '/credits', '/admin'],
     });
   });
 
@@ -34,7 +34,12 @@ describe('robotsFor', () => {
 
 describe('sitemapFor', () => {
   it('lists only public hub pages on the hub', () => {
-    expect(urls('hub')).toEqual(['https://tulzo.online/', 'https://tulzo.online/pricing']);
+    expect(urls('hub')).toEqual([
+      'https://tulzo.online/',
+      'https://tulzo.online/pricing',
+      'https://tulzo.online/docs',
+      'https://tulzo.online/legal',
+    ]);
   });
 
   it('lists nothing for private surfaces', () => {
@@ -51,6 +56,8 @@ describe('sitemapFor', () => {
     expect(urls(null, {})).toEqual([
       'http://localhost:3000/',
       'http://localhost:3000/pricing',
+      'http://localhost:3000/docs',
+      'http://localhost:3000/legal',
       'http://localhost:3000/marketplace',
       'http://localhost:3000/gigs',
     ]);
