@@ -633,7 +633,7 @@ export interface RestApiEndpointUpdate {
  */
 // ============ Packages Table ============
 
-export type PackageType = 'plugin' | 'skill' | 'practitioner' | 'mcp';
+export type PackageType = 'plugin' | 'skill' | 'practitioner' | 'mcp' | 'a2a' | 'subagent' | 'workflow';
 export type PackageVisibility = 'public' | 'pending' | 'private';
 
 export interface PackageRow {

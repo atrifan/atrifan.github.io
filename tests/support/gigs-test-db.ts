@@ -6,7 +6,7 @@
  *   - postgrest (the REST layer supabase-js talks to)
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql and
- * 20261201_qa.sql into it, and serves it through
+ * 20261201_qa.sql and the marketplace package migrations into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
  * `stop()` drops the schema and removes both containers.
  */
@@ -179,6 +179,15 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(API_KEYS_PREREQ_SQL);
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261102_notifications.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261201_qa.sql'), 'utf8'));
+    // Marketplace: packages, ratings/installs, and the new kinds + catalog view.
+    for (const m of [
+      '20260521_packages.sql',
+      '20260522_mcp_registry.sql',
+      '20260703_package_ratings_discovery.sql',
+      '20261205_marketplace_kinds_catalog.sql',
+    ]) {
+      await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations', m), 'utf8'));
+    }
     await admin.query(`
       GRANT ALL ON ALL TABLES IN SCHEMA ${schema} TO service_role;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA ${schema} TO service_role;
@@ -227,6 +236,7 @@ export async function resetGigsTables(pgUrl: string, schema: string): Promise<vo
       'user_budgets', 'paid_usage_analytics',
       'qa_usage_log', 'qa_reviews', 'qa_requests', 'audit_events', 'submissions', 'api_keys',
       'user_contacts', 'notifications', 'notification_preferences',
+      'package_installs', 'package_ratings', 'package_versions', 'packages',
     ].map((t) => `${schema}.${t}`).join(', ')} CASCADE
   `);
   await c.end();

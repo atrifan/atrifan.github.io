@@ -5,10 +5,11 @@ import { authenticateApiKey, discoverPackages } from '@/src/lib/marketplace-serv
 /**
  * Marketplace discovery — API-key-gated (paid plan required).
  *
- * The browser assistant calls this as a tool to find installable
- * skills / plugins / MCP servers.
+ * The browser assistant calls this as a tool to find installable skills, plugins, MCP servers,
+ * A2A agents, sub-agents and workflows. Each result carries the catalog wire format (kind,
+ * title, capabilities, files_hash, install_url, provenance, badges) next to the original fields.
  *
- *   GET /api/marketplace/discover?q=<search>&type=<plugin|skill|practitioner|mcp>&limit=<n>
+ *   GET /api/marketplace/discover?q=<search>&type=<kind>&tag=<capability>&limit=<n>
  *   Authorization: Bearer <tulzo_api_key>
  */
 export async function GET(req: NextRequest) {
@@ -24,12 +25,13 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get('q') || undefined;
   const type = searchParams.get('type') || undefined;
+  const tag = searchParams.get('tag') || undefined;
   const limitRaw = searchParams.get('limit');
   const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
 
   let results;
   try {
-    results = await discoverPackages({ q, type, limit: Number.isNaN(limit) ? undefined : limit });
+    results = await discoverPackages({ q, type, tag, limit: Number.isNaN(limit) ? undefined : limit });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Discovery failed' }, { status: 500 });
   }

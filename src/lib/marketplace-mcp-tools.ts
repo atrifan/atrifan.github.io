@@ -10,6 +10,7 @@
  * branch in the MCP route so they don't go through the calculator widget path.
  */
 
+import { PACKAGE_KINDS } from './marketplace/kinds';
 import {
   discoverPackages,
   publishPackage,
@@ -31,13 +32,15 @@ export const MARKETPLACE_TOOLS = [
   {
     name: 'marketplace_discover',
     description:
-      'Search the Tulzo marketplace for installable skills, plugins, and MCP servers. ' +
-      'Returns each package with its rating, install count, and the details needed to install it.',
+      'Search the Tulzo marketplace for installable skills, plugins, MCP servers, A2A agents, sub-agents and ' +
+      'workflows. Returns each package with its rating, install count, the details needed to install it, and ' +
+      'the catalog wire format: kind, title, capabilities, version, files_hash, install_url, provenance, badges.',
     inputSchema: {
       type: 'object',
       properties: {
         q: { type: 'string', description: 'Free-text search over name and description' },
-        type: { type: 'string', enum: ['plugin', 'skill', 'practitioner', 'mcp'], description: 'Filter by package type' },
+        type: { type: 'string', enum: [...PACKAGE_KINDS], description: 'Filter by package type' },
+        tag: { type: 'string', description: 'Filter by capability tag, e.g. "github"' },
         limit: { type: 'number', description: 'Max results (default 50, max 100)' },
       },
       required: [],
@@ -62,21 +65,27 @@ export const MARKETPLACE_TOOLS = [
   {
     name: 'marketplace_publish',
     description:
-      'Publish a skill, plugin, or MCP server to the Tulzo marketplace. Published packages start ' +
-      'as "pending" and become public after admin moderation. For type="mcp" pass config_json; ' +
-      'for archive types pass an already-uploaded blob_url.',
+      'Publish a skill, plugin, MCP server, A2A agent, sub-agent or workflow to the Tulzo marketplace. ' +
+      'Published packages start as "pending" and become public after admin moderation. For type="mcp" ' +
+      'pass config_json { transport, url | command }; for type="a2a" pass config_json { card_url }; for ' +
+      'archive types pass an already-uploaded blob_url.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Stable package id / slug' },
         name: { type: 'string' },
         description: { type: 'string' },
-        type: { type: 'string', enum: ['plugin', 'skill', 'practitioner', 'mcp'] },
+        type: { type: 'string', enum: [...PACKAGE_KINDS] },
         version: { type: 'string', description: 'Defaults to 1.0.0' },
         config_json: {
           type: 'object',
-          description: 'For type="mcp": { transport: "http|sse|stdio", url?, command?, args?, env? }',
+          description:
+            'For type="mcp": { transport: "http|sse|stdio", url?, command?, args?, env?, tools? }; ' +
+            'for type="a2a": { card_url }',
         },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Capability tags (at most 8)' },
+        category: { type: 'string', description: 'developer-tools, productivity, communication, data, research, design, security or other' },
+        long_description: { type: 'string', description: 'Markdown shown on the package page' },
         blob_url: { type: 'string', description: 'For archive types: URL of the uploaded package zip' },
       },
       required: ['id', 'name', 'type'],
@@ -104,6 +113,7 @@ export async function executeMarketplaceTool(
       const results = await discoverPackages({
         q: typeof args.q === 'string' ? args.q : undefined,
         type: typeof args.type === 'string' ? args.type : undefined,
+        tag: typeof args.tag === 'string' ? args.tag : undefined,
         limit: typeof args.limit === 'number' ? args.limit : undefined,
       });
       return { results, count: results.length };
@@ -124,6 +134,9 @@ export async function executeMarketplaceTool(
         version: typeof args.version === 'string' ? args.version : undefined,
         config_json: (args.config_json as Record<string, unknown>) ?? null,
         blob_url: typeof args.blob_url === 'string' ? args.blob_url : undefined,
+        tags: Array.isArray(args.tags) || typeof args.tags === 'string' ? (args.tags as string[] | string) : undefined,
+        category: typeof args.category === 'string' ? args.category : undefined,
+        long_description: typeof args.long_description === 'string' ? args.long_description : undefined,
       });
       return res.ok
         ? { ok: true, id: res.id, version: res.version, visibility: res.visibility }
