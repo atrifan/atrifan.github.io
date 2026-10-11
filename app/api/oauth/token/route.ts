@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import { MISCONFIGURED, resolveClerkFrontendApi, resolveClerkOAuthClient } from '@/src/lib/clerk-oauth-config';
 
 /**
  * OAuth Token Proxy
@@ -7,25 +8,14 @@ import { clerkClient } from '@clerk/nextjs/server';
  * Validates client credentials and proxies token request to Clerk.
  */
 
-function getClerkFrontendApi(): string {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-  if (publishableKey) {
-    try {
-      const base64Part = publishableKey.replace(/^pk_(test|live)_/, '');
-      let decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
-      // Remove trailing $ that Clerk adds to the encoded domain
-      decoded = decoded.replace(/\$+$/, '');
-      if (decoded && decoded.includes('.clerk.')) {
-        return `https://${decoded}`;
-      }
-    } catch {
-      // Use default
-    }
-  }
-  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
-}
-
 export async function POST(request: NextRequest) {
+  const clerkApi = resolveClerkFrontendApi(process.env);
+  const oauthClient = resolveClerkOAuthClient(process.env, { requireSecret: true });
+  if (!clerkApi || !oauthClient?.clientSecret) {
+    console.error('[oauth/token] Clerk OAuth env is not configured');
+    return NextResponse.json(MISCONFIGURED, { status: 500 });
+  }
+
   const contentType = request.headers.get('content-type') || '';
   
   let body: Record<string, string> = {};
@@ -102,11 +92,11 @@ export async function POST(request: NextRequest) {
 
   // Proxy to Clerk's token endpoint
   const baseUrl = process.env.NEXT_PUBLIC_HOST || request.nextUrl.origin;
-  const clerkTokenUrl = `${getClerkFrontendApi()}/oauth/token`;
+  const clerkTokenUrl = `${clerkApi}/oauth/token`;
   
   const proxyBody = new URLSearchParams();
-  proxyBody.set('client_id', process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID || 'XSfJ6XdWpI4hjmHT');
-  proxyBody.set('client_secret', process.env.CLERK_OAUTH_CLIENT_SECRET || 'V0W2k5USrYoc37NsGpXaYEGb35lV0A2f');
+  proxyBody.set('client_id', oauthClient.clientId);
+  proxyBody.set('client_secret', oauthClient.clientSecret);
   proxyBody.set('grant_type', grantType || 'authorization_code');
   
   if (code) proxyBody.set('code', code);

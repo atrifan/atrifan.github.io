@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { MISCONFIGURED, resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
 
 /**
  * JWKS Proxy endpoint
@@ -7,27 +8,14 @@ import { NextResponse } from 'next/server';
  * This allows clients to use our domain for JWKS discovery.
  */
 
-function getClerkFrontendApi(): string {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-  if (publishableKey) {
-    try {
-      const base64Part = publishableKey.replace(/^pk_(test|live)_/, '');
-      let decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
-      // Remove trailing $ that Clerk adds to the encoded domain
-      decoded = decoded.replace(/\$+$/, '');
-      if (decoded && decoded.includes('.clerk.')) {
-        return `https://${decoded}`;
-      }
-    } catch {
-      // Use default
-    }
-  }
-  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
-}
-
 export async function GET() {
+  const clerkApi = resolveClerkFrontendApi(process.env);
+  if (!clerkApi) {
+    console.error('[oauth/jwks] Clerk frontend API env is not configured');
+    return NextResponse.json(MISCONFIGURED, { status: 500 });
+  }
   try {
-    const clerkJwksUrl = `${getClerkFrontendApi()}/.well-known/jwks.json`;
+    const clerkJwksUrl = `${clerkApi}/.well-known/jwks.json`;
     
     const response = await fetch(clerkJwksUrl, {
       headers: {

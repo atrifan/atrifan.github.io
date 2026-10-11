@@ -22,7 +22,11 @@ async function main() {
   console.log('=== MCP Tools Debug Script ===\n');
 
   // Use provided API key or from environment
-  const apiKey = process.argv[2] || process.env.TEST_API_KEY || 'ak_CSRHXK64X99YG9HQ28KJ2Y8ME00XG5H9';
+  const apiKey = process.argv[2] || process.env.TEST_API_KEY;
+  if (!apiKey) {
+    console.error('Pass an API key as the first argument or set TEST_API_KEY.');
+    process.exit(1);
+  }
   const serverName = 'default';
   const mcpUrl = `${BASE_URL}/api/mcp/${apiKey}/${serverName}`;
   

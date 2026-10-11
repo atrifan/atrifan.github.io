@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveClerkFrontendApi } from '@/src/lib/clerk-oauth-config';
 import { clerkClient, verifyToken } from '@clerk/nextjs/server';
 import { decryptApiKey, isApiKeyExpired, useClerkApiKeys } from '@/src/utils/apiKeyEncryption';
 import { isHigherOrEqualTo } from '@/src/config/billing.config';
@@ -234,26 +235,6 @@ async function validateApiKey(key: string, serverName: string = 'default'): Prom
   };
 }
 
-/**
- * Get Clerk frontend API URL from publishable key
- */
-function getClerkFrontendApi(): string {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
-  if (publishableKey) {
-    try {
-      const base64Part = publishableKey.replace(/^pk_(test|live)_/, '');
-      let decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
-      // Remove trailing $ that Clerk adds to the encoded domain
-      decoded = decoded.replace(/\$+$/, '');
-      if (decoded && decoded.includes('.clerk.')) {
-        return `https://${decoded}`;
-      }
-    } catch {
-      // Use default
-    }
-  }
-  return process.env.CLERK_HOST || 'https://quick-adder-16.clerk.accounts.dev';
-}
 
 /**
  * Validate OAuth bearer token
@@ -290,7 +271,11 @@ async function validateBearerToken(token: string, serverName: string = 'default'
   // If not a JWT, try OAuth access token via userinfo endpoint
   if (!userId) {
     try {
-      const clerkApi = getClerkFrontendApi();
+      const clerkApi = resolveClerkFrontendApi(process.env);
+      if (!clerkApi) {
+        console.error('[mcp] Clerk frontend API env is not configured');
+        return { authenticated: false, authMethod: 'none', error: 'server_misconfigured' };
+      }
       const userinfoResponse = await fetch(`${clerkApi}/oauth/userinfo`, {
         headers: {
           'Authorization': `Bearer ${token}`,
