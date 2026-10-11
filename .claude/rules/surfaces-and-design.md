@@ -27,6 +27,29 @@ the others under `/ai`, `/marketplace`, `/gigs`, `/chat`.
   - Surface mode needs `NEXT_PUBLIC_ROOT_DOMAIN`; don't set `TULZO_SURFACE` on the live `tulzo` project until
     the other projects exist.
 
+### Domains
+
+The hub is the apex (`surfaceUrl('hub')` is `https://tulzo.online/...`, never `www`). `www.<root>` is
+redirected (308, path and query kept) by `middleware.ts` through `wwwRedirect()` in `surface-routing.ts`,
+not by `vercel.json` or Vercel's domain settings: attach `www.tulzo.online` to the `tulzo` project and keep
+the apex as the primary domain (no "redirect to www").
+
+### Hub pages
+
+`app/(hub)/`: `/` (Organization JSON-LD), `/pricing` (plan table from `src/lib/plan-catalog.ts`, Clerk
+`PricingTable` for signed-in users), `/docs`, `/legal`, and the signed-in `/profile` (Clerk identity, Stripe
+Connect card, email notification switches), `/profile/account` (Clerk `UserProfile`), `/credits` (balance,
+top-ups via `/api/billing/checkout`, history) and `/admin/qa` (admins; `app/api/admin/qa/*` over
+`src/lib/qa/qa-review-service.ts`). Signed-in and admin pages are `noindex`. Views are in `src/views/hub/`,
+styles in `styles/hub.css`.
+
+### Consent
+
+`app/layout.tsx` boots iubenda with `iubendaConfig()` (`src/lib/consent.ts`): a bottom bar, no overlay, the
+surface domain as owner. The iubenda dashboard config still applies where we don't override it (TCF text).
+`ConsentScripts` loads GA after measurement consent and AdSense after marketing consent; `AdBanner` only fills
+its slot after consent. The footer's "Cookie settings" reopens the preferences.
+
 ### Adding a page to a surface
 
 Pages of a non-hub surface live under its prefix folder, so the same file works in both modes:

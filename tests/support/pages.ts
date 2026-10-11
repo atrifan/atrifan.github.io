@@ -10,6 +10,8 @@ import type { Page } from '@playwright/test';
 export const PAGES = [
   { path: '/', name: 'home' },
   { path: '/pricing', name: 'pricing' },
+  { path: '/docs', name: 'docs' },
+  { path: '/legal', name: 'legal' },
   { path: '/chat', name: 'chat' },
   { path: '/dashboard', name: 'dashboard' },
   { path: '/ai', name: 'ai' },
@@ -37,6 +39,16 @@ export async function openSettled(page: Page, path: string): Promise<void> {
     .getByRole('link', { name: 'Sign in', exact: true, includeHidden: true })
     .first()
     .waitFor({ state: 'attached', timeout: 30_000 });
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(300);
+}
+
+/** Go to a page as a signed-in user (storageState) and wait until Clerk shows the user button. */
+export async function openSettledSignedIn(page: Page, path: string): Promise<void> {
+  await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
+  await page.goto(path, { waitUntil: 'load' });
+  await page.locator('#main').waitFor({ state: 'visible' });
+  await page.locator('.cl-userButtonTrigger').first().waitFor({ state: 'attached', timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(300);
 }
