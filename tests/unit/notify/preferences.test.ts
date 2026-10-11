@@ -26,6 +26,11 @@ test('an explicit enabled row keeps the type on', () => {
   assert.equal(prefs.bid_received, false);
 });
 
+test('rows for unknown types are ignored', () => {
+  const prefs = resolvePreferences([{ type: 'not_a_type' as never, emailEnabled: false }]);
+  assert.deepEqual(Object.keys(prefs).sort(), [...NOTIFICATION_TYPES].sort());
+});
+
 test('a contact with a verified email and no opt-out is sent', () => {
   assert.deepEqual(gateNotification(contact, [], 'bid_received'), { send: true });
   assert.deepEqual(gateNotification(contact, [{ type: 'bid_received', emailEnabled: true }], 'bid_received'), {

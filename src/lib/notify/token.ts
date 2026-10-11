@@ -31,7 +31,6 @@ export function verifyUnsubscribeToken(token: string, secret: string): Unsubscri
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
-  if (!body || !sig) return null;
 
   const expected = mac(body, secret);
   const given = Buffer.from(sig, 'base64url');
