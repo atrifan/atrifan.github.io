@@ -68,6 +68,16 @@ async function main() {
       stdio: ['ignore', 'ignore', 'inherit'],
     });
     await waitForServer(`${baseUrl}/api/connect/status`);
+    // next dev compiles routes on first hit; parallel first hits can race on its manifests
+    // (500 "Unexpected end of JSON input"). Compile every gigs route once, one at a time.
+    const id = '00000000-0000-4000-8000-000000000000';
+    for (const [method, route] of [
+      ['GET', '/api/jobs'], ['GET', `/api/jobs/${id}`], ['POST', `/api/jobs/${id}/spec/draft`],
+      ['POST', `/api/jobs/${id}/spec/approve`], ['GET', `/api/jobs/${id}/bids`], ['POST', `/api/bids/${id}/accept`],
+      ['GET', '/api/offers'], ['POST', '/api/connect/onboard'], ['GET', '/api/connect/status'], ['POST', '/api/billing/webhook'],
+    ] as const) {
+      await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
+    }
 
     code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', 'tests/e2e/gigs-api.spec.ts', ...process.argv.slice(2)], {
       ...process.env,

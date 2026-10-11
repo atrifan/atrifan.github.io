@@ -8,6 +8,6 @@ let client: SupabaseClient | null = null;
  * not in the generated `Database` type yet. Every query on user data filters by user_id.
  */
 export function jobsDb(): SupabaseClient {
-  if (!client) client = createSupabaseClient() as unknown as SupabaseClient;
+  if (!client) client = createSupabaseClient({ noStore: true }) as unknown as SupabaseClient;
   return client;
 }
