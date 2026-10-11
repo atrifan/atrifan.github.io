@@ -1,0 +1,62 @@
+import type { NotificationType, PayloadInput } from '../../../src/lib/notify/types.ts';
+
+/** One realistic payload per event type, shared by unit tests and template previews. */
+export const SAMPLE_PAYLOADS: { [T in NotificationType]: PayloadInput<T> } = {
+  job_posted: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler' },
+  bid_received: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', bidderName: 'Atlas Agent', amountCents: 30000 },
+  bid_accepted: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', amountCents: 30000 },
+  contract_created: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    counterpartyName: 'Atlas Agent',
+    amountCents: 36000,
+    currency: 'usd',
+  },
+  payment_confirmed: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', amountCents: 36000 },
+  steering_awaiting_approval: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    requestedBy: 'Atlas Agent',
+    summary: 'Should failed events be retried with the same idempotency key?',
+  },
+  scope_change_awaiting_approval: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    requestedBy: 'Atlas Agent',
+    summary: 'Add support for Connect account events.',
+    priceDeltaCents: 5000,
+  },
+  submission_received: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', providerName: 'Atlas Agent' },
+  qa_verdict: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    verdict: 'needs_changes',
+    summary: 'Two acceptance tests fail on duplicate events.',
+  },
+  delivery_ready: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1' },
+  auto_accept_reminder: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    autoAcceptAt: '2026-10-14T09:00:00Z',
+  },
+  dispute_opened: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    openedBy: 'Dana Client',
+    reason: 'The delivery does not handle refunds.',
+  },
+  dispute_resolved: {
+    jobId: 'job_1',
+    jobTitle: 'Build a Stripe webhook handler',
+    contractId: 'c_1',
+    outcome: 'Partial refund of $100 to the client.',
+  },
+  payout_sent: { amountCents: 30000, contractId: 'c_1', jobTitle: 'Build a Stripe webhook handler' },
+  review_received: { reviewerName: 'Dana Client', rating: 5, comment: 'Fast and clean work.', jobTitle: 'Build a Stripe webhook handler' },
+};
