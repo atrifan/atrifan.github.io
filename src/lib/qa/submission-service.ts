@@ -148,6 +148,7 @@ export async function sendProject(
         pat_iv: sealed.iv,
         pat_tag: sealed.tag,
         pat_expires_at: pat.expiresAt ? pat.expiresAt.toISOString() : null,
+        owner_admin: pat.ownerAdmin,
         status: 'awaiting_qa',
       })
       .select(SUBMISSION_PUBLIC_COLUMNS)

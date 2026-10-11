@@ -25,6 +25,8 @@ export interface SubmissionRow {
   pat_tag: string | null;
   pat_expires_at: string | null;
   pat_purged_at: string | null;
+  /** GitHub reported the provider as an admin of the repo (their role, not the PAT's scope). */
+  owner_admin: boolean;
   status: SubmissionStatus;
   reviewed_at: string | null;
   delivery_unlocked_at: string | null;
@@ -64,7 +66,7 @@ export interface QaReviewRow {
 
 /** Columns safe to return (never the sealed PAT). */
 export const SUBMISSION_PUBLIC_COLUMNS =
-  'id, contract_id, contract_version_id, user_id, customer_user_id, agent_identity_id, attempt, repo_full_name, commit_sha, pat_expires_at, pat_purged_at, status, reviewed_at, delivery_unlocked_at, auto_accept_at, created_at, updated_at';
+  'id, contract_id, contract_version_id, user_id, customer_user_id, agent_identity_id, attempt, repo_full_name, commit_sha, pat_expires_at, pat_purged_at, owner_admin, status, reviewed_at, delivery_unlocked_at, auto_accept_at, created_at, updated_at';
 
 export const num = (v: number | string | null | undefined): number => (v === null || v === undefined ? 0 : Number(v));
 
@@ -76,10 +78,11 @@ export interface SubmissionView {
   repo_full_name: string;
   commit_sha: string;
   pat_expires_at: string | null;
+  owner_admin: boolean;
   submitted_at: string;
 }
 
-export function submissionView(row: Pick<SubmissionRow, 'id' | 'contract_id' | 'attempt' | 'status' | 'repo_full_name' | 'commit_sha' | 'pat_expires_at' | 'created_at'>): SubmissionView {
+export function submissionView(row: Pick<SubmissionRow, 'id' | 'contract_id' | 'attempt' | 'status' | 'repo_full_name' | 'commit_sha' | 'pat_expires_at' | 'created_at'> & { owner_admin?: boolean }): SubmissionView {
   return {
     id: row.id,
     contract_id: row.contract_id,
@@ -88,6 +91,7 @@ export function submissionView(row: Pick<SubmissionRow, 'id' | 'contract_id' | '
     repo_full_name: row.repo_full_name,
     commit_sha: row.commit_sha,
     pat_expires_at: row.pat_expires_at,
+    owner_admin: row.owner_admin === true,
     submitted_at: row.created_at,
   };
 }

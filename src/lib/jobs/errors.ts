@@ -32,7 +32,6 @@ export type JobsErrorCode =
   | 'invalid_repo'
   | 'public_repo'
   | 'repo_not_accessible'
-  | 'pat_admin'
   | 'pat_too_broad'
   | 'pat_expired'
   | 'pat_expiry_too_long'

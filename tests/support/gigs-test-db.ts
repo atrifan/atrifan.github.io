@@ -6,7 +6,8 @@
  *   - postgrest (the REST layer supabase-js talks to)
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql,
- * 20261115_job_room.sql and 20261201_qa.sql into it, and serves it through
+ * 20261115_job_room.sql, 20261201_qa.sql and its follow-up 20261202 into it,
+ * and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
  * `stop()` drops the schema and removes both containers.
  */
@@ -180,6 +181,7 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261102_notifications.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261115_job_room.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261201_qa.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261202_submissions_owner_admin.sql'), 'utf8'));
     await admin.query(`
       GRANT ALL ON ALL TABLES IN SCHEMA ${schema} TO service_role;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA ${schema} TO service_role;

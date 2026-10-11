@@ -296,7 +296,6 @@ test.describe('submission MCP: send_project and qa_status', () => {
         message: /private/i,
       },
       { name: 'PAT reaching two repos', args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.broad }, code: 'pat_too_broad' },
-      { name: 'PAT with admin', args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin }, code: 'pat_admin' },
       {
         name: 'PAT expiring in 90 days',
         args: { git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.longExpiry },
@@ -399,6 +398,15 @@ test.describe('submission MCP: send_project and qa_status', () => {
       commit_sha: FAKE_SHA_OTHER,
     });
     expect(sc.contract_status).toBe('in_qa');
+    expect(sc.submission.owner_admin).toBe(false);
   });
 
+  test('a repo owner\'s token (GitHub reports admin) is accepted and flagged owner_admin', async ({ request }) => {
+    const contractC = await makeActiveContract(request, customer, provider);
+    const sc = await expectToolOk(
+      callTool(request, provider, 'send_project', { contract_id: contractC, git_repo: FAKE_REPOS.private, pat_token: FAKE_TOKENS.admin }),
+    );
+    expect(sc.submission).toMatchObject({ contract_id: contractC, status: 'awaiting_qa', owner_admin: true });
+    expect(sc.contract_status).toBe('in_qa');
+  });
 });

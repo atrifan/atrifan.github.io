@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  isOwnerAdmin,
   checkTokenFormat,
   parseRepoRef,
   parseExpirationHeader,
@@ -84,7 +85,7 @@ test('checkExpiry rejects expired tokens and tokens that live longer than 30 day
   assert.equal(checkExpiry(null, now), null);
 });
 
-test('checkRepo requires a private repo with pull and without admin', () => {
+test('checkRepo requires a private repo with pull; admin (the user\'s role) is allowed', () => {
   const ok = { full_name: 'acme/r', private: true, permissions: { admin: false, push: false, pull: true } };
   assert.equal(checkRepo(ok), null);
   assert.equal(checkRepo({ ...ok, permissions: { admin: false, push: true, pull: true } }), null);
@@ -92,7 +93,7 @@ test('checkRepo requires a private repo with pull and without admin', () => {
   assert.equal(checkRepo({ ...ok, private: undefined }), 'public_repo');
   assert.equal(checkRepo({ ...ok, permissions: { admin: false, push: false, pull: false } }), 'repo_not_accessible');
   assert.equal(checkRepo({ full_name: 'acme/r', private: true }), 'repo_not_accessible');
-  assert.equal(checkRepo({ ...ok, permissions: { admin: true, push: true, pull: true } }), 'pat_admin');
+  assert.equal(checkRepo({ ...ok, permissions: { admin: true, push: true, pull: true } }), null);
   // public is reported first: it's the most important reason
   assert.equal(checkRepo({ full_name: 'acme/r', private: false, permissions: { admin: true, push: true, pull: false } }), 'public_repo');
   assert.equal(checkRepo({ ...ok, private: true, permissions: { admin: true, push: true, pull: false } }), 'repo_not_accessible');
@@ -145,4 +146,11 @@ test('the expiration header is trimmed and must match the whole format', () => {
   for (const bad of ['2026-10-20 12:30:45 UTC extra', 'x2026-10-20 12:30:45 UTC', '2026-13-45 99:00:00 UTC']) {
     assert.deepEqual(parseExpirationHeader(bad), { present: true, expiresAt: null }, bad);
   }
+});
+
+test('isOwnerAdmin is true only when GitHub reports admin: true', () => {
+  assert.equal(isOwnerAdmin({ private: true, permissions: { admin: true, push: true, pull: true } }), true);
+  assert.equal(isOwnerAdmin({ private: true, permissions: { admin: false, push: true, pull: true } }), false);
+  assert.equal(isOwnerAdmin({ private: true, permissions: {} }), false);
+  assert.equal(isOwnerAdmin({ private: true }), false);
 });
