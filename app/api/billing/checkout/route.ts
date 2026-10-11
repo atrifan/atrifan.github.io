@@ -3,27 +3,36 @@ import { auth } from '@clerk/nextjs/server';
 
 import { getStripe } from '@/src/lib/stripe';
 import { MISCONFIGURED } from '@/src/lib/misconfigured';
+import { checkoutReturnUrls, validateTopUp } from '@/src/lib/credits';
+import { formatCredits } from '@/src/lib/format';
 
+/**
+ * POST { amount } (whole USD, 5 to 500) → { url } of a Stripe Checkout session for a
+ * credit top-up. One line item: the credits. There is no separate processing fee; the
+ * 1.3x usage markup covers payment costs. Stripe returns the buyer to hub /credits.
+ * The billing webhook credits `metadata.rawDepositAmount` (USD) to the balance.
+ */
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
   if (!stripe) return NextResponse.json(MISCONFIGURED, { status: 500 });
 
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let body: { amount?: unknown };
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Body must be JSON: { amount }' }, { status: 400 });
+  }
 
-    const body = await request.json();
-    const amount = body.amount;
+  const topUp = validateTopUp(body?.amount);
+  if (!topUp.ok) return NextResponse.json({ error: topUp.error }, { status: 400 });
 
-    if (!amount || typeof amount !== 'number' || !Number.isInteger(amount) || amount < 1 || amount > 500) {
-      return NextResponse.json({ error: 'Invalid amount. Must be an integer between 1 and 500.' }, { status: 400 });
-    }
-
-    const baseAmountCents = amount * 100;
-    const feeCents = Math.round(amount * 0.10 * 100);
-
+  const { successUrl, cancelUrl } = checkoutReturnUrls();
+  try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -31,31 +40,24 @@ export async function POST(request: NextRequest) {
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: 'AI Assistant Token Pool Pack' },
-            unit_amount: baseAmountCents,
-          },
-          quantity: 1,
-        },
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: { name: 'Payment Network Processing Fee' },
-            unit_amount: feeCents,
+            product_data: { name: `Tulzo credits: ${formatCredits(topUp.credits)}` },
+            unit_amount: topUp.amountUsd * 100,
           },
           quantity: 1,
         },
       ],
       metadata: {
         clerkUserId: userId,
-        rawDepositAmount: amount.toFixed(2),
+        rawDepositAmount: topUp.amountUsd.toFixed(2),
+        credits: String(topUp.credits),
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL}/dashboard?billing=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL}/dashboard?billing=canceled`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     });
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error('[billing/checkout] Error:', err);
-    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
+    console.error('[billing/checkout] Error:', err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 502 });
   }
 }
