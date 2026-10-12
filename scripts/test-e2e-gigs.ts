@@ -20,7 +20,18 @@ import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
 import { startFakeGithub } from '../tests/support/fake-github';
 
-const SPECS = ['tests/e2e/gigs-api.spec.ts', 'tests/e2e/submission-mcp.spec.ts', 'tests/e2e/admin-qa-mcp.spec.ts'];
+const DEFAULT_SPECS = [
+  'tests/e2e/gigs-api.spec.ts',
+  'tests/e2e/submission-mcp.spec.ts',
+  'tests/e2e/admin-qa-mcp.spec.ts',
+  // gigs UI: pages, a11y (axe) and visual baselines, in light/dark x desktop/mobile
+  'tests/e2e/gigs-ui.spec.ts',
+  'tests/a11y/gigs.a11y.spec.ts',
+  'tests/visual/gigs.visual.spec.ts',
+];
+// GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
+const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+if (SPECS.length === 0) SPECS.push(...DEFAULT_SPECS);
 
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.GIGS_E2E_PORT || 3100);
@@ -95,6 +106,10 @@ async function main() {
       ['POST', '/api/admin/qa/mcp'], ['POST', '/api/e2e/jobs-submission-mcp'], ['POST', '/api/chat'],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
+    }
+    // The gigs pages too (signed out: public pages render, signed-in ones redirect).
+    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/sitemap.xml']) {
+      await fetch(`${baseUrl}${page}`, { redirect: 'manual' });
     }
 
     code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...SPECS, ...process.argv.slice(2)], {
