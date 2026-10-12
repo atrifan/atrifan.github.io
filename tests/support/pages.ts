@@ -6,7 +6,11 @@ import type { Page } from '@playwright/test';
  * dark-desktop and dark-mobile Playwright projects.
  */
 
-/** Pages checked in every theme and viewport. /chat and /dashboard need auth and land on /sign-in. */
+/**
+ * Pages checked in every theme and viewport. /chat and /dashboard need auth and land on /sign-in.
+ * The gigs pages show live data, so they have their own seeded specs (tests/{a11y,visual}/gigs.*.spec.ts,
+ * run by `npm run test:e2e:gigs`).
+ */
 export const PAGES = [
   { path: '/', name: 'home' },
   { path: '/pricing', name: 'pricing' },
@@ -14,7 +18,6 @@ export const PAGES = [
   { path: '/dashboard', name: 'dashboard' },
   { path: '/ai', name: 'ai' },
   { path: '/marketplace', name: 'marketplace' },
-  { path: '/gigs', name: 'gigs' },
   { path: '/sign-in', name: 'sign-in' },
 ] as const;
 
