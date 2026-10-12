@@ -6,7 +6,8 @@
 import type { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { JobsError } from '../jobs/errors';
-import { errorResponse, requireUserId } from '../jobs/http';
+import { e2eUser, errorResponse, requireUserId } from '../jobs/http';
+import { isAdminUserId } from '../admin';
 import { clerkAdmin } from './admin-auth';
 
 export async function withQaAdmin(
@@ -15,7 +16,9 @@ export async function withQaAdmin(
 ): Promise<NextResponse> {
   try {
     const userId = await requireUserId(request);
-    if (!(await clerkAdmin(userId))) throw new JobsError('forbidden', 403, 'Admin access required');
+    // The e2e identity has no Clerk user to look up: for it only ADMIN_USER_IDS counts (as in authenticateQaCaller).
+    const admin = e2eUser(request) ? await isAdminUserId(userId, { lookup: null }) : await clerkAdmin(userId);
+    if (!admin) throw new JobsError('forbidden', 403, 'Admin access required');
     return await fn(userId);
   } catch (err) {
     return errorResponse(err);
