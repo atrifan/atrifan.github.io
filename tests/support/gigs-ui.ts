@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext, type APIResponse, type Browser, type BrowserContext, type Locator, type Page, type Response, type TestInfo } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import Stripe from 'stripe';
+import { FAKE_REPOS, FAKE_TOKENS } from './fake-github';
 
 /**
  * Shared helpers for the gigs UI specs (tests/e2e/gigs-ui.spec.ts,
@@ -371,7 +372,8 @@ export async function settle(page: Page, opts: { signedIn?: boolean } = {}): Pro
 }
 
 export function screenshotMasks(page: Page): Locator[] {
-  return [page.locator('[data-ad-slot]'), page.locator('.cl-footer'), page.locator('.cl-userButtonBox')];
+  // [data-volatile]: times that depend on when a row was written (job room)
+  return [page.locator('[data-ad-slot]'), page.locator('.cl-footer'), page.locator('.cl-userButtonBox'), page.locator('[data-volatile]')];
 }
 
 /** Fulfil the (fake) Stripe Checkout page so the redirect can be asserted without leaving the test. */
@@ -623,4 +625,338 @@ export async function fillBidForm(page: Page): Promise<void> {
   await form.getByRole('spinbutton', { name: 'Steering interactions included' }).fill('2');
   await form.getByRole('textbox', { name: 'Assumptions (one per line)' }).fill('Sample files are representative');
   await expect(page.getByRole('status').filter({ hasText: /you receive €300/i })).toBeVisible();
+}
+
+// ---------------------------------------------------------------------------
+// job room (tests/e2e/gigs-room.spec.ts, tests/a11y/gigs-room.a11y.spec.ts, tests/visual/gigs-room.visual.spec.ts)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RoomJson = any;
+
+export const ROOM_TAB_IDS = ['plan', 'status', 'activity', 'artifacts', 'milestones', 'messages', 'steering', 'qa', 'delivery'] as const;
+export type RoomTabId = (typeof ROOM_TAB_IDS)[number];
+export const ROOM_TAB_NAMES: Record<RoomTabId, string> = {
+  plan: 'Plan',
+  status: 'Status',
+  activity: 'Activity',
+  artifacts: 'Artifacts',
+  milestones: 'Milestones',
+  messages: 'Messages',
+  steering: 'Steering',
+  qa: 'QA',
+  delivery: 'Delivery',
+};
+
+/** Open the contract page (optionally on a tab) and wait for the job room tablist. */
+export async function openRoom(page: Page, contractId: string, tab?: RoomTabId): Promise<void> {
+  await openGigs(page, `/gigs/contracts/${contractId}${tab ? `?tab=${tab}` : ''}`, { signedIn: true });
+  await expect(page.getByRole('tablist', { name: 'Job room' })).toBeVisible();
+}
+
+export function roomTab(page: Page, id: RoomTabId): Locator {
+  return page
+    .getByRole('tablist', { name: 'Job room' })
+    .getByRole('tab', { name: new RegExp(`^\\s*${ROOM_TAB_NAMES[id]}\\b`) });
+}
+
+export function roomPanel(page: Page): Locator {
+  return page.getByRole('tabpanel');
+}
+
+/** Masks for room screenshots: the shared ones plus anything that depends on "now". */
+export function roomScreenshotMasks(page: Page): Locator[] {
+  return [...screenshotMasks(page), page.locator('[data-volatile]')];
+}
+
+/** seedContract + Checkout completed → an active contract. */
+export async function seedActiveContract(
+  request: APIRequestContext,
+  opts: { customer: string; provider: string; title: string; plan: string; qaChecks?: string[] },
+): Promise<Awaited<ReturnType<typeof seedContract>>> {
+  const c = await seedContract(request, opts);
+  await markContractPaid(request, c.contractId, c.totalCents);
+  return c;
+}
+
+async function roomCall(
+  request: APIRequestContext,
+  method: 'GET' | 'POST',
+  userId: string,
+  path: string,
+  data: Record<string, unknown> | undefined,
+  expected: number[],
+): Promise<RoomJson> {
+  const res =
+    method === 'GET'
+      ? await request.get(path, { headers: auth(userId) })
+      : await request.post(path, { headers: auth(userId), data: data ?? {} });
+  const text = await res.text();
+  expect(expected, `${method} ${path} → ${res.status()} ${text}`).toContain(res.status());
+  return text ? JSON.parse(text) : null;
+}
+
+export function getRoomContract(request: APIRequestContext, userId: string, contractId: string): Promise<RoomJson> {
+  return roomCall(request, 'GET', userId, `/api/contracts/${contractId}`, undefined, [200]);
+}
+
+export async function postRoomMessage(request: APIRequestContext, userId: string, contractId: string, body: string): Promise<RoomJson> {
+  return (await roomCall(request, 'POST', userId, `/api/contracts/${contractId}/messages`, { body }, [201])).message;
+}
+
+export async function listRoomMessages(request: APIRequestContext, userId: string, contractId: string): Promise<RoomJson[]> {
+  return (await roomCall(request, 'GET', userId, `/api/contracts/${contractId}/messages`, undefined, [200])).messages;
+}
+
+export async function postProgress(
+  request: APIRequestContext,
+  provider: string,
+  contractId: string,
+  update: { summary: string; details?: string; percent_complete?: number },
+): Promise<RoomJson> {
+  return (await roomCall(request, 'POST', provider, `/api/contracts/${contractId}/progress`, update, [201])).message;
+}
+
+export type MilestoneStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
+
+export async function addMilestone(
+  request: APIRequestContext,
+  provider: string,
+  contractId: string,
+  title: string,
+  status: MilestoneStatus = 'pending',
+): Promise<{ id: string }> {
+  return (await roomCall(request, 'POST', provider, `/api/contracts/${contractId}/milestones`, { title, status }, [201])).milestone;
+}
+
+export interface SteeringInput {
+  message: string;
+  requested_kind?: 'clarification' | 'revision' | 'scope_change';
+  spec_changes?: string[];
+  price_cents?: number;
+  deadline?: string;
+}
+
+export function createSteering(
+  request: APIRequestContext,
+  customer: string,
+  contractId: string,
+  input: SteeringInput,
+): Promise<{ steering: RoomJson; decision: RoomJson }> {
+  return roomCall(request, 'POST', customer, `/api/contracts/${contractId}/steering`, { ...input }, [201]);
+}
+
+export interface SteeringResponseInput {
+  response: string;
+  estimate_delta_cents?: number;
+  eta_days?: number;
+  deliverable_changes?: string[];
+  decline?: boolean;
+}
+
+export function respondSteering(
+  request: APIRequestContext,
+  provider: string,
+  contractId: string,
+  steeringId: string,
+  input: SteeringResponseInput,
+): Promise<{ steering: RoomJson; new_contract_version?: RoomJson }> {
+  return roomCall(request, 'POST', provider, `/api/contracts/${contractId}/steering/${steeringId}/respond`, { ...input }, [200]);
+}
+
+export function approveSteering(
+  request: APIRequestContext,
+  customer: string,
+  contractId: string,
+  steeringId: string,
+): Promise<{
+  steering: RoomJson;
+  contract: RoomJson;
+  version: RoomJson;
+  checkout_url?: string;
+  refund?: { amount_cents: number; status: string };
+}> {
+  return roomCall(request, 'POST', customer, `/api/contracts/${contractId}/steering/${steeringId}/approve`, {}, [200]);
+}
+
+/** One steering request as GET /api/contracts/:id/steering lists it. */
+export async function getSteering(request: APIRequestContext, userId: string, contractId: string, steeringId: string): Promise<RoomJson> {
+  const body = await roomCall(request, 'GET', userId, `/api/contracts/${contractId}/steering`, undefined, [200]);
+  const arrays: RoomJson[][] = Array.isArray(body) ? [body] : Object.values(body ?? {}).filter((v): v is RoomJson[] => Array.isArray(v));
+  const item = arrays.flat().find((x) => x?.id === steeringId);
+  expect(item, `steering ${steeringId} not in ${JSON.stringify(body)}`).toBeTruthy();
+  return item;
+}
+
+/** A customer scope change re-estimated by the provider (waiting for the customer). Returns the steering id. */
+export async function seedEstimatedScopeChange(
+  request: APIRequestContext,
+  c: { customer: string; provider: string; contractId: string },
+  opts: { message: string; specChanges?: string[]; deltaCents: number; etaDays?: number; deliverableChanges?: string[]; note?: string },
+): Promise<string> {
+  const { steering } = await createSteering(request, c.customer, c.contractId, {
+    message: opts.message,
+    requested_kind: 'scope_change',
+    spec_changes: opts.specChanges ?? [],
+  });
+  const response: SteeringResponseInput = {
+    response: opts.note ?? 'Here is the new estimate.',
+    estimate_delta_cents: opts.deltaCents,
+    deliverable_changes: opts.deliverableChanges ?? [],
+  };
+  if (opts.etaDays != null) response.eta_days = opts.etaDays;
+  await respondSteering(request, c.provider, c.contractId, steering.id, response);
+  return steering.id as string;
+}
+
+/** Stripe reports that a top-up Checkout session expired. */
+export async function expireTopupCheckout(
+  request: APIRequestContext,
+  opts: { contractId: string; steeringId: string; sessionId: string },
+): Promise<void> {
+  const payload = JSON.stringify(
+    makeEvent('checkout.session.expired', {
+      id: opts.sessionId,
+      object: 'checkout.session',
+      status: 'expired',
+      metadata: { kind: 'contract_topup', contract_id: opts.contractId, steering_request_id: opts.steeringId },
+    }),
+  );
+  const hook = await postSignedWebhook(request, payload);
+  expect(hook.status(), await hook.text()).toBe(200);
+}
+
+// --- submissions and QA (Jobs MCP send_project + admin QA MCP) ---------------------
+
+async function mcpTool(
+  request: APIRequestContext,
+  path: string,
+  userId: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<RoomJson> {
+  const res = await request.post(path, {
+    headers: { ...auth(userId), 'content-type': 'application/json' },
+    data: { jsonrpc: '2.0', id: rand(), method: 'tools/call', params: { name, arguments: args } },
+  });
+  const text = await res.text();
+  expect(res.status(), `${name}: ${text}`).toBe(200);
+  const body = JSON.parse(text);
+  expect(body.result, `${name}: ${text}`).toBeDefined();
+  expect(body.result.isError, `${name}: ${text}`).toBeFalsy();
+  return body.result.structuredContent;
+}
+
+export const SUBMITTED_REPO = FAKE_REPOS.private;
+
+/** The provider submits acme/private-repo at its head commit → a submission waiting for QA. */
+export async function sendProject(request: APIRequestContext, provider: string, contractId: string): Promise<{ id: string; attempt: number }> {
+  const sc = await mcpTool(request, '/api/jobs/mcp', provider, 'send_project', {
+    contract_id: contractId,
+    git_repo: FAKE_REPOS.private,
+    pat_token: FAKE_TOKENS.good,
+  });
+  return sc.submission;
+}
+
+/** The QA admin fetches the credentials, which puts the submission in review. */
+export async function startQaReview(request: APIRequestContext, submissionId: string): Promise<void> {
+  await mcpTool(request, '/api/admin/qa/mcp', ADMIN_USER, 'qa_credentials_get', { submission_id: submissionId });
+}
+
+export async function markQa(
+  request: APIRequestContext,
+  submissionId: string,
+  verdict: 'validated' | 'requires_changes' | 'rejected',
+  reason: string,
+): Promise<void> {
+  await mcpTool(request, '/api/admin/qa/mcp', ADMIN_USER, 'qa_mark', { submission_id: submissionId, verdict, reason });
+}
+
+// --- a fixed, populated room (a11y + visual) ----------------------------------------
+
+export interface RoomScenario {
+  customer: string;
+  provider: string;
+  contractId: string;
+  texts: {
+    title: string;
+    plan: string;
+    milestones: string[];
+    customerMessage: string;
+    providerMessage: string;
+    progressSummary: string;
+    clarification: string;
+    clarificationAnswer: string;
+    revision: string;
+    scopeChange: string;
+    openQuestion: string;
+    qaReason: string;
+  };
+}
+
+/**
+ * An active contract with three milestones, two messages, a progress update, an answered
+ * clarification and revision, and an approved scope change that lowered the price
+ * (Version 2, €250, refund). `openQuestion` leaves a clarification waiting for an answer;
+ * `deliver` adds attempt 1 (changes requested) and attempt 2 (validated → delivered).
+ * Every rendered text is fixed per `word`; ids never reach the page text.
+ */
+export async function seedRoomScenario(
+  request: APIRequestContext,
+  word: string,
+  opts: { openQuestion?: boolean; deliver?: boolean } = {},
+): Promise<RoomScenario> {
+  const customer = uid(`${word}cust`);
+  const provider = uid(`${word}prov`);
+  const texts: RoomScenario['texts'] = {
+    title: `CSV importer for the ${word} shop`,
+    plan: `Stream the ${word} files, validate each row with a schema and add tests.`,
+    milestones: ['Schema and parser', 'Row validation', 'Error report'],
+    customerMessage: `Hi, the ${word} sample files are in the shared folder.`,
+    providerMessage: 'Thanks, starting with the parser today.',
+    progressSummary: 'Parser done, validation next',
+    clarification: 'Should empty rows be skipped?',
+    clarificationAnswer: 'Yes, empty rows are skipped and counted.',
+    revision: 'Please rename the error column to reason.',
+    scopeChange: 'Also accept semicolon separated files.',
+    openQuestion: 'Which Postgres version do you target?',
+    qaReason: 'Empty files crash the importer.',
+  };
+  const { contractId } = await seedActiveContract(request, { customer, provider, title: texts.title, plan: texts.plan });
+  const statuses: MilestoneStatus[] = ['done', 'in_progress', 'pending'];
+  for (let i = 0; i < texts.milestones.length; i += 1) {
+    await addMilestone(request, provider, contractId, texts.milestones[i], statuses[i]);
+  }
+  await postRoomMessage(request, customer, contractId, texts.customerMessage);
+  await postRoomMessage(request, provider, contractId, texts.providerMessage);
+  await postProgress(request, provider, contractId, {
+    summary: texts.progressSummary,
+    details: 'Streams a 10 MB file in under a second.',
+    percent_complete: 40,
+  });
+  const clar = await createSteering(request, customer, contractId, { message: texts.clarification, requested_kind: 'clarification' });
+  await respondSteering(request, provider, contractId, clar.steering.id, { response: texts.clarificationAnswer });
+  const rev = await createSteering(request, customer, contractId, { message: texts.revision, requested_kind: 'revision' });
+  await respondSteering(request, provider, contractId, rev.steering.id, { response: 'Done, the column is now called reason.' });
+  const scope = await seedEstimatedScopeChange(request, { customer, provider, contractId }, {
+    message: texts.scopeChange,
+    specChanges: ['Accept semicolon separated files'],
+    deltaCents: -5000,
+    // no etaDays: an ETA moves the deadline relative to today, which would change the screenshots daily
+    deliverableChanges: ['Sample semicolon file'],
+    note: 'Semicolon support, and less work than planned elsewhere.',
+  });
+  await approveSteering(request, customer, contractId, scope);
+  if (opts.openQuestion) {
+    await createSteering(request, customer, contractId, { message: texts.openQuestion, requested_kind: 'clarification' });
+  }
+  if (opts.deliver) {
+    const first = await sendProject(request, provider, contractId);
+    await startQaReview(request, first.id);
+    await markQa(request, first.id, 'requires_changes', texts.qaReason);
+    const second = await sendProject(request, provider, contractId);
+    await startQaReview(request, second.id);
+    await markQa(request, second.id, 'validated', 'Meets the spec');
+  }
+  return { customer, provider, contractId, texts };
 }

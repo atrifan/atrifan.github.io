@@ -12,7 +12,7 @@
  *   QA_E2E_ADMIN_USER)
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
  * - two seeded API keys for the Jobs MCP spec (an active Free-plan key and a revoked key)
- * Runs tests/e2e/gigs-api.spec.ts and tests/e2e/jobs-mcp.spec.ts.
+ * Runs the gigs API, MCP, UI and job room specs (DEFAULT_SPECS).
  * Everything is torn down afterwards.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -32,6 +32,10 @@ const DEFAULT_SPECS = [
   'tests/e2e/gigs-ui.spec.ts',
   'tests/a11y/gigs.a11y.spec.ts',
   'tests/visual/gigs.visual.spec.ts',
+  // job room: every tab for both parties, steering flows, a11y and visual baselines
+  'tests/e2e/gigs-room.spec.ts',
+  'tests/a11y/gigs-room.a11y.spec.ts',
+  'tests/visual/gigs-room.visual.spec.ts',
 ];
 // GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
 const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -140,6 +144,9 @@ async function main() {
       ['GET', `/api/contracts/${id}`], ['GET', `/api/contracts/${id}/messages`], ['GET', `/api/contracts/${id}/steering`],
       ['POST', `/api/contracts/${id}/steering/${id}/approve`], ['POST', `/api/contracts/${id}/steering/${id}/reject`],
       ['GET', `/api/contracts/${id}/milestones`], ['GET', `/api/contracts/${id}/activity`],
+      ['POST', `/api/contracts/${id}/progress`], ['GET', `/api/contracts/${id}/qa`],
+      ['POST', `/api/contracts/${id}/steering/${id}/respond`], ['POST', `/api/contracts/${id}/steering/${id}/topup`],
+      ['POST', `/api/contracts/${id}/versions/${id}/accept`],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }
