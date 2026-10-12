@@ -1,8 +1,7 @@
 import fs from 'fs';
-import path from 'path';
 import { test as base, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
-import { clerk, clerkSetup } from '@clerk/testing/playwright';
-import { E2E_USERS, storageStatePath, hasClerkTestEnv } from '../fixtures/clerk-users';
+import { setupClerkTestingToken } from '@clerk/testing/playwright';
+import { storageStatePath, hasClerkTestEnv } from '../fixtures/clerk-users';
 import { hasSupabaseEnv } from '../fixtures/seed';
 import {
   CHAT_DEVICE_NAME,
@@ -27,33 +26,19 @@ const AUTH = storageStatePath('customer');
 const FRAME_TIMEOUT = 15_000;
 
 /**
- * The setup project signs each user out after saving tests/.auth/<role>.json, which revokes the
- * saved Clerk session: its 60s JWT stops working a minute into the run and the page bounces to
- * /sign-in. So each worker signs the customer in once (Clerk testing token, no sign-out) and the
- * tests reuse that live session.
+ * Signed-in tests use the customer's session saved by the `setup` project (never signed out),
+ * with a Clerk testing token per page so the 60s session token refreshes past bot protection.
+ * No sign-in per worker: those hit Clerk's rate limit (429) when the suite runs twice in a row.
  */
-const test = base.extend<object, { customerState: string }>({
-  customerState: [
-    async ({ browser }, use, workerInfo) => {
-      await clerkSetup();
-      const file = path.join(workerInfo.project.outputDir, `.chat-surface-auth-${workerInfo.workerIndex}.json`);
-      const context = await browser.newContext({ baseURL: workerInfo.project.use.baseURL });
-      try {
-        const page = await context.newPage();
-        await blockThirdParty(page);
-        await page.goto('/', { timeout: 60_000 });
-        await clerk.signIn({ page, emailAddress: E2E_USERS.customer.email });
-        await page.goto('/', { timeout: 60_000 });
-        await context.storageState({ path: file });
-      } finally {
-        await context.close();
-      }
-      await use(file);
-      fs.rmSync(file, { force: true });
+const test = base.extend<{ clerkToken: void }>({
+  storageState: AUTH,
+  clerkToken: [
+    async ({ page }, use) => {
+      if (hasClerkTestEnv()) await setupClerkTestingToken({ page });
+      await use();
     },
-    { scope: 'worker' },
+    { auto: true },
   ],
-  storageState: async ({ customerState }, use) => use(customerState),
 });
 
 function chatUrl(device: ChatDevice, sessionId?: string): string {
