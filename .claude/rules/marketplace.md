@@ -36,8 +36,8 @@ in `tools/call` before the widget/native path.
 ## Moderation
 
 Admin uploads (`POST /api/packages`) are `public` immediately. API-key publishes are `pending`; an admin
-approves via `PATCH /api/packages/[id]` `{ visibility }`. Admins are configured in `src/lib/admin.ts`
-(seed email + `ADMIN_EMAILS` env, comma-separated).
+approves via `PATCH /api/packages/[id]` `{ visibility }`. Who is an admin is the rule in `src/lib/admin.ts`
+(see [[api-routes]] → Admins).
 
 ## Followups
 

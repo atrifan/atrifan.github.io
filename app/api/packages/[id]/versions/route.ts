@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
+import { isAdminUser } from '@/src/lib/admin';
 import { put } from '@vercel/blob';
 import { createClient } from '@supabase/supabase-js';
 
@@ -7,8 +8,6 @@ const supabase = createClient(
   process.env.STORAGE_SUPABASE_URL || process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL!,
   process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
 
 export async function POST(
   request: NextRequest,
@@ -19,7 +18,7 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const isAdmin = user.emailAddresses?.some(e => ADMIN_EMAILS.includes(e.emailAddress));
+  const isAdmin = isAdminUser(user);
   if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

@@ -43,7 +43,7 @@ before(async () => {
   chat = await import('../../app/api/chat/route');
   adminMcp = await import('../../app/api/admin/qa/mcp/route');
   tools = await import('../../src/lib/jobs/mcp/tools/submission');
-  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'billing-admin@test.local' }], publicMetadata: {} });
+  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'billing-admin@test.local', verification: { status: 'verified' } }], publicMetadata: {} });
   adminKey = await seedDeviceKey(ADMIN, 'pro');
 });
 

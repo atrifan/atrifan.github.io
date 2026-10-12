@@ -5,9 +5,8 @@
 import { jobsDb } from '../jobs/db';
 import { dbError } from '../jobs/errors';
 import { PLAN_KEYS, normalizePlan, type PlanKey } from '../plans';
-import { getAdminEmails } from '../admin';
+import { adminRecipientIds, type AdminContact, type AdminSubject } from '../admin';
 import { enqueue, type NotificationType, type PayloadInput } from '../notify';
-import { adminUserIdsFromEnv } from './admin-check';
 import type { SubmissionStatus, QaVerdict } from './qa-decision';
 
 export interface SubmissionRow {
@@ -168,16 +167,37 @@ export async function audit(
   if (error) throw dbError(error, `audit ${action}`);
 }
 
-/** Admin user ids to notify: ADMIN_USER_IDS plus contacts whose email is on the admin list. */
-export async function adminUserIdsForNotify(): Promise<string[]> {
-  const ids = new Set(adminUserIdsFromEnv());
-  const emails = getAdminEmails();
-  if (emails.length > 0) {
-    const { data, error } = await jobsDb().from('user_contacts').select('user_id, email').in('email', emails);
-    if (error) console.error('[qa] admin contacts lookup failed:', error.code);
-    for (const row of (data ?? []) as Array<{ user_id: string }>) ids.add(row.user_id);
+/** Clerk users by id, 100 per call; ids Clerk doesn't return are left out. */
+async function clerkUsersById(ids: string[]): Promise<AdminSubject[]> {
+  if (ids.length === 0) return [];
+  const { clerkClient } = await import('@clerk/nextjs/server');
+  const client = await clerkClient();
+  const wanted = new Set(ids);
+  const out: AdminSubject[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const page = await client.users.getUserList({ userId: ids.slice(i, i + 100), limit: 100 });
+    for (const u of page.data as AdminSubject[]) if (u.id && wanted.has(u.id)) out.push(u);
   }
-  return Array.from(ids);
+  return out;
+}
+
+/**
+ * Admin user ids to notify: every user matching the admin rule (src/lib/admin.ts). The users known
+ * from user_contacts are checked by their verified email there and, through Clerk, by role and email;
+ * ADMIN_USER_IDS are added as they are. Lookup failures are logged and the rest still counts.
+ */
+export async function adminUserIdsForNotify(): Promise<string[]> {
+  const { data, error } = await jobsDb().from('user_contacts').select('user_id, email, email_verified');
+  if (error) console.error('[qa] admin contacts lookup failed:', error.code);
+  const rows = (data ?? []) as Array<{ user_id: string; email: string | null; email_verified: boolean | null }>;
+  const contacts: AdminContact[] = rows.map((r) => ({ userId: r.user_id, email: r.email, emailVerified: r.email_verified === true }));
+  let users: AdminSubject[] = [];
+  try {
+    users = await clerkUsersById(contacts.map((c) => c.userId));
+  } catch (err) {
+    console.error('[qa] admin user lookup failed:', err instanceof Error ? err.message : 'error');
+  }
+  return adminRecipientIds({ contacts, users });
 }
 
 /** Best-effort email: a failed notification never breaks the QA flow. */

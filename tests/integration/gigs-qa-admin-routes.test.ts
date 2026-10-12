@@ -41,7 +41,7 @@ before(async () => {
   credentials = await import('../../app/api/admin/qa/submissions/[id]/credentials/route');
   verdict = await import('../../app/api/admin/qa/submissions/[id]/verdict/route');
   tools = await import('../../src/lib/jobs/mcp/tools/submission');
-  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'QA-Admin@test.local' }], publicMetadata: {} });
+  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'QA-Admin@test.local', verification: { status: 'verified' } }], publicMetadata: {} });
   clerkState.users.set(ROLE_ADMIN, { emailAddresses: [{ emailAddress: 'r@test.local' }], publicMetadata: { role: 'admin' } });
   clerkState.users.set(CUSTOMER, { emailAddresses: [{ emailAddress: 'cust@test.local' }], publicMetadata: { role: 'customer' } });
   clerkState.users.set(PROVIDER, { emailAddresses: [{ emailAddress: 'prov@test.local' }], publicMetadata: {} });

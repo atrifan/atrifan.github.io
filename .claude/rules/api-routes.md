@@ -67,3 +67,21 @@ All five projects deploy the same `vercel.json`, so each runs every cron. Only t
 on ai/marketplace/gigs/chat they are outside `SURFACE_API_ALLOWLIST` and middleware answers 404, so those
 copies are no-ops. `tests/unit/surface-routing.vitest.ts` checks this (daily schedules, hub-only routes)
 against `vercel.json`.
+
+## Admins (`src/lib/admin.ts`)
+
+One rule, and every admin check calls it: the hub admin pages (`/admin/qa`, `/admin/disputes`), the admin
+QA MCP (`/api/admin/qa/mcp`), marketplace moderation and package uploads, gigs admin pages, and the
+recipients of admin notifications. A user is an admin if any of these holds:
+
+1. **Primary:** one of their **verified** Clerk email addresses is in the seed list in `admin.ts` or in
+   `ADMIN_EMAILS` (comma-separated), compared case-insensitively. Unverified addresses never count.
+2. **Fallback:** Clerk `publicMetadata.role === 'admin'`. Grant it in the Clerk dashboard → Users → the
+   user → Metadata → Public: `{"role":"admin"}`.
+3. The Clerk user id is in `ADMIN_USER_IDS` (comma-separated). The gigs e2e runner names its admin this
+   way, because the e2e identity header has no Clerk user to look up.
+
+Use `isAdminSubject(user)` for a Clerk user in hand, `isAdminUserId(userId)` to look one up, and `isAdmin()`
+for the signed-in user. Admin notification recipients (`adminUserIdsForNotify` in `src/lib/qa/qa-data.ts`)
+are the users known from `user_contacts` that match the rule (verified admin email in the contact row, or
+role/email from Clerk), plus `ADMIN_USER_IDS`. `tests/unit/admin.vitest.ts` covers the rule.
