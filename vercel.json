@@ -16,5 +16,117 @@
       "path": "/api/cron/credit-grants",
       "schedule": "15 0 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "ai.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "ai.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/ai/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "marketplace.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "marketplace.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/marketplace/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "gigs.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "gigs.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/gigs/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "chat.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "chat.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/chat/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "jobs.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/gigs/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/:path*",
+      "permanent": true
+    }
   ]
 }

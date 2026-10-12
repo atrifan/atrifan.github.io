@@ -27,6 +27,19 @@ the others under `/ai`, `/marketplace`, `/gigs`, `/chat`.
   - Surface mode needs `NEXT_PUBLIC_ROOT_DOMAIN`; don't set `TULZO_SURFACE` on the live `tulzo` project until
     the other projects exist.
 
+### Current deployment: path mode (Clerk development instance)
+
+Clerk's development instance keeps a session per host, so signing in on tulzo.online didn't carry over to
+ai.tulzo.online (measured on the live site, 2026-10-12). Until the production Clerk keys (pk_live + sk_live,
+same instance) are in place, everything is served from the `tulzo` project in **path-prefix mode**:
+`TULZO_SURFACE` and `NEXT_PUBLIC_ROOT_DOMAIN` are unset there, and `vercel.json` `redirects` send
+`ai|marketplace|gigs|chat.tulzo.online/x` to `tulzo.online/<surface>/x` (307) and `/api/*` on those hosts to
+`tulzo.online/api/*`. `jobs.` goes to `/gigs`, and `www.` goes to the apex (308). The subdomains are attached to the
+`tulzo` project, and the four surface projects skip builds (`exit 0` ignore command). To go back to surface mode
+after switching keys: set `TULZO_SURFACE=hub` and `NEXT_PUBLIC_ROOT_DOMAIN=tulzo.online` on `tulzo`, move each
+subdomain back to its project, remove the host redirects and the ignore commands
+(`tests/unit/vercel-path-mode.test.ts` pins the current rules).
+
 ### Domains
 
 The hub is the apex (`surfaceUrl('hub')` is `https://tulzo.online/...`, never `www`). `www.<root>` is
