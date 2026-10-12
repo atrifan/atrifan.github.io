@@ -311,3 +311,49 @@ test.describe('ads (signed out)', () => {
     expect(box!.height).toBeLessThanOrEqual(120);
   });
 });
+
+// A phone (touch, 390px) gets the same text sizes as desktop, all on the token scale: nothing scales body
+// text up on touch screens (Spectrum's "large" scale did, to 17px).
+test.describe('type scale on a phone', () => {
+  const TOKEN_PX = new Set([12, 14, 16, 18, 22, 28]);
+
+  async function textSizes(page: Page): Promise<Record<string, number>> {
+    return page.evaluate(() => {
+      const out: Record<string, number> = {};
+      const walker = document.createTreeWalker(document.querySelector('#main') ?? document.body, NodeFilter.SHOW_TEXT);
+      let n: Node | null;
+      while ((n = walker.nextNode())) {
+        const el = n.parentElement;
+        if (!el || !n.textContent?.trim() || el.closest('h1, h2, h3, .visually-hidden, code, pre')) continue;
+        if (!el.getBoundingClientRect().height) continue;
+        const key = `${el.tagName.toLowerCase()}|${n.textContent.trim().slice(0, 40)}`;
+        out[key] = parseFloat(getComputedStyle(el).fontSize);
+      }
+      return out;
+    });
+  }
+
+  for (const path of ['/', '/pricing', '/gigs']) {
+    test(`${path}: body text sizes match desktop and stay on the scale`, async ({ browser, playwright }) => {
+      const sizes: Record<string, Record<string, number>> = {};
+      for (const [name, opts] of [
+        ['desktop', { viewport: { width: 1280, height: 800 } }],
+        ['phone', { ...playwright.devices['Pixel 7'], viewport: { width: 390, height: 844 } }],
+      ] as const) {
+        const context = await browser.newContext(opts);
+        const page = await context.newPage();
+        await blockAds(page);
+        await page.goto(path);
+        await page.locator('#main').waitFor();
+        sizes[name] = await textSizes(page);
+        await context.close();
+      }
+      const shared = Object.keys(sizes.phone).filter((k) => k in sizes.desktop);
+      expect(shared.length).toBeGreaterThan(5);
+      const differ = shared.filter((k) => sizes.phone[k] !== sizes.desktop[k]).map((k) => `${k}: ${sizes.desktop[k]} → ${sizes.phone[k]}`);
+      expect(differ, 'text that changes size on a phone').toEqual([]);
+      const offScale = Object.entries(sizes.phone).filter(([, px]) => !TOKEN_PX.has(px)).map(([k, px]) => `${k}: ${px}px`);
+      expect(offScale, 'text off the token scale on a phone').toEqual([]);
+    });
+  }
+});
