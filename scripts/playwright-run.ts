@@ -6,6 +6,10 @@
  * .claude/rules/testing.md, mcr.microsoft.com/playwright:v1.61.1-noble), with host networking
  * so the runner's dev server, Docker DB and fakes on localhost stay reachable. The env is passed
  * into the container except for host-specific variables (paths, shell, Node/npm settings).
+ *
+ * Variables are forwarded by name only (`-e NAME`): docker reads each value from its own process
+ * environment, which the caller sets to the same env when it spawns the command. Values never
+ * reach the command line, where `ps` would show the secrets.
  */
 import path from 'node:path';
 
@@ -16,7 +20,7 @@ export function playwrightCommand(root: string, args: string[], env: NodeJS.Proc
   if (!image) return { cmd: process.execPath, args: [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...args] };
   const forwarded = Object.entries(env)
     .filter(([k, v]) => v !== undefined && !HOST_ONLY.test(k))
-    .flatMap(([k, v]) => ['-e', `${k}=${v}`]);
+    .flatMap(([k]) => ['-e', k]);
   return {
     cmd: 'docker',
     args: ['run', '--rm', '--network', 'host', '-v', `${root}:${root}`, '-w', root, ...forwarded, image, 'npx', 'playwright', 'test', ...args],
