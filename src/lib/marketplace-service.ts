@@ -21,6 +21,8 @@ import { CATALOG_PAGE_SIZE, pageCount, type CatalogQuery } from './marketplace/c
 import { isMissingColumnError, legacyRow } from './marketplace/db-compat';
 import { installMode, isPackageKind, slugify, type PackageKind } from './marketplace/kinds';
 import { validatePublishInput } from './marketplace/publish-validation';
+import { enqueue, type NotificationType, type PayloadInput } from './notify';
+import { bucketStart } from './notify/inapp';
 import {
   configFilesHash,
   toCatalogItem,
@@ -370,21 +372,41 @@ export async function recordInstall(
 
   const { data: pkg } = await supabase
     .from('packages')
-    .select('id, latest_version, visibility')
+    .select('id, name, latest_version, visibility, owner_user_id')
     .eq('id', packageId)
     .maybeSingle();
   if (!pkg || (opts.requirePublic && pkg.visibility !== 'public')) {
     return { ok: false, status: 404, error: 'Package not found' };
   }
 
+  const installedVersion = version || pkg.latest_version;
   await supabase.from('package_installs').insert({
     package_id: packageId,
     user_id: auth.userId,
-    version: version || pkg.latest_version,
+    version: installedVersion,
   });
   await supabase.rpc('increment_install_count', { pkg_id: packageId });
 
+  // Tell the publisher (never who installed). In-app aggregates per package per hour, so the
+  // email key is per hour too; the email itself is off unless the publisher switches it on.
+  if (pkg.owner_user_id && pkg.owner_user_id !== auth.userId) {
+    await notifySafe(
+      pkg.owner_user_id,
+      'package_installed',
+      { packageId, packageName: pkg.name || packageId, version: installedVersion || undefined },
+      `package_installed:${packageId}:${bucketStart(new Date()).toISOString()}`,
+    );
+  }
   return { ok: true };
+}
+
+/** Best effort: a notification that can't be queued never fails the marketplace action. */
+async function notifySafe<T extends NotificationType>(userId: string, type: T, payload: PayloadInput<T>, dedupeKey: string): Promise<void> {
+  try {
+    await enqueue(userId, type, payload, dedupeKey);
+  } catch (err) {
+    console.error(`[marketplace] could not notify ${type}:`, err instanceof Error ? err.message : String(err));
+  }
 }
 
 // ============ Publisher stats ============
@@ -440,6 +462,78 @@ export async function getPublisherStats(userId: string): Promise<PublisherPackag
   }));
 }
 
+// ============ Install / publish activity ============
+
+/** An install event without the installer: the only shape activity views ever see. */
+export interface AnonymousInstall {
+  packageId: string;
+  version: string | null;
+  at: string;
+}
+
+const ACTIVITY_LIMIT = 10_000;
+
+/** The user's packages and every install of them (anonymous: user_id is never selected). */
+export async function getPublisherInstallEvents(userId: string): Promise<{ packages: Array<{ id: string; name: string }>; installs: AnonymousInstall[] }> {
+  const supabase = getClient();
+  const { data: packages, error } = await supabase.from('packages').select('id, name').eq('owner_user_id', userId).order('name');
+  if (error) throw new Error(error.message);
+  const ids = (packages ?? []).map((p) => p.id as string);
+  if (ids.length === 0) return { packages: [], installs: [] };
+  const { data: installs, error: installsError } = await supabase
+    .from('package_installs')
+    .select('package_id, version, created_at')
+    .in('package_id', ids)
+    .order('created_at', { ascending: false })
+    .limit(ACTIVITY_LIMIT);
+  if (installsError) throw new Error(installsError.message);
+  return {
+    packages: (packages ?? []).map((p) => ({ id: p.id as string, name: (p.name as string) || (p.id as string) })),
+    installs: (installs ?? []).map((i) => ({ packageId: i.package_id as string, version: (i.version as string | null) ?? null, at: i.created_at as string })),
+  };
+}
+
+export interface PackageActivityRow {
+  packageId: string;
+  packageName: string;
+  version: string | null;
+  at: string;
+}
+
+/**
+ * Admin: installs and published versions in [start, end) (newest first, up to `limit` rows each)
+ * plus the exact counts. Installs stay anonymous here too.
+ */
+export async function getMarketplaceActivity(
+  start: string,
+  end: string,
+  limit = 100,
+): Promise<{ installs: PackageActivityRow[]; installCount: number; publishes: Array<PackageActivityRow & { visibility: string }>; publishCount: number }> {
+  const supabase = getClient();
+  const [installs, publishes] = await Promise.all([
+    supabase.from('package_installs').select('package_id, version, created_at', { count: 'exact' }).gte('created_at', start).lt('created_at', end).order('created_at', { ascending: false }).limit(limit),
+    supabase.from('package_versions').select('package_id, version, created_at', { count: 'exact' }).gte('created_at', start).lt('created_at', end).order('created_at', { ascending: false }).limit(limit),
+  ]);
+  if (installs.error) throw new Error(installs.error.message);
+  if (publishes.error) throw new Error(publishes.error.message);
+  const ids = [...new Set([...(installs.data ?? []), ...(publishes.data ?? [])].map((r) => r.package_id as string))];
+  const { data: pkgs, error } = ids.length ? await supabase.from('packages').select('id, name, visibility').in('id', ids) : { data: [], error: null };
+  if (error) throw new Error(error.message);
+  const byId = new Map((pkgs ?? []).map((p) => [p.id as string, p as { id: string; name: string | null; visibility: string }]));
+  const row = (r: Record<string, unknown>): PackageActivityRow => ({
+    packageId: r.package_id as string,
+    packageName: byId.get(r.package_id as string)?.name || (r.package_id as string),
+    version: (r.version as string | null) ?? null,
+    at: r.created_at as string,
+  });
+  return {
+    installs: (installs.data ?? []).map(row),
+    installCount: installs.count ?? 0,
+    publishes: (publishes.data ?? []).map((r) => ({ ...row(r), visibility: byId.get(r.package_id as string)?.visibility ?? 'unknown' })),
+    publishCount: publishes.count ?? 0,
+  };
+}
+
 // ============ Moderation (admin) ============
 
 export const VISIBILITIES = ['pending', 'public', 'private'] as const;
@@ -473,6 +567,7 @@ export async function moderatePackage(
 ): Promise<{ ok: true } | { ok: false; status: 404 | 500; error: string }> {
   const supabase = getClient();
   const now = new Date().toISOString();
+  const { data: before } = await supabase.from('packages').select('name, visibility, owner_user_id, latest_version').eq('id', id).maybeSingle();
   const update: Record<string, unknown> = {
     visibility,
     updated_at: now,
@@ -485,6 +580,14 @@ export async function moderatePackage(
   }
   if (res.error) return { ok: false, status: 500, error: res.error.message };
   if (!res.data || res.data.length === 0) return { ok: false, status: 404, error: 'Package not found' };
+
+  // A pending publish that an admin decides on: tell the owner.
+  if (before?.owner_user_id && before.visibility === 'pending' && visibility !== 'pending') {
+    const payload = { packageId: id, packageName: before.name || id };
+    const key = `${id}:${before.latest_version ?? ''}`;
+    if (visibility === 'public') await notifySafe(before.owner_user_id, 'package_approved', payload, `package_approved:${key}`);
+    else await notifySafe(before.owner_user_id, 'package_rejected', payload, `package_rejected:${key}`);
+  }
   return { ok: true };
 }
 
