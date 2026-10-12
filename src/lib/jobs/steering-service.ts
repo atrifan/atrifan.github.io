@@ -599,7 +599,7 @@ async function refundDecrease(contract: ContractRow, s: SteeringRequestRow, amou
     if (refundError) throw dbError(refundError, 'record refund');
   }
   const status = leftover > 0 ? 'credit_pending' : 'refunded';
-  const steering = await updateSteering(s, ['approved'], { refund_amount_cents: amountCents, refund_status: status });
+  const steering = await updateSteering(s, ['approved'], { refund_amount_cents: amountCents, refund_status: status, refund_credit_cents: leftover });
   await recordActivity(
     contract.id,
     actor,

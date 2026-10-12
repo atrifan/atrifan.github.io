@@ -97,7 +97,7 @@ export interface RoomSteering {
   topup_status: 'none' | 'pending' | 'paid' | 'expired';
   topup_checkout_url: string | null;
   refund_amount_cents: number;
-  refund_status: 'none' | 'refunded' | 'credit_pending';
+  refund_status: 'none' | 'refunded' | 'credit_pending' | 'credit_settled';
 }
 
 export type VersionState = 'current' | 'superseded' | 'proposed' | 'rejected';

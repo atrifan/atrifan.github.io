@@ -247,7 +247,12 @@ export interface SteeringRequestRow {
   topup_checkout_url: string | null;
   /** Refund on approval of a price decrease, or a credit recorded for payout when nothing could be refunded. */
   refund_amount_cents: number;
-  refund_status: 'none' | 'refunded' | 'credit_pending';
+  refund_status: 'none' | 'refunded' | 'credit_pending' | 'credit_settled';
+  /** Still owed to the customer while credit_pending; settled at payout (src/lib/delivery/scope-credits.ts). */
+  refund_credit_cents: number;
+  credit_refunded_cents: number;
+  credit_deducted_cents: number;
+  credit_settled_at: string | null;
   /** The job_spec_versions row this scope change created (spec or deliverable changes). */
   new_spec_version_id: string | null;
   decided_at: string | null;

@@ -7,7 +7,7 @@
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql,
  * 20261115_job_room.sql, 20261201_qa.sql and its follow-ups (20261202, 20261203),
- * the job room follow-ups (20261206), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
+ * the job room follow-ups (20261206), scope credits and snapshots (20261216), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
  * (Phase 5), and the
  * marketplace package migrations into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
@@ -188,6 +188,7 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261203_qa_credit_holds.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261215_delivery_trust.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261206_job_room_followups.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261216_scope_credit_and_snapshot.sql'), 'utf8'));
     // Marketplace: packages, ratings/installs, and the new kinds + catalog view.
     for (const m of [
       '20260521_packages.sql',

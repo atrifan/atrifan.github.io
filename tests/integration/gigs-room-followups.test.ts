@@ -107,8 +107,9 @@ test('(a) when Stripe refuses the refund it is recorded as a credit to apply at 
   const ok = await approve(pc, p.customer, sid);
   assert.equal(ok.status, 200, JSON.stringify(ok.body));
   assert.deepEqual(ok.body.refund, { amount_cents: 11500, status: 'credit_pending' });
-  const [s] = await sql<{ refund_status: string; refund_amount_cents: number }>('SELECT refund_status, refund_amount_cents FROM steering_requests WHERE id = $1', [sid]);
-  assert.deepEqual(s, { refund_status: 'credit_pending', refund_amount_cents: 11500 });
+  const [s] = await sql<{ refund_status: string; refund_amount_cents: number; refund_credit_cents: number }>(
+    'SELECT refund_status, refund_amount_cents, refund_credit_cents FROM steering_requests WHERE id = $1', [sid]);
+  assert.deepEqual(s, { refund_status: 'credit_pending', refund_amount_cents: 11500, refund_credit_cents: 11500 });
   const [payment] = await sql<{ amount_refunded_cents: number }>('SELECT amount_refunded_cents FROM payments WHERE contract_id = $1', [pc.contractId]);
   assert.equal(payment.amount_refunded_cents, 0);
 });

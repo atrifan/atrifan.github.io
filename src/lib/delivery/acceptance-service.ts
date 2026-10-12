@@ -28,7 +28,8 @@ import {
   purgeContractPats,
   type Phase5ContractRow,
 } from './contract-data';
-import { payoutContract, type PayoutResult } from './payout';
+import type { PayoutResult } from './payout';
+import { payoutWithCredits } from './scope-credits';
 
 export type Acceptance = 'customer' | 'auto' | 'resolution';
 
@@ -96,7 +97,7 @@ export async function afterAcceptance(contract: Phase5ContractRow, acceptance: A
   await completeJob(contract.job_id);
   await purgeContractPats(contract.id);
   const version = await currentVersion(contract);
-  const payout = await payoutContract(contract, amountCents ?? version?.price_cents ?? 0);
+  const payout = await payoutWithCredits(contract, amountCents ?? version?.price_cents ?? 0);
   const jobTitle = await jobTitleOf(contract.job_id);
   await audit(actor, 'contract_accepted', 'contract', contract.id, { acceptance, payout: payoutView(payout) });
   await notifyPayout(contract, payout, jobTitle);
@@ -205,7 +206,7 @@ export async function retryPayouts(): Promise<number> {
     const disputes = await listDisputes(contract.id);
     if (disputes.length > 0) continue; // an admin decides what moves once a claim exists
     const version = await currentVersion(contract);
-    const payout = await payoutContract(contract, version?.price_cents ?? 0);
+    const payout = await payoutWithCredits(contract, version?.price_cents ?? 0);
     if (payout.status === 'paid' && payout.created) {
       retried += 1;
       await notifyPayout(contract, payout, await jobTitleOf(contract.job_id));

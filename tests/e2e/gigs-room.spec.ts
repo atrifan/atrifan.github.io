@@ -927,7 +927,9 @@ test.describe('job room: artifacts, QA and delivery', () => {
     await goTab(page, 'qa');
     await expect(roomPanel(page)).toContainText('No work submitted yet.');
     await goTab(page, 'delivery');
-    await expect(page.locator('[data-slot="delivery"]')).toHaveCount(0);
+    const slot = page.locator('[data-slot="delivery"]');
+    await expect(slot).toContainText('The delivery unlocks once QA validates the work');
+    await expect(slot.getByRole('link', { name: 'Download .tar.gz' })).toHaveCount(0);
   });
 
   test('after send_project: attempt 1 waiting for QA, status "In QA"', async ({ page, context, request }) => {
@@ -974,11 +976,13 @@ test.describe('job room: artifacts, QA and delivery', () => {
       await goTab(page, 'status');
       await expect(currentStep(page)).toContainText('In progress');
       await goTab(page, 'delivery');
-      await expect(page.locator('[data-slot="delivery"]')).toHaveCount(0);
+      const slot = page.locator('[data-slot="delivery"]');
+      await expect(slot).toContainText('The delivery unlocks once QA validates the work');
+      await expect(slot.getByRole('link', { name: 'Download .tar.gz' })).toHaveCount(0);
     }
   });
 
-  test('validated resubmission: attempt 2 validated, delivery placeholder, status "Delivered"', async ({ page, context, request }) => {
+  test('validated resubmission: attempt 2 validated, the delivery panel, status "Delivered"', async ({ page, context, request }) => {
     const second = await sendProject(request, p.provider, c.contractId);
     await startQaReview(request, second.id);
     await markQa(request, second.id, 'validated', `Meets the spec ${W}`);
@@ -996,7 +1000,12 @@ test.describe('job room: artifacts, QA and delivery', () => {
       await goTab(page, 'delivery');
       const slot = page.locator('[data-slot="delivery"]');
       await expect(slot).toBeVisible();
-      await expect(slot).toContainText(/deliver/i);
+      await expect(slot).toContainText('Ready for review');
+      await expect(slot.getByRole('heading', { name: 'Delivered commit', level: 3 })).toBeVisible();
+      // Only the customer downloads, accepts or disputes.
+      await expect(slot.getByRole('link', { name: 'Download .tar.gz' })).toHaveCount(who === p.customer ? 1 : 0);
+      await expect(slot.getByRole('button', { name: 'Accept delivery' })).toHaveCount(who === p.customer ? 1 : 0);
+      await expect(slot.getByRole('button', { name: 'Open a dispute' })).toHaveCount(who === p.customer ? 1 : 0);
       await goTab(page, 'status');
       await expect(currentStep(page)).toContainText('Delivered');
     }

@@ -15,12 +15,16 @@
  *  - initial:         the server-rendered DeliveryView (optional; fetched when absent).
  *  - counterpartName: the other party's display name (review hint).
  *  - headingLevel:    level of the section headings, 2 (default) when the page has an h1 above.
+ *  - onChanged:       called after an action changed the contract (accept, dispute, review, push).
+ *
+ * `RoomDeliveryPanel` is the same panel with the job room's slot props (the room's Delivery tab).
  */
 import { useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatDate, formatMoneyCents } from '@/src/lib/format';
 import type { DeliveryView } from '@/src/lib/delivery/delivery-service';
+import type { DeliveryPanelProps as RoomSlotProps } from '@/src/views/gigs/room/DeliverySlot';
 import { DisputeForm } from './DisputeForm';
 import { ReviewForm } from './ReviewForm';
 import '@/styles/gigs-delivery.css';
@@ -30,6 +34,7 @@ export interface DeliveryPanelProps {
   initial?: DeliveryView | null;
   counterpartName?: string;
   headingLevel?: 2 | 3;
+  onChanged?: () => void;
 }
 
 export type DeliveryChip = 'Waiting for QA' | 'Ready for review' | 'Accepted' | 'Disputed' | 'Refunded' | 'Cancelled' | 'Waiting for payment';
@@ -67,7 +72,7 @@ function verdictLabel(verdict: string | null, status: string): string {
 
 const money = (cents: number, currency: string) => formatMoneyCents(cents, currency);
 
-export function DeliveryPanel({ contractId, initial = null, counterpartName, headingLevel = 2 }: DeliveryPanelProps) {
+export function DeliveryPanel({ contractId, initial = null, counterpartName, headingLevel = 2, onChanged }: DeliveryPanelProps) {
   const [view, setView] = useState<DeliveryView | null>(initial);
   const [loadError, setLoadError] = useState('');
   const [message, setMessage] = useState('');
@@ -123,6 +128,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
       setConfirming(false);
       setMessage('Accepted. The provider has been paid.');
       await reload();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The delivery could not be accepted. Try again.');
     } finally {
@@ -273,6 +279,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
                 : 'Dispute opened. Payment and auto-accept are paused while Tulzo reviews it.',
             );
             await reload();
+            onChanged?.();
           }}
         />
       ) : null}
@@ -433,9 +440,20 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
           counterpartName={counterpartName}
           existing={view.reviews.mine}
           headingLevel={headingLevel}
-          onSubmitted={() => void reload()}
+          onSubmitted={() => {
+            void reload();
+            onChanged?.();
+          }}
         />
       ) : null}
     </div>
   );
+}
+
+/**
+ * The panel in the job room's Delivery tab: section headings under the room's h2, and a fresh
+ * load whenever the room sees the contract status change (QA validated, accepted, disputed).
+ */
+export function RoomDeliveryPanel({ contractId, contractStatus, onChanged }: RoomSlotProps) {
+  return <DeliveryPanel key={contractStatus} contractId={contractId} headingLevel={3} onChanged={onChanged} />;
 }

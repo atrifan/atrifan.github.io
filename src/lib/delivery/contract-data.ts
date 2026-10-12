@@ -28,6 +28,8 @@ export interface TransferRow {
   transfer_group: string | null;
   amount_cents: number;
   amount_reversed_cents: number;
+  /** Scope-change credit taken off the bid (20261216). */
+  credit_deducted_cents?: number;
   currency: string;
   status: 'pending' | 'paid' | 'failed' | 'reversed' | 'partially_reversed';
   created_at: string;

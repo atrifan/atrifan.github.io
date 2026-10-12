@@ -261,7 +261,9 @@ function SteeringCard({ s, client, contractId, viewer, versions, allowance, work
         <p className="gigs-hint">
           {s.refund_status === 'refunded'
             ? refundNotice(s.refund_amount_cents)
-            : `${refundNotice(s.refund_amount_cents)} It's settled when the provider is paid.`}
+            : s.refund_status === 'credit_settled'
+              ? `${refundNotice(s.refund_amount_cents)} It was settled when the provider was paid.`
+              : `${refundNotice(s.refund_amount_cents)} It's settled when the provider is paid.`}
         </p>
       ) : null}
       {notice ? (

@@ -1,15 +1,7 @@
 /**
- * The job room's Delivery tab is a slot. Phase 5 (delivery, acceptance, disputes, reviews)
- * builds `src/views/gigs/delivery/DeliveryPanel`; until it is merged the slot shows a
- * placeholder. To mount it, set `deliveryPanel` in ./delivery-panel.ts:
- *
- *   import dynamic from 'next/dynamic';
- *   export const deliveryPanel: DeliveryPanelComponent = dynamic(
- *     () => import('@/src/views/gigs/delivery/DeliveryPanel').then((m) => m.DeliveryPanel),
- *     { ssr: false },
- *   );
- *
- * or pass `deliveryPanel` to <JobRoom> directly.
+ * The job room's Delivery tab is a slot. ./delivery-panel.ts mounts Phase 5's DeliveryPanel
+ * (src/views/gigs/delivery/DeliveryPanel, `RoomDeliveryPanel`) in it; a caller can also pass
+ * `deliveryPanel` to <JobRoom> directly. Without a panel the slot shows a placeholder.
  */
 import type { ComponentType } from 'react';
 import type { PartyRole } from '@/src/lib/jobs/client/room';
@@ -29,8 +21,9 @@ export type DeliveryPanelComponent = ComponentType<DeliveryPanelProps>;
 const DELIVERABLE = new Set(['delivered', 'completed']);
 
 /**
- * `[data-slot="delivery"]` is present when there is something to deliver (QA validated the
- * work) or a mounted panel; before that the tab only says what will appear here.
+ * With a mounted panel, `[data-slot="delivery"]` is always there: the panel says when the
+ * delivery unlocks, and a dispute can be opened while the work is still in progress. Without
+ * a panel the slot appears once QA validated the work.
  */
 export function DeliverySlot({ panel: Panel, ...props }: DeliveryPanelProps & { panel?: DeliveryPanelComponent }) {
   if (Panel) {

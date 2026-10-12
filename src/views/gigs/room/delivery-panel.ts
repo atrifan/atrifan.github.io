@@ -1,14 +1,12 @@
 /**
- * The Delivery panel the job room mounts. Phase 5 builds src/views/gigs/delivery/DeliveryPanel;
- * until it is merged this is undefined and the room's Delivery tab shows a placeholder. After
- * the merge, replace the export with (see ./DeliverySlot.tsx for the props it receives):
- *
- *   import dynamic from 'next/dynamic';
- *   export const deliveryPanel: DeliveryPanelComponent | undefined = dynamic(
- *     () => import('@/src/views/gigs/delivery/DeliveryPanel').then((m) => m.DeliveryPanel),
- *     { ssr: false },
- *   );
+ * The Delivery panel the job room mounts: Phase 5's DeliveryPanel (download of the QA'd commit,
+ * push, accept, dispute and review), loaded on the client only when the Delivery tab opens.
+ * The standalone `/contracts/[id]/delivery` page renders the same panel (email deep links).
  */
+import dynamic from 'next/dynamic';
 import type { DeliveryPanelComponent } from './DeliverySlot';
 
-export const deliveryPanel: DeliveryPanelComponent | undefined = undefined;
+export const deliveryPanel: DeliveryPanelComponent | undefined = dynamic(
+  () => import('@/src/views/gigs/delivery/DeliveryPanel').then((m) => m.RoomDeliveryPanel),
+  { ssr: false },
+);

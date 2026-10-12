@@ -69,8 +69,10 @@ async function recordPayoutFingerprints(stripe: Stripe, userId: string, accountI
 /**
  * Pay `amountCents` (default: the contract's bid) to the provider. Safe to call again: an
  * existing live transfer is returned, a pending one is retried with the same idempotency key.
+ * `creditDeductedCents` records how much scope-change credit was taken off the bid
+ * (./scope-credits.ts).
  */
-export async function payoutContract(contract: ContractRow, amountCents: number): Promise<PayoutResult> {
+export async function payoutContract(contract: ContractRow, amountCents: number, opts: { creditDeductedCents?: number } = {}): Promise<PayoutResult> {
   if (!Number.isInteger(amountCents) || amountCents <= 0) return { status: 'blocked', reason: 'nothing_to_pay' };
   const db = jobsDb();
   const existing = (await listTransfers(contract.id)).find((t) => t.status !== 'failed');
@@ -100,6 +102,7 @@ export async function payoutContract(contract: ContractRow, amountCents: number)
         destination_account_id: account.stripe_account_id,
         transfer_group: contract.transfer_group,
         amount_cents: amountCents,
+        credit_deducted_cents: opts.creditDeductedCents ?? 0,
         currency: contract.currency,
         status: 'pending',
       })
