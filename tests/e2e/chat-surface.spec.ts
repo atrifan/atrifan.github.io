@@ -138,6 +138,28 @@ test.describe('chat surface (desktop)', () => {
       await expect(composer(page)).toBeVisible();
     });
 
+    test('a 401 on the saved messages is retried: the conversation still shows', async ({ page }) => {
+      device = await createChatDevice();
+      const sid = await createChatSession(device, { title: 'Trip plan', messages: RICH_CONVERSATION });
+      const path = `/api/plugin/chat/sessions/${sid}/messages`;
+      const requests: string[] = [];
+      let first = true;
+      await page.route(
+        (url) => url.pathname === path,
+        (route) => {
+          requests.push(route.request().url());
+          if (!first) return route.fallback();
+          first = false;
+          return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthorized' }) });
+        },
+      );
+      await openChat(page, device, sid);
+      const log = conversation(page);
+      await expect(log).toContainText('Compare the two cheapest flights to Lisbon', { timeout: 10_000 });
+      await expect(log.getByRole('article', { name: 'Assistant' }).getByRole('table')).toBeVisible({ timeout: 10_000 });
+      expect(requests.length).toBeGreaterThanOrEqual(2);
+    });
+
     test('an open chat shows its title as the heading', async ({ page }) => {
       device = await createChatDevice();
       const sid = await createChatSession(device, { title: 'Trip plan', messages: RICH_CONVERSATION });

@@ -18,6 +18,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowRightIcon } from '@/src/components/brand/UiIcons';
+import { getJsonRetrying } from './get-json-retrying';
 import { ChatBubble } from './panel/components/ChatBubble';
 import { RenderBlockView } from './panel/components/RenderBlockView';
 import { PlanView } from './panel/components/PlanView';
@@ -534,14 +535,12 @@ export function RemoteChat({
   useEffect(() => {
     if (!sessionId || freshRef.current) return;
     let cancelled = false;
-    fetch(`/api/plugin/chat/sessions/${sessionId}/messages`)
-      .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((body) => {
-        if (cancelled) return;
-        const hist = (body.messages as RelayMessage[] | undefined) ?? [];
-        setMessages(hist.map(fromRelayMessage));
-      })
-      .catch(() => {});
+    // A failed load (e.g. a 401 while the session token refreshes) is retried; it is never shown as an
+    // empty chat.
+    void getJsonRetrying<{ messages?: RelayMessage[] }>(`/api/plugin/chat/sessions/${sessionId}/messages`).then((body) => {
+      if (cancelled || !body) return;
+      setMessages((body.messages ?? []).map(fromRelayMessage));
+    });
     return () => {
       cancelled = true;
     };
