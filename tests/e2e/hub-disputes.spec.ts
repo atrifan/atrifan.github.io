@@ -173,6 +173,28 @@ test.describe('admin disputes page, admin', () => {
     await expect(page.getByRole('button', { name: 'Resolve dispute', exact: true })).toBeVisible();
   });
 
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`decision radios use the theme accent, not the browser default (${scheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await mockDisputesApi(page);
+      await openDetail(page);
+      const radio = decision(page).getByRole('radio', { name: 'Partial refund', exact: true });
+      await radio.check();
+      const { accent, radioAccent, browserDefault } = await radio.evaluate((el) => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--color-accent)';
+        document.body.append(probe);
+        const resolved = getComputedStyle(probe).color;
+        probe.style.color = 'AccentColor';
+        const system = getComputedStyle(probe).color;
+        probe.remove();
+        return { accent: resolved, radioAccent: getComputedStyle(el).accentColor, browserDefault: system };
+      });
+      expect(accent).not.toBe(browserDefault);
+      expect(radioAccent).toBe(accent);
+    });
+  }
+
   test('default_resolution preselects the outcome (QA rejected → Full refund)', async ({ page }) => {
     await mockDisputesApi(page);
     await openDetail(page, 'Nightly backups for the shop');

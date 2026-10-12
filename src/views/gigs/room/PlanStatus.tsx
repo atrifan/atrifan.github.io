@@ -4,6 +4,7 @@
 import { contractStatusLabel, formatDate, formatEuros } from '@/src/lib/jobs/client/format';
 import { contractSteps, creditsText, deadlineCountdown, toVersionItems, type RoomContractDetail } from '@/src/lib/jobs/client/room';
 import type { ContractStatus } from '@/src/lib/jobs/job-state';
+import { withGlyphIcons } from '@/src/components/brand/UiIcons';
 import { Empty, When } from './parts';
 
 export function PlanTab({ plan, detail }: { plan: string | null; detail: RoomContractDetail | null }) {
@@ -80,7 +81,7 @@ export function PlanTab({ plan, detail }: { plan: string | null; detail: RoomCon
                 {item.changes.length ? (
                   <ul className="room-diff">
                     {item.changes.map((c) => (
-                      <li key={c}>{c}</li>
+                      <li key={c}>{withGlyphIcons(c)}</li>
                     ))}
                   </ul>
                 ) : (

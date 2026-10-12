@@ -21,6 +21,7 @@ import {
   type RoomVersion,
   type SteeringCredits,
 } from '@/src/lib/jobs/client/room';
+import { withGlyphIcons } from '@/src/components/brand/UiIcons';
 import { Field } from '../ui';
 import { ErrorText, When, lines, useAction } from './parts';
 
@@ -202,7 +203,7 @@ function SteeringCard({ s, client, contractId, viewer, versions, allowance, work
           <h4 className="room-h4">New estimate</h4>
           <ul className="room-diff">
             {estimate.lines.map((l) => (
-              <li key={l}>{l}</li>
+              <li key={l}>{withGlyphIcons(l)}</li>
             ))}
           </ul>
           {estimate.deliverableChanges.length ? (

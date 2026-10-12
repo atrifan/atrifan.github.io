@@ -1,3 +1,4 @@
+import { PauseIcon } from "@/src/components/brand/UiIcons"
 import type { ActionApprovalPayload } from "../../shared/types"
 
 interface Props {
@@ -74,7 +75,7 @@ export function ActionApprovalCard({ action, onDecision }: Props) {
           onClick={() => onDecision(action.actionId, "queue")}
           title="Decide later — skip this action for now without running it"
         >
-          <span aria-hidden="true">⏸</span> Queue
+          <PauseIcon title="" /> Queue
         </button>
         {action.allowAlways && (
           <button

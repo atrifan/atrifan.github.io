@@ -1,5 +1,6 @@
 /** A job's public page: the approved spec, plus the bid form or the owner's bid comparison. */
 import Link from 'next/link';
+import { ArrowLeftIcon } from '@/src/components/brand/UiIcons';
 import { deadlineLabel, formatBudget, formatEuros, jobStatusLabel, postedAgo } from '@/src/lib/jobs/client/format';
 import type { JobPageData } from '@/src/lib/jobs/ui/loaders';
 import { gigsHref, type GigsBase } from '@/src/lib/jobs/ui/paths';
@@ -128,7 +129,7 @@ export function JobDetail({
   return (
     <div className="page gigs-page">
       <a className="gigs-back" href={base || '/'}>
-        ← All gigs
+        <ArrowLeftIcon /> All gigs
       </a>
       {published ? (
         <p role="status" className="gigs-notice gigs-notice-success">

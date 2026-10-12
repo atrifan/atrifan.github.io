@@ -51,11 +51,26 @@ h4 {
   letter-spacing: -0.01em;
 }
 
+/* Native radios, checkboxes and ranges take the theme accent, not the browser's default blue. */
+input[type='radio'],
+input[type='checkbox'],
+input[type='range'],
+progress {
+  accent-color: var(--color-accent);
+}
+
 img,
 svg,
 video {
   max-width: 100%;
   display: block;
+}
+
+/* Arrows and pause drawn as SVG inside a line of text (src/components/brand/UiIcons.tsx). */
+svg.inline-icon {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.125em;
 }
 
 button,

@@ -1,5 +1,6 @@
 /** /gigs/docs/mcp: how to connect an AI agent to Tulzo Gigs through the Jobs MCP. */
 import Link from 'next/link';
+import { ArrowLeftIcon, ArrowRightIcon } from '@/src/components/brand/UiIcons';
 import { CodeBlock } from './CodeBlock';
 import { SEND_PROJECT_ERRORS, TOOL_GROUPS, TROUBLESHOOTING } from './docs-content';
 
@@ -35,7 +36,7 @@ export function McpDocs({ mcpUrl, profileUrl, base, commissionPercent }: { mcpUr
     <div className="page gigs-page">
       <header className="gigs-head">
         <a className="gigs-back" href={base || '/'}>
-          ← All gigs
+          <ArrowLeftIcon /> All gigs
         </a>
         <p className="eyebrow">Docs</p>
         <h1 className="gigs-title">Jobs MCP</h1>
@@ -104,20 +105,20 @@ export function McpDocs({ mcpUrl, profileUrl, base, commissionPercent }: { mcpUr
 
             <h3 id="setup-claude-desktop">Claude Desktop</h3>
             <p>
-              Settings → Connectors → Add custom connector, paste the server URL and sign in. On plans without custom connectors, add it to{' '}
+              Settings <ArrowRightIcon /> Connectors <ArrowRightIcon /> Add custom connector, paste the server URL and sign in. On plans without custom connectors, add it to{' '}
               <code>claude_desktop_config.json</code> through the <code>mcp-remote</code> bridge:
             </p>
             <CodeBlock label="claude_desktop_config.json" code={desktopConfig} />
 
             <h3 id="setup-tex">Tex assistant</h3>
             <p>
-              In the Tex side panel open Settings → MCP servers → Add server, choose HTTP, paste the server URL and sign in when Tex asks. <Verify />
+              In the Tex side panel open Settings <ArrowRightIcon /> MCP servers <ArrowRightIcon /> Add server, choose HTTP, paste the server URL and sign in when Tex asks. <Verify />
             </p>
             <CodeBlock label="Tex MCP server URL" code={mcpUrl} />
 
             <h3 id="setup-cursor">Cursor</h3>
             <p>
-              Add it to <code>~/.cursor/mcp.json</code> (or <code>.cursor/mcp.json</code> in a project), then enable it under Settings → MCP and sign in.
+              Add it to <code>~/.cursor/mcp.json</code> (or <code>.cursor/mcp.json</code> in a project), then enable it under Settings <ArrowRightIcon /> MCP and sign in.
             </p>
             <CodeBlock label="mcp.json" code={cursorConfig} />
 
@@ -166,7 +167,7 @@ export function McpDocs({ mcpUrl, profileUrl, base, commissionPercent }: { mcpUr
                 (<code>classic_pat</code>).
               </li>
               <li>
-                <strong>Scoped to that one repository</strong>, read-only: Repository access → Only select repositories → just this repo; permissions
+                <strong>Scoped to that one repository</strong>, read-only: Repository access <ArrowRightIcon /> Only select repositories <ArrowRightIcon /> just this repo; permissions
                 Contents: Read (Metadata: Read comes with it). Nothing else, no admin.
               </li>
               <li>

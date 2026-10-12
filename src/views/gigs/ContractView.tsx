@@ -1,5 +1,6 @@
 /** A contract for its two parties: summary, checkout return states and the job room (always on). */
 import Link from 'next/link';
+import { ArrowLeftIcon } from '@/src/components/brand/UiIcons';
 import { contractStatusLabel, deadlineLabel, formatEuros } from '@/src/lib/jobs/client/format';
 import { percentFromBps } from '@/src/lib/jobs/client/pricing';
 import type { ContractPageData } from '@/src/lib/jobs/ui/loaders';
@@ -25,7 +26,7 @@ export function ContractView({
     <div className="page gigs-page">
       {job ? (
         <Link className="gigs-back" href={gigsHref(base, `/jobs/${job.id}`)}>
-          ← Back to the job
+          <ArrowLeftIcon /> Back to the job
         </Link>
       ) : null}
 

@@ -17,6 +17,7 @@
 //    (it runs its own configured model).
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { ArrowRightIcon } from '@/src/components/brand/UiIcons';
 import { ChatBubble } from './panel/components/ChatBubble';
 import { RenderBlockView } from './panel/components/RenderBlockView';
 import { PlanView } from './panel/components/PlanView';
@@ -240,7 +241,7 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
         <div className="interaction-block-fields">
           {block.items.map((it) => (
             <span key={it.id} className="interaction-block-field">
-              {it.label}: {it.current ?? '—'} → {it.proposed}
+              {it.label}: {it.current ?? '—'} <ArrowRightIcon /> {it.proposed}
             </span>
           ))}
         </div>
@@ -250,7 +251,7 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
   if (block.kind === 'approval') {
     return (
       <div className={className}>
-        {header(<>Action: {block.action.actionType} → {block.action.target}</>)}
+        {header(<>Action: {block.action.actionType} <ArrowRightIcon /> {block.action.target}</>)}
         {block.action.reasoning && <div className="interaction-block-reasoning">{block.action.reasoning}</div>}
       </div>
     );
@@ -791,7 +792,7 @@ export function RemoteChat({
         );
         setActiveGroups((prev) => prev.map((g) => (g.groupId === msg.groupId ? { ...g, done: true, results: msg.results } : g)));
       } else if (msg.type === 'ACTION_QUEUED') {
-        setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: `⏸ Action queued: ${msg.summary}` }]);
+        setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: `Action queued: ${msg.summary}` }]);
       }
     };
 

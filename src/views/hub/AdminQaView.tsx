@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDate, formatMoneyCents } from '@/src/lib/format';
+import { ArrowRightIcon } from '@/src/components/brand/UiIcons';
 
 /**
  * Hub /admin/qa: queue → detail drawer → reveal credentials (confirmed, audited) → verdict.
@@ -124,7 +125,7 @@ export function AdminQaView() {
             <thead>
               <tr>
                 <th scope="col">Job</th>
-                <th scope="col">From → To</th>
+                <th scope="col">From <ArrowRightIcon /> To</th>
                 <th scope="col" className="num">Price</th>
                 <th scope="col" className="num">Commission</th>
                 <th scope="col">Plans</th>
@@ -144,8 +145,8 @@ export function AdminQaView() {
                       {formatDate(it.submitted_at)} · {it.checks.join(', ')}
                     </span>
                   </td>
-                  <td data-label="From → To">
-                    {partyName(it.provider)} → {partyName(it.customer)}
+                  <td data-label="From / To">
+                    {partyName(it.provider)} <ArrowRightIcon /> {partyName(it.customer)}
                   </td>
                   <td data-label="Price" className="num">
                     {formatMoneyCents(it.price_cents, it.currency)}
@@ -154,7 +155,7 @@ export function AdminQaView() {
                     {formatMoneyCents(it.commission_cents, it.currency)}
                   </td>
                   <td data-label="Plans">
-                    {it.provider?.plan ?? '—'} → {it.customer?.plan ?? '—'}
+                    {it.provider?.plan ?? '—'} <ArrowRightIcon /> {it.customer?.plan ?? '—'}
                   </td>
                   <td data-label="Attempt" className="num">
                     {it.attempt}
@@ -303,9 +304,9 @@ function ReviewDrawer({ item, onClose, onDone }: { item: QueueItem; onClose: () 
               <h3 id="qa-job">Job</h3>
               <List value={detail.job?.description} />
               <dl className="kv">
-                <dt>From → To</dt>
+                <dt>From <ArrowRightIcon /> To</dt>
                 <dd>
-                  {partyName(item.provider)} → {partyName(item.customer)}
+                  {partyName(item.provider)} <ArrowRightIcon /> {partyName(item.customer)}
                 </dd>
                 <dt>Price</dt>
                 <dd>{formatMoneyCents(cv?.price_cents ?? item.price_cents, cv?.currency ?? item.currency)}</dd>

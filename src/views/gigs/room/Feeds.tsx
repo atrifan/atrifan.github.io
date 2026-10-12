@@ -16,6 +16,7 @@ import {
   type RoomMessage,
   type RoomMilestone,
 } from '@/src/lib/jobs/client/room';
+import { withGlyphIcons } from '@/src/components/brand/UiIcons';
 import { Field } from '../ui';
 import { Empty, ErrorText, When, useAction } from './parts';
 
@@ -46,7 +47,7 @@ export function ActivityTab({
             <p className="room-meta">
               {a.actor} · <When iso={a.at} />{' '}
             </p>
-            <p>{a.summary}</p>
+            <p>{withGlyphIcons(a.summary)}</p>
           </li>
         ))}
         {items.length === 0 ? (

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react"
 import ReactMarkdown from "react-markdown"
+import { ArrowRightIcon } from "@/src/components/brand/UiIcons"
 import remarkGfm from "remark-gfm"
 
 export interface SubAgentEntry {
@@ -127,11 +128,11 @@ function AgentRow({ a, onStop }: { a: SubAgentEntry; onStop?: (id: string) => vo
                   <span className="subagent-action-num">{i + 1}</span>
                   <span className="subagent-action-title">
                     {act.action} {act.input.slice(0, 60)}
-                    {act.input.length > 60 ? "…" : ""} → {act.ok ? "✓" : "✗"}
+                    {act.input.length > 60 ? "…" : ""} <ArrowRightIcon /> {act.ok ? "✓" : "✗"}
                   </span>
                 </summary>
                 <div className="subagent-action-full">
-                  {act.action} {act.input} → {act.ok ? "✓" : "✗"}
+                  {act.action} {act.input} <ArrowRightIcon /> {act.ok ? "✓" : "✗"}
                 </div>
               </details>
             ))}

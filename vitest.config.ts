@@ -10,6 +10,8 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname) },
   },
+  // Components imported by a unit test (e.g. the brand icons) use the automatic JSX runtime, as in Next.
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'node',
     include: ['tests/unit/**/*.vitest.ts'],
