@@ -31,6 +31,9 @@ Pick the file suffix by runner: `*.test.ts` node:test, `*.vitest.ts` Vitest, `*.
 - `integration`: `tests/integration/*.spec.ts`.
 
 Locally the servers are `next dev` (reused if running); in CI the main one is `next start`, so build first.
+Against `next dev` the `setup` project opens every page once, serially, before the other projects start
+(`WARM_PATHS` in `tests/setup/auth.setup.spec.ts`; add new pages there), and `next.config.mjs` keeps compiled
+pages (`onDemandEntries`), so first-hit compiles and mid-run rebuilds don't land inside a spec's wait.
 Page specs block iubenda/analytics/ads (`blockThirdParty` in `tests/e2e/surface-helpers.ts`,
 `openSettled` in `tests/support/pages.ts`).
 
