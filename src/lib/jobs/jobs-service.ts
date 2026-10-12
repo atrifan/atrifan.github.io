@@ -2,6 +2,7 @@
  * Jobs and their spec versions. Shared by the HTTP routes and (later) the Jobs MCP tools.
  */
 import { jobsDb } from './db';
+import { budgetFilterClauses } from './budget-filter';
 import { JobsError, dbError, isUniqueViolation, notFound } from './errors';
 import { ensureUserPrincipal } from './principals';
 import { assertJobTransition, type JobStatus } from './job-state';
@@ -110,9 +111,8 @@ export async function listJobs(
   }
   if (query.category) q = q.eq('category', query.category);
   if (query.q) q = q.or(`title.ilike.*${query.q}*,description.ilike.*${query.q}*`);
-  // price filter = overlap between [min_price, max_price] and the job's budget range
-  if (query.min_price_cents != null) q = q.gte('budget_max_cents', query.min_price_cents);
-  if (query.max_price_cents != null) q = q.lte('budget_min_cents', query.max_price_cents);
+  // price filter = overlap between [min_price, max_price] and the job's budget range (open ends unbounded)
+  for (const clause of budgetFilterClauses({ min: query.min_price_cents, max: query.max_price_cents })) q = q.or(clause);
   if (query.deadline_before) q = q.lte('deadline', query.deadline_before);
   if (query.deadline_after) q = q.gte('deadline', query.deadline_after);
   q = q.order('created_at', { ascending: false }).range(query.offset, query.offset + query.limit - 1);
