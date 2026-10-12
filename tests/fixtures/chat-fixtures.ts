@@ -22,6 +22,8 @@ import { E2E_USERS } from './clerk-users';
 
 export const CHAT_DEVICE_NAME = 'Studio laptop';
 const SERVER_PREFIX = 'chat-e2e-';
+/** Retries for network errors only (Playwright never retries an HTTP status). */
+const NETWORK_RETRIES = 2;
 
 export type ChatPresence = 'online' | 'offline' | 'never';
 
@@ -240,6 +242,7 @@ export async function emitFrame(
   const res = await request.post('/api/plugin/chat/emit', {
     headers: { authorization: `Bearer ${device.apiKey}` },
     data: { sessionId, frame },
+    maxRetries: NETWORK_RETRIES,
   });
   if (!res.ok()) throw new Error(`emit ${frame.type}: ${res.status()} ${await res.text()}`);
 }
@@ -252,7 +255,8 @@ export interface InboxEnvelope {
 
 /** Page → device: drain the device inbox once, as the assistant's relay does. */
 export async function pollDevice(request: APIRequestContext, device: ChatDevice): Promise<InboxEnvelope[]> {
-  const res = await request.get('/api/plugin/chat/poll', { headers: { authorization: `Bearer ${device.apiKey}` } });
+  // maxRetries: a dev-server keep-alive socket reset (ECONNRESET) is retried, not a test failure.
+  const res = await request.get('/api/plugin/chat/poll', { headers: { authorization: `Bearer ${device.apiKey}` }, maxRetries: NETWORK_RETRIES });
   if (!res.ok()) throw new Error(`poll: ${res.status()} ${await res.text()}`);
   return ((await res.json()) as { frames: InboxEnvelope[] }).frames;
 }

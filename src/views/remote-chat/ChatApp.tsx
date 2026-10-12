@@ -6,6 +6,7 @@
 // kept in the URL so a reload or a shared link reopens the same chat.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getJsonRetrying } from './get-json-retrying';
 import { RemoteChat } from './RemoteChat';
 import { SessionsDrawer } from './SessionsDrawer';
 import type { RelaySession } from './frames';
@@ -110,13 +111,11 @@ export function ChatApp() {
   );
 
   const loadDevices = useCallback(async () => {
-    try {
-      const res = await fetch('/api/plugin/devices');
-      const body = res.ok ? await res.json() : { devices: [] };
-      setDevices((body.devices as ChatDevice[]) ?? []);
-    } catch {
-      setDevices((prev) => prev ?? []);
-    }
+    // A failed load (e.g. a 401 while the session token refreshes) is retried; only a real answer
+    // can say the user has no devices.
+    const body = await getJsonRetrying<{ devices?: ChatDevice[] }>('/api/plugin/devices');
+    if (body) setDevices(body.devices ?? []);
+    else setDevices((prev) => prev ?? []);
   }, []);
 
   useEffect(() => {
@@ -141,13 +140,9 @@ export function ChatApp() {
   const device = devices?.find((d) => d.id === deviceId) ?? null;
 
   const loadSessions = useCallback(async (id: string) => {
-    try {
-      const res = await fetch('/api/plugin/chat/sessions');
-      const body = res.ok ? await res.json() : { sessions: [] };
-      setSessions(((body.sessions as RelaySession[]) ?? []).filter((s) => s.api_key_id === id));
-    } catch {
-      /* keep the last list */
-    }
+    const body = await getJsonRetrying<{ sessions?: RelaySession[] }>('/api/plugin/chat/sessions');
+    // null: every attempt failed, so keep the last list rather than showing no chats
+    if (body) setSessions((body.sessions ?? []).filter((s) => s.api_key_id === id));
   }, []);
 
   useEffect(() => {
