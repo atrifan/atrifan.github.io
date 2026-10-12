@@ -222,9 +222,14 @@ export function Publisher({ canPublish, initial }: { canPublish: boolean; initia
             reviewed by a Tulzo admin before it appears in the catalog.
           </p>
         </div>
-        <a className="btn btn-secondary btn-sm" href={surfaceUrl('marketplace', '/')}>
-          Back to the catalog
-        </a>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+          <a className="btn btn-secondary btn-sm" href={surfaceUrl('marketplace', '/publisher/activity')}>
+            Install activity
+          </a>
+          <a className="btn btn-secondary btn-sm" href={surfaceUrl('marketplace', '/')}>
+            Back to the catalog
+          </a>
+        </div>
       </header>
 
       {!canPublish ? (
