@@ -9,7 +9,7 @@
  */
 import path from 'node:path';
 
-const HOST_ONLY = /^(PATH|HOME|PWD|OLDPWD|SHELL|USER|LOGNAME|TMPDIR|TMP|TEMP|TERM.*|LANG|LC_.*|SSH_.*|XPC_.*|__CF.*|NODE.*|NVM_.*|npm_.*|INIT_CWD|COLOR.*|PW_DOCKER_IMAGE|PLAYWRIGHT_BROWSERS_PATH|DOCKER_.*|RUNNER_.*|GITHUB_.*|ACTIONS_.*|ImageOS|ImageVersion|AGENT_.*|_)$/;
+const HOST_ONLY = /^(PATH|HOME|PWD|OLDPWD|SHELL|USER|LOGNAME|TMPDIR|TMP|TEMP|TERM.*|LANG|LC_.*|SSH_.*|XPC_.*|__CF.*|NODE.*|NVM_.*|npm_.*|INIT_CWD|COLOR.*|PW_DOCKER_IMAGE|PLAYWRIGHT_BROWSERS_PATH|DOCKER_.*|RUNNER_.*|GITHUB_(?!FAKE_URL$).*|ACTIONS_.*|ImageOS|ImageVersion|AGENT_.*|_)$/;
 
 export function playwrightCommand(root: string, args: string[], env: NodeJS.ProcessEnv): { cmd: string; args: string[] } {
   const image = process.env.PW_DOCKER_IMAGE;
