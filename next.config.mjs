@@ -5,6 +5,10 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   // Keeps the dev build indicator out of visual snapshots.
   devIndicators: { buildActivity: false },
+  // next dev only: keep compiled pages instead of disposing them after 60s idle (default: 5 kept).
+  // Disposed pages were recompiled mid-run by the Playwright suite, and a request racing that
+  // rebuild failed with a 500 ("reading 'useContext'" / "reading 'call'" in webpack-runtime).
+  onDemandEntries: { maxInactiveAge: 60 * 60 * 1000, pagesBufferLength: 200 },
 
   // Production optimizations
   poweredByHeader: false,
