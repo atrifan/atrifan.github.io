@@ -95,3 +95,13 @@ test('appUrl builds surface URLs from the root domain', () => {
   assert.equal(appUrl('hub', '/profile', 'localhost:3000'), 'http://localhost:3000/profile');
   assert.equal(appUrl('hub', '/x', 'https://tulzo.online/'), 'https://tulzo.online/x');
 });
+
+test('progress_update and milestone_completed link to the job room and quote the update', () => {
+  const progress = render('progress_update');
+  assert.ok(hrefs(progress.html).some((h) => h.startsWith(appUrl('gigs', '/contracts/c_1'))), hrefs(progress.html).join(' '));
+  assert.match(progress.text, /Webhook signature checks are in/);
+  assert.match(progress.text, /40%/);
+  const milestone = render('milestone_completed');
+  assert.ok(hrefs(milestone.html).some((h) => h.startsWith(appUrl('gigs', '/contracts/c_1?tab=milestones'))), hrefs(milestone.html).join(' '));
+  assert.match(milestone.subject, /Signature checks/);
+});

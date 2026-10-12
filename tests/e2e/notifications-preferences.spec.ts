@@ -27,6 +27,8 @@ const TYPES = [
   'dispute_resolved',
   'payout_sent',
   'review_received',
+  'progress_update',
+  'milestone_completed',
 ] as const;
 
 type Pref = { type: string; label: string; emailEnabled: boolean };

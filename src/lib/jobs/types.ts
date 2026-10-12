@@ -118,6 +118,10 @@ export interface ContractRow {
   currency: string;
   transfer_group: string | null;
   stripe_checkout_session_id: string | null;
+  /** Included steering credits used so far; claimed with a compare-and-swap (steering-service.ts). */
+  steering_credits_used: number;
+  /** When the customer was last emailed a progress update (at most one per hour). */
+  progress_notified_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -241,6 +245,11 @@ export interface SteeringRequestRow {
   topup_status: TopupStatus;
   topup_checkout_session_id: string | null;
   topup_checkout_url: string | null;
+  /** Refund on approval of a price decrease, or a credit recorded for payout when nothing could be refunded. */
+  refund_amount_cents: number;
+  refund_status: 'none' | 'refunded' | 'credit_pending';
+  /** The job_spec_versions row this scope change created (spec or deliverable changes). */
+  new_spec_version_id: string | null;
   decided_at: string | null;
   created_at: string;
   updated_at: string;

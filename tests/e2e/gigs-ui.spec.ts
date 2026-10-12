@@ -219,10 +219,8 @@ test.describe('gigs home: listing', () => {
     await filters.getByRole('spinbutton', { name: 'Min price (€)' }).fill('450');
     await filters.getByRole('button', { name: 'Apply filters' }).click();
     await expect(page).toHaveURL(/[?&]min=450(&|$)/);
-    // Known backend gap (listJobs: min_price_cents is `budget_max_cents >= min`): a "From €500" job
-    // with no maximum is left out of a min-price filter. Asserted again once the API treats an open
-    // maximum as unbounded.
-    test.info().annotations.push({ type: 'known-gap', description: 'open-ended budgets are excluded by min_price_cents (backend)' });
+    // An open maximum is unbounded: "From €500" overlaps a €450 minimum; €200–400 and €300 don't.
+    await expect(page.getByRole('heading', { name: t.c, exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: t.a, exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: t.e, exact: true })).toHaveCount(0);
 

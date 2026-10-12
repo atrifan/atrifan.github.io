@@ -24,6 +24,8 @@ export const NOTIFICATION_TYPES = [
   'payout_sent',
   'review_received',
   'review_requested',
+  'progress_update',
+  'milestone_completed',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -82,6 +84,9 @@ export const payloadSchemas = {
     url,
   }),
   review_requested: z.object({ ...contract, counterpartyName: personName }),
+  /** Sent at most once per contract per hour (src/lib/jobs/room-service.ts). */
+  progress_update: z.object({ ...contract, summary, percentComplete: z.number().int().min(0).max(100).optional() }),
+  milestone_completed: z.object({ ...contract, milestoneTitle: title }),
 } satisfies Record<NotificationType, z.ZodTypeAny>;
 
 /** Payload a caller passes to `enqueue` (defaults such as `currency` optional). */
@@ -140,4 +145,6 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   payout_sent: 'Payouts',
   review_received: 'New reviews',
   review_requested: 'Review reminders',
+  progress_update: 'Progress updates',
+  milestone_completed: 'Milestones completed',
 };

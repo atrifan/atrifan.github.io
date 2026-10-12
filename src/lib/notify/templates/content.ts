@@ -30,6 +30,8 @@ function clip(text: string, max = 600): string {
 }
 
 const jobUrl = (p: { url?: string; jobId: string }) => p.url ?? appUrl('gigs', `/jobs/${encodeURIComponent(p.jobId)}`);
+const roomUrl = (p: { url?: string; contractId: string }, tab?: string) =>
+  p.url ?? appUrl('gigs', `/contracts/${encodeURIComponent(p.contractId)}${tab ? `?tab=${tab}` : ''}`);
 const profileUrl = (p: { url?: string }, section: string) => p.url ?? appUrl('hub', `/profile#${section}`);
 
 type Builders = { [T in NotificationType]: (p: Payload<T>) => Omit<EmailContent, 'subject'> & { subject: string } };
@@ -192,6 +194,22 @@ const builders: Builders = {
       `"${p.jobTitle}" is done. A short review of ${p.counterpartyName} helps everyone on Tulzo pick who to work with.`,
     ],
     cta: { label: 'Write a review', url: p.url ?? appUrl('gigs', `/contracts/${encodeURIComponent(p.contractId)}/delivery#review`) },
+  }),
+  progress_update: (p) => ({
+    subject: `Progress on ${p.jobTitle}`,
+    preheader: p.percentComplete !== undefined ? `About ${p.percentComplete}% done.` : 'Your provider posted an update.',
+    heading: 'New progress update',
+    paragraphs: [`Your provider posted an update on "${p.jobTitle}":`],
+    quote: clip(p.summary),
+    details: p.percentComplete !== undefined ? [['Progress', `${p.percentComplete}%`]] : undefined,
+    cta: { label: 'Open the job room', url: roomUrl(p) },
+  }),
+  milestone_completed: (p) => ({
+    subject: `Milestone done: ${p.milestoneTitle}`,
+    preheader: `"${p.milestoneTitle}" is done on ${p.jobTitle}.`,
+    heading: 'A milestone is done',
+    paragraphs: [`Your provider marked "${p.milestoneTitle}" as done on "${p.jobTitle}".`],
+    cta: { label: 'See the milestones', url: roomUrl(p, 'milestones') },
   }),
 };
 

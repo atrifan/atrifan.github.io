@@ -16,6 +16,15 @@ A route that needs an env var it doesn't have answers 500 `{ error: 'server_misc
 ## Chat (`/api/chat`)
 POST, streaming; the assistant's chat endpoint (hub).
 
+## Job room (`/api/contracts/`)
+Contract parties only (404 unknown, 403 not a party); served on gigs and the hub. `GET /` (mine),
+`GET [id]` (versions, spec + all spec versions, pause, steering credits), `messages` (GET `?since=<seq>`, POST),
+`activity?since=<seq>`, `milestones` (GET `?since=<ts>`, POST provider create/update), `progress` (POST provider,
+≤ 1 customer email per hour), `qa` (submissions + verdict reasons), `steering` (GET, POST customer),
+`steering/[sid]/{respond (provider), approve, reject, topup}` (customer; approve refunds a price drop, `topup` makes a
+fresh Checkout for an unpaid top-up), `versions/[vid]/accept` (provider signs customer-proposed terms). Services:
+`src/lib/jobs/{room,steering}-service.ts`; the UI client is `src/lib/jobs/client/room.ts`.
+
 ## MCP (`/api/mcp/`)
 `route` (JSON-RPC), `[key]` + `[key]/[serverName]` (path-key surfaces), `oauth-source`,
 `servers[/…]`, `call`. See [[oauth-mcp]].

@@ -38,6 +38,10 @@ const DEFAULT_SPECS = [
   'tests/e2e/gigs-delivery.spec.ts',
   'tests/a11y/gigs-delivery.a11y.spec.ts',
   'tests/visual/gigs-delivery.visual.spec.ts',
+  // job room: every tab for both parties, steering flows, a11y and visual baselines
+  'tests/e2e/gigs-room.spec.ts',
+  'tests/a11y/gigs-room.a11y.spec.ts',
+  'tests/visual/gigs-room.visual.spec.ts',
 ];
 // GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
 const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -156,6 +160,9 @@ async function main() {
       ['GET', '/api/admin/disputes'], ['GET', `/api/admin/disputes/${id}`], ['POST', `/api/admin/disputes/${id}/resolve`],
       ['GET', '/api/cron/auto-accept'], ['GET', '/api/cron/trust-decay'], ['GET', '/api/cron/credit-grants'],
       ['GET', '/api/profile/reputation'], ['GET', `/api/trust?principal_ids=${id}`], ['GET', '/api/credits/grants'],
+      ['POST', `/api/contracts/${id}/progress`], ['GET', `/api/contracts/${id}/qa`],
+      ['POST', `/api/contracts/${id}/steering/${id}/respond`], ['POST', `/api/contracts/${id}/steering/${id}/topup`],
+      ['POST', `/api/contracts/${id}/versions/${id}/accept`],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }

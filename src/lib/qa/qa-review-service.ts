@@ -12,6 +12,7 @@ import { jobsDb } from '../jobs/db';
 import { JobsError, dbError, notFound } from '../jobs/errors';
 import { loadContract, loadContractVersion, transitionContract } from '../jobs/contracts-service';
 import { loadJob, loadSpecVersion, transitionJob } from '../jobs/jobs-service';
+import { recordActivity } from '../jobs/room-service';
 import { canTransitionJob } from '../jobs/job-state';
 import { appBaseUrl } from '../jobs/stripe';
 import type { ContractRow, ContractVersionRow } from '../jobs/types';
@@ -405,6 +406,12 @@ export async function markSubmission(adminUserId: string, args: unknown) {
     verdict: decision.verdict,
     credits,
   });
+  const verdictWords = { validated: 'validated', requires_changes: 'asked for changes on', rejected: 'rejected' } as const;
+  await recordActivity(contract.id, null, 'qa_verdict', `QA ${verdictWords[decision.verdict]} attempt ${sub.attempt}`, {
+    submission_id: sub.id,
+    review_id: review.id,
+    verdict: decision.verdict,
+  }).catch((err) => console.error('[qa] verdict activity not recorded:', err instanceof Error ? err.message : err));
 
   return {
     review: {

@@ -1,6 +1,6 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { installMocks, resetDb, sql, useFakeStripe, stopFakeStripe, aiState, notifyState } from './helpers';
+import { installMocks, resetDb, sql, seedBalance, useFakeStripe, stopFakeStripe, aiState, notifyState } from './helpers';
 import { formToObject, type FakeStripe } from '../support/fake-stripe';
 
 installMocks();
@@ -13,6 +13,13 @@ let n = 0;
 function parties() {
   n += 1;
   return { customer: `user_steer_c${n}`, provider: `user_steer_p${n}` };
+}
+
+/** A paid contract whose customer has a balance, so the (billed) AI classifier runs. */
+async function paidFunded(customer: string, provider: string, opts: Parameters<typeof paidContract>[2] = {}): Promise<PaidContract> {
+  const pc = await paidContract(customer, provider, opts);
+  await seedBalance(customer, 5);
+  return pc;
 }
 
 /** Make the (mocked) classifier answer `kind`. */
@@ -50,7 +57,7 @@ async function detail(pc: PaidContract, user: string) {
 
 test('a clarification is classified by the LLM, is free, and is answered by the provider', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider, { credits: 1 });
+  const pc = await paidFunded(customer, provider, { credits: 1 });
   const res = await ask(pc, customer, { message: 'Which CSV delimiter should I expect?' });
   assert.equal(res.status, 201, JSON.stringify(res.body));
   assert.deepEqual(res.body.decision, { kind: 'clarification', consumesCredit: false, requiresApproval: false });
@@ -79,7 +86,7 @@ test('a clarification is classified by the LLM, is free, and is answered by the 
 
 test('a revision uses one included credit; with none left it becomes a scope change', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider, { credits: 1 });
+  const pc = await paidFunded(customer, provider, { credits: 1 });
   classifierSays('revision');
   const first = await ask(pc, customer, { message: 'Please rename the CLI flag to --input' });
   assert.deepEqual(first.body.decision, { kind: 'revision', consumesCredit: true, requiresApproval: false });
@@ -96,11 +103,11 @@ test('a revision uses one included credit; with none left it becomes a scope cha
 
 test('without the AI the customer\'s requested kind is used, and spec/price/deadline changes still force scope_change', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider, { credits: 3 });
+  const pc = await paidFunded(customer, provider, { credits: 3 });
   aiState.generateObject = async () => { throw new Error('gateway down'); };
   const rev = await ask(pc, customer, { message: 'Tweak the log format', requested_kind: 'revision' });
   assert.equal(rev.body.decision.kind, 'revision');
-  assert.equal(rev.body.steering.classifier_output.source, 'fallback');
+  assert.equal(rev.body.steering.classifier_output.source, 'rules');
   const spec = await ask(pc, customer, { message: 'Small thing', requested_kind: 'clarification', spec_changes: ['Also export JSON'] });
   assert.equal(spec.body.decision.kind, 'scope_change');
   assert.deepEqual(spec.body.steering.spec_changes, ['Also export JSON']);
@@ -112,7 +119,7 @@ test('without the AI the customer\'s requested kind is used, and spec/price/dead
 
 test('steering requests: only the customer creates, only parties read', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider);
+  const pc = await paidFunded(customer, provider);
   assert.equal((await ask(pc, provider, { message: 'Can I ask myself?' })).status, 403);
   assert.equal((await ask(pc, 'user_steer_stranger', { message: 'Hi' })).status, 403);
   assert.equal((await ask(pc, customer, { message: '' })).status, 400);
@@ -130,7 +137,7 @@ test('steering requests: only the customer creates, only parties read', async ()
 
 test('scope change: provider re-estimates, a new contract version awaits approval, work pauses, approval charges a top-up', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider, { credits: 1 });
+  const pc = await paidFunded(customer, provider, { credits: 1 });
   classifierSays('scope_change');
   const req = await ask(pc, customer, { message: 'Add an XLSX importer too' });
   assert.equal(req.body.steering.status, 'awaiting_estimate');
@@ -207,7 +214,7 @@ test('scope change: provider re-estimates, a new contract version awaits approva
 
 test('scope change rejected by the customer: version not adopted, work resumes', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider);
+  const pc = await paidFunded(customer, provider);
   classifierSays('scope_change');
   const req = await ask(pc, customer, { message: 'Add a web UI' });
   const sid = req.body.steering.id as string;
@@ -225,7 +232,7 @@ test('scope change rejected by the customer: version not adopted, work resumes',
 
 test('scope change declined by the provider resumes work', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider);
+  const pc = await paidFunded(customer, provider);
   const req = await ask(pc, customer, { message: 'Different deadline please', deadline: '2027-01-15T00:00:00.000Z' });
   assert.equal(req.body.steering.kind, 'scope_change');
   assert.equal(req.body.steering.status, 'awaiting_provider');
@@ -236,7 +243,7 @@ test('scope change declined by the provider resumes work', async () => {
 
 test('customer-proposed price: the provider accepts the proposed version with contract_accept_version', async () => {
   const { customer, provider } = parties();
-  const pc = await paidContract(customer, provider);
+  const pc = await paidFunded(customer, provider);
   const req = await ask(pc, customer, { message: 'I can pay more for faster delivery', price_cents: 36000 });
   assert.equal(req.status, 201, JSON.stringify(req.body));
   assert.equal(req.body.steering.status, 'awaiting_provider');
