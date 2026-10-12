@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { formatDay, formatMoney } from '@/src/lib/activity/format';
+import { pluralize } from '@/src/lib/format';
 import type { AdminActivity } from '@/src/lib/activity/admin-activity-service';
 import '@/styles/activity.css';
 
@@ -52,8 +53,6 @@ function Section<T extends { at: string }>({ id, title, rows, columns, rowKey }:
     </section>
   );
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 const when = <T extends { at: string }>(): Column<T> => ({ label: 'Date', cell: (r) => <time dateTime={r.at}>{formatDay(r.at)}</time> });
 
@@ -163,7 +162,7 @@ export function AdminActivityView() {
               </div>
             </dl>
             <p className="act-note">
-              {plural(t.paymentsCount, 'payment')}, {plural(t.payoutsCount, 'payout')} and {plural(t.refundsCount, 'refund')} from {formatDay(data.range.from)} to {formatDay(data.range.to)}.
+              {pluralize(t.paymentsCount, 'payment')}, {pluralize(t.payoutsCount, 'payout')} and {pluralize(t.refundsCount, 'refund')} from {formatDay(data.range.from)} to {formatDay(data.range.to)}.
             </p>
           </section>
 

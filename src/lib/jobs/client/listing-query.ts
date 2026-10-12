@@ -7,6 +7,8 @@
  * deadline (7d|30d|90d, jobs only), status (jobs only), page (1-based; omitted on page 1).
  */
 
+import { pluralize } from '../../format';
+
 export const LISTING_PAGE_SIZE = 12;
 const MAX_PAGE = 10_000;
 const DAY_MS = 86_400_000;
@@ -144,5 +146,5 @@ export function pagination(total: number, page: number, pageSize: number = LISTI
 
 export function resultCountLabel(n: number, tab: ListingTab): string {
   const noun = tab === 'jobs' ? 'job' : 'offer';
-  return `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ${noun}${n === 1 ? '' : 's'}`;
+  return pluralize(n, noun);
 }

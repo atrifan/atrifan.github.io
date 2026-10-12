@@ -363,6 +363,8 @@ test.describe('/admin/activity, admin', () => {
     await expect(termValue(main, 'Payouts')).toContainText('€300.00');
     await expect(termValue(main, 'Refunds')).toContainText('€45.00');
     await expect(termValue(main, 'Disputes')).toContainText('1');
+    // One payout and one refund read in the singular.
+    await expect(main).toContainText('2 payments, 1 payout and 1 refund from 12 Sep 2026 to 12 Oct 2026.');
   });
 
   test('From / To + Apply requests /api/admin/activity?from=&to=', async ({ page }) => {
