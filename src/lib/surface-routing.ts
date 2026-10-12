@@ -187,21 +187,15 @@ export function wwwRedirect({
   pathAndQuery: string;
   rootDomain: string | undefined;
 }): string | null {
-  const root = (rootDomain ?? '').trim().replace(/\/+$/, '');
-  if (!root || !host) return null;
-  if (bareHost(host) !== `www.${bareHost(root)}`) return null;
-  return surfaceUrl('hub', pathAndQuery, { rootDomain: root });
+  // An empty root gives "www.", which no bare host equals.
+  if (!host || bareHost(host) !== `www.${bareHost(rootDomain ?? '')}`) return null;
+  return surfaceUrl('hub', pathAndQuery, { rootDomain });
 }
 
-/** Lower-case host name without scheme, port, path or trailing dot. */
+/** Lower-case host name without scheme, path, port or trailing dot. */
 function bareHost(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/:\d+$/, '')
-    .replace(/\.$/, '');
+  const noScheme = value.trim().toLowerCase().replace(/^https?:\/\//, '');
+  return noScheme.split('/')[0].split(':')[0].replace(/\.$/, '');
 }
 
 /** TULZO_ROUTING: `path` (default) or `hybrid`. */
@@ -248,15 +242,15 @@ export function surfaceFromHost(
   rootDomain: string | undefined,
   pathAndQuery: string = '/',
 ): Surface | null | { redirect: string } {
-  const root = (rootDomain ?? '').trim().replace(/\/+$/, '');
-  if (!host || !root) return null;
-  const www = wwwRedirect({ host, pathAndQuery, rootDomain: root });
+  if (!host) return null;
+  const www = wwwRedirect({ host, pathAndQuery, rootDomain });
   if (www) return { redirect: www };
-  const suffix = `.${bareHost(root)}`;
+  // An empty root gives the suffix ".", which no bare host ends with.
+  const suffix = `.${bareHost(rootDomain ?? '')}`;
   const name = bareHost(host);
   if (!name.endsWith(suffix)) return null;
   const label = name.slice(0, -suffix.length);
-  if (label === JOBS_ALIAS) return { redirect: surfaceUrl('gigs', pathAndQuery, { rootDomain: root, links: 'host' }) };
+  if (label === JOBS_ALIAS) return { redirect: surfaceUrl('gigs', pathAndQuery, { rootDomain, links: 'host' }) };
   return SUBDOMAIN_SURFACES.find((s) => s === label) ?? null;
 }
 

@@ -32,7 +32,7 @@ export type LinkMode = 'path' | 'host';
 
 /** TULZO_LINKS, leniently: only `host` means host links (middleware validates it strictly). */
 export function linkMode(value: string | undefined): LinkMode {
-  return (value ?? '').trim().toLowerCase() === 'host' ? 'host' : 'path';
+  return value?.trim().toLowerCase() === 'host' ? 'host' : 'path';
 }
 
 export interface SurfaceUrlOptions {
@@ -60,7 +60,8 @@ export function surfaceUrl(surface: Surface, path: string = '/', opts?: SurfaceU
   const scheme = /^https?:\/\//.exec(root)?.[0];
   const host = scheme ? root.slice(scheme.length) : root;
   const origin = scheme ?? 'https://';
-  if ((opts?.links ?? linkMode(process.env.TULZO_LINKS)) === 'path') return `${origin}${host}${prefixed(surface, normalized)}`;
-  const fullHost = surface === 'hub' ? host : `${surface}.${host}`;
-  return `${origin}${fullHost}${normalized}`;
+  if ((opts?.links ?? linkMode(process.env.TULZO_LINKS)) === 'host') {
+    return `${origin}${surface === 'hub' ? host : `${surface}.${host}`}${normalized}`;
+  }
+  return `${origin}${host}${prefixed(surface, normalized)}`;
 }

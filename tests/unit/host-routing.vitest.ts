@@ -5,6 +5,7 @@ import {
   resolveLinkMode,
   resolveRequestSurface,
   resolveRoutingMode,
+  routeRequest,
   surfaceFromHeader,
   surfaceFromHost,
   withSurfaceHeader,
@@ -287,5 +288,36 @@ describe('surfaceUrl link modes (TULZO_LINKS)', () => {
     vi.stubEnv('TULZO_SURFACE', 'ai');
     expect(surfaceUrl('ai', '/usage', { rootDomain: ROOT, links: 'path' })).toBe('https://tulzo.online/ai/usage');
     expect(surfaceUrl('ai', '/usage', { rootDomain: ROOT, links: 'host' })).toBe('https://ai.tulzo.online/usage');
+  });
+});
+
+describe('edge cases (from mutation testing)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('requestHost trims a blank Host from any header source, and the first x-forwarded-host value', () => {
+    const raw = (init: Record<string, string>) => ({ get: (n: string) => init[n] ?? null });
+    expect(requestHost(raw({ host: '  ', 'x-forwarded-host': 'ai.tulzo.online' }))).toBe('ai.tulzo.online');
+    expect(requestHost(raw({ host: ' gigs.tulzo.online ' }))).toBe('gigs.tulzo.online');
+    expect(requestHost(raw({ 'x-forwarded-host': 'chat.tulzo.online , proxy.internal' }))).toBe('chat.tulzo.online');
+  });
+
+  it('routeRequest passes links through even without a rootDomain', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'tulzo.test');
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', links: 'host' }).destination).toBe('https://ai.tulzo.test/');
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', links: 'path' }).destination).toBe('https://tulzo.test/ai');
+  });
+
+  it('surfaceUrl with no options reads both env vars', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'tulzo.test');
+    vi.stubEnv('TULZO_LINKS', 'host');
+    expect(surfaceUrl('chat', '/x')).toBe('https://chat.tulzo.test/x');
+    vi.stubEnv('TULZO_LINKS', '');
+    expect(surfaceUrl('chat', '/x')).toBe('https://tulzo.test/chat/x');
+  });
+
+  it('a root domain with a path or trailing slashes still matches its hosts', () => {
+    expect(surfaceFromHost('ai.tulzo.online', 'tulzo.online//')).toBe('ai');
+    expect(surfaceFromHost('ai.tulzo.online', 'https://tulzo.online/x/y')).toBe('ai');
+    expect(surfaceFromHost('www.tulzo.online', 'tulzo.online/', '/a')).toEqual({ redirect: 'https://tulzo.online/a' });
   });
 });
