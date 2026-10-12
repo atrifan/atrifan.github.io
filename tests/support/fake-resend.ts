@@ -10,6 +10,10 @@
  *  - GET    /__sent                  → `{ emails: SentEmail[] }` (every POST /emails body, oldest first)
  *  - DELETE /__sent                  → clears the sent list
  *  - POST   /__received              → body is a received email (`{ id, from, to, subject, html, text, headers, message_id, ... }`)
+ *  - POST   /__fail                  → body `{ match, status, count }`: the next `count` POST /emails whose raw JSON
+ *                                      body contains `match` answer `status` and are not recorded (a transient
+ *                                      Resend outage for one test's mail; parallel tests use their own `match`)
+ *  - GET    /__attempts?match=       → `{ attempts }`: POST /emails received whose body contains `match`, failed or not
  */
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -63,13 +67,22 @@ function send(res: ServerResponse, status: number, body: unknown): void {
 export async function startFakeResend(port = 0): Promise<FakeResend> {
   const sent: SentEmail[] = [];
   const received = new Map<string, ReceivedEmail>();
+  const failures: Array<{ match: string; status: number; remaining: number }> = [];
+  const attemptBodies: string[] = [];
 
   const server: Server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://fake-resend.local');
       const method = req.method ?? 'GET';
       if (method === 'POST' && url.pathname === '/emails') {
-        const body = JSON.parse((await readBody(req)) || '{}') as Record<string, unknown>;
+        const raw = (await readBody(req)) || '{}';
+        attemptBodies.push(raw);
+        const failure = failures.find((f) => f.remaining > 0 && raw.includes(f.match));
+        if (failure) {
+          failure.remaining -= 1;
+          return send(res, failure.status, { statusCode: failure.status, name: 'fake_failure', message: `fake Resend answered ${failure.status}` });
+        }
+        const body = JSON.parse(raw) as Record<string, unknown>;
         const id = randomUUID();
         sent.push({ ...(body as Omit<SentEmail, 'id' | 'authorization'>), id, authorization: req.headers.authorization ?? null } as SentEmail);
         return send(res, 200, { id });
@@ -84,6 +97,18 @@ export async function startFakeResend(port = 0): Promise<FakeResend> {
       if (url.pathname === '/__sent' && method === 'DELETE') {
         sent.length = 0;
         return send(res, 200, { ok: true });
+      }
+      if (url.pathname === '/__fail' && method === 'POST') {
+        const { match, status, count } = JSON.parse((await readBody(req)) || '{}') as { match?: unknown; status?: unknown; count?: unknown };
+        if (typeof match !== 'string' || !match || !Number.isInteger(status) || !Number.isInteger(count) || (count as number) < 1) {
+          return send(res, 400, { error: 'match (string), status and count (>= 1) required' });
+        }
+        failures.push({ match, status: status as number, remaining: count as number });
+        return send(res, 200, { ok: true });
+      }
+      if (url.pathname === '/__attempts' && method === 'GET') {
+        const match = url.searchParams.get('match') ?? '';
+        return send(res, 200, { attempts: attemptBodies.filter((b) => b.includes(match)).length });
       }
       if (url.pathname === '/__received' && method === 'POST') {
         const email = JSON.parse((await readBody(req)) || '{}') as ReceivedEmail;

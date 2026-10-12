@@ -15,15 +15,16 @@
  *    so mail clients keep the thread together, and the reference in the subject.
  *
  * Email goes straight through Resend (src/lib/notify/transport.ts), not the notify outbox: the
- * recipients are addresses, not users. A failed confirmation or forward is logged, never lost
- * data: the thread is stored first.
+ * recipients are addresses, not users. Transient Resend errors are retried inline (sendWithRetry, as
+ * for notification email); a send that still fails is logged, never lost data: the thread is stored
+ * first. A failed admin reply answers 502.
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { jobsDb } from '@/src/lib/jobs/db';
 import { JobsError, dbError, isUniqueViolation } from '@/src/lib/jobs/errors';
 import { getAdminEmails } from '@/src/lib/admin';
 import { adminUserIdsForNotify, notifySafe } from '@/src/lib/qa/qa-data';
-import { createResendTransport, resendApiBase, type EmailMessage } from '@/src/lib/notify/transport';
+import { createResendTransport, resendApiBase, sendWithRetry, type EmailMessage } from '@/src/lib/notify/transport';
 import { contactEmailFrom, COMPLAINT_RESPONSE_DAYS } from '@/src/lib/legal/facts';
 import { CATEGORY_LABELS, rateLimitDecision, type ComplaintInput } from './complaint';
 import { findReference, referenceFromBytes, replySubject, subjectWithReference } from './reference';
@@ -110,7 +111,9 @@ async function sendMail(message: Omit<EmailMessage, 'from' | 'headers'> & { from
     return false;
   }
   try {
-    await createResendTransport(apiKey).send({
+    // Same inline retries as notification email (0.5s, 2s, 5s on network/429/5xx); the idempotency
+    // key keeps a retry from sending twice.
+    await sendWithRetry(createResendTransport(apiKey), {
       ...message,
       from: message.from ?? fromHeader(supportAddress()),
       headers: message.headers ?? {},
@@ -225,7 +228,8 @@ export async function submitComplaint({
     html_body: null,
   });
 
-  await sendMail({
+  // Both emails at once, so their retries don't add up before the form gets its answer.
+  const forward = sendMail({
     to: support,
     replyTo: input.email,
     subject: `[${thread.reference}] ${label}: ${input.name}`,
@@ -244,13 +248,14 @@ export async function submitComplaint({
     '',
     'Tulzo',
   ].join('\n');
-  await sendMail({
+  const confirm = sendMail({
     to: input.email,
     subject: subjectWithReference('We received your message', thread.reference),
     text: confirmation,
     html: textToHtml(confirmation),
     idempotencyKey: `complaint-confirm-${thread.id}`,
   });
+  await Promise.all([forward, confirm]);
   await notifyAdmins('support_complaint_received', { threadId: thread.id, reference: thread.reference, category: label, fromName: input.name }, `support_complaint:${thread.id}`);
   return { reference: thread.reference, threadId: thread.id };
 }

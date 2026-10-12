@@ -1,3 +1,5 @@
+import { withRetry, type BackoffOptions } from './backoff.ts';
+
 export interface EmailMessage {
   from: string;
   to: string;
@@ -34,6 +36,28 @@ export class TransportError extends Error {
 
 export function isRetryableError(err: unknown): boolean {
   return err instanceof TransportError ? err.retryable : true;
+}
+
+/** Inline retries after the first send, for transient errors (network, 429, 5xx). Nothing retries later. */
+export const SEND_RETRIES = 3;
+/** Waits between inline retries: 0.5s, 2s, 5s. */
+export const SEND_BACKOFF: BackoffOptions = { baseMs: 500, factor: 4, maxMs: 5000 };
+
+/**
+ * One email through `transport`, retried inline on transient errors (SEND_RETRIES, SEND_BACKOFF);
+ * a permanent error, or the last transient one, is thrown. Pass `idempotencyKey` so a retry after a
+ * lost answer is not sent twice.
+ */
+export function sendWithRetry(
+  transport: EmailTransport,
+  message: EmailMessage,
+  {
+    retries = SEND_RETRIES,
+    backoff = SEND_BACKOFF,
+    sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  }: { retries?: number; backoff?: BackoffOptions; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<SendResult> {
+  return withRetry(() => transport.send(message), { retries, backoff, sleep, isRetryable: isRetryableError });
 }
 
 export const RESEND_API_BASE = 'https://api.resend.com';

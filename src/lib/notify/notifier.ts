@@ -1,9 +1,9 @@
-import { withRetry, type BackoffOptions } from './backoff.ts';
+import type { BackoffOptions } from './backoff.ts';
 import { gateNotification, type SkipReason } from './preferences.ts';
 import type { NotifyStore } from './store.ts';
 import { renderEmail } from './templates/index.ts';
 import { signUnsubscribeToken } from './token.ts';
-import { isRetryableError, type EmailTransport } from './transport.ts';
+import { SEND_BACKOFF, SEND_RETRIES, sendWithRetry, type EmailTransport } from './transport.ts';
 import { isNotificationType, parsePayload, type NotificationRow, type NotificationType, type PayloadInput } from './types.ts';
 import { appUrl } from './urls.ts';
 
@@ -60,8 +60,8 @@ export function createNotifier(deps: NotifierDeps): Notifier {
     unsubscribeSecret,
     schedule,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    sendRetries = 3,
-    sendBackoff = { baseMs: 500, factor: 4, maxMs: 5000 },
+    sendRetries = SEND_RETRIES,
+    sendBackoff = SEND_BACKOFF,
     leaseMs = 120_000,
   } = deps;
 
@@ -83,18 +83,18 @@ export function createNotifier(deps: NotifierDeps): Notifier {
         unsubscribeUrl: unsub,
         preferencesUrl: appUrl('hub', '/profile'),
       });
-      const result = await withRetry(
-        () =>
-          transport.send({
-            from,
-            to: contact.email as string,
-            subject: email.subject,
-            html: email.html,
-            text: email.text,
-            headers: { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-            idempotencyKey: row.id,
-          }),
-        { retries: sendRetries, backoff: sendBackoff, sleep, isRetryable: isRetryableError },
+      const result = await sendWithRetry(
+        transport,
+        {
+          from,
+          to: contact.email as string,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+          headers: { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+          idempotencyKey: row.id,
+        },
+        { retries: sendRetries, backoff: sendBackoff, sleep },
       );
       await store.markSent(row.id, result.id);
       return 'sent';

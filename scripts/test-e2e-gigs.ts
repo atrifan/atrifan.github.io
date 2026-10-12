@@ -55,6 +55,7 @@ const DEFAULT_SPECS = [
   'tests/e2e/notifications-api.spec.ts',
   'tests/e2e/legal-complaints-api.spec.ts',
   'tests/e2e/support-inbox.spec.ts',
+  'tests/e2e/support-mail-retry.spec.ts',
   'tests/e2e/legal-consent-api.spec.ts',
   'tests/e2e/gigs-legal-notices.spec.ts',
   'tests/a11y/support-inbox.a11y.spec.ts',
