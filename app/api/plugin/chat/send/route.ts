@@ -12,7 +12,7 @@ import {
 /**
  * Page → device. The remote chat page posts an inbound frame (SEND_MESSAGE,
  * STOP_STREAM, approval responses, …) for the connected device to execute. The
- * device receives it over the Realtime channel or via /poll. A SEND_MESSAGE
+ * device pulls it from /poll. A SEND_MESSAGE
  * frame also persists the user message to durable history.
  *
  *   POST /api/plugin/chat/send

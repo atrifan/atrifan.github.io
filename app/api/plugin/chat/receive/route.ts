@@ -9,7 +9,7 @@ import { authorizeSession, fetchPageFrames, latestPageSeq } from '@/src/lib/chat
  * `to_page` frames over Supabase Realtime under RLS. It polls this route with a
  * monotonic `after` seq cursor to drain the device's streamed frames
  * (STREAM_CHUNK / THINKING_CHUNK / RENDER_BLOCK / STREAM_DONE / …). Mirrors the
- * device's `/poll` inbox. Realtime broadcast stays a best-effort optimization.
+ * device's `/poll` inbox.
  *
  *   GET /api/plugin/chat/receive?session_id=<id>&after=<seq>
  *   (Clerk session)
