@@ -53,7 +53,11 @@ Open every changed image before committing it. Ads and Clerk's dev footer are ma
 - **API-key routes** use a real seeded fixture key (`tests/fixtures/seed.ts`); specs skip when
   `hasSupabaseEnv()` is false.
 - **Clerk-gated UI** runs only when `E2E_CLERK_STORAGE_STATE` points at a saved Clerk session. Signed out,
-  `/chat` and `/dashboard` are checked as the sign-in page they redirect to.
+  `/chat`, `/dashboard` and `/ai` are checked as the sign-in page they redirect to. Signed-in specs use
+  `storageStatePath('customer')` (the `setup` project saves it; one context per role, never signed out).
+- **ai. panel** specs mock the extension with `tests/support/mock-bridge.ts` and the server with
+  `tests/support/ai-fixtures.ts`; the opt-in `live-extension` project runs `tests/live/` against the real
+  extension (see [[plugin-control-plane]]).
 
 ## Accessibility bar
 

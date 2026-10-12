@@ -7,11 +7,11 @@ import { AD_SLOT, PRIMARY_NAV, blockThirdParty } from './surface-helpers';
  * trap, touch targets, no horizontal scroll and footer-only lazy ads.
  */
 
-const SHELL_PAGES = ['/', '/pricing', '/ai', '/marketplace', '/gigs'];
+// /ai is signed-in only (the control panel), so it is not a signed-out shell page.
+const SHELL_PAGES = ['/', '/pricing', '/marketplace', '/gigs'];
 const CURRENT_BY_PAGE: Record<string, string | null> = {
   '/': null,
   '/pricing': null,
-  '/ai': 'AI',
   '/marketplace': 'Marketplace',
   '/gigs': 'Gigs',
 };

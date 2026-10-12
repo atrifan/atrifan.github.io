@@ -1,6 +1,6 @@
 ---
 description: Assistant admin surfaces — skill enable/disable, per-skill settings, notification channels, schedules, and the plugin catalog
-appliesTo: ["src/views/ControlPanelPage.tsx", "app/api/plugin/**"]
+appliesTo: ["src/views/ai/**", "src/lib/bridge-commands.ts", "app/api/plugin/**"]
 alwaysApply: false
 ---
 
@@ -41,16 +41,17 @@ only when that skill is active + enabled.
 
 - `NOTIFICATION_GET_CONFIG` → `config.availableChannels: [{ id, name, builtin }]`
   (dynamic) plus per-channel `enabled` + event rules.
-- `NOTIFICATION_TEST` — `{ channel?: string }` sends a test to that channel (or via
-  the event rules if omitted).
+- `NOTIFICATION_SET_CONFIG` — `{ config: { channels, rules, soundEnabled? } }`; it replaces channels and
+  rules, so send the full config (`toNotificationConfig`).
+- `NOTIFICATION_TEST` exists on the host but is not on the extension's control-plane allow-list.
 
 ## Schedules
 
 - `SCHEDULE_LIST` → `{ schedules: [{ id, cron, prompt, type, paused?, catchup? }] }`
 - `SCHEDULE_ADD` — `{ cron, prompt, source? }` (also an LLM tool `ADD_SCHEDULE` with `scheduleType:'task'|'notify'`)
-- `SCHEDULE_PAUSE` / `SCHEDULE_RESUME` — `{ id }`
-- `SCHEDULE_REMOVE` — `{ id }`
-- `SCHEDULE_SET_CATCHUP` — `{ id, value: boolean }`
+- `SCHEDULE_PAUSE` / `SCHEDULE_RESUME` / `SCHEDULE_REMOVE` — `{ scheduleId }` (`id` also works)
+- `RELOAD_DECLARED_SCHEDULES` — `{}`; `GET_SCHEDULE_RUNS` — `{ scheduleId, month? }`
+- `SCHEDULE_SET_CATCHUP` is not on the control-plane allow-list.
 
 ## CLI
 

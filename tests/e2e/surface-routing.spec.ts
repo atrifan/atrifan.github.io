@@ -29,26 +29,14 @@ async function resolveRedirects(request: APIRequestContext, path: string): Promi
 test.describe('path-prefix mode routing', () => {
   test.beforeEach(async ({ page }) => blockThirdParty(page));
 
-  for (const path of ['/', '/pricing', '/ai', '/marketplace', '/gigs', '/sign-in']) {
+  for (const path of ['/', '/pricing', '/marketplace', '/gigs', '/sign-in']) {
     test(`GET ${path} returns 200`, async ({ request }) => {
       const res = await request.get(path, { maxRedirects: 0 });
       expect(res.status()).toBe(200);
     });
   }
 
-  const placeholders = [
-    { path: '/ai', heading: 'AI' },
-  ];
-  for (const { path, heading } of placeholders) {
-    test(`${path} is a "Coming soon" placeholder with h1 "${heading}"`, async ({ page }) => {
-      await page.goto(path);
-      const h1 = page.getByRole('heading', { level: 1 });
-      await expect(h1).toHaveCount(1);
-      await expect(h1).toHaveText(heading, { useInnerText: true });
-      await expect(page.getByText('Coming soon').first()).toBeVisible();
-      await expect(page).toHaveTitle(/Coming soon/);
-    });
-  }
+  // No surface is a "Coming soon" placeholder any more: ai., marketplace., gigs. and chat. all ship real pages.
 
   test('/gigs is the gigs home with h1 "Gigs" (no longer a placeholder)', async ({ page }) => {
     await page.goto('/gigs');
@@ -57,7 +45,8 @@ test.describe('path-prefix mode routing', () => {
     await expect(page).not.toHaveTitle(/Coming soon/);
   });
 
-  for (const path of ['/dashboard', '/chat']) {
+  // /ai is the signed-in control panel (src/views/ai), no longer a placeholder.
+  for (const path of ['/dashboard', '/chat', '/ai', '/ai/secrets']) {
     test(`signed-out ${path} lands on this app's /sign-in, not a Clerk host`, async ({ request, page }) => {
       const clerkHost = /accounts\.dev$|(^|\.)clerk\./;
       const finalUrl = await resolveRedirects(request, path);

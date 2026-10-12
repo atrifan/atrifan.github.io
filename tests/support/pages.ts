@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  */
 
 /**
- * Pages checked in every theme and viewport. /chat and /dashboard need auth and land on /sign-in.
+ * Pages checked in every theme and viewport. /chat, /dashboard and /ai need auth and land on /sign-in.
  * The gigs pages show live data, so they have their own seeded specs (tests/{a11y,visual}/gigs.*.spec.ts,
  * run by `npm run test:e2e:gigs`).
  */
@@ -29,7 +29,7 @@ const THIRD_PARTY = /(iubenda|googletagmanager|google-analytics|googlesyndicatio
 export async function openSettled(page: Page, path: string): Promise<void> {
   await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
   await page.goto(path, { waitUntil: 'load' });
-  if (path === '/chat' || path === '/dashboard') {
+  if (path === '/chat' || path === '/dashboard' || path === '/ai') {
     await page.waitForURL(/\/sign-in/, { timeout: 30_000 });
   }
   await page.locator('#main').waitFor({ state: 'visible' });

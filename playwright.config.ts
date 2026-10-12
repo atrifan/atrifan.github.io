@@ -90,6 +90,15 @@ export default defineConfig({
       use: desktop,
     },
     {
+      // tests/live/*.spec.ts: the ai. panel against the real Tex extension + native host. Opt-in: skipped
+      // unless AI_EXTENSION_DIR and AI_EXTENSION_PROFILE are set (see the spec's header).
+      name: 'live-extension',
+      dependencies: ['setup'],
+      testMatch: /live\/.*\.spec\.ts$/,
+      timeout: 120_000,
+      use: desktop,
+    },
+    {
       name: 'surface-ai',
       testMatch: /\.surface-ai\.spec\.ts$/,
       use: { ...desktop, baseURL: `http://localhost:${AI_PORT}` },

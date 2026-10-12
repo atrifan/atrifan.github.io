@@ -8,19 +8,20 @@ import { blockThirdParty, isSurfaceNotFoundBody, keepPageOnLocalhost, PRIMARY_NA
  */
 
 test.describe('ai surface routing', () => {
-  test('GET / returns 200', async ({ request }) => {
-    const res = await request.get('/', { maxRedirects: 0 });
-    expect(res.status()).toBe(200);
-  });
-
-  test('"/" renders the AI placeholder via rewrite (URL stays "/")', async ({ page }) => {
-    await blockThirdParty(page);
-    await keepPageOnLocalhost(page);
-    await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('AI', { useInnerText: true });
-    await expect(page.getByText('Coming soon').first()).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe('/');
-  });
+  // "/" is the control panel (rewritten to /ai, signed-in only): a signed-out visitor is sent to the hub's
+  // sign-in. The hub host (tulzo.test) does not resolve, so that navigation is only recorded.
+  for (const path of ['/', '/secrets']) {
+    test(`signed-out ${path} is sent to the hub sign-in`, async ({ page }) => {
+      await blockThirdParty(page);
+      // Redirect hops are not routable, so the navigation requests are observed instead.
+      const toHub: string[] = [];
+      page.on('request', (req) => {
+        if (req.isNavigationRequest() && new URL(req.url()).hostname.endsWith('tulzo.test')) toHub.push(req.url());
+      });
+      await page.goto(path).catch(() => {});
+      await expect.poll(() => toHub[0] ?? '', { timeout: 30_000 }).toMatch(/^https:\/\/tulzo\.test\/sign-in/);
+    });
+  }
 
   test('GET /ai is a 308 to "/"', async ({ request }) => {
     const res = await request.get('/ai', { maxRedirects: 0 });
@@ -73,10 +74,10 @@ test.describe('ai surface routing', () => {
     expect(res.status()).not.toBe(404);
   });
 
-  test('shell nav on "/" marks AI current and links to absolute surface URLs', async ({ page }) => {
+  test('shell nav (on another surface\'s 404 page) marks AI current and links to absolute surface URLs', async ({ page }) => {
     await blockThirdParty(page);
     await keepPageOnLocalhost(page);
-    await page.goto('/');
+    await page.goto('/marketplace');
     const nav = page.getByRole('navigation', { name: 'Primary' });
     const expected: Record<(typeof PRIMARY_NAV)[number], string> = {
       AI: 'https://ai.tulzo.test/',

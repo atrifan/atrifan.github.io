@@ -23,7 +23,8 @@ alwaysApply: true
 app/                    # Next.js App Router
 ├── api/                # API routes (mcp, marketplace, oauth, plugin, packages, billing, webhooks, …)
 ├── page.tsx pricing/ sign-in/ sign-up/   # hub pages
-├── dashboard/          # control panel (ai surface, moves to app/(ai)/ai later)
+├── (ai)/ai/            # the ai. control panel: layout.tsx + [[...tab]]/page.tsx (one URL per section)
+├── dashboard/          # /dashboard redirects to the ai surface; admin/packages is the package admin
 ├── ai/ marketplace/ gigs/ chat/          # surface homes under their prefix (see surfaces-and-design)
 ├── robots.txt/ sitemap.ts icon.svg opengraph-image.tsx
 ├── layout.tsx providers.tsx              # no-flash theme script, Clerk + Spectrum + AppShell
@@ -32,7 +33,7 @@ src/
 ├── components/         # shell/AppShell, theme/, brand/ (TulzoMark, SurfaceIcons), AdBanner
 ├── config/             # ai-tokens.config.ts (⭐ models/pricing), tools-definitions.ts, billing.config.ts
 ├── lib/                # surface-routing, surface-url, theme, seo, mcp-client, supabase-services, marketplace-service, admin
-├── views/              # Page components (HomePage, PricingPage, ControlPanelPage, PackageAdminPage, RemoteChatPage, remote-chat/)
+├── views/              # Page components (HomePage, PricingPage, PackageAdminPage, RemoteChatPage, remote-chat/, ai/ = control panel tabs)
 └── types/supabase.ts   # DB types
 
 styles/tokens.css       # design tokens (light/dark); styles/globals.css: reset + shared classes
@@ -40,7 +41,7 @@ styles/tokens.css       # design tokens (light/dark); styles/globals.css: reset 
 supabase/migrations/    # Schema (run in order)
 ```
 
-The live control panel is `src/views/ControlPanelPage.tsx`, mounted at `/dashboard`. Views no `app/` page
+The control panel is `src/views/ai/*` (one `*Tab.tsx` per section, shared state in `useControlPanelData`), served at `/ai/<section>` (`ai.tulzo.online/<section>`). Views no `app/` page
 reaches get deleted, not kept around.
 
 ## Path aliases

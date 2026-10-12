@@ -41,11 +41,6 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
     '/api/plugin/devices',
     '/api/plugin/presence',
     '/api/plugin/version',
-    '/api/packages',
-    '/api/marketplace/publisher',
-    '/api/admin/downloads',
-    // The control panel's Budget tab still buys credits here until it moves to hub /credits.
-    '/api/billing/checkout',
   ],
   marketplace: ['/api/marketplace', '/api/packages', '/api/admin/downloads'],
   // Stripe Connect onboarding (/api/connect) and the billing webhook stay on the hub.
@@ -53,8 +48,8 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 
-/** Pages that require a signed-in user. */
-const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
+/** Pages that require a signed-in user. `/ai` is the control panel (rewritten from ai. `/x`). */
+const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/ai', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
 const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa'];
