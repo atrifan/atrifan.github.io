@@ -54,7 +54,8 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
   const [grant, setGrant] = useState<GrantView | null>(null);
-  const info = planInfo(plan);
+  // The subscription the grant ledger saw wins over a stale session claim.
+  const info = planInfo(grant?.plan ?? plan);
 
   useEffect(() => {
     let alive = true;

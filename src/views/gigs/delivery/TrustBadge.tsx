@@ -8,7 +8,7 @@
  *  - averageRating: their average overall rating (1–5), or null.
  *  - level:         'new' | 'building' | 'established' (shown as a title hint).
  *
- * With neither a score nor reviews it reads "New on Tulzo". With a score it shows
+ * With neither a score (beyond level 'new') nor reviews it reads "New on Tulzo". With a score it shows
  * "Trust 80" (accessible name "Trust score 80 out of 100"); reviews add "4.8 ★ (12)".
  */
 import '@/styles/gigs-delivery.css';
@@ -35,7 +35,8 @@ function Shield() {
 }
 
 export function TrustBadge({ score, reviewCount = 0, averageRating = null, level }: TrustBadgeProps) {
-  const hasScore = typeof score === 'number' && Number.isFinite(score);
+  // A score computed from no counted history is just the prior: show it as new.
+  const hasScore = typeof score === 'number' && Number.isFinite(score) && level !== 'new';
   const hasReviews = reviewCount > 0 && typeof averageRating === 'number';
   if (!hasScore && !hasReviews) {
     return (

@@ -137,7 +137,7 @@ export function AdminDisputesView() {
           <h2 id="disputes-list-title" className="visually-hidden">
             {filter === 'open' ? 'Open disputes' : 'Resolved disputes'}
           </h2>
-          <ul className="link-list">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             {items.map((it) => (
               <li key={it.id}>
                 <button
@@ -149,7 +149,7 @@ export function AdminDisputesView() {
                 >
                   <span>{it.job_title ?? 'Untitled job'}</span>
                   <span className="muted" style={{ color: 'inherit' }}>
-                    {`${CATEGORY_LABELS[it.category] ?? it.category} · ${SOURCE_LABELS[it.source]} · ${formatDate(it.created_at)}`}
+                    {[CATEGORY_LABELS[it.category] ?? it.category, it.source === 'customer' ? SOURCE_LABELS.customer : null, formatDate(it.created_at)].filter(Boolean).join(' · ')}
                   </span>
                 </button>
               </li>

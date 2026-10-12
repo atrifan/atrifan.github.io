@@ -112,9 +112,9 @@ export async function afterAcceptance(contract: Phase5ContractRow, acceptance: A
 }
 
 async function assertAcceptable(contract: Phase5ContractRow): Promise<void> {
-  if (contract.status !== 'delivered') throw new JobsError('not_acceptable', 409, `The contract is ${contract.status}, not delivered`);
   const [disputes, payments, sub] = await Promise.all([listDisputes(contract.id), listPayments(contract.id), deliveredSubmission(contract.id)]);
-  if (openDisputes(disputes).length > 0) throw new JobsError('dispute_open', 409, 'A dispute is open on this contract');
+  if (contract.status === 'disputed' || openDisputes(disputes).length > 0) throw new JobsError('dispute_open', 409, 'A dispute is open on this contract');
+  if (contract.status !== 'delivered') throw new JobsError('not_acceptable', 409, `The contract is ${contract.status}, not delivered`);
   if (!paymentSucceeded(payments)) throw new JobsError('not_acceptable', 409, 'The payment has not gone through');
   if (!sub?.delivery_unlocked_at) throw new JobsError('delivery_locked', 409, 'QA has not validated a delivery yet');
 }

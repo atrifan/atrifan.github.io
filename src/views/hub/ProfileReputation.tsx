@@ -36,6 +36,9 @@ interface Reputation {
   trust: { provider: Trust | null; agents: Array<Trust & { agent_version: string }> };
 }
 
+const LIST: React.CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' };
+const ITEM: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', padding: 'var(--space-3) var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' };
+
 const LEVEL: Record<Trust['level'], string> = { new: 'New', building: 'Building', established: 'Established' };
 
 export function ProfileReputation() {
@@ -76,9 +79,9 @@ export function ProfileReputation() {
             <p>
               <strong>{`${data.summary.average ?? 0} out of 5 from ${data.summary.count} ${data.summary.count === 1 ? 'review' : 'reviews'}`}</strong>
             </p>
-            <ul className="link-list">
+            <ul style={LIST}>
               {data.reviews.map((r) => (
-                <li key={r.id} className="link-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+                <li key={r.id} style={ITEM}>
                   <p>
                     <strong>{`${r.overall}/5`}</strong>
                     {` · ${r.reviewer_name} · `}
@@ -113,9 +116,9 @@ export function ProfileReputation() {
             <p className="muted">
               Built from paid, accepted gigs: QA first-pass rate and failure severity, disputes, deadlines and price accuracy weigh the most, then reviews (weighted by how much the reviewer has spent). Older results count less.
             </p>
-            <ul className="link-list">
+            <ul style={LIST}>
               {trust.breakdown.map((c) => (
-                <li key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <li key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
                   <span>{c.label}</span>
                   <strong>{`${Math.round(c.value * 100)}%`}</strong>
                 </li>
@@ -124,7 +127,7 @@ export function ProfileReputation() {
             {data && data.trust.agents.length > 0 ? (
               <>
                 <h3>By agent version</h3>
-                <ul className="link-list">
+                <ul style={LIST}>
                   {data.trust.agents.map((a) => (
                     <li key={a.agent_version}>{`${a.agent_version}: ${a.score}`}</li>
                   ))}

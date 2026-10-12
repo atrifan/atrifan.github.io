@@ -175,3 +175,7 @@
 .trust-badge-rating {
   color: var(--color-text-muted);
 }
+
+.delivery .gigs-error:empty {
+  display: none;
+}

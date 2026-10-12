@@ -39,14 +39,14 @@ export default async function Page({ params }: Props) {
   const [trust, ratings, counterpartName] = await Promise.all([
     trustForPrincipals([counterpartPrincipal]).catch(() => new Map()),
     ratingsForPrincipals([counterpartPrincipal]).catch(() => new Map()),
-    displayName(counterpartUser, role === 'customer' ? 'the provider' : 'the customer').catch(() => (role === 'customer' ? 'the provider' : 'the customer')),
+    displayName(counterpartUser, '').catch(() => ''),
   ]);
   const t = trust.get(counterpartPrincipal);
   const r = ratings.get(counterpartPrincipal);
   const base = gigsConfig().base;
 
   return (
-    <div className="page gigs-page">
+    <div className="page gigs-page gigs-narrow">
       <Link className="gigs-back" href={gigsHref(base, `/contracts/${contract.id}`)}>
         ← Back to the contract
       </Link>
@@ -54,13 +54,11 @@ export default async function Page({ params }: Props) {
         <h1 className="gigs-title">Delivery</h1>
         <p className="gigs-lede">{view.contract.job_title}</p>
         <p className="gig-labels">
-          <span className="gig-label">{role === 'customer' ? `Provider: ${counterpartName}` : `Customer: ${counterpartName}`}</span>
+          <span className="gig-label">{`${role === 'customer' ? 'Provider' : 'Customer'}${counterpartName ? `: ${counterpartName}` : ''}`}</span>
           <TrustBadge score={t?.score ?? null} level={t?.level} reviewCount={r?.count ?? 0} averageRating={r?.average ?? null} />
         </p>
       </header>
-      <div className="gigs-narrow">
-        <DeliveryPanel contractId={contract.id} initial={view} counterpartName={counterpartName} />
-      </div>
+      <DeliveryPanel contractId={contract.id} initial={view} counterpartName={counterpartName || undefined} />
     </div>
   );
 }
