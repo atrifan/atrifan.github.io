@@ -24,7 +24,10 @@ loadEnv({ path: '.env.local' });
  * it is `npm run start`, so run `npm run build` first.
  * PLAYWRIGHT_BASE_URL overrides the main server URL (then no server is started for it).
  */
-const PORT = 3000;
+// PW_PORT / PW_AI_PORT / PW_HUB_PORT move the servers (e.g. parallel worktrees on one machine).
+const PORT = Number(process.env.PW_PORT) || 3000;
+const AI_PORT = Number(process.env.PW_AI_PORT) || 3001;
+const HUB_PORT = Number(process.env.PW_HUB_PORT) || 3002;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`;
 const CI = !!process.env.CI;
 
@@ -89,12 +92,12 @@ export default defineConfig({
     {
       name: 'surface-ai',
       testMatch: /\.surface-ai\.spec\.ts$/,
-      use: { ...desktop, baseURL: 'http://localhost:3001' },
+      use: { ...desktop, baseURL: `http://localhost:${AI_PORT}` },
     },
     {
       name: 'surface-hub',
       testMatch: /\.surface-hub\.spec\.ts$/,
-      use: { ...desktop, baseURL: 'http://localhost:3002' },
+      use: { ...desktop, baseURL: `http://localhost:${HUB_PORT}` },
     },
   ],
   webServer: [
@@ -109,6 +112,6 @@ export default defineConfig({
           },
         ]),
     // Against an external server (PLAYWRIGHT_BASE_URL, e.g. the gigs runner) the surface servers aren't started.
-    ...(process.env.PLAYWRIGHT_BASE_URL ? [] : [surfaceServer('ai', 3001), surfaceServer('hub', 3002)]),
+    ...(process.env.PLAYWRIGHT_BASE_URL ? [] : [surfaceServer('ai', AI_PORT), surfaceServer('hub', HUB_PORT)]),
   ],
 });

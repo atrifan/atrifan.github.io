@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ADS_CONFIG } from '../config/ads.config';
+import { useConsent } from './consent/ConsentScripts';
 
 declare global {
   interface Window {
@@ -12,11 +13,13 @@ declare global {
 /**
  * The single footer ad slot. Small (max 100px tall), reserved space so it
  * never shifts the layout, and lazy: the AdSense <ins> is only created once
- * the slot scrolls into view. The AppShell decides whether to render it.
+ * the slot scrolls into view and the visitor has accepted marketing cookies. The
+ * AppShell decides whether to render it.
  */
 export function AdBanner({ slot = ADS_CONFIG.footerSlot }: { slot?: string }) {
   const ref = useRef<HTMLElement>(null);
   const [inView, setInView] = useState(false);
+  const { ads } = useConsent();
 
   useEffect(() => {
     const el = ref.current;
@@ -35,19 +38,20 @@ export function AdBanner({ slot = ADS_CONFIG.footerSlot }: { slot?: string }) {
   }, [inView]);
 
   useEffect(() => {
-    if (!inView) return;
+    if (!inView || !ads) return;
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {
       // Blocked or not loaded: the slot stays empty.
     }
-  }, [inView]);
+  }, [inView, ads]);
 
   if (!ADS_CONFIG.enabled) return null;
+  const show = inView && ads;
 
   return (
     <aside ref={ref} className="ad-slot" data-ad-slot={slot} aria-label="Advertisement">
-      {inView && (
+      {show && (
         <ins
           className="adsbygoogle"
           style={{ display: 'block', width: '100%', height: '100%' }}

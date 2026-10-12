@@ -250,6 +250,11 @@ ol[role='list'] {
   min-height: var(--touch-target);
 }
 
+.user-button-pending {
+  width: var(--touch-target);
+  height: var(--touch-target);
+}
+
 .theme-toggle {
   display: inline-flex;
   padding: 2px;
@@ -371,8 +376,51 @@ ol[role='list'] {
   color: var(--color-text-muted);
 }
 
-.footer-links a:hover {
+.footer-links a:hover,
+.footer-link-button:hover {
   color: var(--color-text);
+}
+
+.footer-link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/*
+ * iubenda consent bar: a bottom sheet, never a full-screen modal. Its TCF text is fixed by
+ * iubenda, so the bar is capped in height and scrolls; the buttons stay inside it.
+ */
+#iubenda-cs-banner {
+  top: auto !important;
+  bottom: 0 !important;
+  height: auto !important;
+  font-family: var(--font-sans) !important;
+}
+
+html body #iubenda-cs-banner.iubenda-cs-default .iubenda-cs-container {
+  max-height: min(42vh, 21rem) !important;
+  overflow-y: auto !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+html body #iubenda-cs-banner.iubenda-cs-default #iubenda-cs-paragraph,
+html body #iubenda-cs-banner.iubenda-cs-default #iubenda-cs-paragraph .iub-p {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+@media (min-width: 768px) {
+  html body #iubenda-cs-banner.iubenda-cs-default .iubenda-cs-container {
+    max-height: 13rem !important;
+  }
 }
 
 .ad-slot {

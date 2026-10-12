@@ -78,3 +78,10 @@ describe('surfaceUrl edge cases (from mutation testing)', () => {
     expect(surfaceUrl('ai', '/keys/', { rootDomain: '' })).toBe('/ai/keys/');
   });
 });
+
+describe('the hub is the apex domain', () => {
+  it('never adds www or a subdomain for the hub', () => {
+    expect(surfaceUrl('hub', '/', { rootDomain: 'tulzo.online' })).toBe('https://tulzo.online/');
+    expect(surfaceUrl('hub', '/credits', { rootDomain: 'tulzo.online' })).toBe('https://tulzo.online/credits');
+  });
+});

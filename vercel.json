@@ -8,18 +8,5 @@
       "path": "/api/notifications/dispatch",
       "schedule": "*/5 * * * *"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "tulzo.online"
-        }
-      ],
-      "destination": "https://www.tulzo.online/:path*",
-      "permanent": true
-    }
   ]
 }

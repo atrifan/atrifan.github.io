@@ -53,11 +53,11 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 
-/** Pages that require a signed-in user (unchanged from before surfaces). */
-const PROTECTED_PREFIXES = ['/dashboard', '/chat'];
+/** Pages that require a signed-in user. */
+const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/profile', '/credits', '/admin'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
-const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits'];
+const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa'];
 
 /** Auth pages; on non-hub surfaces they redirect to the hub. */
 const AUTH_PREFIXES = ['/sign-in', '/sign-up'];
@@ -151,4 +151,27 @@ export function activeSurface({ surface, pathname }: { surface: Surface | null; 
   if (surface) return surface;
   if (underPrefix(pathname, '/dashboard')) return 'ai';
   return prefixOwner(pathname) ?? 'hub';
+}
+
+/**
+ * `www.<root>` → the apex (the hub lives at the root domain). Returns the redirect URL
+ * (middleware answers 308), or null for any other host or without a root domain.
+ */
+export function wwwRedirect({
+  host,
+  pathAndQuery,
+  rootDomain,
+}: {
+  host: string | null | undefined;
+  pathAndQuery: string;
+  rootDomain: string | undefined;
+}): string | null {
+  const root = (rootDomain ?? '').trim().replace(/\/+$/, '');
+  if (!root || !host) return null;
+  const scheme = /^https?:\/\//.exec(root)?.[0];
+  const apex = (scheme ? root.slice(scheme.length) : root).toLowerCase();
+  const apexHost = apex.replace(/:\d+$/, '');
+  const reqHost = host.trim().toLowerCase().replace(/:\d+$/, '');
+  if (reqHost !== `www.${apexHost}`) return null;
+  return surfaceUrl('hub', pathAndQuery, { rootDomain: root });
 }

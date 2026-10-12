@@ -4,11 +4,49 @@ import { Providers } from './providers';
 import { resolveSurface } from '@/src/lib/surface-routing';
 import { absoluteSurfaceUrl } from '@/src/lib/site-url';
 import { noFlashThemeScript } from '@/src/lib/theme';
+import { iubendaConfig } from '@/src/lib/consent';
+import { ConsentScripts } from '@/src/components/consent/ConsentScripts';
 import '@/styles/tokens.css';
 import '@/styles/globals.css';
 
 const surface = resolveSurface(process.env.TULZO_SURFACE);
 const siteUrl = absoluteSurfaceUrl(surface ?? 'hub', '/');
+const siteHost = new URL(siteUrl).host;
+
+/**
+ * iubenda cookie banner: a slim bottom bar naming this surface's domain (src/lib/consent.ts).
+ * Every page view with a stored preference (and every new choice) publishes it on
+ * window.__tulzoConsent + a `tulzo:consent` event, which ConsentScripts and AdBanner read.
+ */
+/** NEXT_PUBLIC_ROOT_DOMAIN without scheme or port (consent shared by every surface), or ''. */
+function rootDomainHost(): string {
+  const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? '').trim().replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
+  return root;
+}
+
+function iubendaBootScript(host: string): string {
+  const config = JSON.stringify(iubendaConfig({ siteHost: host, consentDomain: rootDomainHost() })).replace(/</g, '\\u003c');
+  return `
+    (function () {
+      var publish = function (preference) {
+        window.__tulzoConsent = preference;
+        window.dispatchEvent(new CustomEvent('tulzo:consent', { detail: preference }));
+      };
+      var cfg = ${config};
+      cfg.callback = { onPreferenceExpressed: publish };
+      window._iub = window._iub || [];
+      window._iub.csConfiguration = cfg;
+      var gpp = document.createElement('script');
+      gpp.src = 'https://cdn.iubenda.com/cs/gpp/stub.js';
+      document.head.appendChild(gpp);
+      var cs = document.createElement('script');
+      cs.src = 'https://cdn.iubenda.com/cs/iubenda_cs.js';
+      cs.async = true;
+      cs.charset = 'UTF-8';
+      document.head.appendChild(cs);
+    })();
+  `;
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -79,27 +117,6 @@ export default function RootLayout({
         {/* Google AdSense - account verification only, ads are manually rendered */}
         <meta name="google-adsense-account" content="ca-pub-7299057534028491" />
 
-        {/* Google Analytics - using next/script to avoid hydration mismatch */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-QSNTL3PGRJ"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-QSNTL3PGRJ');
-          `}
-        </Script>
-
-        {/* Google AdSense - loads the adsbygoogle library for manual ad rendering */}
-        <Script
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7299057534028491"
-          strategy="afterInteractive"
-          crossOrigin="anonymous"
-        />
-
         {/* Suppress hydration warnings from browser extensions */}
         <Script id="extension-cleanup" strategy="beforeInteractive">
           {`
@@ -138,56 +155,10 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <Providers surface={surface}>{children}</Providers>
 
-        {/* iubenda - dynamically loaded based on domain */}
-        <Script id="iubenda-dynamic" strategy="afterInteractive">
-          {`
-            (function() {
-              var hostname = window.location.hostname;
-              console.log('[iubenda] hostname:', hostname);
-              if (hostname === 'tulzo.online' || hostname === 'www.tulzo.online' || hostname.endsWith('.tulzo.online')) {
-                // Load tulzo.online widget
-                console.log('[iubenda] Loading tulzo.online widget');
-                var widgetScript = document.createElement('script');
-                widgetScript.src = 'https://embeds.iubenda.com/widgets/2569ce59-a2eb-4a6d-8767-523fba42cce4.js';
-                document.body.appendChild(widgetScript);
-              } else {
-                // Set config first for other domains
-                var _iub = _iub || [];
-                _iub.csConfiguration = {
-                  "siteId": 3856498,
-                  "cookiePolicyId": 11077306,
-                  "lang": "en",
-                  "storage": { "useSiteId": true },
-                  "banner": {
-                    "acceptButtonDisplay": true,
-                    "closeButtonDisplay": false,
-                    "customizeButtonDisplay": true,
-                    "explicitWithdrawal": true,
-                    "listPurposes": true,
-                    "position": "float-bottom-center",
-                    "rejectButtonDisplay": true,
-                    "showTitle": false,
-                    "backgroundOverlay": true
-                  }
-                };
-                window._iub = _iub;
-
-                // Then load scripts
-                var autoblock = document.createElement('script');
-                autoblock.src = 'https://cs.iubenda.com/autoblocking/3856498.js';
-                document.head.appendChild(autoblock);
-
-                var gpp = document.createElement('script');
-                gpp.src = '//cdn.iubenda.com/cs/gpp/stub.js';
-                document.head.appendChild(gpp);
-
-                var iubendaCs = document.createElement('script');
-                iubendaCs.src = '//cdn.iubenda.com/cs/iubenda_cs.js';
-                iubendaCs.async = true;
-                document.head.appendChild(iubendaCs);
-              }
-            })();
-          `}
+        {/* Consent first: GA and AdSense load only after the visitor agrees (src/components/consent). */}
+        <ConsentScripts />
+        <Script id="iubenda-cs" strategy="afterInteractive">
+          {iubendaBootScript(siteHost)}
         </Script>
       </body>
     </html>

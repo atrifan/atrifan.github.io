@@ -6,7 +6,7 @@ import { blockThirdParty, isSurfaceNotFoundBody } from './surface-helpers';
  * Every surface lives under its own path prefix on one host.
  */
 
-const ORIGIN = 'http://localhost:3000';
+const ORIGIN = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${process.env.PW_PORT || 3000}`;
 
 /**
  * Follow redirects by hand, but only while they stay on this app's origin.

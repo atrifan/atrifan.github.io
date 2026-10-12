@@ -14,14 +14,14 @@ const PRIVATE_SURFACES: readonly Surface[] = ['ai', 'chat'];
 
 /** Public pages per surface, as surface-local paths. */
 const PUBLIC_PAGES: Record<Surface, readonly string[]> = {
-  hub: ['/', '/pricing'],
+  hub: ['/', '/pricing', '/docs', '/legal'],
   ai: [],
   marketplace: ['/'],
   gigs: ['/'],
   chat: [],
 };
 
-const HUB_DISALLOW = ['/api/', '/dashboard', '/sign-in', '/sign-up', '/profile', '/credits'];
+const HUB_DISALLOW = ['/api/', '/dashboard', '/sign-in', '/sign-up', '/profile', '/credits', '/admin'];
 
 export function robotsFor(surface: Surface | null, env: Env = process.env): MetadataRoute.Robots {
   if (surface && PRIVATE_SURFACES.includes(surface)) {

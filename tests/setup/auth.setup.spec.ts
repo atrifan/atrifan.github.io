@@ -7,19 +7,26 @@ import { E2E_USERS, ensureE2EUsers, hasClerkTestEnv, storageStatePath, type E2ER
  * (git-ignored). Specs that need a signed-in user use
  * `test.use({ storageState: storageStatePath('customer') })` and depend on the
  * `setup` project. Skips when the Clerk development keys are not configured.
+ *
+ * Each role signs in in its own browser context, and the session is never signed
+ * out: signing out revokes it in Clerk, which leaves the saved state with a
+ * short-lived __session JWT the server still accepts for a minute while the
+ * browser's Clerk client already sees a signed-out user.
  */
 setup.describe.configure({ mode: 'serial' });
 
-setup('clerk users and sessions', async ({ page }) => {
+setup('clerk users and sessions', async ({ browser }) => {
   setup.skip(!hasClerkTestEnv(), 'Clerk development keys not configured');
   await clerkSetup();
   await ensureE2EUsers();
   for (const role of Object.keys(E2E_USERS) as E2ERole[]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
     await page.goto('/');
     await clerk.signIn({ page, emailAddress: E2E_USERS[role].email });
     await page.goto('/');
-    await page.context().storageState({ path: storageStatePath(role) });
-    await clerk.signOut({ page });
-    await page.context().clearCookies();
+    await page.waitForFunction(() => !!(window as unknown as { Clerk?: { user?: unknown } }).Clerk?.user);
+    await context.storageState({ path: storageStatePath(role) });
+    await context.close();
   }
 });

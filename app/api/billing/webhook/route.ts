@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         type: 'deposit',
         amount: parseFloat(rawDepositAmount),
         stripe_session_id: session.id,
-        description: `AI Token Pool - $${rawDepositAmount}`,
+        description: `Credit top-up ($${rawDepositAmount})`,
       });
 
       console.log(`[billing/webhook] Deposited $${rawDepositAmount} for user ${clerkUserId}`);
