@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NOTIFICATION_TYPES } from '@/src/lib/notify/types';
-import { PREFERENCE_GROUPS, PREFERENCE_LABELS, groupPreferences } from '@/src/lib/notify/preference-groups';
+import { PREFERENCE_GROUPS, PREFERENCE_LABELS, groupPreferences, groupTypes } from '@/src/lib/notify/preference-groups';
 
 describe('PREFERENCE_GROUPS', () => {
   it('puts every notification type in exactly one group', () => {
@@ -9,8 +9,11 @@ describe('PREFERENCE_GROUPS', () => {
     expect(new Set(grouped).size).toBe(grouped.length);
   });
 
-  it('groups are Gigs, Payments, QA, Account, in that order', () => {
-    expect(PREFERENCE_GROUPS.map((g) => g.title)).toEqual(['Gigs', 'Payments', 'QA', 'Account']);
+  it('groups are Gigs, Payments, QA, Account, Marketplace, Admin, in that order', () => {
+    expect(PREFERENCE_GROUPS.map((g) => g.title)).toEqual(['Gigs', 'Payments', 'QA', 'Account', 'Marketplace', 'Admin']);
+    expect(groupTypes('marketplace')).toEqual(['package_installed', 'package_approved', 'package_rejected']);
+    expect(groupTypes('admin')).toEqual(['submission_awaiting_qa']);
+    expect(groupTypes('nope')).toEqual([]);
   });
 
   it('every type has a friendly label, all different', () => {
@@ -26,18 +29,30 @@ describe('groupPreferences', () => {
       { type: 'bid_received', emailEnabled: false },
       { type: 'payout_sent', emailEnabled: false },
     ]);
-    expect(groups.map((g) => g.id)).toEqual(['gigs', 'payments', 'qa', 'account']);
+    expect(groups.map((g) => g.id)).toEqual(['gigs', 'payments', 'qa', 'account', 'marketplace', 'admin']);
     const all = groups.flatMap((g) => g.items);
     expect(all).toHaveLength(NOTIFICATION_TYPES.length);
     expect(all.find((i) => i.type === 'bid_received')).toEqual({ type: 'bid_received', label: PREFERENCE_LABELS.bid_received, emailEnabled: false });
     expect(all.find((i) => i.type === 'payout_sent')?.emailEnabled).toBe(false);
-    expect(all.filter((i) => i.emailEnabled)).toHaveLength(NOTIFICATION_TYPES.length - 2);
+    // package_installed is the one email that is off unless switched on
+    expect(all.find((i) => i.type === 'package_installed')?.emailEnabled).toBe(false);
+    expect(all.filter((i) => i.emailEnabled)).toHaveLength(NOTIFICATION_TYPES.length - 3);
   });
 
   it('ignores types it does not know', () => {
     const all = groupPreferences([{ type: 'newsletter', emailEnabled: false }]).flatMap((g) => g.items);
     expect(all.map((i) => i.type)).not.toContain('newsletter');
-    expect(all.every((i) => i.emailEnabled)).toBe(true);
+    expect(all.filter((i) => !i.emailEnabled).map((i) => i.type)).toEqual(['package_installed']);
+  });
+
+  it('a group is in-app on unless every type in it was switched off', () => {
+    const groups = groupPreferences([
+      { type: 'payment_confirmed', emailEnabled: true, inAppEnabled: false },
+      ...['submission_received', 'qa_verdict'].map((type) => ({ type, emailEnabled: true, inAppEnabled: false })),
+    ]);
+    const byId = Object.fromEntries(groups.map((g) => [g.id, g.inAppEnabled]));
+    expect(byId).toEqual({ gigs: true, payments: true, qa: false, account: true, marketplace: true, admin: true });
+    expect(groupPreferences([]).every((g) => g.inAppEnabled)).toBe(true);
   });
 
   it('keeps the group order of PREFERENCE_GROUPS inside each group', () => {

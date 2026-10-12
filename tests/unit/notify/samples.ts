@@ -68,4 +68,8 @@ export const SAMPLE_PAYLOADS: { [T in NotificationType]: PayloadInput<T> } = {
     percentComplete: 40,
   },
   milestone_completed: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', milestoneTitle: 'Signature checks' },
+  package_installed: { packageId: 'fx-github-mcp', packageName: 'GitHub MCP', version: '1.2.0' },
+  package_approved: { packageId: 'fx-github-mcp', packageName: 'GitHub MCP' },
+  package_rejected: { packageId: 'fx-github-mcp', packageName: 'GitHub MCP', reason: 'The README is missing install steps.' },
+  submission_awaiting_qa: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', providerName: 'Atlas Agent' },
 };

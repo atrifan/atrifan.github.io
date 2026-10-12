@@ -3,13 +3,30 @@ import { NOTIFICATION_TYPES, type Contact, type NotificationType, type Preferenc
 export type SkipReason = 'no_contact' | 'no_email' | 'email_unverified' | 'unsubscribed';
 export type GateDecision = { send: true } | { send: false; reason: SkipReason };
 
-/** Every type is on by default; a stored row overrides it. */
+/** Types whose email is off until the user switches it on (high-volume, the bell covers them). */
+export const EMAIL_OFF_BY_DEFAULT: readonly NotificationType[] = ['package_installed'];
+
+/** Email: every type is on by default except EMAIL_OFF_BY_DEFAULT; a stored choice overrides it. */
 export function resolvePreferences(rows: PreferenceRow[]): Record<NotificationType, boolean> {
-  const out = Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, true])) as Record<NotificationType, boolean>;
+  const out = Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, !EMAIL_OFF_BY_DEFAULT.includes(t)])) as Record<NotificationType, boolean>;
   for (const row of rows) {
-    if (row.type in out) out[row.type] = row.emailEnabled;
+    if (row.type in out && typeof row.emailEnabled === 'boolean') out[row.type] = row.emailEnabled;
   }
   return out;
+}
+
+/** In-app: every type is on by default; a stored choice overrides it. */
+export function resolveInAppPreferences(rows: PreferenceRow[]): Record<NotificationType, boolean> {
+  const out = Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, true])) as Record<NotificationType, boolean>;
+  for (const row of rows) {
+    if (row.type in out && typeof row.inAppEnabled === 'boolean') out[row.type] = row.inAppEnabled;
+  }
+  return out;
+}
+
+/** Whether to write the in-app item. Unlike email it needs no contact or verified address. */
+export function gateInApp(rows: PreferenceRow[], type: NotificationType): boolean {
+  return resolveInAppPreferences(rows)[type];
 }
 
 export function gateNotification(contact: Contact | null, rows: PreferenceRow[], type: NotificationType): GateDecision {

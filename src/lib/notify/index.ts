@@ -1,10 +1,11 @@
 /**
- * Email notifications (server-only). Other tracks call:
+ * Notifications (server-only): one enqueue() writes the in-app item and the email. Other tracks call:
  *
  *   import { enqueue } from '@/src/lib/notify';
  *   await enqueue(userId, 'bid_received', { jobId, jobTitle, bidderName, amountCents }, `bid_received:${bidId}`);
  */
-export { enqueue, dispatchQueued, syncContactFromClerk, deleteContact, getNotifyStore, getNotifier } from './notify.ts';
+export { enqueue, dispatchQueued, syncContactFromClerk, deleteContact, getNotifyStore, getNotifier, getInAppStore } from './notify.ts';
+export type { ChannelsResult } from './channels.ts';
 export { createNotifier, unsubscribeUrl } from './notifier.ts';
 export type { Notifier, NotifierDeps, EnqueueResult, DeliverResult, DispatchSummary } from './notifier.ts';
 export { NOTIFICATION_TYPES, NOTIFICATION_LABELS, payloadSchemas, isNotificationType } from './types.ts';
