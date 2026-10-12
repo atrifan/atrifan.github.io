@@ -11,7 +11,7 @@ const ENV = {
   HOME: '/Users/me',
   NODE_OPTIONS: '--max-old-space-size=4096',
   UNSET: undefined,
-};
+} as unknown as NodeJS.ProcessEnv;
 
 describe('playwrightCommand', () => {
   const previous = process.env.PW_DOCKER_IMAGE;
