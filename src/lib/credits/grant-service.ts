@@ -4,16 +4,20 @@
  *
  * Granted once per user per monthly period, from the Clerk subscription webhook
  * (active / renewed) and, as a fallback for missed webhooks, by the daily
- * app/api/cron/credit-grants. The previous grant's unused remainder expires at the next grant;
+ * app/api/cron/credit-grants. The cron covers plan_subscriptions and also asks Clerk for paid
+ * users it has no subscription row for (publicMetadata.plan, else Clerk Billing; see
+ * ./clerk-plans.ts) who have no grant for the current period. The previous grant's unused remainder expires at the next grant;
  * grants whose period ended without a renewal expire in the cron. Bought credits never expire.
  * The math is in ./grants.ts; the SQL functions apply it atomically, guarded on the balance
  * the math was computed from (a concurrent spend makes it retry).
  */
+import { clerkClient } from '@clerk/nextjs/server';
 import { jobsDb } from '../jobs/db';
 import { JobsError, dbError } from '../jobs/errors';
 import { creditValueUsdFromEnv } from '../../config/qa.config';
 import type { PlanKey } from '../plans';
 import { grantRemainingCredits, monthlyCreditsFor, monthlyPeriod, planGrant, type MonthlyPeriod } from './grants';
+import { clerkGrantCandidates, planFromClerkBilling, type ClerkBillingLike, type ClerkUserLike } from './clerk-plans';
 
 interface GrantRow {
   id: string;
@@ -174,8 +178,86 @@ export async function onSubscriptionEvent(input: { userId: string; plan: PlanKey
   return grantForPeriod({ userId: input.userId, plan: input.plan, anchor: input.anchor, now: input.now, source: 'webhook' });
 }
 
-/** The daily cron: grant missing periods for active paid subscriptions, then expire ended grants. */
-export async function runGrantCron(now: Date = new Date()): Promise<{ granted: number; duplicates: number; expired: number; errors: number }> {
+const CLERK_PAGE = 100;
+const CLERK_MAX_USERS = 5000;
+const CLERK_MAX_BILLING_LOOKUPS = 200;
+
+/** Every Clerk user (id, publicMetadata, createdAt), up to CLERK_MAX_USERS. */
+async function clerkUsers(): Promise<ClerkUserLike[]> {
+  const client = await clerkClient();
+  const out: ClerkUserLike[] = [];
+  for (let offset = 0; offset < CLERK_MAX_USERS; offset += CLERK_PAGE) {
+    const page = (await client.users.getUserList({ limit: CLERK_PAGE, offset, orderBy: '+created_at' })) as unknown as
+      | { data: ClerkUserLike[] }
+      | ClerkUserLike[];
+    const users = Array.isArray(page) ? page : page.data;
+    out.push(...users.map((u) => ({ id: u.id, publicMetadata: u.publicMetadata ?? null, createdAt: u.createdAt ?? null })));
+    if (users.length < CLERK_PAGE) break;
+  }
+  return out;
+}
+
+async function clerkBilling(userId: string): Promise<ClerkBillingLike | null> {
+  try {
+    const client = (await clerkClient()) as unknown as { billing?: { getUserBillingSubscription(id: string): Promise<ClerkBillingLike> } };
+    if (!client.billing) return null;
+    return await client.billing.getUserBillingSubscription(userId);
+  } catch {
+    return null; // no subscription (404), or billing not enabled
+  }
+}
+
+export interface ClerkFallbackRun {
+  granted: number;
+  duplicates: number;
+  errors: number;
+}
+
+/**
+ * Paid users per Clerk that plan_subscriptions doesn't cover: grant the current period unless
+ * they already have a live grant. The cycle is anchored on the Clerk Billing period start,
+ * else the previous grant, else when the user signed up.
+ */
+async function grantFromClerk(covered: ReadonlySet<string>, now: Date): Promise<ClerkFallbackRun> {
+  const out: ClerkFallbackRun = { granted: 0, duplicates: 0, errors: 0 };
+  let users: ClerkUserLike[];
+  try {
+    users = await clerkUsers();
+  } catch (err) {
+    console.error('[credits] Clerk user list failed:', err instanceof Error ? err.message : 'error');
+    out.errors += 1;
+    return out;
+  }
+  const { grants, lookups } = clerkGrantCandidates(users, covered);
+  const due: Array<{ userId: string; plan: PlanKey; anchor: Date | null }> = [...grants];
+  for (const userId of lookups.slice(0, CLERK_MAX_BILLING_LOOKUPS)) {
+    const found = planFromClerkBilling(await clerkBilling(userId));
+    if (found) due.push({ userId, ...found });
+  }
+  for (const c of due) {
+    try {
+      const last = await latestGrant(c.userId);
+      if (last && !last.expired_at && new Date(last.period_end).getTime() > now.getTime()) {
+        out.duplicates += 1;
+        continue;
+      }
+      const anchor = c.anchor ?? (last ? new Date(last.period_start) : null);
+      const r = await grantForPeriod({ userId: c.userId, plan: c.plan, anchor, now, source: 'cron' });
+      if (r.status === 'granted') out.granted += 1;
+      else if (r.status === 'duplicate') out.duplicates += 1;
+    } catch (err) {
+      out.errors += 1;
+      console.error('[credits] Clerk fallback grant failed:', err instanceof Error ? err.message : 'error');
+    }
+  }
+  return out;
+}
+
+/**
+ * The daily cron: grant missing periods for active paid subscriptions, then for paid users per
+ * Clerk that have no subscription row, then expire ended grants.
+ */
+export async function runGrantCron(now: Date = new Date()): Promise<{ granted: number; duplicates: number; expired: number; errors: number; clerk: ClerkFallbackRun }> {
   const { data, error } = await jobsDb().from('plan_subscriptions').select('*').in('status', Array.from(ACTIVE)).neq('plan', 'free').limit(5000);
   if (error) throw dbError(error, 'active subscriptions');
   let granted = 0;
@@ -191,8 +273,13 @@ export async function runGrantCron(now: Date = new Date()): Promise<{ granted: n
       console.error('[credits] cron grant failed:', err instanceof Error ? err.message : 'error');
     }
   }
+  // Any plan_subscriptions row (cancelled ones too) means Clerk's webhook reached us and is the
+  // source of truth for that user; the Clerk fallback covers only users we never heard about.
+  const { data: known, error: knownError } = await jobsDb().from('plan_subscriptions').select('user_id').limit(20000);
+  if (knownError) throw dbError(knownError, 'known subscriptions');
+  const clerk = await grantFromClerk(new Set(((known ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)), now);
   const expired = await expireEndedGrants(now);
-  return { granted, duplicates, expired, errors };
+  return { granted: granted + clerk.granted, duplicates: duplicates + clerk.duplicates, expired, errors: errors + clerk.errors, clerk };
 }
 
 export interface GrantView {

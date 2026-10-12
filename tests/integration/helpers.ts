@@ -25,9 +25,13 @@ export const aiState: { generateObject: GenerateObjectFn; calls: Array<Record<st
 
 /** Clerk users and bearer tokens the mocked Clerk SDK knows. */
 export const clerkState: {
-  users: Map<string, { emailAddresses: Array<{ emailAddress: string }>; publicMetadata: Record<string, unknown> }>;
+  users: Map<string, { emailAddresses: Array<{ emailAddress: string }>; publicMetadata: Record<string, unknown>; createdAt?: number }>;
   tokens: Map<string, string>;
-} = { users: new Map(), tokens: new Map() };
+  /** Clerk Billing subscriptions by user id (billing.getUserBillingSubscription); missing → 404. */
+  billing: Map<string, Record<string, unknown>>;
+  /** Every billing lookup made, by user id. */
+  billingLookups: string[];
+} = { users: new Map(), tokens: new Map(), billing: new Map(), billingLookups: [] };
 
 type StreamTextFn = (args: Record<string, any>) => unknown;
 export const streamState: { streamText: StreamTextFn; calls: Array<Record<string, unknown>> } = {
@@ -58,6 +62,18 @@ export function installMocks(): void {
             const u = clerkState.users.get(id);
             if (!u) throw new Error('user not found');
             return { id, ...u };
+          },
+          getUserList: async ({ limit = 10, offset = 0 }: { limit?: number; offset?: number } = {}) => {
+            const all = [...clerkState.users.entries()].map(([id, u]) => ({ id, ...u }));
+            return { data: all.slice(offset, offset + limit), totalCount: all.length };
+          },
+        },
+        billing: {
+          getUserBillingSubscription: async (id: string) => {
+            clerkState.billingLookups.push(id);
+            const sub = clerkState.billing.get(id);
+            if (!sub) throw Object.assign(new Error('not found'), { status: 404 });
+            return sub;
           },
         },
       }),

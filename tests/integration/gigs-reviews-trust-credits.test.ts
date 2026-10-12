@@ -8,7 +8,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { Webhook } from 'svix';
-import { installMocks, resetDb, sql, call, useFakeStripe, stopFakeStripe, notifyState, seedBalance } from './helpers';
+import { installMocks, resetDb, sql, call, useFakeStripe, stopFakeStripe, notifyState, seedBalance, clerkState } from './helpers';
 import { balance, seedContact } from './qa-helpers';
 import { seedDelivered, one } from './delivery-helpers';
 import type { FakeStripe } from '../support/fake-stripe';
@@ -243,6 +243,54 @@ test('grants: the cron grants missed periods for active subscriptions and expire
   const ended = await grants.expireEndedGrants(new Date());
   assert.ok(ended >= 1);
   assert.equal(await balance(C), 1, 'only the bought credit is left');
+});
+
+test('grants: the cron also grants paid users per Clerk (publicMetadata.plan, else Clerk Billing) that have no subscription row', async () => {
+  const day = 86_400_000;
+  const META = 'user_clerk_meta_plus';
+  const BILL = 'user_clerk_billing_pro';
+  const FREE = 'user_clerk_free';
+  const KNOWN = 'user_clerk_known_cancelled';
+  const LIVE = 'user_clerk_live_grant';
+  const user = (meta: Record<string, unknown>, createdAt: number) => ({ emailAddresses: [], publicMetadata: meta, createdAt });
+  clerkState.users.set(META, user({ plan: 'plus' }, Date.now() - 40 * day));
+  clerkState.users.set(BILL, user({}, Date.now() - 90 * day));
+  clerkState.users.set(FREE, user({ plan: 'free_user' }, Date.now() - 5 * day));
+  clerkState.users.set(KNOWN, user({ plan: 'pro' }, Date.now() - 50 * day));
+  clerkState.users.set(LIVE, user({ plan: 'pro' }, Date.now() - 60 * day));
+  clerkState.billing.set(BILL, {
+    status: 'active',
+    activeAt: Date.now() - 70 * day,
+    subscriptionItems: [{ status: 'active', periodStart: Date.now() - 10 * day, plan: { slug: 'pro' } }],
+  });
+  // the webhook told us KNOWN cancelled: Clerk's metadata doesn't override it
+  await grants.recordSubscription({ userId: KNOWN, plan: 'pro', status: 'canceled', anchor: null, subscriptionId: 'sub_known' });
+  // LIVE already has this period's grant
+  await grants.grantForPeriod({ userId: LIVE, plan: 'pro', anchor: new Date(Date.now() - 3 * day), source: 'webhook' });
+  const liveBefore = await balance(LIVE);
+  clerkState.billingLookups.length = 0;
+
+  const r = await call(creditCron.GET, { url: '/x', headers: cron });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.clerk.granted, 2);
+  assert.equal(r.body.clerk.errors, 0);
+  assert.equal(await balance(META), 28, 'plus: 2800 credits');
+  assert.equal(await balance(BILL), 10, 'pro via Clerk Billing: 1000 credits');
+  assert.equal((await balance(FREE)) ?? 0, 0);
+  assert.equal((await balance(KNOWN)) ?? 0, 0);
+  assert.equal(await balance(LIVE), liveBefore);
+  assert.deepEqual(clerkState.billingLookups, [BILL], 'only users without a plan in metadata are looked up');
+  const billGrant = await one<{ plan: string; period_start: string; source: string }>(`SELECT plan, period_start, source FROM credit_grants WHERE user_id = $1`, [BILL]);
+  assert.equal(billGrant.plan, 'pro');
+  assert.equal(billGrant.source, 'cron');
+  assert.ok(Math.abs(Date.parse(billGrant.period_start) - (Date.now() - 10 * day)) < 60_000, 'anchored on the Clerk Billing period start');
+
+  const again = await call(creditCron.GET, { url: '/x', headers: cron });
+  assert.equal(again.body.clerk.granted, 0);
+  assert.equal(await balance(META), 28);
+  assert.equal(await balance(BILL), 10);
+  for (const id of [META, BILL, FREE, KNOWN, LIVE]) clerkState.users.delete(id);
+  clerkState.billing.clear();
 });
 
 test('Clerk webhook: subscription.updated (active) grants the plan credits once', async () => {
