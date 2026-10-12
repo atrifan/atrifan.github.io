@@ -597,7 +597,7 @@ const THIRD_PARTY = /(iubenda|googletagmanager|google-analytics|googlesyndicatio
 
 /**
  * Open a signed-in ai page settled: third parties blocked, clock frozen at FROZEN_NOW,
- * h1 visible, fonts ready. Install `bridge` (and adjust `server.state`) before calling.
+ * h1 visible, fonts ready, Clerk's user button in the header. Install `bridge` (and adjust `server.state`) before calling.
  */
 export async function openAi(page: Page, path: string): Promise<void> {
   await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
@@ -605,6 +605,9 @@ export async function openAi(page: Page, path: string): Promise<void> {
   await page.goto(path, { waitUntil: 'load' });
   await page.locator('h1').first().waitFor({ state: 'visible', timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
+  // The real Clerk session (signedIn()): the header settles on the signed-in user button, as on
+  // the hub specs, before anything is asserted or shot.
+  await page.locator('.cl-userButtonTrigger').first().waitFor({ state: 'attached', timeout: 30_000 });
 }
 
 /** Skip unless Clerk dev keys are present, and sign in as the E2E customer. */

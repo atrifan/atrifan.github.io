@@ -25,6 +25,10 @@ function clerkAppearance(scheme: Scheme) {
         ? { colorPrimary: '#b9a3e6', colorTextOnPrimaryBackground: '#17141f', colorBackground: '#1f1f1f', colorInputBackground: '#161616', colorText: '#ececec' }
         : { colorPrimary: '#6b4fb3', colorTextOnPrimaryBackground: '#ffffff', colorBackground: '#ffffff', colorInputBackground: '#ffffff', colorText: '#1c1a22' },
     elements: { card: { boxShadow: 'none', border: '1px solid var(--color-border)' } },
+    // The shell header already carries the Tulzo mark. Clerk's own logo is a link to the home
+    // page whose only content is an <img> that renders after the image loads, so until then axe
+    // sees a link without a name (the /sign-in link-name flake).
+    layout: { logoPlacement: 'none' as const },
   };
 }
 
