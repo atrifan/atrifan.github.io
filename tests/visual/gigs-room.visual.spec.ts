@@ -57,7 +57,7 @@ async function ready(page: Page, tab: RoomTabId, s: RoomScenario): Promise<void>
       await expect(page.getByRole('list', { name: 'Submissions' }).getByRole('listitem')).toHaveCount(2);
       break;
     case 'milestones':
-      await expect(panel).toContainText('1 of 3 done');
+      await expect(panel).toContainText('3 of 3 done');
       break;
     case 'messages':
       await expect(page.getByRole('log', { name: 'Messages' })).toContainText(s.texts.providerMessage);

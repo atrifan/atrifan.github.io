@@ -870,9 +870,9 @@ test.describe('delivery page: disputes', () => {
     await page.waitForTimeout(300);
     expect(posts()).toBe(0);
 
-    const reason = 'The export command is missing from the delivery.';
+    const reason = 'Files with a quoted comma lose every field after the comma.';
     await page.getByRole('textbox', { name: 'Describe the problem' }).fill(reason);
-    await page.getByRole('textbox', { name: 'Evidence (optional)' }).fill('README has no export section.');
+    await page.getByRole('textbox', { name: 'Evidence (optional)' }).fill('Sample file orders-quoted.csv imports with shifted columns.');
     await page.getByRole('button', { name: 'Submit dispute' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Dispute opened. Payment and auto-accept are paused while Tulzo reviews it.' }),

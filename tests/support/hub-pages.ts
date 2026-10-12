@@ -68,8 +68,8 @@ export async function mockHubApis(page: Page): Promise<void> {
   );
   await page.route('**/api/dashboard/paid-stats', (r) =>
     json(r, {
-      remainingBalance: 12.34,
-      totalSpent: 2.66,
+      remainingBalance: 14.4,
+      totalSpent: 0.6,
       totalDeposited: 15,
       purchaseHistory: [
         { id: 2, amount: 0.6, type: 'qa_reserve', description: 'QA reserve: Fix the login bug', createdAt: '2026-10-05T10:00:00Z' },

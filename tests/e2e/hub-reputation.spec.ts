@@ -50,7 +50,7 @@ test.describe('profile reputation (customer session)', () => {
     const items = s.getByRole('listitem');
     await expect(items).toHaveCount(2);
     const first = items.filter({ hasText: 'Clean importer and a clear README.' });
-    for (const t of ['Cara Customer', '5/5', 'CSV importer for the shop', 'As provider']) await expect(first).toContainText(t);
+    for (const t of ['Dana Customer', '5/5', 'CSV importer for the shop', 'As provider']) await expect(first).toContainText(t);
     const second = items.filter({ hasText: 'Clear spec and quick answers.' });
     for (const t of ['Pat Provider', '4/5', 'Nightly backups for the shop', 'As customer']) await expect(second).toContainText(t);
   });
@@ -70,13 +70,13 @@ test.describe('profile reputation (customer session)', () => {
     await mockReputation(page);
     await page.goto('/profile');
     const s = trust(page);
-    await expect(s.getByText('Trust score 82 out of 100').or(s.getByLabel('Trust score 82 out of 100')).first()).toBeAttached();
-    await expect(s).toContainText('82');
+    await expect(s.getByText('Trust score 92 out of 100').or(s.getByLabel('Trust score 92 out of 100')).first()).toBeAttached();
+    await expect(s).toContainText('92');
     await expect(s).toContainText('Established');
     const breakdown: Array<[string, string]> = [
       ['QA first-pass rate', '92%'],
-      ['Average rating', '88%'],
-      ['Disputes lost', '100%'],
+      ['Reviews', '88%'],
+      ['Disputes', '100%'],
     ];
     for (const [label, pct] of breakdown) {
       const li = s.getByRole('listitem').filter({ hasText: label });

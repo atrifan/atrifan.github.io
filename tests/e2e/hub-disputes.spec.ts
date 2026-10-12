@@ -152,8 +152,8 @@ test.describe('admin disputes page, admin', () => {
     for (const term of ['Reason', 'Evidence', 'Category', 'Paid', 'Bid', 'Already refunded', 'Paid out']) {
       await expect(facts.locator('dt').filter({ hasText: new RegExp(`^\\s*${term}\\s*$`) })).toHaveCount(1);
     }
-    await expect(facts).toContainText('The export command is missing from the delivery.');
-    await expect(facts).toContainText('README has no export section.');
+    await expect(facts).toContainText('Files with a quoted comma lose every field after the comma.');
+    await expect(facts).toContainText('Sample file orders-quoted.csv imports with shifted columns.');
     await expect(facts).toContainText('Incomplete');
     await expect(facts).toContainText('€345.00');
     await expect(facts).toContainText('€300.00');

@@ -314,6 +314,9 @@ export async function seedMarketplaceCatalog(): Promise<void> {
   const db = client();
   await resetMarketplaceCatalog();
   for (const f of CATALOG_FIXTURES) {
+    const versions = f.versions ?? [f.latest_version];
+    // One version a day from created_at; the package was last updated with its latest version.
+    const versionAt = (i: number) => new Date(Date.parse(f.created_at) + i * 86_400_000).toISOString();
     const { error } = await db.from('packages').insert({
       id: f.id,
       name: f.name,
@@ -335,12 +338,11 @@ export async function seedMarketplaceCatalog(): Promise<void> {
       provenance: f.provenance ?? null,
       files_hash: `sha256:${f.id}-${f.latest_version}`,
       created_at: f.created_at,
-      updated_at: f.created_at,
+      updated_at: versionAt(versions.length - 1),
     });
     if (error) throw new Error(`seed ${f.id}: ${error.message}`);
-    const versions = f.versions ?? [f.latest_version];
     for (const [i, v] of versions.entries()) {
-      const at = new Date(Date.parse(f.created_at) + i * 86_400_000).toISOString();
+      const at = versionAt(i);
       const { error: vErr } = await db.from('package_versions').insert({
         package_id: f.id,
         version: v,
