@@ -4,6 +4,7 @@
  * never expire. Pure.
  */
 import { CREDIT_VALUE_USD } from './credits';
+import { formatUsd } from './format';
 import type { PlanKey } from './plans';
 
 export interface PlanInfo {
@@ -53,6 +54,21 @@ export const PLAN_CATALOG: readonly PlanInfo[] = [
 
 export function planInfo(key: PlanKey): PlanInfo {
   return PLAN_CATALOG.find((p) => p.key === key) ?? PLAN_CATALOG[0];
+}
+
+/** "$600", "$100.08": whole dollars without a ".00". */
+function priceText(usd: number): string {
+  return formatUsd(usd).replace(/\.00$/, '');
+}
+
+/**
+ * The annual line under a plan's monthly price: the annual price as billed in Clerk, plus its per-month
+ * equivalent rounded to the cent. "Free forever" for a plan without an annual option.
+ */
+export function annualPriceLabel({ annualUsd }: Pick<PlanInfo, 'annualUsd'>): string {
+  if (annualUsd === null) return 'Free forever';
+  const perMonthUsd = Math.round((annualUsd * 100) / 12) / 100;
+  return `or ${priceText(annualUsd)} a year (${priceText(perMonthUsd)} / month)`;
 }
 
 /** Usage is metered at the real model cost times this markup (covers fees, failed calls, margin). */

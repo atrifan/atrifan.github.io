@@ -3,6 +3,7 @@ import {
   CREDIT_MARKUP,
   PLAN_CATALOG,
   REFERENCE_MODELS,
+  annualPriceLabel,
   formatTokenCount,
   outputTokensForCredits,
   planInfo,
@@ -57,5 +58,25 @@ describe('what credits buy', () => {
     expect(formatTokenCount(999_999)).toBe('1M');
     expect(formatTokenCount(999_499)).toBe('999K');
     expect(formatTokenCount(999_500)).toBe('1M');
+  });
+});
+
+describe('annualPriceLabel', () => {
+  it('shows the Clerk annual price and its per-month equivalent rounded to cents', () => {
+    expect(annualPriceLabel(planInfo('pro'))).toBe('or $100.08 a year ($8.34 / month)');
+    expect(annualPriceLabel(planInfo('plus'))).toBe('or $250.08 a year ($20.84 / month)');
+  });
+
+  it('drops a zero cents part on whole-dollar amounts', () => {
+    expect(annualPriceLabel(planInfo('super'))).toBe('or $600 a year ($50 / month)');
+  });
+
+  it('rounds the per-month equivalent half up to the cent', () => {
+    expect(annualPriceLabel({ ...planInfo('pro'), annualUsd: 100 })).toBe('or $100 a year ($8.33 / month)');
+    expect(annualPriceLabel({ ...planInfo('pro'), annualUsd: 0.3 })).toBe('or $0.30 a year ($0.03 / month)');
+  });
+
+  it('says free forever when there is no annual option', () => {
+    expect(annualPriceLabel(planInfo('free'))).toBe('Free forever');
   });
 });

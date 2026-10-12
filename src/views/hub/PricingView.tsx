@@ -2,7 +2,14 @@
 
 import { PricingTable, SignedIn, SignedOut } from '@clerk/nextjs';
 import { surfaceUrl } from '@/src/lib/surface-url';
-import { CREDIT_MARKUP, PLAN_CATALOG, REFERENCE_MODELS, formatTokenCount, outputTokensForCredits } from '@/src/lib/plan-catalog';
+import {
+  CREDIT_MARKUP,
+  PLAN_CATALOG,
+  REFERENCE_MODELS,
+  annualPriceLabel,
+  formatTokenCount,
+  outputTokensForCredits,
+} from '@/src/lib/plan-catalog';
 import { formatCredits, formatUsd } from '@/src/lib/format';
 import { CREDIT_VALUE_USD } from '@/src/lib/credits';
 
@@ -61,9 +68,7 @@ export function PricingView() {
               <p className="plan-price">
                 ${p.monthlyUsd} <small>/ month</small>
               </p>
-              <p className="plan-annual">
-                {p.annualUsd === null ? 'Free forever' : `or ${formatUsd(p.annualUsd).replace(/\.00$/, '')} a year`}
-              </p>
+              <p className="plan-annual">{annualPriceLabel(p)}</p>
               <p className="plan-credits">{formatCredits(p.monthlyCredits)} a month</p>
               <ul className="plan-extras" role="list">
                 {p.extras.map((e) => (
