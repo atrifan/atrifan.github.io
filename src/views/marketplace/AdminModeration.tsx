@@ -6,6 +6,7 @@ import type { CatalogItem } from '@/src/lib/marketplace/wire-format';
 import { surfaceUrl } from '@/src/lib/surface-url';
 import { KindIcon } from './KindIcon';
 import { PackageBadges } from './PackageCard';
+import { AdminSubNav } from '@/src/components/admin/AdminSubNav';
 
 /**
  * Marketplace moderation (admin only): the Pending / Public / Private lists, and per package
@@ -90,6 +91,7 @@ export function AdminModeration({
 
   return (
     <div className="page mp-page mp-admin">
+      <AdminSubNav />
       <header className="mp-hero">
         <div>
           <h1 className="mp-title">Moderation</h1>

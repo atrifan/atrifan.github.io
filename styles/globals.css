@@ -251,6 +251,11 @@ ol[role='list'] {
   color: var(--color-accent);
 }
 
+/* The mobile menu panel's "Admin" link (admins only); the desktop user menu has its own entry. */
+.shell-admin-link {
+  display: none;
+}
+
 .shell-tools {
   margin-left: auto;
   display: flex;
@@ -348,6 +353,13 @@ ol[role='list'] {
 
   .nav-link {
     width: 100%;
+  }
+
+  .shell-panel .shell-admin-link {
+    display: inline-flex;
+    border-top: 1px solid var(--color-border);
+    border-radius: 0;
+    padding-top: var(--space-2);
   }
 
   .shell-tools {
@@ -686,4 +698,24 @@ html body #iubenda-cs-banner.iubenda-cs-default #iubenda-cs-paragraph .iub-p {
 
 .hide-preferenced-plan .cl-pricingTableCard:nth-child(2) {
   display: none !important;
+}
+
+/* "← Admin" on every admin page (src/components/admin/AdminSubNav.tsx); hub and marketplace. */
+.admin-subnav {
+  margin-bottom: var(--space-3);
+}
+
+.admin-subnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.admin-subnav-link:hover {
+  color: var(--color-text);
 }

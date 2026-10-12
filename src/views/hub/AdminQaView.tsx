@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDate, formatMoneyCents } from '@/src/lib/format';
 import { ArrowRightIcon } from '@/src/components/brand/UiIcons';
+import { AdminSubNav } from '@/src/components/admin/AdminSubNav';
 
 /**
  * Hub /admin/qa: queue → detail drawer → reveal credentials (confirmed, audited) → verdict.
@@ -89,6 +90,7 @@ export function AdminQaView() {
 
   return (
     <div className="page">
+      <AdminSubNav />
       <header className="account-header">
         <h1>QA review</h1>
         <p className="muted">

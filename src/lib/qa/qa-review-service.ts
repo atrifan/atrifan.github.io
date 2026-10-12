@@ -125,6 +125,13 @@ export async function listQueue(args: unknown) {
   };
 }
 
+/** How many submissions are in `status` (the admin home's QA queue number). */
+export async function countQueue(status: z.infer<typeof queueSchema>['status'] = 'awaiting_qa'): Promise<number> {
+  const { count, error } = await jobsDb().from('submissions').select('id', { count: 'exact', head: true }).eq('status', status);
+  if (error) throw dbError(error, 'qa queue count');
+  return count ?? 0;
+}
+
 // ── detail ───────────────────────────────────────────────────────────────────
 
 async function steeringHistory(contractId: string): Promise<unknown[]> {

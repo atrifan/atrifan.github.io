@@ -83,6 +83,11 @@ top-ups via `/api/billing/checkout`, history) and `/admin/qa` (admins; `app/api/
 `src/lib/qa/qa-review-service.ts`) and `/admin/inbox` (complaints + support email; `/admin/complaints` redirects to it). Signed-in and admin pages are `noindex`. Views are in `src/views/hub/`,
 styles in `styles/hub.css`.
 
+`/admin` is the admin home (404 for non-admins, like the other admin pages): one card per area with its key
+number (QA queue, open disputes, open inbox threads, pending marketplace packages, 30-day commission) read
+through the area's service (`src/lib/admin-home/`), plus the admin QA MCP URL with a copy button. Every
+`/admin/*` page and `/marketplace/admin` starts with `AdminSubNav` ("← Admin", `src/components/admin/`).
+
 ### Consent
 
 `app/layout.tsx` boots iubenda with `iubendaConfig()` (`src/lib/consent.ts`): a bottom bar, no overlay, the
@@ -105,9 +110,11 @@ A new hub-only page: add it to `HUB_ONLY_PREFIXES` so other surfaces 404 it. Pub
 
 `src/components/shell/AppShell.tsx` wraps every page (from `app/providers.tsx`): skip link → `#main`,
 wordmark, `nav[aria-label=Primary]` (AI · Marketplace · Gigs · Chat via `surfaceUrl`, `aria-current="page"`
-on the active surface), `ThemeToggle`, Sign in or the Clerk `UserButton` (Profile, Credits on the hub), the
-`<main id="main">`, and the footer. Below 960px nav and tools fold into a "Menu" panel (focus trap, Escape
-closes). Pages render content only: no `<main>`, header or footer of their own. Touch targets ≥ 44px.
+on the active surface), `ThemeToggle`, Sign in or the Clerk `UserButton` (Profile, Credits on the hub, and
+Admin for admins), the `<main id="main">`, and the footer. Below 960px nav and tools fold into a "Menu" panel
+(focus trap, Escape closes), which also has an "Admin" link for admins. Admin comes from the `viewerIsAdmin`
+server action (`src/lib/admin-actions.ts`, the `admin.ts` rule, a boolean only); the user button mounts once it
+has answered. It is not a root-layout prop, which would render every page per request. Pages render content only: no `<main>`, header or footer of their own. Touch targets ≥ 44px.
 
 ## Tokens and theme
 

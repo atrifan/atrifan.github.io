@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { formatDate } from '@/src/lib/format';
+import { AdminSubNav } from '@/src/components/admin/AdminSubNav';
 
 type Source = 'complaint' | 'email';
 type Status = 'open' | 'answered' | 'closed';
@@ -70,6 +71,7 @@ export function AdminInboxView({ initialSource, initialThread }: { initialSource
 
   return (
     <div className="page">
+      <AdminSubNav />
       <header className="account-header">
         <h1>Inbox</h1>
         <p className="muted">Complaints from the form and email to the support address. Replies go out from the support address.</p>

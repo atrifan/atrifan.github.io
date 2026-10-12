@@ -14,6 +14,7 @@ alwaysApply: false
 | `npm run test:integration` | node:test + Docker | `tests/integration/*.test.ts` against a throwaway Postgres + PostgREST |
 | `npm run test:int` | Vitest | `tests/integration/*.vitest.ts`: route handlers called with `Request` objects; DB specs use the Supabase in `.env.local` and skip (with a message) without it |
 | `npm run test:e2e:gigs` | Playwright | `tests/e2e/gigs-api.spec.ts` on its own runner (port 3100, Docker DB, fake Stripe) |
+| `npm run test:e2e:marketplace` | Playwright | marketplace specs plus the admin home (`admin-home.*`, `ADMIN_HOME_E2E=1`) on a seeded Docker DB (port 3200; `MARKETPLACE_E2E_PHASE=admin\|e2e\|themed`) |
 | `npm run test:integration:notify` | Playwright | `tests/integration/notify.spec.ts` |
 | `npm test` | Playwright | every project below |
 | `npm run test:e2e` / `test:a11y` / `test:visual` | Playwright | one folder |

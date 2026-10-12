@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { formatDate, formatMoneyCents } from '@/src/lib/format';
+import { AdminSubNav } from '@/src/components/admin/AdminSubNav';
 
 type Filter = 'open' | 'resolved';
 type Outcome = 'release' | 'partial_refund' | 'full_refund';
@@ -111,6 +112,7 @@ export function AdminDisputesView() {
 
   return (
     <div className="page">
+      <AdminSubNav />
       <header className="account-header">
         <h1>Disputes</h1>
         <p className="muted">Customer disputes and claims, rejected QA and chargebacks. Decide what happens to the money; both parties are told.</p>

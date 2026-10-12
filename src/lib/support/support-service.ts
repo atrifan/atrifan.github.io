@@ -417,6 +417,13 @@ export async function listThreads(filter: { source?: ThreadSource; status?: Thre
   }));
 }
 
+/** How many threads are in `status` (the admin home's inbox number). */
+export async function countThreads(status: ThreadStatus = 'open'): Promise<number> {
+  const { count, error } = await jobsDb().from('support_threads').select('id', { count: 'exact', head: true }).eq('status', status);
+  if (error) throw dbError(error, 'count support threads');
+  return count ?? 0;
+}
+
 async function loadThread(id: string): Promise<ThreadRow> {
   const { data, error } = await jobsDb().from('support_threads').select(THREAD_COLUMNS).eq('id', id).maybeSingle();
   if (error) throw dbError(error, 'load support thread');

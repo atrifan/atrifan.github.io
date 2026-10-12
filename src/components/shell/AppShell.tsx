@@ -12,13 +12,16 @@ import '@/styles/notifications.css';
 import { activeSurface } from '@/src/lib/surface-routing';
 import { footerAdAllowed } from '@/src/lib/ads-policy';
 import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
+import { viewerIsAdmin } from '@/src/lib/admin-actions';
 
 /**
  * Shared shell for every surface: skip link, wordmark, primary nav
  * (AI · Marketplace · Gigs · Chat via surfaceUrl, the active one marked with
  * aria-current), theme switch, sign-in or the Clerk user menu (with Profile and
- * Credits on the hub), the notification bell for signed-in users (NotificationBell), and a
- * footer with at most one small ad.
+ * Credits on the hub, and Admin for admins), the notification bell for signed-in users
+ * (NotificationBell), and a footer with at most one small ad. Whether the viewer is an admin
+ * comes from the server (viewerIsAdmin: the src/lib/admin.ts rule), asked once per signed-in user;
+ * admins also get an "Admin" link in the mobile menu panel.
  *
  * Below 960px the nav and tools fold into a menu panel behind a "Menu" button:
  * focus moves into the panel, Tab is trapped inside it, Escape closes it. The bell stays in the
@@ -49,6 +52,11 @@ const ProfileIcon = () => (
     <path d="M4 21a8 8 0 0 1 16 0" />
   </svg>
 );
+const AdminIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z" />
+  </svg>
+);
 const CreditsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
     <circle cx="12" cy="12" r="9" />
@@ -59,8 +67,12 @@ const CreditsIcon = () => (
 export function AppShell({ surface, children }: { surface: Surface | null; children: React.ReactNode }) {
   const pathname = usePathname() || '/';
   const current = activeSurface({ surface, pathname });
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const [open, setOpen] = useState(false);
+  // The server's answer for this user id; another user (or none) never sees the entry.
+  const [adminCheck, setAdminCheck] = useState<{ userId: string; admin: boolean } | null>(null);
+  const adminChecked = !!userId && adminCheck?.userId === userId;
+  const isAdmin = adminChecked && adminCheck.admin;
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -68,6 +80,18 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
     setOpen(false);
     if (restoreFocus) buttonRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    const answer = (admin: boolean) => {
+      if (alive) setAdminCheck({ userId, admin });
+    };
+    viewerIsAdmin().then(answer, () => answer(false));
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
 
   // Close the menu on navigation.
   useEffect(() => {
@@ -164,6 +188,14 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
               </ul>
             </nav>
 
+            {/* Below 960px only: on desktop the user menu carries the Admin entry. */}
+            {isAdmin && (
+              <a href={surfaceUrl('hub', '/admin')} className="nav-link shell-admin-link">
+                <AdminIcon />
+                <span>Admin</span>
+              </a>
+            )}
+
             <div className="shell-tools">
               <ThemeToggle />
               {/* Holds the account slot while Clerk loads, so neither "Sign in" nor the avatar flashes in. */}
@@ -176,14 +208,21 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
                 </a>
               </SignedOut>
               <SignedIn>
-                <div className="user-button">
-                  <UserButton>
-                    <UserButton.MenuItems>
-                      <UserButton.Link label="Profile" labelIcon={<ProfileIcon />} href={surfaceUrl('hub', '/profile')} />
-                      <UserButton.Link label="Credits" labelIcon={<CreditsIcon />} href={surfaceUrl('hub', '/credits')} />
-                    </UserButton.MenuItems>
-                  </UserButton>
-                </div>
+                {/* Clerk takes the custom menu items when the button mounts, so it mounts once the admin
+                    check has answered (a later remount would close a menu the user already opened). */}
+                {adminChecked ? (
+                  <div className="user-button">
+                    <UserButton>
+                      <UserButton.MenuItems>
+                        <UserButton.Link label="Profile" labelIcon={<ProfileIcon />} href={surfaceUrl('hub', '/profile')} />
+                        <UserButton.Link label="Credits" labelIcon={<CreditsIcon />} href={surfaceUrl('hub', '/credits')} />
+                        {isAdmin && <UserButton.Link label="Admin" labelIcon={<AdminIcon />} href={surfaceUrl('hub', '/admin')} />}
+                      </UserButton.MenuItems>
+                    </UserButton>
+                  </div>
+                ) : (
+                  <span className="user-button user-button-pending" aria-hidden="true" />
+                )}
               </SignedIn>
             </div>
           </div>

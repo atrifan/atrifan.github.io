@@ -10,6 +10,7 @@ import { formatDay, formatMoney } from '@/src/lib/activity/format';
 import { pluralize } from '@/src/lib/format';
 import type { AdminActivity } from '@/src/lib/activity/admin-activity-service';
 import '@/styles/activity.css';
+import { AdminSubNav } from '@/src/components/admin/AdminSubNav';
 
 interface Column<T> {
   label: string;
@@ -98,6 +99,7 @@ export function AdminActivityView() {
 
   return (
     <div className="page act-page">
+      <AdminSubNav />
       <header className="act-header">
         <h1>Activity</h1>
         <p className="act-lede">Installs, publishes and money across Tulzo for a date range (UTC days).</p>

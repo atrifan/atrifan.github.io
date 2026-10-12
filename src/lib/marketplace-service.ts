@@ -547,16 +547,23 @@ export function isVisibility(v: unknown): v is Visibility {
 export async function listModerationQueue(
   visibility: Visibility,
 ): Promise<{ items: CatalogItem[]; counts: Record<Visibility, number> }> {
-  const supabase = getClient();
-  const [{ data, error }, ...counts] = await Promise.all([
-    supabase.from('package_catalog').select('*').eq('visibility', visibility).order('updated_at', { ascending: false }).limit(200),
-    ...VISIBILITIES.map((vis) => supabase.from('packages').select('id', { count: 'exact', head: true }).eq('visibility', vis)),
+  const [{ data, error }, counts] = await Promise.all([
+    getClient().from('package_catalog').select('*').eq('visibility', visibility).order('updated_at', { ascending: false }).limit(200),
+    countPackagesByVisibility(),
   ]);
   if (error) throw new Error(error.message);
-  return {
-    items: (data ?? []).map((r) => toCatalogItem(r as PackageRecord)),
-    counts: Object.fromEntries(VISIBILITIES.map((vis, i) => [vis, counts[i].count ?? 0])) as Record<Visibility, number>,
-  };
+  return { items: (data ?? []).map((r) => toCatalogItem(r as PackageRecord)), counts };
+}
+
+/** Packages per visibility (the moderation tabs, and the admin home's pending number). */
+export async function countPackagesByVisibility(): Promise<Record<Visibility, number>> {
+  const supabase = getClient();
+  const counts = await Promise.all(
+    VISIBILITIES.map((vis) => supabase.from('packages').select('id', { count: 'exact', head: true }).eq('visibility', vis)),
+  );
+  const failed = counts.find((c) => c.error);
+  if (failed?.error) throw new Error(failed.error.message);
+  return Object.fromEntries(VISIBILITIES.map((vis, i) => [vis, counts[i].count ?? 0])) as Record<Visibility, number>;
 }
 
 /** Set a package's visibility. Approving (public) verifies it; anything else clears that. */

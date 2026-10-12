@@ -186,6 +186,13 @@ export const listSchema = z.object({
   limit: z.number().int().min(1).max(100).default(50),
 });
 
+/** Disputes still to decide (open or resolving), as the admin list's "open" filter counts them. */
+export async function countOpenDisputes(): Promise<number> {
+  const { count, error } = await jobsDb().from('disputes').select('id', { count: 'exact', head: true }).in('status', ['open', 'resolving']);
+  if (error) throw dbError(error, 'count disputes');
+  return count ?? 0;
+}
+
 export async function listDisputesForAdmin(args: unknown) {
   const r = listSchema.safeParse(args ?? {});
   if (!r.success) throw new JobsError('invalid_request', 400, 'Invalid arguments', r.error.issues);
