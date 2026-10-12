@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dailyInstalls, installTotals, installsLabel, packageTimeline, weekStart, weeklyInstalls } from '@/src/lib/activity/installs';
-import { formatDay, formatMoney, formatWeek } from '@/src/lib/activity/format';
+import { formatDay, formatMoney, formatWeek, plainAmount } from '@/src/lib/activity/format';
 
 const NOW = new Date('2026-10-12T15:00:00Z');
 const at = (iso: string, version = '1.0.0') => ({ at: iso, version });
@@ -10,6 +10,8 @@ describe('format', () => {
     expect(formatDay('2026-10-05')).toBe('5 Oct 2026');
     expect(formatDay('2026-10-10T23:30:00Z')).toBe('10 Oct 2026');
     expect(formatWeek('2026-10-05')).toBe('Week of 5 Oct 2026');
+    const months = Array.from({ length: 12 }, (_, i) => formatDay(`2026-${String(i + 1).padStart(2, '0')}-15`).split(' ')[1]);
+    expect(months).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
   });
   it('formats euros with two decimals and thousands separators', () => {
     expect(formatMoney(34500)).toBe('€345.00');
@@ -17,6 +19,9 @@ describe('format', () => {
     expect(formatMoney(0)).toBe('€0.00');
     expect(formatMoney(123456789)).toBe('€1,234,567.89');
     expect(formatMoney(-1250)).toBe('-€12.50');
+    expect(plainAmount(-1250)).toBe('-12.50');
+    expect(plainAmount(123456)).toBe('1234.56');
+    expect(plainAmount(7)).toBe('0.07');
   });
   it('pluralises installs', () => {
     expect(installsLabel(1)).toBe('1 install');
@@ -85,5 +90,7 @@ describe('installTotals', () => {
     const rows = [at('2026-10-12T14:00:00Z'), at('2026-10-05T15:00:01Z'), at('2026-10-05T14:59:59Z'), at('2026-09-12T15:00:01Z'), at('2026-09-01T00:00:00Z')];
     expect(installTotals(rows, NOW)).toEqual({ all: 5, last7: 2, last30: 4 });
     expect(installTotals([], NOW)).toEqual({ all: 0, last7: 0, last30: 0 });
+    // exactly 7 / 30 days old is outside the window
+    expect(installTotals([at('2026-10-05T15:00:00Z'), at('2026-09-12T15:00:00Z')], NOW)).toEqual({ all: 2, last7: 0, last30: 1 });
   });
 });

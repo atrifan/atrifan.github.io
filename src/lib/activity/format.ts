@@ -7,18 +7,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 /** `2026-10-05` or an ISO timestamp → "5 Oct 2026" (UTC). */
 export function formatDay(isoOrDay: string): string {
-  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(isoOrDay) ? `${isoOrDay}T00:00:00Z` : isoOrDay);
+  // A date-only string parses as UTC midnight, like the ISO timestamps.
+  const d = new Date(isoOrDay);
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 export function formatWeek(weekStartDay: string): string {
   return `Week of ${formatDay(weekStartDay)}`;
-}
-
-/** "09:30" (UTC). */
-export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 /** Cents → "€1,234.50" (always two decimals). */

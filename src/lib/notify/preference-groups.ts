@@ -4,7 +4,7 @@
  * one switch per type; in-app is one switch per group. Pure.
  */
 import { EMAIL_OFF_BY_DEFAULT } from './preferences';
-import { isNotificationType, type NotificationType } from './types';
+import type { NotificationType } from './types';
 
 export type PreferenceGroupId = 'gigs' | 'payments' | 'qa' | 'account' | 'marketplace' | 'admin';
 
@@ -80,13 +80,9 @@ type SavedPreference = { type: string; emailEnabled?: boolean | null; inAppEnabl
 
 /** Every type in its group; a type the server didn't send gets its default. */
 export function groupPreferences(prefs: ReadonlyArray<SavedPreference>): PreferenceGroupView[] {
-  const email = new Map<NotificationType, boolean>();
-  const inApp = new Map<NotificationType, boolean>();
-  for (const p of prefs) {
-    if (!isNotificationType(p.type)) continue;
-    if (typeof p.emailEnabled === 'boolean') email.set(p.type, p.emailEnabled);
-    if (typeof p.inAppEnabled === 'boolean') inApp.set(p.type, p.inAppEnabled);
-  }
+  // Unknown types are never looked up; a null/absent choice falls back to the default below.
+  const email = new Map(prefs.map((p) => [p.type, p.emailEnabled]));
+  const inApp = new Map(prefs.map((p) => [p.type, p.inAppEnabled]));
   return PREFERENCE_GROUPS.map((g) => ({
     id: g.id,
     title: g.title,

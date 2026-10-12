@@ -25,25 +25,14 @@ export interface FeedQuery {
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-function b64urlEncode(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
+// Cursors are made and read on the server only (the API routes), so Node's base64url is available.
 function b64urlDecode(s: string): string | null {
   if (!/^[A-Za-z0-9_-]+$/.test(s)) return null;
-  try {
-    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-    return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
-  } catch {
-    return null;
-  }
+  return Buffer.from(s, 'base64url').toString('utf8');
 }
 
 export function encodeCursor(c: FeedCursor): string {
-  return b64urlEncode(`${c.at}|${c.id}`);
+  return Buffer.from(`${c.at}|${c.id}`, 'utf8').toString('base64url');
 }
 
 export function decodeCursor(s: string): FeedCursor | null {

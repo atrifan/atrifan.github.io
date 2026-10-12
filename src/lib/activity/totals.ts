@@ -16,11 +16,8 @@ export interface DateRange {
 const DAY_MS = 86_400_000;
 const DEFAULT_DAYS = 30;
 export const MAX_RANGE_DAYS = 366;
-const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
+/** A real `YYYY-MM-DD` day: it must survive a round trip through Date (so 2026-02-30 fails). */
 function validDay(s: string): boolean {
-  const m = DAY_RE.exec(s);
-  if (!m) return false;
   const d = new Date(`${s}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { buildGigsActivity, commissionFor, filterLedger, type GigsActivityInput } from '@/src/lib/activity/ledger';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { LEDGER_KINDS, buildGigsActivity, commissionFor, filterLedger, type GigsActivityInput } from '@/src/lib/activity/ledger';
 
 const ME = 'u_me';
 const OTHER = 'u_other';
@@ -48,7 +48,54 @@ describe('commissionFor', () => {
 });
 
 describe('buildGigsActivity', () => {
-  const out = buildGigsActivity(input());
+  // Built per test (not at collection time) so mutation testing maps coverage to the tests.
+  let out: ReturnType<typeof buildGigsActivity>;
+  beforeEach(() => {
+    out = buildGigsActivity(input());
+  });
+
+  it('gives every entry the role and kind its id names', () => {
+    const roleOf: Record<string, string> = { job_posted: 'customer', bid_received: 'customer', contract: 'customer', payment: 'customer', delivery: 'customer', bid_placed: 'provider', contract_won: 'provider', payout: 'provider', review: 'provider' };
+    for (const e of out.ledger) {
+      const kind = e.id.split(':')[0];
+      expect(e.kind, e.id).toBe(kind);
+      expect(e.role, e.id).toBe(roleOf[kind]);
+      expect(e.jobTitle, e.id).not.toBe('');
+    }
+    expect(new Set(out.ledger.map((e) => e.kind)).size).toBe(9);
+  });
+
+  it('lists the ledger kinds in filter order', () => {
+    expect(LEDGER_KINDS).toEqual(['job_posted', 'bid_received', 'contract', 'payment', 'delivery', 'bid_placed', 'contract_won', 'payout', 'review']);
+  });
+
+  it('only counts succeeded deliveries, bids on the user\'s own jobs and contracts the user is a party to', () => {
+    const more = buildGigsActivity(
+      input({
+        deliveries: [
+          { id: 'd1', contract_id: 'c1', user_id: ME, kind: 'download', status: 'succeeded', created_at: '2026-10-06T10:00:00Z' },
+          { id: 'd2', contract_id: 'c1', user_id: ME, kind: 'push', status: 'failed', created_at: '2026-10-06T11:00:00Z' },
+          { id: 'd3', contract_id: 'c1', user_id: ME, kind: 'push', status: 'pending', created_at: '2026-10-06T12:00:00Z' },
+        ],
+        bids: [
+          { id: 'b1', job_id: 'j1', user_id: OTHER, price_cents: 30000, status: 'accepted', created_at: '2026-10-02T10:00:00Z' },
+          { id: 'bx', job_id: 'j3', user_id: 'u_third', price_cents: 100, status: 'active', created_at: '2026-10-02T10:00:00Z' },
+          { id: 'by', job_id: 'j_unknown', user_id: 'u_third', price_cents: 100, status: 'active', created_at: '2026-10-02T10:00:00Z' },
+        ],
+        contracts: [
+          ...input().contracts,
+          { id: 'cx', job_id: 'j_unknown', customer_user_id: OTHER, provider_user_id: 'u_third', status: 'active', created_at: '2026-10-05T08:00:00Z', price_cents: 1, fee_cents: 0, customer_total_cents: 1 },
+        ],
+        transfers: [{ id: 'tq', contract_id: 'cx', user_id: ME, amount_cents: 100, amount_reversed_cents: 0, status: 'paid', created_at: '2026-10-08T12:00:00Z' }],
+      }),
+    );
+    expect(more.customer.deliveries).toBe(1);
+    expect(more.customer.bidsReceived).toBe(1);
+    expect(more.customer.contracts).toBe(1);
+    expect(more.provider.contractsWon).toBe(1);
+    expect(more.ledger.some((e) => e.id.endsWith(':bx') || e.id.endsWith(':by') || e.id.endsWith(':cx'))).toBe(false);
+    expect(more.ledger.find((e) => e.id === 'payout:tq')!.jobTitle).toBe('Unknown job');
+  });
 
   it('summarises the customer side: posted jobs (not drafts), bids from others, contracts, deliveries, payments and commission', () => {
     expect(out.customer).toEqual({ jobsPosted: 1, bidsReceived: 2, contracts: 1, deliveries: 1, paymentsCents: 34500, commissionCents: 4500 });
@@ -126,7 +173,10 @@ describe('buildGigsActivity', () => {
 });
 
 describe('filterLedger', () => {
-  const { ledger } = buildGigsActivity(input());
+  let ledger: ReturnType<typeof buildGigsActivity>['ledger'];
+  beforeEach(() => {
+    ledger = buildGigsActivity(input()).ledger;
+  });
 
   it('keeps everything with no filters', () => {
     expect(filterLedger(ledger, {})).toHaveLength(ledger.length);
@@ -147,5 +197,9 @@ describe('filterLedger', () => {
     expect(filterLedger(ledger, { to: '2026-10-01' }).map((e) => e.id)).toEqual(['job_posted:j1']);
     // malformed dates are ignored rather than hiding everything
     expect(filterLedger(ledger, { from: 'yesterday' })).toHaveLength(ledger.length);
+    for (const bad of ['tomorrow', 'x2026-10-01', '2026-10-01x']) {
+      expect(filterLedger(ledger, { to: bad }), bad).toHaveLength(ledger.length);
+      expect(filterLedger(ledger, { from: bad }), bad).toHaveLength(ledger.length);
+    }
   });
 });

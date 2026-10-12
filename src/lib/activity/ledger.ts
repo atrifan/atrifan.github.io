@@ -101,7 +101,6 @@ export const PAID_TRANSFER = new Set(['paid', 'partially_reversed']);
  */
 export function commissionFor(amountCents: number, versionFeeCents: number, versionTotalCents: number): number {
   if (versionTotalCents <= 0) return 0;
-  if (amountCents === versionTotalCents) return versionFeeCents;
   return Math.round((amountCents * versionFeeCents) / versionTotalCents);
 }
 

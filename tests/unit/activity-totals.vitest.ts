@@ -13,6 +13,7 @@ describe('parseRange', () => {
     expect(parseRange('2026-10-01', null, NOW)).toEqual({ ok: true, range: { from: '2026-10-01', to: '2026-10-12' } });
     expect(parseRange(null, '2026-10-05', NOW)).toEqual({ ok: true, range: { from: '2026-09-06', to: '2026-10-05' } });
     expect(parseRange('2026-10-05', '2026-10-05', NOW).ok).toBe(true);
+    expect(parseRange(' 2026-10-01 ', ' 2026-10-05 ', NOW)).toEqual({ ok: true, range: { from: '2026-10-01', to: '2026-10-05' } });
   });
   it('rejects malformed, impossible, inverted and over-long ranges', () => {
     expect(parseRange('10/01/2026', null, NOW)).toEqual({ ok: false, error: 'Dates must be YYYY-MM-DD' });
@@ -20,6 +21,9 @@ describe('parseRange', () => {
     expect(parseRange('2026-10-06', '2026-10-05', NOW)).toEqual({ ok: false, error: '"From" must be on or before "To"' });
     expect(parseRange('2025-01-01', '2026-10-05', NOW)).toEqual({ ok: false, error: 'The range can be at most 366 days' });
     expect(parseRange('2025-10-05', '2026-10-05', NOW).ok).toBe(true); // 366 days inclusive
+    expect(parseRange('2025-10-04', '2026-10-05', NOW)).toEqual({ ok: false, error: 'The range can be at most 366 days' }); // 367
+    expect(parseRange(null, '2026-13-01', NOW)).toEqual({ ok: false, error: 'Dates must be YYYY-MM-DD' });
+    expect(parseRange(null, 'x2026-10-01', NOW)).toEqual({ ok: false, error: 'Dates must be YYYY-MM-DD' });
   });
 });
 

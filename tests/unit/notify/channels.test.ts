@@ -95,3 +95,47 @@ test('programmer errors still throw and write nothing', async () => {
   assert.equal(s.inApp.rows.length, 0);
   assert.equal(s.store.rows.length, 0);
 });
+
+const throwingNotifier = (err: unknown) => ({
+  enqueue: async () => {
+    throw err;
+  },
+  deliver: async () => 'failed' as const,
+  dispatch: async () => ({ claimed: 0, sent: 0, skipped: 0, retry: 0, failed: 0 }),
+});
+
+test('a programmer error raised inside the email notifier is rethrown, anything else is reported', async () => {
+  const s = setup();
+  const zod = Object.assign(new Error('bad payload'), { name: 'ZodError' });
+  await assert.rejects(createEnqueue({ ...s.deps, notifier: () => throwingNotifier(zod) })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'a'), /bad payload/);
+  await assert.rejects(createEnqueue({ ...s.deps, notifier: () => throwingNotifier(new Error('enqueue: nope')) })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'b'), /enqueue: nope/);
+  const other = await createEnqueue({ ...s.deps, notifier: () => throwingNotifier(new Error('xenqueue: not ours')) })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'c');
+  assert.deepEqual({ status: other.status, error: (other as { error?: string }).error }, { status: 'error', error: 'xenqueue: not ours' });
+  const r = await createEnqueue({ ...s.deps, notifier: () => throwingNotifier('boom') })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'd');
+  assert.equal((r as { error?: string }).error, 'boom');
+});
+
+test('without email configured the result says so; without in-app configured too', async () => {
+  const s = setup();
+  const r = await createEnqueue({ ...s.deps, notifier: () => null, inApp: () => null })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'k');
+  assert.deepEqual(r, { status: 'error', id: null, error: 'notifications are not configured', inApp: { status: 'error', error: 'in-app notifications are not configured' } });
+});
+
+test('defaults: the real clock stamps in-app rows and failures go to console.error', async () => {
+  const s = setup();
+  const { now: _now, log: _log, ...deps } = s.deps;
+  const started = Date.now();
+  await createEnqueue(deps)('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'k');
+  const stamped = Date.parse(s.inApp.rows[0].createdAt);
+  assert.ok(stamped >= started - 1000 && stamped <= Date.now() + 1000);
+  const errors: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => void errors.push(args);
+  try {
+    const broken = { ...s.inApp, getPreferences: async () => { throw new Error('db down'); } } as unknown as MemoryInAppStore;
+    await createEnqueue({ ...deps, inApp: () => broken })('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'k2');
+  } finally {
+    console.error = original;
+  }
+  assert.ok(errors.some((a) => a[0] === '[notify] in-app write failed' && a.includes('k2') && a.includes('db down')));
+});

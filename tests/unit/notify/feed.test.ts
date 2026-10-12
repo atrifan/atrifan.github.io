@@ -103,3 +103,47 @@ test('itemHref puts the item url on its surface', () => {
   assert.equal(itemHref({ surface: 'gigs', url: '//evil.test/x' }, ''), '/gigs');
   assert.equal(itemHref({ surface: 'moon' as never, url: '/x' }, ''), '/x');
 });
+
+test('cursors survive base64 padding and url-unsafe characters, and reject padded, spaced or partial input', () => {
+  for (const c of [
+    { at: '2026-10-12T10:00:00.123456+00:00', id: 'a' },
+    { at: '2026-10-12T10:00:00Z', id: 'ab' },
+    { at: '2026-10-12T10:00:00.1Z', id: '3f0c1d2e-0000-4000-8000-00000000003f' },
+  ]) {
+    const enc = encodeCursor(c);
+    assert.doesNotMatch(enc, /[=+/]/);
+    assert.deepEqual(decodeCursor(enc), c);
+  }
+  const good = encodeCursor({ at: '2026-10-12T10:00:00Z', id: 'n_1' });
+  for (const bad of [`${good}=`, ` ${good}`, `${good} `, `${good}.`, Buffer.from('|n_1').toString('base64url'), Buffer.from('2026-10-12T10:00:00Z|n|1').toString('base64url'), '_-_-_']) {
+    assert.equal(decodeCursor(bad), null, bad);
+  }
+});
+
+test('parseFeedQuery reads a blank limit as the default and a leading number as the limit', () => {
+  const blank = parseFeedQuery(q('limit='));
+  assert.ok(blank.ok && blank.query.limit === FEED_DEFAULT_LIMIT);
+  const seven = parseFeedQuery(q('limit=7abc'));
+  assert.ok(seven.ok && seven.query.limit === 7);
+});
+
+test('parseReadBody: every id must be valid, and the errors say what is expected', () => {
+  assert.equal(parseReadBody({ ids: ['ok', ''] }).ok, false);
+  assert.equal(parseReadBody({ ids: ['ok', 'bad id'] }).ok, false);
+  const notObject = parseReadBody(7);
+  assert.ok(!notObject.ok && /ids/.test(notObject.error) && /all/.test(notObject.error));
+  const empty = parseReadBody({ ids: [] });
+  assert.ok(!empty.ok && /1.100 ids/.test(empty.error));
+});
+
+test('itemHref uses NEXT_PUBLIC_ROOT_DOMAIN when no root domain is passed; a relative url falls back to the surface home', () => {
+  const before = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
+  try {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'tulzo.test';
+    assert.equal(itemHref({ surface: 'gigs', url: '/jobs/1' }), 'https://gigs.tulzo.test/jobs/1');
+    assert.equal(itemHref({ surface: 'gigs', url: 'jobs/1' }), 'https://gigs.tulzo.test/');
+  } finally {
+    if (before === undefined) delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
+    else process.env.NEXT_PUBLIC_ROOT_DOMAIN = before;
+  }
+});
