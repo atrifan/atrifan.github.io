@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 import { apiPath, expectNoAdSlots, fulfillJson, guardPage, recordRequests, sectionByH2 } from './hub-helpers';
 import { NOTIFICATION_TYPES } from '../../src/lib/notify/types';
+import { ADMIN_ONLY_TYPES } from '../../src/lib/notify/preference-groups';
 
 /** Hub profile page `/profile`: account, Stripe Connect payouts, email notifications, reviews, trust. */
 
@@ -190,7 +191,7 @@ test.describe('hub profile, signed in (customer)', () => {
     test('every notification type but the admin-only ones has a switch, grouped Gigs / Payments / QA / Account / Marketplace, checked by emailEnabled', async ({ page }) => {
       await page.goto('/profile');
       const s = sectionByH2(page, 'Email notifications');
-      await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length - 1);
+      await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length - ADMIN_ONLY_TYPES.length);
       await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account', 'Marketplace']);
       const gigs = s.getByRole('group', { name: 'Gigs' });
       await expect(gigs.getByRole('switch', { name: 'New bids on your jobs', exact: true })).toBeChecked();
