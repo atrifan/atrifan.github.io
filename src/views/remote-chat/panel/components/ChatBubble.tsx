@@ -273,7 +273,7 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
   }, [text])
 
   return (
-    <button className={`copy-btn ${copied ? "copied" : ""} ${className ?? ""}`} onClick={handleCopy} title={copied ? "Copied!" : "Copy"}>
+    <button type="button" className={`copy-btn ${copied ? "copied" : ""} ${className ?? ""}`} onClick={handleCopy} title={copied ? "Copied!" : "Copy"} aria-label={copied ? "Copied" : "Copy"}>
       {copied ? "✓" : "⎘"}
     </button>
   )
@@ -452,7 +452,7 @@ function RichContent({
               pre: ({ children, ...props }) => (
                 <div className="code-block-wrapper">
                   <CopyButton text={extractTextFromChildren(children)} />
-                  <pre {...props}>{children}</pre>
+                  <pre tabIndex={0} {...props}>{children}</pre>
                 </div>
               ),
               code: ({ className, children, ...props }) => {

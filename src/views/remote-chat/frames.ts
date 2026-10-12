@@ -8,9 +8,6 @@
 
 export type { PanelToWorker, WorkerToPanel } from './shared/types';
 
-// Any frame — the relay treats frames as opaque JSON, so unknown types are fine.
-export type RelayFrame = { type: string; [k: string]: unknown };
-
 // A durable, rendered message as stored by the relay (chat_relay_messages).
 export interface RelayMessage {
   id: string;

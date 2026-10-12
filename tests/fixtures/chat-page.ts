@@ -83,6 +83,9 @@ export async function openChatState(page: Page, request: import('@playwright/tes
   await expect(page.getByRole('status').filter({ hasText: 'Your assistant is online' })).toBeVisible({ timeout: 20_000 });
   if (state === 'empty') {
     await expect(log).toContainText(/send a message/i);
+    // The chats list has loaded (desktop sidebar).
+    const nav = page.getByRole('navigation', { name: 'Chats' });
+    if (await nav.isVisible()) await expect(nav).toContainText('No chats yet', { timeout: 15_000 });
   } else {
     await expect(log.getByRole('table')).toBeVisible({ timeout: 30_000 });
   }
