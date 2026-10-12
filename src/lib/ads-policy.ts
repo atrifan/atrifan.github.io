@@ -3,7 +3,7 @@ import type { Surface } from './surface-url';
 /**
  * Where the single footer ad may appear. Kept to the minimum: signed-out
  * visitors only, on public browsing pages (hub landing and docs, marketplace,
- * gigs listing and detail). Never on ai., chat., profile, credits, pricing,
+ * gigs listing, detail and docs). Never on ai., chat., profile, credits, pricing,
  * auth, admin, posting, checkout or job rooms.
  *
  * `surface` is the active surface (activeSurface()); `pathname` may still carry
@@ -11,7 +11,7 @@ import type { Surface } from './surface-url';
  */
 const BLOCKED_SEGMENTS: Partial<Record<Surface, readonly string[]>> = {
   marketplace: ['admin'],
-  gigs: ['post', 'room', 'checkout'],
+  gigs: ['post', 'room', 'checkout', 'contracts', 'offers', 'admin-qa'],
 };
 
 export function footerAdAllowed({

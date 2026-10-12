@@ -47,4 +47,12 @@ describe('footerAdAllowed', () => {
       expect(ok('gigs', p)).toBe(false);
     }
   });
+
+  it('allows the public gigs docs, never contracts, the offer form or the admin docs', () => {
+    expect(ok('gigs', '/gigs/docs/mcp')).toBe(true);
+    expect(ok('gigs', '/docs/mcp')).toBe(true);
+    for (const p of ['/gigs/contracts/1', '/contracts/1', '/gigs/offers/new', '/offers/new', '/gigs/docs/admin-qa', '/docs/admin-qa']) {
+      expect(ok('gigs', p), p).toBe(false);
+    }
+  });
 });
