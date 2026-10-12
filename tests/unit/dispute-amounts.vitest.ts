@@ -129,19 +129,21 @@ describe('providerShareOfRefund', () => {
 });
 
 describe('planResolution: validation', () => {
-  const bad = (fn: () => unknown, code: string) => {
+  const bad = (fn: () => unknown, code: string, message?: string) => {
     try {
       fn();
     } catch (err) {
       expect(err).toBeInstanceOf(DisputeAmountError);
       expect((err as DisputeAmountError).code).toBe(code);
+      expect((err as Error).name).toBe('DisputeAmountError');
+      if (message) expect((err as Error).message).toBe(message);
       return;
     }
     throw new Error('expected a DisputeAmountError');
   };
 
   it('a partial refund needs a whole positive amount below what is refundable', () => {
-    bad(() => planResolution(PAID, 'partial_refund'), 'invalid_amount');
+    bad(() => planResolution(PAID, 'partial_refund'), 'invalid_amount', 'A partial refund is a whole number of cents from 1 to 34499');
     bad(() => planResolution(PAID, 'partial_refund', 0), 'invalid_amount');
     bad(() => planResolution(PAID, 'partial_refund', -5), 'invalid_amount');
     bad(() => planResolution(PAID, 'partial_refund', 10.5), 'invalid_amount');
@@ -152,19 +154,19 @@ describe('planResolution: validation', () => {
   });
 
   it('rejects inconsistent money state', () => {
-    bad(() => planResolution({ ...PAID, customerPaidCents: 0 }, 'release'), 'invalid_state');
-    bad(() => planResolution({ ...PAID, bidCents: 40000 }, 'release'), 'invalid_state');
-    bad(() => planResolution({ ...PAID, bidCents: 0 }, 'release'), 'invalid_state');
-    bad(() => planResolution({ ...PAID, alreadyRefundedCents: 34501 }, 'release'), 'invalid_state');
-    bad(() => planResolution({ ...PAID, alreadyRefundedCents: -1 }, 'release'), 'invalid_state');
+    bad(() => planResolution({ ...PAID, customerPaidCents: 0 }, 'release'), 'invalid_state', 'The bid is more than was paid');
+    bad(() => planResolution({ ...PAID, bidCents: 40000 }, 'release'), 'invalid_state', 'The bid is more than was paid');
+    bad(() => planResolution({ ...PAID, bidCents: 0 }, 'release'), 'invalid_state', 'Nothing was paid');
+    bad(() => planResolution({ ...PAID, alreadyRefundedCents: 34501 }, 'release'), 'invalid_state', 'Refunded more than was paid');
+    bad(() => planResolution({ ...PAID, alreadyRefundedCents: -1 }, 'release'), 'invalid_state', 'Amounts must be whole, non-negative cents');
     bad(() => planResolution({ ...PAID, transferredCents: -1 }, 'release'), 'invalid_state');
-    bad(() => planResolution({ ...PAID, alreadyReversedCents: 1 }, 'release'), 'invalid_state');
+    bad(() => planResolution({ ...PAID, alreadyReversedCents: 1 }, 'release'), 'invalid_state', 'Reversed more than was transferred');
     bad(() => planResolution({ ...PAID, bidCents: 1.5 }, 'release'), 'invalid_state');
-    bad(() => planResolution(PAID, 'nope' as never), 'invalid_outcome');
+    bad(() => planResolution(PAID, 'nope' as never), 'invalid_outcome', 'Outcome must be release, partial_refund or full_refund');
   });
 
   it('a fully refunded payment cannot be refunded again', () => {
-    bad(() => planResolution({ ...PAID, alreadyRefundedCents: 34500 }, 'full_refund'), 'nothing_to_refund');
+    bad(() => planResolution({ ...PAID, alreadyRefundedCents: 34500 }, 'full_refund'), 'nothing_to_refund', 'The payment was already refunded in full');
   });
 
   it('allows paid equal to the bid (no fee)', () => {

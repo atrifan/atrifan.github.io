@@ -68,6 +68,9 @@ describe('timestamps from Clerk', () => {
     expect(timestampToDate(1760000000)?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
     expect(timestampToDate(1760000000000)?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
     expect(timestampToDate('2025-10-09T08:53:20.000Z')?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
+    // 1e12 is the first millisecond value (2001); anything below is seconds
+    expect(timestampToDate(1e12)?.toISOString()).toBe('2001-09-09T01:46:40.000Z');
+    expect(timestampToDate(999_999_999_999)?.getUTCFullYear()).toBeGreaterThan(30000);
     expect(timestampToDate(null)).toBeNull();
     expect(timestampToDate(0)).toBeNull();
     expect(timestampToDate('nope')).toBeNull();
@@ -85,6 +88,7 @@ describe('timestamps from Clerk', () => {
       })?.toISOString(),
     ).toBe('2025-10-09T08:53:20.000Z');
     expect(periodAnchorFromSubscription({ current_period_start: 1760000000 })?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
+    expect(periodAnchorFromSubscription({ items: [null as never, { status: 'active', period_start: 1760000000 }] })?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
     expect(periodAnchorFromSubscription({ created_at: 1760000000000 })?.toISOString()).toBe('2025-10-09T08:53:20.000Z');
     expect(periodAnchorFromSubscription({})).toBeNull();
     expect(periodAnchorFromSubscription(null)).toBeNull();

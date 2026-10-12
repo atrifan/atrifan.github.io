@@ -79,6 +79,9 @@ describe('clock helpers', () => {
     expect(claimDaysFrom({})).toBe(14);
     expect(claimDaysFrom({ JOBS_POST_ACCEPT_CLAIM_DAYS: '30' })).toBe(30);
     expect(claimDaysFrom({ JOBS_POST_ACCEPT_CLAIM_DAYS: '' })).toBe(14);
+    expect(claimDaysFrom({ JOBS_POST_ACCEPT_CLAIM_DAYS: '   ' })).toBe(14);
+    expect(autoAcceptDaysFrom({ JOBS_AUTO_ACCEPT_DAYS: '1' })).toBe(1);
+    expect(() => claimDaysFrom({ JOBS_POST_ACCEPT_CLAIM_DAYS: '0' })).toThrow('JOBS_POST_ACCEPT_CLAIM_DAYS must be a whole number >= 1, got "0"');
     for (const bad of ['0', '-1', '2.5', 'abc']) {
       expect(() => claimDaysFrom({ JOBS_POST_ACCEPT_CLAIM_DAYS: bad })).toThrow(RangeError);
       expect(() => autoAcceptDaysFrom({ JOBS_AUTO_ACCEPT_DAYS: bad })).toThrow(RangeError);

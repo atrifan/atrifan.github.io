@@ -110,6 +110,7 @@ describe('building blocks', () => {
     expect(isSelfDealing(contract({ customerFingerprints: ['card:abc'], providerFingerprints: ['card:def'] }))).toBe(false);
     expect(isSelfDealing(contract({ customerFingerprints: ['EMAIL:A@X'], providerFingerprints: ['email:a@x'] }))).toBe(true);
     expect(isSelfDealing(contract({ customerFingerprints: [''], providerFingerprints: [''] }))).toBe(false);
+    expect(isSelfDealing(contract({ customerFingerprints: [' card:abc '], providerFingerprints: ['card:abc'] }))).toBe(true);
   });
 });
 
@@ -273,6 +274,16 @@ describe('computeTrustScore', () => {
     expect(comp(s, 'reviews').evidence).toBeCloseTo(1 + wFresh, 10);
     expect(s.averageRating).toBeCloseTo((5 * 1 + 1 * wFresh) / (1 + wFresh), 1);
     expect(s.reviewCount).toBe(2);
+  });
+
+  it('the oldest review from a reviewer gets the full weight, whatever the input order', () => {
+    const a = contract({ customerUserId: 'same' });
+    const b = contract({ customerUserId: 'same' });
+    const newer = review(b, { overall: 1, quality: 1, communication: 1, timeliness: 1, createdAt: daysAgo(0) });
+    const older = review(a, { createdAt: daysAgo(10) });
+    const s = computeTrustScore({ contracts: [a, b], reviews: [newer, older], now: NOW });
+    const wOld = decayWeight(daysAgo(10), NOW);
+    expect(comp(s, 'reviews').value).toBeCloseTo((0.625 * 3 + wOld) / (3 + wOld + 0.5), 10);
   });
 
   it('repeat reviews by one reviewer are capped like contracts', () => {

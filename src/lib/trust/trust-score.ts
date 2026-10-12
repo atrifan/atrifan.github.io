@@ -176,12 +176,12 @@ export function contractSignals(c: TrustContract): ContractSignals {
   let deadline: number | null = null;
   if (c.deadline && c.deliveredAt) {
     const lateDays = (new Date(c.deliveredAt).getTime() - new Date(c.deadline).getTime()) / DAY_MS;
-    deadline = lateDays <= 0 ? 1 : Math.max(0, 1 - lateDays / 7);
+    deadline = Math.min(1, Math.max(0, 1 - lateDays / 7));
   }
   let price: number | null = null;
   if (c.initialPriceCents > 0) {
     const overrun = c.finalPriceCents / c.initialPriceCents - 1;
-    price = overrun <= 0 ? 1 : Math.max(0, 1 - overrun * 2);
+    price = Math.min(1, Math.max(0, 1 - overrun * 2));
   }
   return { firstPass, severity, dispute, deadline, price };
 }

@@ -71,7 +71,7 @@ export function providerShareOfRefund(refundCents: number, bidCents: number, pai
 function checkState(s: MoneyState): void {
   const values = [s.customerPaidCents, s.alreadyRefundedCents, s.bidCents, s.transferredCents, s.alreadyReversedCents];
   if (!values.every(isCents)) throw new DisputeAmountError('invalid_state', 'Amounts must be whole, non-negative cents');
-  if (s.customerPaidCents === 0 || s.bidCents === 0) throw new DisputeAmountError('invalid_state', 'Nothing was paid');
+  if (s.bidCents === 0) throw new DisputeAmountError('invalid_state', 'Nothing was paid');
   if (s.bidCents > s.customerPaidCents) throw new DisputeAmountError('invalid_state', 'The bid is more than was paid');
   if (s.alreadyRefundedCents > s.customerPaidCents) throw new DisputeAmountError('invalid_state', 'Refunded more than was paid');
   if (s.alreadyReversedCents > s.transferredCents) throw new DisputeAmountError('invalid_state', 'Reversed more than was transferred');
