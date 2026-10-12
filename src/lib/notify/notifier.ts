@@ -1,4 +1,4 @@
-import { backoffDelay, withRetry, type BackoffOptions } from './backoff.ts';
+import { withRetry, type BackoffOptions } from './backoff.ts';
 import { gateNotification, type SkipReason } from './preferences.ts';
 import type { NotifyStore } from './store.ts';
 import { renderEmail } from './templates/index.ts';
@@ -12,18 +12,17 @@ export interface NotifierDeps {
   transport: EmailTransport;
   from: string;
   unsubscribeSecret: string;
-  /** Runs delivery after enqueue without blocking the caller (waitUntil in prod). */
+  /**
+   * Keeps the send running after the response without blocking the caller (waitUntil in prod). The send
+   * starts either way; without a hook (or when it throws) it just isn't tied to the request's lifetime.
+   */
   schedule?: (work: Promise<unknown>) => void;
   sleep?: (ms: number) => Promise<void>;
-  now?: () => Date;
-  /** Total delivery attempts across in-process and cron runs before a row is `failed`. */
-  maxAttempts?: number;
-  /** Quick in-process retries per attempt for transient errors. */
+  /** Inline retries after the first send, for transient errors. Default 3. */
   sendRetries?: number;
+  /** Waits between inline retries. Default 0.5s, 2s, 5s. */
   sendBackoff?: BackoffOptions;
-  /** Delay before the cron picks a failed attempt up again. */
-  outboxBackoff?: BackoffOptions;
-  /** How long a claimed row is hidden from other workers. */
+  /** How long a claimed row is hidden from a second deliver(). */
   leaseMs?: number;
 }
 
@@ -32,15 +31,7 @@ export type EnqueueResult =
   | { status: 'skipped'; id: string; reason: SkipReason }
   | { status: 'duplicate'; id: null };
 
-export type DeliverResult = 'sent' | 'skipped' | 'retry' | 'failed' | 'not_claimed';
-
-export interface DispatchSummary {
-  claimed: number;
-  sent: number;
-  skipped: number;
-  retry: number;
-  failed: number;
-}
+export type DeliverResult = 'sent' | 'skipped' | 'failed' | 'not_claimed';
 
 export interface Notifier {
   enqueue<T extends NotificationType>(
@@ -50,7 +41,6 @@ export interface Notifier {
     dedupeKey: string,
   ): Promise<EnqueueResult>;
   deliver(id: string): Promise<DeliverResult>;
-  dispatch(limit?: number): Promise<DispatchSummary>;
 }
 
 export function unsubscribeUrl(userId: string, type: NotificationType, secret: string): string {
@@ -70,18 +60,15 @@ export function createNotifier(deps: NotifierDeps): Notifier {
     unsubscribeSecret,
     schedule,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now = () => new Date(),
-    maxAttempts = 5,
-    sendRetries = 2,
-    sendBackoff = { baseMs: 500, factor: 2, maxMs: 4000 },
-    outboxBackoff = { baseMs: 60_000, factor: 5, maxMs: 6 * 3_600_000 },
+    sendRetries = 3,
+    sendBackoff = { baseMs: 500, factor: 4, maxMs: 5000 },
     leaseMs = 120_000,
   } = deps;
 
   async function send(row: NotificationRow): Promise<DeliverResult> {
     try {
       if (!isNotificationType(row.type)) {
-        await store.markFailed(row.id, `unknown type ${String(row.type)}`, null);
+        await store.markFailed(row.id, `unknown type ${String(row.type)}`);
         return 'failed';
       }
       const [contact, prefs] = await Promise.all([store.getContact(row.userId), store.getPreferences(row.userId)]);
@@ -112,10 +99,9 @@ export function createNotifier(deps: NotifierDeps): Notifier {
       await store.markSent(row.id, result.id);
       return 'sent';
     } catch (err) {
-      const terminal = !isRetryableError(err) || row.attempts >= maxAttempts;
-      const retryAt = terminal ? null : new Date(now().getTime() + backoffDelay(row.attempts, outboxBackoff));
-      await store.markFailed(row.id, errorMessage(err), retryAt);
-      return terminal ? 'failed' : 'retry';
+      // Inline retries are the only retries: nothing polls the outbox, so a row that didn't go out is failed.
+      await store.markFailed(row.id, errorMessage(err));
+      return 'failed';
     }
   }
 
@@ -144,27 +130,16 @@ export function createNotifier(deps: NotifierDeps): Notifier {
       if (!row) return { status: 'duplicate', id: null };
       if (!gate.send) return { status: 'skipped', id: row.id, reason: gate.reason };
 
-      if (schedule) {
-        const work = deliver(row.id).catch((err) => console.error('[notify] deliver failed', row.id, errorMessage(err)));
-        try {
-          schedule(work);
-        } catch (err) {
-          console.warn('[notify] schedule failed; the cron will deliver', errorMessage(err));
-        }
+      // Send now, in this request. The promise runs whether or not the hook takes it.
+      const work = deliver(row.id).catch((err) => console.error('[notify] deliver failed', row.id, errorMessage(err)));
+      try {
+        schedule?.(work);
+      } catch (err) {
+        console.warn('[notify] schedule failed; sending without waitUntil', errorMessage(err));
       }
       return { status: 'queued', id: row.id };
     },
 
     deliver,
-
-    async dispatch(limit = 50) {
-      const rows = await store.claimDue(limit, leaseMs);
-      const summary: DispatchSummary = { claimed: rows.length, sent: 0, skipped: 0, retry: 0, failed: 0 };
-      for (const row of rows) {
-        const outcome = await send(row);
-        if (outcome !== 'not_claimed') summary[outcome] += 1;
-      }
-      return summary;
-    },
   };
 }

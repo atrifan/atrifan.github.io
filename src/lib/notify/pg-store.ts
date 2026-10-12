@@ -134,23 +134,6 @@ export class PgNotifyStore implements NotifyStore {
     return rows[0] ? toRow(rows[0]) : null;
   }
 
-  async claimDue(limit: number, leaseMs: number): Promise<NotificationRow[]> {
-    const { rows } = await this.db.query<DbNotification>(
-      `update ${this.t.notifications}
-         set attempts = attempts + 1, next_attempt_at = now() + ($2::bigint * interval '1 millisecond')
-       where id in (
-         select id from ${this.t.notifications}
-         where status = 'queued' and next_attempt_at <= now()
-         order by next_attempt_at, created_at
-         limit $1
-         for update skip locked
-       )
-       returning ${COLUMNS}`,
-      [limit, leaseMs],
-    );
-    return rows.map(toRow).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }
-
   async markSent(id: string, providerMessageId: string | null): Promise<void> {
     await this.db.query(
       `update ${this.t.notifications}
@@ -164,14 +147,7 @@ export class PgNotifyStore implements NotifyStore {
     await this.db.query(`update ${this.t.notifications} set status = 'skipped', last_error = $2 where id = $1`, [id, reason]);
   }
 
-  async markFailed(id: string, error: string, retryAt: Date | null): Promise<void> {
-    await this.db.query(
-      `update ${this.t.notifications}
-         set status = case when $3::timestamptz is null then 'failed' else 'queued' end,
-             last_error = $2,
-             next_attempt_at = coalesce($3::timestamptz, next_attempt_at)
-       where id = $1`,
-      [id, error, retryAt ? retryAt.toISOString() : null],
-    );
+  async markFailed(id: string, error: string): Promise<void> {
+    await this.db.query(`update ${this.t.notifications} set status = 'failed', last_error = $2 where id = $1`, [id, error]);
   }
 }

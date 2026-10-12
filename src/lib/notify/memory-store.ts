@@ -76,10 +76,6 @@ export class MemoryNotifyStore implements NotifyStore {
     return row && this.due(row) ? this.claim(row, leaseMs) : null;
   }
 
-  async claimDue(limit: number, leaseMs: number): Promise<NotificationRow[]> {
-    return this.rows.filter((r) => this.due(r)).slice(0, limit).map((r) => this.claim(r, leaseMs));
-  }
-
   async markSent(id: string, providerMessageId: string | null): Promise<void> {
     const row = this.find(id);
     row.status = 'sent';
@@ -94,15 +90,10 @@ export class MemoryNotifyStore implements NotifyStore {
     row.lastError = reason;
   }
 
-  async markFailed(id: string, error: string, retryAt: Date | null): Promise<void> {
+  async markFailed(id: string, error: string): Promise<void> {
     const row = this.find(id);
     row.lastError = error;
-    if (retryAt) {
-      row.status = 'queued';
-      row.nextAttemptAt = retryAt.getTime();
-    } else {
-      row.status = 'failed';
-    }
+    row.status = 'failed';
   }
 
   private find(id: string): MemoryRow {

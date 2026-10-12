@@ -55,13 +55,15 @@ Services in `src/lib/{delivery,disputes,reviews,trust,credits}`; pure math in `d
 
 ## Crons (`vercel.json`)
 
-The Vercel account is on **Hobby**, which rejects a deploy with any cron that runs more than once a day.
-So every cron is daily: `notifications/dispatch` at `0 7 * * *`, plus `cron/auto-accept`, `cron/trust-decay`
-and `cron/credit-grants`. Emails don't wait for the cron: `enqueue()` (`src/lib/notify/notify.ts`) sends right
-away through `waitUntil`, and `dispatch` is only the daily fallback for sends that failed or were cut off
-(so retries of a failed send now wait up to a day). On the Pro plan `dispatch` can go back to `*/5 * * * *`.
+The Vercel account is on **Hobby**, which rejects a deploy with any cron that runs more than once a day, so
+every cron is daily: `cron/auto-accept`, `cron/trust-decay` and `cron/credit-grants`.
 
-All five projects deploy the same `vercel.json`, so each runs every cron. Only the hub serves
-`/api/notifications/dispatch` and `/api/cron/*`; on ai/marketplace/gigs/chat they are outside
-`SURFACE_API_ALLOWLIST` and middleware answers 404, so those copies are no-ops.
-`tests/unit/surface-routing.vitest.ts` checks both (daily schedules, hub-only routes) against `vercel.json`.
+Email has no cron and no poller. `enqueue()` (`src/lib/notify/notify.ts`) sends when the action happens,
+inside the request under `waitUntil` (the response isn't blocked), retrying inline after 0.5s, 2s and 5s on
+transient errors. If the send still fails, or the provider refuses it, the row is `failed` with `last_error`;
+nothing retries it later. The dedupe key keeps a repeated action from sending twice.
+
+All five projects deploy the same `vercel.json`, so each runs every cron. Only the hub serves `/api/cron/*`;
+on ai/marketplace/gigs/chat they are outside `SURFACE_API_ALLOWLIST` and middleware answers 404, so those
+copies are no-ops. `tests/unit/surface-routing.vitest.ts` checks this (daily schedules, hub-only routes)
+against `vercel.json`.

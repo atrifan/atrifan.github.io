@@ -389,10 +389,9 @@ describe('vercel.json crons', () => {
   const vercel = JSON.parse(readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf8')) as { crons: { path: string; schedule: string }[] };
   const cronPaths = vercel.crons.map((c) => c.path);
 
-  it('are the notification dispatch and the /api/cron/* routes', () => {
-    expect(cronPaths).toContain('/api/notifications/dispatch');
-    expect(cronPaths.some((p) => p.startsWith('/api/cron/'))).toBe(true);
-    for (const p of cronPaths) expect(p === '/api/notifications/dispatch' || p.startsWith('/api/cron/')).toBe(true);
+  it('are the daily /api/cron/* jobs; email has no cron (it is sent when the action happens)', () => {
+    expect([...cronPaths].sort()).toEqual(['/api/cron/auto-accept', '/api/cron/credit-grants', '/api/cron/trust-decay']);
+    expect(cronPaths.some((p) => p.startsWith('/api/notifications'))).toBe(false);
   });
 
   it('run at most once a day (Vercel Hobby rejects anything more frequent)', () => {

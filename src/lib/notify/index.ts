@@ -4,10 +4,10 @@
  *   import { enqueue } from '@/src/lib/notify';
  *   await enqueue(userId, 'bid_received', { jobId, jobTitle, bidderName, amountCents }, `bid_received:${bidId}`);
  */
-export { enqueue, dispatchQueued, syncContactFromClerk, deleteContact, getNotifyStore, getNotifier, getInAppStore } from './notify.ts';
+export { enqueue, syncContactFromClerk, deleteContact, getNotifyStore, getNotifier, getInAppStore } from './notify.ts';
 export type { ChannelsResult } from './channels.ts';
 export { createNotifier, unsubscribeUrl } from './notifier.ts';
-export type { Notifier, NotifierDeps, EnqueueResult, DeliverResult, DispatchSummary } from './notifier.ts';
+export type { Notifier, NotifierDeps, EnqueueResult, DeliverResult } from './notifier.ts';
 export { NOTIFICATION_TYPES, NOTIFICATION_LABELS, payloadSchemas, isNotificationType } from './types.ts';
 export type { NotificationType, Payload, PayloadInput, Contact, NotificationRow, NotificationStatus } from './types.ts';
 export type { NotifyStore } from './store.ts';
