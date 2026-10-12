@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { AiShell } from '@/src/views/ai/AiShell';
 import { isPreferenced } from '@/src/lib/preferenced';
 import { planFromClaims } from '@/src/lib/plans';
-import { resolveSurface } from '@/src/lib/surface-routing';
+import { requestSurface } from '@/src/lib/request-surface';
 import { SURFACE_PREFIX, surfaceUrl } from '@/src/lib/surface-url';
 
 /**
@@ -16,7 +16,7 @@ export default async function AiLayout({ children }: { children: React.ReactNode
   if (!userId) redirect(surfaceUrl('hub', '/sign-in'));
   const plan = planFromClaims(sessionClaims as Record<string, unknown> | null);
   const showDownloads = plan !== 'free' || (await isPreferenced());
-  const base = resolveSurface(process.env.TULZO_SURFACE) === 'ai' ? '' : SURFACE_PREFIX.ai;
+  const base = requestSurface() === 'ai' ? '' : SURFACE_PREFIX.ai;
   return (
     <AiShell base={base} showDownloads={showDownloads}>
       {children}

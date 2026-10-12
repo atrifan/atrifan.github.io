@@ -11,7 +11,7 @@ import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
 import type { Scheme } from '@/src/lib/theme';
 
 interface ProvidersProps {
-  /** TULZO_SURFACE of this deploy, resolved on the server (null = path-prefix mode). */
+  /** This request's surface, resolved on the server by requestSurface() (null = path-prefix mode). */
   surface: Surface | null;
   children: React.ReactNode;
 }

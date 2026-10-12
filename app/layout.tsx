@@ -1,17 +1,20 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { Providers } from './providers';
-import { resolveSurface } from '@/src/lib/surface-routing';
+import { requestSurface } from '@/src/lib/request-surface';
 import { absoluteSurfaceUrl } from '@/src/lib/site-url';
+import { seoEnv } from '@/src/lib/seo';
+import type { Surface } from '@/src/lib/surface-url';
 import { noFlashThemeScript } from '@/src/lib/theme';
 import { iubendaConfig } from '@/src/lib/consent';
 import { ConsentScripts } from '@/src/components/consent/ConsentScripts';
 import '@/styles/tokens.css';
 import '@/styles/globals.css';
 
-const surface = resolveSurface(process.env.TULZO_SURFACE);
-const siteUrl = absoluteSurfaceUrl(surface ?? 'hub', '/');
-const siteHost = new URL(siteUrl).host;
+/** This request's site root: the surface's own host on a single-surface host, the hub in path mode. */
+function siteUrlFor(surface: Surface | null): string {
+  return absoluteSurfaceUrl(surface ?? 'hub', '/', seoEnv(surface));
+}
 
 /**
  * iubenda cookie banner: a slim bottom bar naming this surface's domain (src/lib/consent.ts).
@@ -48,8 +51,7 @@ function iubendaBootScript(host: string): string {
   `;
 }
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+const baseMetadata: Metadata = {
   title: {
     default: 'Tex by Tulzo - Your Personal AI Assistant',
     template: '%s | Tex by Tulzo',
@@ -73,7 +75,6 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: siteUrl,
     siteName: 'Tulzo',
     title: 'Tex by Tulzo - Your Personal AI Assistant',
     description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
@@ -89,6 +90,12 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
 };
+
+/** Per request: metadataBase and og:url follow the host's surface (x-tulzo-surface). */
+export function generateMetadata(): Metadata {
+  const siteUrl = siteUrlFor(requestSurface());
+  return { ...baseMetadata, metadataBase: new URL(siteUrl), openGraph: { ...baseMetadata.openGraph, url: siteUrl } };
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -109,6 +116,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const surface = requestSurface();
+  const siteHost = new URL(siteUrlFor(surface)).host;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

@@ -1,5 +1,5 @@
 /**
- * Links inside the gigs surface. Pure. In surface mode (TULZO_SURFACE=gigs) pages live at
+ * Links inside the gigs surface. Pure. On the gigs host (gigs.<root>, or TULZO_SURFACE=gigs) pages live at
  * the root (`/jobs/1`); everywhere else under the `/gigs` prefix (`/gigs/jobs/1`).
  * Server components compute the base once and pass it to client components.
  */

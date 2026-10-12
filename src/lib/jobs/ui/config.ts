@@ -1,9 +1,9 @@
 /**
  * Server-side settings the gigs pages pass to their client views: the link base for this
- * deploy, the commission, bid bounds, QA check caps and the dispute/claim windows (all env-configurable).
+ * request's host, the commission, bid bounds, QA check caps and the dispute/claim windows (all env-configurable).
  */
 import 'server-only';
-import { resolveSurface } from '@/src/lib/surface-routing';
+import { requestSurface } from '@/src/lib/request-surface';
 import { gigsBase } from '@/src/lib/jobs/ui/paths';
 import { commissionBpsFromEnv } from '@/src/lib/jobs/commission';
 import { bidBoundsFromEnv } from '@/src/lib/jobs/bid-eligibility';
@@ -13,7 +13,7 @@ import { gigsWindowsNotice } from '@/src/lib/legal/facts';
 
 export function gigsConfig() {
   return {
-    base: gigsBase(resolveSurface(process.env.TULZO_SURFACE)),
+    base: gigsBase(requestSurface()),
     bps: commissionBpsFromEnv(),
     bounds: bidBoundsFromEnv(),
     qaCosts: qaCostsFromEnv(),

@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Lets the Playwright surface servers (TULZO_SURFACE=ai|hub) run beside the main dev server.
+  // Lets the Playwright surface and host-routing servers run beside the main dev server.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Where cross-surface links point (path | host, src/lib/surface-url.ts), inlined so client code sees it too.
+  env: { TULZO_LINKS: process.env.TULZO_LINKS || '' },
   // Keeps the dev build indicator out of visual snapshots.
   devIndicators: { buildActivity: false },
   // next dev only: keep compiled pages instead of disposing them after 60s idle (default: 5 kept).
