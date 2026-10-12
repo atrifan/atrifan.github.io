@@ -40,6 +40,8 @@ export type JobsErrorCode =
   | 'scope_unverifiable'
   | 'github_error'
   | 'pat_purged'
+  | 'snapshot_missing'
+  | 'snapshot_unavailable'
   | 'reason_required'
   | 'config_error'
   // delivery, acceptance, disputes, reviews (Phase 5)

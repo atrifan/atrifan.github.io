@@ -238,7 +238,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
             </div>
           ) : null}
           {customer && actions.can_download ? (
-            <p className="gigs-hint">The download is the exact commit QA checked. Download it before you accept: acceptance ends the platform&apos;s access to the provider&apos;s repository.</p>
+            <p className="gigs-hint">The download is the exact commit QA checked. It stays available here after you accept.</p>
           ) : null}
           {customer && actions.can_dispute && actions.dispute_phase === 'post_accept' && actions.claim_window_ends_at ? (
             <p className="gigs-hint">{`You can file a claim until ${formatDate(actions.claim_window_ends_at)}.`}</p>
@@ -246,7 +246,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
 
           {confirming ? (
             <div className="delivery-confirm">
-              <p>Accepting releases the payment to the provider and ends the platform&apos;s access to their repository. Download first if you haven&apos;t.</p>
+              <p>Accepting releases the payment to the provider and ends the platform&apos;s access to their repository. The QA&apos;d commit stays available to download.</p>
               <div className="delivery-actions">
                 <button type="button" className="btn btn-primary" onClick={() => void accept()} disabled={busy === 'accept'}>
                   {busy === 'accept' ? 'Accepting…' : 'Accept and release payment'}

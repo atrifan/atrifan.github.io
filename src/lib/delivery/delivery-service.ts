@@ -1,17 +1,17 @@
 /**
  * Delivery: what QA validated, and how the customer gets it.
  *
- * Once QA validated a submission and the payment went through, the customer can download the
- * exact QA'd commit (a tarball streamed through the platform, fetched with the provider's
- * sealed read PAT, never shown to anyone) or have it pushed into an empty private repo of
- * their own with a fine-grained write PAT they give for that push. Every access is recorded in
- * `deliveries` and `audit_events`. Both PATs are purged on acceptance.
+ * When QA validates a submission the platform snapshots the exact QA'd commit into private
+ * blob storage (./snapshot.ts, fetched once with the provider's sealed read PAT, which is never
+ * shown to anyone). Once the payment went through, the customer can download that snapshot (a
+ * tarball streamed through the platform) or have it pushed into an empty private repo of their
+ * own with a fine-grained write PAT they give for that push, before and after acceptance.
+ * Every access is recorded in `deliveries` and `audit_events`. Both PATs are purged on
+ * acceptance; the snapshot stays.
  *
  * The delivery view also carries the QA report and warnings, the attempt history, the
  * contract version history, the dispute state and what the caller may do next.
  */
-import { createGunzip } from 'node:zlib';
-import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { jobsDb } from '../jobs/db';
 import { JobsError, dbError, isUniqueViolation } from '../jobs/errors';
@@ -33,8 +33,8 @@ import {
   type DisputeRow,
   type Phase5ContractRow,
 } from './contract-data';
-import { fetchCommitTarball, pushTree, verifyPushTarget } from './github-delivery';
-import { DEFAULT_TAR_LIMITS, TarError, readTar, stripTopDir } from './tar';
+import { pushTree, verifyPushTarget } from './github-delivery';
+import { ensureSnapshot, filesOf, openSnapshot, readSnapshot, type SnapshotSubmission } from './snapshot';
 
 export interface DeliveryWarning {
   severity: string | null;
@@ -73,6 +73,9 @@ export interface DeliveryView {
     auto_accept_at: string | null;
     auto_accept_paused: boolean;
     pat_available: boolean;
+    /** The QA'd commit is kept in storage: downloads and pushes work after acceptance too. */
+    snapshot_available: boolean;
+    files_hash: string | null;
   };
   qa: { verdict: string; reason: string | null; report_md: string | null; warnings: DeliveryWarning[]; reviewed_at: string } | null;
   history: Array<{ attempt: number; commit_sha: string; submitted_at: string; status: string; verdict: string | null; reason: string | null; reviewed_at: string | null }>;
@@ -186,6 +189,10 @@ export async function getDeliveryView(userId: string, contractId: string, now: D
   const theirs = reviewRows.find((r) => r.reviewer_user_id !== userId);
   const resolvedOrAccepted = contract.status === 'completed' || contract.status === 'refunded';
   const patOk = hasUsablePat(sub, now);
+  const snap = sub as SnapshotSubmission | null;
+  const kept = !!snap?.snapshot_path;
+  // Served from the snapshot; a missing one is taken on first use while the PAT still works.
+  const available = kept || patOk;
   const customer = role === 'customer';
 
   return {
@@ -208,6 +215,8 @@ export async function getDeliveryView(userId: string, contractId: string, now: D
       auto_accept_at: contract.status === 'delivered' ? sub?.auto_accept_at ?? null : null,
       auto_accept_paused: open.length > 0,
       pat_available: patOk,
+      snapshot_available: kept,
+      files_hash: snap?.files_hash ?? null,
     },
     qa: validated
       ? {
@@ -251,8 +260,8 @@ export async function getDeliveryView(userId: string, contractId: string, now: D
         }
       : null,
     actions: {
-      can_download: customer && isUnlocked && patOk,
-      can_push: customer && isUnlocked && patOk,
+      can_download: customer && isUnlocked && available,
+      can_push: customer && isUnlocked && available,
       can_accept: customer && isUnlocked && contract.status === 'delivered' && open.length === 0,
       can_dispute: customer && eligibility.ok && paymentSucceeded(payments),
       dispute_phase: eligibility.ok ? eligibility.phase : null,
@@ -275,17 +284,8 @@ async function requireDeliverable(userId: string, contractId: string) {
   if (!sub || !unlocked(contract, sub, payments)) {
     throw new JobsError('delivery_locked', 409, 'The delivery unlocks once QA validates the work and the payment has gone through');
   }
-  if (!hasUsablePat(sub, new Date()) || !sub.pat_ciphertext || !sub.pat_iv || !sub.pat_tag) {
-    throw new JobsError('pat_purged', 410, "The platform's access to the provider's repository has ended (accepted, or the token expired)");
-  }
-  let pat: string;
-  try {
-    pat = openSecret({ ciphertext: sub.pat_ciphertext, iv: sub.pat_iv, tag: sub.pat_tag }, { aad: `submission:${sub.id}` });
-  } catch (err) {
-    console.error('[delivery] PAT decrypt failed:', err instanceof Error ? err.name : 'error');
-    throw new JobsError('config_error', 500, 'The delivery could not be prepared. Try again later.');
-  }
-  return { contract, sub, pat };
+  const snapshot = await ensureSnapshot(sub as SnapshotSubmission, userId);
+  return { contract, sub, snapshot };
 }
 
 async function recordDelivery(row: Record<string, unknown>): Promise<string> {
@@ -308,46 +308,21 @@ export interface DownloadStream {
   contentLength: string | null;
 }
 
-/** Stream the QA'd commit as a .tar.gz. Audited per access. */
+/** Stream the QA'd commit's snapshot as a .tar.gz. Audited per access. */
 export async function openDownload(userId: string, contractId: string): Promise<DownloadStream> {
-  const { contract, sub, pat } = await requireDeliverable(userId, contractId);
+  const { contract, sub, snapshot } = await requireDeliverable(userId, contractId);
   const deliveryId = await recordDelivery({ contract_id: contract.id, submission_id: sub.id, user_id: userId, kind: 'download', status: 'pending', commit_sha: sub.commit_sha });
   await audit(userId, 'delivery_download', 'contract', contract.id, { submission_id: sub.id, commit_sha: sub.commit_sha, delivery_id: deliveryId });
-  let res: Response;
+  let file: Awaited<ReturnType<typeof openSnapshot>>;
   try {
-    res = await fetchCommitTarball(pat, sub.repo_full_name, sub.commit_sha);
+    file = await openSnapshot(snapshot);
   } catch (err) {
     await finishDelivery(deliveryId, { status: 'failed', error: err instanceof JobsError ? err.code : 'error' });
     throw err;
   }
-  const contentLength = res.headers.get('content-length');
-  await finishDelivery(deliveryId, { status: 'succeeded', bytes: contentLength ? Number(contentLength) : null });
+  await finishDelivery(deliveryId, { status: 'succeeded', bytes: file.size });
   const repoName = sub.repo_full_name.split('/')[1] ?? 'delivery';
-  return { body: res.body as ReadableStream<Uint8Array>, filename: `${repoName}-${sub.commit_sha.slice(0, 12)}.tar.gz`, contentLength };
-}
-
-async function gunzipToBuffer(res: Response, maxBytes: number): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  const gunzip = createGunzip();
-  const source = Readable.fromWeb(res.body as unknown as import('node:stream/web').ReadableStream);
-  await new Promise<void>((resolve, reject) => {
-    source.on('error', reject);
-    gunzip.on('error', reject);
-    gunzip.on('data', (c: Buffer) => {
-      total += c.length;
-      if (total > maxBytes) {
-        source.destroy();
-        gunzip.destroy();
-        reject(new JobsError('archive_too_large', 413, `The delivery is larger than ${Math.round(maxBytes / 1024 / 1024)} MB; download it instead`));
-        return;
-      }
-      chunks.push(c);
-    });
-    gunzip.on('end', () => resolve());
-    source.pipe(gunzip);
-  });
-  return Buffer.concat(chunks);
+  return { body: file.body, filename: `${repoName}-${sub.commit_sha.slice(0, 12)}.tar.gz`, contentLength: file.size !== null ? String(file.size) : null };
 }
 
 export const pushSchema = z.object({
@@ -369,7 +344,7 @@ export interface PushResult {
  * sealed for the duration of the push and purged right after (and in any case on acceptance).
  */
 export async function pushDelivery(userId: string, contractId: string, input: { repo: string; token: string }): Promise<PushResult> {
-  const { contract, sub, pat } = await requireDeliverable(userId, contractId);
+  const { contract, sub, snapshot } = await requireDeliverable(userId, contractId);
   const target = await verifyPushTarget(input.token, input.repo);
   const deliveryId = await recordDelivery({
     contract_id: contract.id,
@@ -387,15 +362,8 @@ export async function pushDelivery(userId: string, contractId: string, input: { 
   await audit(userId, 'delivery_push', 'contract', contract.id, { submission_id: sub.id, commit_sha: sub.commit_sha, delivery_id: deliveryId, target_repo: target.ref.fullName });
   const purge = { pat_ciphertext: null, pat_iv: null, pat_tag: null, pat_purged_at: new Date().toISOString() };
   try {
-    const tarball = await fetchCommitTarball(pat, sub.repo_full_name, sub.commit_sha);
-    const tar = await gunzipToBuffer(tarball, DEFAULT_TAR_LIMITS.maxBytes);
-    let files;
-    try {
-      files = stripTopDir(readTar(tar));
-    } catch (err) {
-      if (err instanceof TarError) throw new JobsError('archive_too_large', 413, err.message);
-      throw err;
-    }
+    const tar = await readSnapshot(snapshot);
+    const files = filesOf(tar);
     if (files.length === 0) throw new JobsError('push_failed', 422, 'The delivered commit has no files');
     const token = openSecret(sealed, { aad: `delivery:${deliveryId}` });
     const pushed = await pushTree(token, target, files, `Delivery from Tulzo: contract ${contract.id}\n\nSource commit ${sub.commit_sha} (validated by QA).`);

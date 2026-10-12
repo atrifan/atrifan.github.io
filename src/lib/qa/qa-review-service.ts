@@ -37,6 +37,8 @@ import {
   type QaReviewRow,
   type SubmissionRow,
 } from './qa-data';
+import { deliveredSubmission } from '../delivery/contract-data';
+import { trySnapshot } from '../delivery/snapshot';
 
 const uuid = z.string().uuid();
 
@@ -359,6 +361,9 @@ export async function markSubmission(adminUserId: string, args: unknown) {
         const { error } = await db.from('submissions').update({ delivery_unlocked_at: now }).eq('id', sub.id);
         if (error) throw dbError(error, 'unlock delivery');
         await audit(adminUserId, 'delivery_unlocked', 'submission', sub.id, { contract_id: contract.id, commit_sha: sub.commit_sha });
+        // Keep the QA'd commit for the customer: the PAT is purged on acceptance.
+        const validated = await deliveredSubmission(contract.id);
+        if (validated) await trySnapshot(validated, adminUserId);
         break;
       }
       case 'start_auto_accept': {

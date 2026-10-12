@@ -261,18 +261,23 @@ test.describe('delivery API: delivered, accepted and reviewed', () => {
     expectApiError(await postJson(request, `/api/contracts/${c.contractId}/accept`, customer, {}), 409, 'not_acceptable');
   });
 
-  test('download after acceptance → 410 pat_purged', async ({ request }) => {
-    expectApiError(await getJson(request, `${deliveryPath(c.contractId)}/download`, customer), 410, 'pat_purged');
+  test('download after acceptance → still the gzip tarball, served from the kept snapshot', async ({ request }) => {
+    const r = await getJson(request, `${deliveryPath(c.contractId)}/download`, customer);
+    expect(r.status, r.text.slice(0, 200)).toBe(200);
+    const body = await r.res.body();
+    expect([body[0], body[1]]).toEqual([0x1f, 0x8b]);
   });
 
   test('GET delivery after acceptance: completed, payout, claim window of 14 days, reviews open', async ({ request }) => {
     const d = await getDelivery(request, c.contractId, customer);
     expect(d.contract).toMatchObject({ status: 'completed', acceptance: 'customer', accepted_at: acceptedAt });
     expect(d.delivery.pat_available).toBe(false);
+    expect(d.delivery.snapshot_available).toBe(true);
+    expect(d.delivery.files_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(d.payout).toMatchObject({ status: 'paid', amount_cents: BID_CENTS, reversed_cents: 0 });
     expect(d.actions).toMatchObject({
-      can_download: false,
-      can_push: false,
+      can_download: true,
+      can_push: true,
       can_accept: false,
       can_dispute: true,
       dispute_phase: 'post_accept',
@@ -624,7 +629,7 @@ async function openDelivery(page: Page, contractId: string): Promise<void> {
 
 const LOCKED_TEXT = 'The delivery unlocks once QA validates the work and the payment has gone through.';
 const ACCEPT_CONFIRM =
-  "Accepting releases the payment to the provider and ends the platform's access to their repository. Download first if you haven't.";
+  "Accepting releases the payment to the provider and ends the platform's access to their repository. The QA'd commit stays available to download.";
 
 test.describe('delivery page: access and locked state', () => {
   test.describe.configure({ mode: 'serial', timeout: 120_000 });
@@ -753,7 +758,7 @@ test.describe('delivery page: ready, push, accept, review (customer and provider
     expect(await fakeGithubHead(request, target.repo, target.token)).toMatch(/^[0-9a-f]{40}$/);
   });
 
-  test('accept: confirmation with Cancel, then confirm → accepted, download gone, review form and claim window', async ({
+  test('accept: confirmation with Cancel, then confirm → accepted, download kept, review form and claim window', async ({
     page,
     context,
     request,
@@ -772,7 +777,7 @@ test.describe('delivery page: ready, push, accept, review (customer and provider
     await expect(page.getByRole('status').filter({ hasText: 'Accepted. The provider has been paid.' })).toBeVisible();
     await expect(chip(page, 'Accepted')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Accept delivery' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Download .tar.gz' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Download .tar.gz' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Leave a review' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'File a claim' })).toBeVisible();
 

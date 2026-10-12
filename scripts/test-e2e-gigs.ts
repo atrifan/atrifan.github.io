@@ -12,6 +12,7 @@
  *   QA_E2E_ADMIN_USER)
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
  * - two seeded API keys for the Jobs MCP spec (an active Free-plan key and a revoked key)
+ * - DELIVERY_SNAPSHOT_FAKE_DIR, a temp dir standing in for private Vercel Blob (delivery snapshots)
  * - a CRON_SECRET for the Phase 5 cron routes; the specs get it plus GITHUB_FAKE_URL and
  *   STRIPE_FAKE_URL (to add fake GitHub token fixtures, e.g. a push target repo)
  * Runs the specs in DEFAULT_SPECS.
@@ -19,6 +20,8 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
@@ -108,6 +111,8 @@ async function main() {
   const authSecret = randomBytes(24).toString('hex');
   const webhookSecret = `whsec_e2e_${randomBytes(12).toString('hex')}`;
   const cronSecret = `cron_e2e_${randomBytes(12).toString('hex')}`;
+  // Delivery snapshots go to a throwaway directory instead of Vercel Blob.
+  const snapshots = mkdtempSync(path.join(os.tmpdir(), 'tulzo-e2e-snapshots-'));
   let server: ChildProcess | null = null;
   let code = 1;
   try {
@@ -129,6 +134,7 @@ async function main() {
       PAT_ENCRYPTION_KEY_PREV: '',
       ADMIN_USER_IDS: qaAdmin,
       CRON_SECRET: cronSecret,
+      DELIVERY_SNAPSHOT_FAKE_DIR: snapshots,
       JOBS_AUTO_ACCEPT_DAYS: '',
       JOBS_POST_ACCEPT_CLAIM_DAYS: '',
       ADMIN_EMAILS: '',
@@ -196,6 +202,7 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1000));
       if (server.exitCode === null) server.kill('SIGKILL');
     }
+    rmSync(snapshots, { recursive: true, force: true });
     await stripe.close();
     await github.close();
     await db.stop();

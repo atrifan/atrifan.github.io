@@ -9,7 +9,8 @@
  * Supabase project, live Stripe or the AI Gateway.
  */
 import { spawn } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
 
@@ -22,6 +23,8 @@ async function main() {
     ? picked.map((f) => path.resolve(root, f))
     : readdirSync(dir).filter((f) => f.endsWith('.test.ts')).map((f) => path.join(dir, f));
   const db = await startGigsTestDb();
+  // Delivery snapshots go to a throwaway directory instead of Vercel Blob.
+  const snapshots = mkdtempSync(path.join(os.tmpdir(), 'tulzo-int-snapshots-'));
   let code = 1;
   try {
     const env: NodeJS.ProcessEnv = {
@@ -37,6 +40,7 @@ async function main() {
       STRIPE_WEBHOOK_SECRET: 'whsec_test_integration',
       AI_GATEWAY_API_KEY: 'fake-gateway-key',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+      DELIVERY_SNAPSHOT_FAKE_DIR: snapshots,
     };
     const args = [
       '--import', 'tsx',
@@ -51,6 +55,7 @@ async function main() {
     });
   } finally {
     await db.stop();
+    rmSync(snapshots, { recursive: true, force: true });
   }
   process.exit(code);
 }

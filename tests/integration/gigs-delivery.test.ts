@@ -13,6 +13,9 @@ import { seedDelivered, one } from './delivery-helpers';
 import { startFakeGithub, FAKE_SHA_HEAD, FAKE_TOKENS, DEFAULT_REPO_FILES, type FakeGithub } from '../support/fake-github';
 import type { FakeStripe } from '../support/fake-stripe';
 import { readTar, stripTopDir } from '../../src/lib/delivery/tar';
+import { filesHash } from '../../src/lib/delivery/snapshot-hash';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 installMocks();
 process.env.PAT_ENCRYPTION_KEY = randomBytes(32).toString('base64');
@@ -35,6 +38,7 @@ const TARGET_TOKEN = `github_pat_11TARGET000000000000_${'t'.padEnd(59, '0')}`;
 const NONEMPTY_TOKEN = `github_pat_11NONEMPTY0000000000_${'n'.padEnd(59, '0')}`;
 const PUBLIC_TOKEN = `github_pat_11PUBTARGET000000000_${'p'.padEnd(59, '0')}`;
 const READONLY_TOKEN = `github_pat_11READONLY0000000000_${'r'.padEnd(59, '0')}`;
+const KEPT_TOKEN = `github_pat_11KEPTTARGET00000000_${'k'.padEnd(59, '0')}`;
 
 const p = (id: string) => ({ id });
 const cronHeaders = { authorization: `Bearer ${process.env.CRON_SECRET}` };
@@ -52,6 +56,7 @@ before(async () => {
   github.setToken(NONEMPTY_TOKEN, { repos: [target('cust/busy', { empty: false })], expires_in_days: 10 });
   github.setToken(PUBLIC_TOKEN, { repos: [target('cust/open', { private: false })], expires_in_days: 10 });
   github.setToken(READONLY_TOKEN, { repos: [target('cust/readonly', { push: false })], expires_in_days: 10 });
+  github.setToken(KEPT_TOKEN, { repos: [target('cust/kept')], expires_in_days: 10 });
   viewRoute = await import('../../app/api/contracts/[id]/delivery/route');
   downloadRoute = await import('../../app/api/contracts/[id]/delivery/download/route');
   pushRoute = await import('../../app/api/contracts/[id]/delivery/push/route');
@@ -238,9 +243,56 @@ test('accept: completes the contract, transfers the bid with source_transaction 
   assert.equal(again.status, 409);
   assert.equal(again.body.error, 'not_acceptable');
   assert.equal(stripe.requests.filter((q) => q.path === '/v1/transfers').length, 1, 'no second transfer');
-  const gone = await download(c.contractId, CUSTOMER);
+  // The QA'd commit was kept before the PAT was purged: the download still works, from storage.
+  github.requests.length = 0;
+  const kept = await download(c.contractId, CUSTOMER);
+  assert.equal(kept.res.status, 200);
+  assert.deepEqual(Object.fromEntries(stripTopDir(readTar(gunzipSync(kept.bytes))).map((f) => [f.path, f.data.toString()])), DEFAULT_REPO_FILES);
+  assert.equal(github.requests.length, 0, 'no GitHub call (and no PAT) after acceptance');
+});
+
+test('snapshot: the first use keeps the QA’d commit in private storage with its files hash; later downloads never use the PAT', async () => {
+  const c = await delivered();
+  github.requests.length = 0;
+  const first = await download(c.contractId, CUSTOMER);
+  assert.equal(first.res.status, 200);
+  const sub = await one<{ snapshot_path: string; files_hash: string; snapshot_bytes: number; snapshot_at: string | null }>(
+    `SELECT snapshot_path, files_hash, snapshot_bytes, snapshot_at FROM submissions WHERE id = $1`, [c.submissionId]);
+  assert.match(sub.snapshot_path, new RegExp(`^deliveries/${c.contractId}/${c.submissionId}-[0-9a-f]{64}\\.tar\\.gz$`));
+  assert.equal(sub.files_hash, filesHash(stripTopDir(readTar(gunzipSync(first.bytes)))));
+  assert.equal(Number(sub.snapshot_bytes), first.bytes.length);
+  assert.ok(sub.snapshot_at);
+  assert.deepEqual(readFileSync(path.join(process.env.DELIVERY_SNAPSHOT_FAKE_DIR!, ...sub.snapshot_path.split('/'))), first.bytes);
+  assert.ok(await one(`SELECT id FROM audit_events WHERE action = 'delivery_snapshot' AND subject_id = $1`, [c.submissionId]));
+
+  github.requests.length = 0;
+  const second = await download(c.contractId, CUSTOMER);
+  assert.equal(second.res.status, 200);
+  assert.deepEqual(second.bytes, first.bytes);
+  assert.equal(github.requests.length, 0, 'served from the snapshot');
+  const view = await call(viewRoute.GET, { url: '/x', params: p(c.contractId), user: CUSTOMER });
+  assert.equal(view.body.delivery.snapshot_available, true);
+  assert.equal(view.body.delivery.files_hash, sub.files_hash);
+  assert.ok(!JSON.stringify(view.body).includes(sub.snapshot_path), 'the storage path is never shown');
+});
+
+test('snapshot: with the PAT purged, a kept snapshot still downloads and pushes; without one it is 410 snapshot_missing', async () => {
+  const c = await delivered();
+  assert.equal((await download(c.contractId, CUSTOMER)).res.status, 200);
+  await sql(`UPDATE submissions SET pat_ciphertext = NULL, pat_iv = NULL, pat_tag = NULL, pat_purged_at = NOW() WHERE id = $1`, [c.submissionId]);
+  github.requests.length = 0;
+  assert.equal((await download(c.contractId, CUSTOMER)).res.status, 200);
+  const pushed = await call(pushRoute.POST, { method: 'POST', url: '/x', params: p(c.contractId), user: CUSTOMER, body: { repo: 'cust/kept', token: KEPT_TOKEN } });
+  assert.equal(pushed.status, 200, JSON.stringify(pushed.body));
+  assert.ok(!github.requests.some((r) => r.path.includes('/tarball/')), 'the push reads the snapshot, not the provider repo');
+
+  const lost = await delivered();
+  await sql(`UPDATE submissions SET pat_ciphertext = NULL, pat_iv = NULL, pat_tag = NULL, pat_purged_at = NOW() WHERE id = $1`, [lost.submissionId]);
+  const gone = await download(lost.contractId, CUSTOMER);
   assert.equal(gone.res.status, 410);
-  assert.equal(JSON.parse(gone.bytes.toString()).error, 'pat_purged');
+  assert.equal(JSON.parse(gone.bytes.toString()).error, 'snapshot_missing');
+  const view = await call(viewRoute.GET, { url: '/x', params: p(lost.contractId), user: CUSTOMER });
+  assert.equal(view.body.actions.can_download, false);
 });
 
 test('accept: only the customer, only a delivered and paid contract', async () => {

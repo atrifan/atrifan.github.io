@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { installMocks, resetDb, sql, seedBalance, notifyState, clerkState } from './helpers';
 import {
   seedActiveContract, seedDeviceKey, seedContact, balance, contractStatus, toolCall, rpc, type SeededContract,
@@ -261,6 +263,11 @@ test('validated: delivered, delivery unlocked, auto-accept set, key revoked, res
   const [sub] = await sql<any>('SELECT * FROM submissions WHERE id = $1', [submissionId]);
   assert.equal(sub.status, 'validated');
   assert.ok(sub.delivery_unlocked_at);
+  // The QA'd commit is kept in (fake) private storage at validation, with its files hash.
+  assert.match(sub.snapshot_path, new RegExp(`^deliveries/${c.contractId}/${submissionId}-[0-9a-f]{64}\\.tar\\.gz$`));
+  assert.match(sub.files_hash, /^sha256:[0-9a-f]{64}$/);
+  assert.ok(existsSync(path.join(process.env.DELIVERY_SNAPSHOT_FAKE_DIR!, ...sub.snapshot_path.split('/'))));
+  assert.ok(github.requests.some((q) => q.path === `/repos/${FAKE_REPOS.private}/tarball/${sub.commit_sha}` && q.authorized));
   const days = (Date.parse(sub.auto_accept_at) - Date.now()) / 86_400_000;
   assert.ok(days > 6.9 && days < 7.1);
   const [key] = await sql<any>('SELECT is_active, revoked_at FROM api_keys WHERE id = $1', [cred.data.review_key.key_id]);

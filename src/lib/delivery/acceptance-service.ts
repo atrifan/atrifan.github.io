@@ -30,6 +30,7 @@ import {
 } from './contract-data';
 import type { PayoutResult } from './payout';
 import { payoutWithCredits } from './scope-credits';
+import { trySnapshot } from './snapshot';
 
 export type Acceptance = 'customer' | 'auto' | 'resolution';
 
@@ -95,6 +96,9 @@ async function completeDelivered(contract: Phase5ContractRow, acceptance: Accept
 /** Shared tail of acceptance and of a dispute released by an admin. */
 export async function afterAcceptance(contract: Phase5ContractRow, acceptance: Acceptance, actor: string | null, amountCents?: number): Promise<AcceptResult> {
   await completeJob(contract.job_id);
+  // The download outlives the PAT: make sure the QA'd commit is kept before purging it.
+  const sub = await deliveredSubmission(contract.id);
+  if (sub) await trySnapshot(sub, actor);
   await purgeContractPats(contract.id);
   const version = await currentVersion(contract);
   const payout = await payoutWithCredits(contract, amountCents ?? version?.price_cents ?? 0);
