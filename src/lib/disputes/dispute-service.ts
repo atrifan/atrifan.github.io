@@ -66,7 +66,7 @@ async function moveJob(jobId: string, to: JobStatus): Promise<void> {
 async function notifyAdmins(contract: Phase5ContractRow, openedBy: string, reason: string, key: string): Promise<void> {
   const jobTitle = await jobTitleOf(contract.job_id);
   for (const admin of await adminUserIdsForNotify()) {
-    await notifyUser(admin, 'dispute_opened', { jobId: contract.job_id, jobTitle, contractId: contract.id, openedBy, reason: reason.slice(0, 2000) }, `${key}:admin:${admin}`);
+    await notifyUser(admin, 'dispute_opened', { jobId: contract.job_id, jobTitle, contractId: contract.id, openedBy, reason: reason.slice(0, 2000), audience: 'admin' }, `${key}:admin:${admin}`);
   }
 }
 

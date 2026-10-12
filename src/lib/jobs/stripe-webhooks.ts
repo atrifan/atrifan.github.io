@@ -16,6 +16,7 @@ import { recordActivity } from './room-service';
 import { formatEuros } from './client/format';
 import type { ContractRow, PaymentRow, SteeringRequestRow } from './types';
 import { linkChargeback } from '../disputes/dispute-service';
+import { notifyUser } from './notifications';
 
 type Outcome = 'processed' | 'ignored';
 
@@ -171,6 +172,20 @@ async function onContractCheckoutPaid(session: Stripe.Checkout.Session): Promise
     await recordActivity(contract.id, null, 'payment_received', `Payment of ${formatEuros(session.amount_total)} received; work can start`, {
       checkout_session_id: session.id,
     });
+    const paidJob = await loadJob(contract.job_id);
+    const jobTitle = paidJob?.title ?? 'Your job';
+    await notifyUser(
+      contract.customer_user_id,
+      'payment_confirmed',
+      { jobId: contract.job_id, jobTitle, contractId: contract.id, amountCents: version.customer_total_cents, currency: version.currency },
+      `payment_confirmed:${session.id}`,
+    );
+    await notifyUser(
+      contract.provider_user_id,
+      'contract_created',
+      { jobId: contract.job_id, jobTitle, contractId: contract.id, counterpartyName: 'Your client', amountCents: version.price_cents, currency: version.currency },
+      `contract_created:${contract.id}:provider`,
+    );
   } else if (contract.status !== 'active') {
     console.error(`[jobs/webhook] payment for contract ${contract.id} in status ${contract.status}; needs admin review`);
   }
