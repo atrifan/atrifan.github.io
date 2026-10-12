@@ -1,6 +1,20 @@
 name: CI
 
 # Vercel does the deploys; this workflow only checks the code.
+#
+# GitHub secrets (Settings → Secrets and variables → Actions). All optional: without them the
+# specs that need them skip with a message instead of failing (e.g. on forks).
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY  Clerk *development* instance (pk_test_/sk_test_):
+#                                                        signed-in Playwright specs and the E2E users
+#   STORAGE_SUPABASE_URL, NEXT_PUBLIC_STORAGE_SUPABASE_URL, STORAGE_SUPABASE_SERVICE_ROLE_KEY
+#                                                        a Supabase project for test:int and the API-key
+#                                                        e2e specs (never production)
+# Everything else (Stripe, GitHub, Resend, the AI Gateway, Vercel Blob, the gigs/marketplace DB)
+# is faked or runs in throwaway Docker containers.
+#
+# Screenshots: the Linux baselines are taken in the Playwright image below (see
+# .claude/rules/testing.md), so every Playwright run here happens inside that image too.
+
 on:
   pull_request:
   push:
@@ -14,13 +28,14 @@ permissions:
   contents: read
 
 env:
-  # Specs that need these skip themselves when they are empty (e.g. on forks).
   STORAGE_SUPABASE_URL: ${{ secrets.STORAGE_SUPABASE_URL }}
+  NEXT_PUBLIC_STORAGE_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_STORAGE_SUPABASE_URL }}
   STORAGE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STORAGE_SUPABASE_SERVICE_ROLE_KEY }}
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
   CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
   E2E_CLERK_STORAGE_STATE: ''
   NEXT_TELEMETRY_DISABLED: '1'
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.61.1-noble
 
 jobs:
   gitleaks:
@@ -36,7 +51,7 @@ jobs:
 
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,7 +72,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     needs: checks
     steps:
       - uses: actions/checkout@v4
@@ -66,14 +81,29 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Pull the Playwright image
+        run: docker pull "$PLAYWRIGHT_IMAGE"
       - name: Build
         run: npm run build
-      - name: Gigs API e2e (Docker backends, fake Stripe)
+      # The runners start their own Docker DB and server here, and Playwright in the image.
+      - name: Gigs e2e, a11y and visual (Docker backends, fake Stripe and GitHub)
         run: npm run test:e2e:gigs
-      - name: Playwright e2e, surface routing, a11y and visual (light/dark x desktop/mobile)
-        run: npx playwright test
+        env:
+          PW_DOCKER_IMAGE: ${{ env.PLAYWRIGHT_IMAGE }}
+          NEXT_DIST_DIR: .next-gigs-e2e
+      - name: Marketplace e2e, a11y and visual (Docker DB)
+        run: npm run test:e2e:marketplace
+        env:
+          PW_DOCKER_IMAGE: ${{ env.PLAYWRIGHT_IMAGE }}
+      # Every default project: setup, chromium, light/dark x desktop/mobile, surface-ai,
+      # surface-hub and integration (notify.spec.ts, i.e. test:integration:notify).
+      - name: Playwright, all projects
+        run: |
+          docker run --rm --network host --ipc host -v "$PWD:$PWD" -w "$PWD" \
+            -e CI=true -e NEXT_TELEMETRY_DISABLED -e E2E_CLERK_STORAGE_STATE \
+            -e STORAGE_SUPABASE_URL -e NEXT_PUBLIC_STORAGE_SUPABASE_URL -e STORAGE_SUPABASE_SERVICE_ROLE_KEY \
+            -e NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY -e CLERK_SECRET_KEY \
+            "$PLAYWRIGHT_IMAGE" npx playwright test
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

@@ -46,14 +46,25 @@ docker run --rm --network host -v "$PWD:$PWD" -w "$PWD" -e PLAYWRIGHT_BASE_URL=h
   --project=light-desktop --project=light-mobile --project=dark-desktop --project=dark-mobile
 ```
 
-Open every changed image before committing it. Ads and Clerk's dev footer are masked.
+The gigs and marketplace baselines come from their runners. `PW_DOCKER_IMAGE` makes a runner start Playwright
+in that image (host networking; `scripts/playwright-run.ts`), which is also how CI runs them:
+
+```bash
+PW_DOCKER_IMAGE=mcr.microsoft.com/playwright:v1.61.1-noble NEXT_DIST_DIR=.next-gigs-e2e \
+  npm run test:e2e:gigs -- --update-snapshots=all
+PW_DOCKER_IMAGE=mcr.microsoft.com/playwright:v1.61.1-noble MARKETPLACE_E2E_PHASE=themed \
+  npm run test:e2e:marketplace -- --update-snapshots=all
+```
+
+Without `PW_DOCKER_IMAGE` the same commands write the darwin baselines. Open every changed image before
+committing it. Ads, Clerk's dev footer, the avatar and volatile dates (`[data-volatile]`) are masked.
 
 ## Auth in tests
 
 - **API-key routes** use a real seeded fixture key (`tests/fixtures/seed.ts`); specs skip when
   `hasSupabaseEnv()` is false.
 - **Clerk-gated UI** runs only when `E2E_CLERK_STORAGE_STATE` points at a saved Clerk session. Signed out,
-  `/chat`, `/dashboard` and `/ai` are checked as the sign-in page they redirect to. Signed-in specs use
+  `/dashboard` and `/ai` are checked as the sign-in page they redirect to; `/chat` is the public chat landing. Signed-in specs use
   `storageStatePath('customer')` (the `setup` project saves it; one context per role, never signed out).
 - **ai. panel** specs mock the extension with `tests/support/mock-bridge.ts` and the server with
   `tests/support/ai-fixtures.ts`; the opt-in `live-extension` project runs `tests/live/` against the real
