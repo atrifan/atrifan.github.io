@@ -27,7 +27,9 @@ request by `middleware.ts`:
 Middleware passes the resolved surface to pages and route handlers in the `x-tulzo-surface` request header
 (`path` in path mode) and always overwrites a client-sent one. Server code reads it with `requestSurface()`
 (`src/lib/request-surface.ts`): the root layout (`metadataBase`, the AppShell's `aria-current` and ad policy), the
-ai. and gigs. link bases, robots.txt and the sitemap. Never read `TULZO_SURFACE` directly.
+ai. and gigs. link bases, robots.txt and the sitemap. Never read `TULZO_SURFACE` directly. In path mode (or with
+`TULZO_SURFACE`) it does not read the header, so `/`, `/docs`, `/pricing` and robots.txt stay prerendered; in
+hybrid mode every page is rendered per request.
 
 - `src/lib/surface-url.ts`: `surfaceUrl(surface, path)` builds every cross-surface link (see `TULZO_LINKS`).
   Never hard-code a surface host or prefix. `absoluteSurfaceUrl()` (`src/lib/site-url.ts`) is the same but
