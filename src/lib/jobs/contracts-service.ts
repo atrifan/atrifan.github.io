@@ -15,6 +15,7 @@ import { buildContractCheckoutParams, transferGroupFor } from './checkout-params
 import { getStripe, appBaseUrl, stripeFailure } from './stripe';
 import { creditValueUsdFromEnv, qaCostsFromEnv, type QaCheck } from '@/src/config/qa.config';
 import { computeReserve, creditsToUsd, normalizeChecks } from '@/src/lib/qa/qa-credits';
+import { notifyUser } from './notifications';
 import type { ContractRow, ContractVersionRow } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -214,6 +215,12 @@ export async function acceptBid(
       .single();
     if (updateError) throw dbError(updateError, 'link checkout');
 
+    await notifyUser(
+      bid.user_id,
+      'bid_accepted',
+      { jobId: job.id, jobTitle: job.title, contractId, amountCents: bid.price_cents, currency: bid.currency },
+      `bid_accepted:${bid.id}`,
+    );
     return { contract: updated as ContractRow, version: version as ContractVersionRow, checkout_url: session.url, qa };
   } catch (err) {
     try {

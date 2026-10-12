@@ -45,18 +45,35 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   marketplace: ['/api/marketplace', '/api/packages', '/api/admin/downloads'],
   // Stripe Connect onboarding (/api/connect) and the billing webhook stay on the hub.
   // /api/contracts: the job room and delivery; /api/trust: badges on the public cards.
-  gigs: ['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust'],
+  // /api/activity/gigs: the My activity ledger.
+  gigs: ['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust', '/api/activity/gigs'],
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 
+/**
+ * Exact API paths every surface serves: the header bell's feed (the AppShell is on every page).
+ * Exact, not prefixes, so /api/notifications/{dispatch,preferences,unsubscribe} stay on the hub.
+ */
+export const SHARED_API_PATHS: readonly string[] = ['/api/notifications', '/api/notifications/read', '/api/notifications/unread-count'];
+
 /** Pages that require a signed-in user. `/ai` is the control panel (rewritten from ai. `/x`). */
-const PROTECTED_PREFIXES = ['/dashboard', '/ai', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/ai',
+  '/profile',
+  '/credits',
+  '/admin',
+  '/notifications',
+  '/marketplace/publish',
+  '/marketplace/publisher',
+  '/marketplace/admin',
+];
 
 /** Public at the prefix itself (the signed-out chat landing), signed-in below it. */
 const PROTECTED_BELOW = ['/chat'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
-const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa', '/admin/disputes'];
+const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/notifications', '/admin/qa', '/admin/disputes', '/admin/activity'];
 
 /** Auth pages; on non-hub surfaces they redirect to the hub. */
 const AUTH_PREFIXES = ['/sign-in', '/sign-up'];
@@ -109,7 +126,7 @@ export function routeRequest({ surface, pathname, rootDomain }: RouteInput): Rou
 
   if (underPrefix(pathname, '/api')) {
     const allow = SURFACE_API_ALLOWLIST[surface];
-    if (allow === 'all' || allow.some((p) => underPrefix(pathname, p))) return next;
+    if (allow === 'all' || allow.some((p) => underPrefix(pathname, p)) || SHARED_API_PATHS.includes(pathname)) return next;
     return { action: 'notFound' };
   }
 

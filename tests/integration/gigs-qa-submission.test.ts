@@ -201,7 +201,9 @@ test('a good private repo is accepted: PAT encrypted, SHA pinned, contract in_qa
   const toCustomer = notifyState.sent.find((n) => n.userId === CUSTOMER && n.type === 'submission_received');
   assert.ok(toCustomer, 'customer notified');
   assert.equal(toCustomer!.payload.contractId, c.contractId);
-  const adminIds = notifyState.sent.filter((n) => n.type === 'submission_received' && n.userId !== CUSTOMER).map((n) => n.userId).sort();
+  // Admins get the QA-queue event (it links to hub /admin/qa), not the customer's submission_received.
+  const adminIds = notifyState.sent.filter((n) => n.type === 'submission_awaiting_qa').map((n) => n.userId).sort();
+  assert.equal(notifyState.sent.filter((n) => n.type === 'submission_received' && n.userId !== CUSTOMER).length, 0);
   assert.deepEqual(adminIds, ['user_qa_admin_email', 'user_qa_admin_ids']);
   assert.ok(!JSON.stringify(notifyState.sent).includes(FAKE_TOKENS.good));
 

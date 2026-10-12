@@ -1,10 +1,12 @@
 /**
- * How hub /profile shows the email switches: every notification type, in four groups, with
- * labels written for the settings page (the email templates use NOTIFICATION_LABELS). Pure.
+ * How hub /profile shows the notification switches: every notification type, in groups, with
+ * labels written for the settings page (the email templates use NOTIFICATION_LABELS). Email is
+ * one switch per type; in-app is one switch per group. Pure.
  */
-import { isNotificationType, type NotificationType } from './types';
+import { EMAIL_OFF_BY_DEFAULT } from './preferences';
+import type { NotificationType } from './types';
 
-export type PreferenceGroupId = 'gigs' | 'payments' | 'qa' | 'account';
+export type PreferenceGroupId = 'gigs' | 'payments' | 'qa' | 'account' | 'marketplace' | 'admin';
 
 export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: string; types: NotificationType[] }> = [
   {
@@ -26,7 +28,14 @@ export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: st
   { id: 'payments', title: 'Payments', types: ['payment_confirmed', 'payout_sent', 'dispute_opened', 'dispute_resolved'] },
   { id: 'qa', title: 'QA', types: ['submission_received', 'qa_verdict'] },
   { id: 'account', title: 'Account', types: ['review_received', 'review_requested'] },
+  { id: 'marketplace', title: 'Marketplace', types: ['package_installed', 'package_approved', 'package_rejected'] },
+  { id: 'admin', title: 'Admin', types: ['submission_awaiting_qa'] },
 ];
+
+/** The types in a group (empty for an unknown id). */
+export function groupTypes(id: string): NotificationType[] {
+  return [...(PREFERENCE_GROUPS.find((g) => g.id === id)?.types ?? [])];
+}
 
 export const PREFERENCE_LABELS: Record<NotificationType, string> = {
   job_posted: 'Your job is posted',
@@ -47,6 +56,10 @@ export const PREFERENCE_LABELS: Record<NotificationType, string> = {
   qa_verdict: 'QA verdicts',
   review_received: 'Someone reviewed you',
   review_requested: 'Reminders to leave a review',
+  package_installed: 'Someone installed your package',
+  package_approved: 'Your package is approved',
+  package_rejected: "Your package wasn't approved",
+  submission_awaiting_qa: 'Submissions waiting in the QA queue',
 };
 
 export interface PreferenceItem {
@@ -55,13 +68,25 @@ export interface PreferenceItem {
   emailEnabled: boolean;
 }
 
-/** Every type in its group; a type the server didn't send is on (the default). */
-export function groupPreferences(prefs: ReadonlyArray<{ type: string; emailEnabled: boolean }>): Array<{ id: PreferenceGroupId; title: string; items: PreferenceItem[] }> {
-  const saved = new Map<NotificationType, boolean>();
-  for (const p of prefs) if (isNotificationType(p.type)) saved.set(p.type, p.emailEnabled);
+export interface PreferenceGroupView {
+  id: PreferenceGroupId;
+  title: string;
+  /** On unless every type in the group was switched off in-app. */
+  inAppEnabled: boolean;
+  items: PreferenceItem[];
+}
+
+type SavedPreference = { type: string; emailEnabled?: boolean | null; inAppEnabled?: boolean | null };
+
+/** Every type in its group; a type the server didn't send gets its default. */
+export function groupPreferences(prefs: ReadonlyArray<SavedPreference>): PreferenceGroupView[] {
+  // Unknown types are never looked up; a null/absent choice falls back to the default below.
+  const email = new Map(prefs.map((p) => [p.type, p.emailEnabled]));
+  const inApp = new Map(prefs.map((p) => [p.type, p.inAppEnabled]));
   return PREFERENCE_GROUPS.map((g) => ({
     id: g.id,
     title: g.title,
-    items: g.types.map((type) => ({ type, label: PREFERENCE_LABELS[type], emailEnabled: saved.get(type) ?? true })),
+    inAppEnabled: g.types.some((type) => inApp.get(type) ?? true),
+    items: g.types.map((type) => ({ type, label: PREFERENCE_LABELS[type], emailEnabled: email.get(type) ?? !EMAIL_OFF_BY_DEFAULT.includes(type) })),
   }));
 }

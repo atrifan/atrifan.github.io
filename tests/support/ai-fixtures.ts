@@ -1,4 +1,5 @@
 import { test as base, expect, type Page, type Route } from '@playwright/test';
+import { quietBell } from '../e2e/surface-helpers';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 import { MockBridge, type Handlers, type Params } from './mock-bridge';
 
@@ -601,6 +602,7 @@ const THIRD_PARTY = /(iubenda|googletagmanager|google-analytics|googlesyndicatio
  */
 export async function openAi(page: Page, path: string): Promise<void> {
   await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
+  await quietBell(page);
   await page.clock.setFixedTime(FROZEN_NOW);
   await page.goto(path, { waitUntil: 'load' });
   await page.locator('h1').first().waitFor({ state: 'visible', timeout: 30_000 });

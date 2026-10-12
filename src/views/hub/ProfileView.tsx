@@ -17,6 +17,7 @@ interface Preference {
   type: string;
   label: string;
   emailEnabled: boolean;
+  inAppEnabled?: boolean;
 }
 
 /** Hub /profile: identity, Stripe Connect, email notifications, reviews and trust (Phase 5). */
@@ -214,15 +215,15 @@ function NotificationsPanel() {
     };
   }, []);
 
-  const toggle = async (type: string, enabled: boolean) => {
+  const save = async (change: Record<string, unknown>, optimistic: (p: Preference[]) => Preference[]) => {
     const before = prefs;
-    setPrefs((p) => p?.map((x) => (x.type === type ? { ...x, emailEnabled: enabled } : x)) ?? p);
+    setPrefs((p) => (p ? optimistic(p) : p));
     setStatus('Saving…');
     try {
       const res = await fetch('/api/notifications/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preferences: { [type]: enabled } }),
+        body: JSON.stringify(change),
       });
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json().catch(() => null)) as { preferences?: Preference[] } | null;
@@ -234,7 +235,43 @@ function NotificationsPanel() {
     }
   };
 
+  const toggle = (type: string, enabled: boolean) =>
+    save({ preferences: { [type]: enabled } }, (p) => p.map((x) => (x.type === type ? { ...x, emailEnabled: enabled } : x)));
+
+  const toggleInApp = (groupId: string, types: string[], enabled: boolean) =>
+    save({ inApp: { [groupId]: enabled } }, (p) => p.map((x) => (types.includes(x.type) ? { ...x, inAppEnabled: enabled } : x)));
+
   return (
+    <>
+    <section className="panel" aria-labelledby="inapp-title">
+      <div className="panel-head">
+        <h2 id="inapp-title">In-app notifications</h2>
+      </div>
+      <p className="muted">What shows up under the bell and on your notifications page. Each group is on unless you switch it off.</p>
+      {failed && <p className="field-error">We couldn&apos;t load your preferences. Refresh to try again.</p>}
+      {!prefs && !failed && <p className="muted">Loading…</p>}
+      {prefs && (
+        <ul className="switch-list" role="list">
+          {groupPreferences(prefs).map((group) => {
+            const id = `inapp-${group.id}`;
+            return (
+              <li key={group.id} className="switch-row">
+                <label htmlFor={id}>{group.title}</label>
+                <input
+                  id={id}
+                  type="checkbox"
+                  role="switch"
+                  className="switch"
+                  checked={group.inAppEnabled}
+                  aria-checked={group.inAppEnabled}
+                  onChange={(e) => void toggleInApp(group.id, group.items.map((i) => i.type), e.target.checked)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
     <section className="panel" aria-labelledby="notify-title">
       <div className="panel-head">
         <h2 id="notify-title">Email notifications</h2>
@@ -273,5 +310,6 @@ function NotificationsPanel() {
           </div>
         ))}
     </section>
+    </>
   );
 }

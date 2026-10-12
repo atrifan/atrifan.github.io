@@ -211,6 +211,35 @@ const builders: Builders = {
     paragraphs: [`Your provider marked "${p.milestoneTitle}" as done on "${p.jobTitle}".`],
     cta: { label: 'See the milestones', url: roomUrl(p, 'milestones') },
   }),
+  package_installed: (p) => ({
+    subject: `New install of ${p.packageName}`,
+    preheader: 'Someone installed your package.',
+    heading: 'Your package was installed',
+    paragraphs: [`Someone installed "${p.packageName}"${p.version ? ` (version ${p.version})` : ''}. Installs are anonymous counts.`],
+    cta: { label: 'See install activity', url: p.url ?? appUrl('marketplace', '/publisher/activity') },
+  }),
+  package_approved: (p) => ({
+    subject: `${p.packageName} is live in the marketplace`,
+    preheader: 'Your package passed review.',
+    heading: 'Your package is approved',
+    paragraphs: [`"${p.packageName}" passed review and is now listed in the marketplace.`],
+    cta: { label: 'View your package', url: p.url ?? appUrl('marketplace', `/${encodeURIComponent(p.packageId)}`) },
+  }),
+  package_rejected: (p) => ({
+    subject: `${p.packageName} wasn't approved`,
+    preheader: 'Your package needs changes before it can be listed.',
+    heading: "Your package wasn't approved",
+    paragraphs: [`"${p.packageName}" wasn't approved for the marketplace. You can publish a new version with the changes.`],
+    quote: p.reason ? clip(p.reason) : undefined,
+    cta: { label: 'Open your packages', url: p.url ?? appUrl('marketplace', '/publish') },
+  }),
+  submission_awaiting_qa: (p) => ({
+    subject: `Submission awaiting QA: ${p.jobTitle}`,
+    preheader: `${p.providerName} submitted work for review.`,
+    heading: 'A submission is waiting for QA',
+    paragraphs: [`${p.providerName} submitted "${p.jobTitle}" and it is waiting in the QA queue.`],
+    cta: { label: 'Open the QA queue', url: p.url ?? appUrl('hub', '/admin/qa') },
+  }),
 };
 
 export function buildContent<T extends NotificationType>(type: T, payload: Payload<T>): EmailContent {

@@ -29,6 +29,10 @@ const TYPES = [
   'review_received',
   'progress_update',
   'milestone_completed',
+  'package_installed',
+  'package_approved',
+  'package_rejected',
+  'submission_awaiting_qa',
 ] as const;
 
 type Pref = { type: string; label: string; emailEnabled: boolean };

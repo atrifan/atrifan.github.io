@@ -7,6 +7,8 @@ import { TulzoMark } from '../brand/TulzoMark';
 import { SURFACE_ICON } from '../brand/SurfaceIcons';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { AdBanner } from '../AdBanner';
+import { NotificationBell } from './NotificationBell';
+import '@/styles/notifications.css';
 import { activeSurface } from '@/src/lib/surface-routing';
 import { footerAdAllowed } from '@/src/lib/ads-policy';
 import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
@@ -15,10 +17,12 @@ import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
  * Shared shell for every surface: skip link, wordmark, primary nav
  * (AI · Marketplace · Gigs · Chat via surfaceUrl, the active one marked with
  * aria-current), theme switch, sign-in or the Clerk user menu (with Profile and
- * Credits on the hub), and a footer with at most one small ad.
+ * Credits on the hub), the notification bell for signed-in users (NotificationBell), and a
+ * footer with at most one small ad.
  *
  * Below 960px the nav and tools fold into a menu panel behind a "Menu" button:
- * focus moves into the panel, Tab is trapped inside it, Escape closes it.
+ * focus moves into the panel, Tab is trapped inside it, Escape closes it. The bell stays in the
+ * bar beside the menu button at every width.
  */
 
 const NAV: { surface: Exclude<Surface, 'hub'>; label: string }[] = [
@@ -183,6 +187,10 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
               </SignedIn>
             </div>
           </div>
+
+          <SignedIn>
+            <NotificationBell />
+          </SignedIn>
         </div>
       </header>
 

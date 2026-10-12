@@ -1,0 +1,436 @@
+/*
+ * Hub /notifications and the activity views (marketplace publisher activity, gigs My activity,
+ * hub admin activity). Mobile first: one column, tables become labelled cards below 640px.
+ * Tokens only; light and dark come from styles/tokens.css.
+ */
+
+.act-page {
+  max-width: 60rem;
+}
+
+.act-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.act-header h1 {
+  font-size: var(--text-2xl);
+  margin: 0;
+}
+
+.act-lede {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.act-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.act-section > h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.act-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.act-section-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* ── Stats (definition lists) ─────────────────────────────────────────── */
+.act-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.act-stat {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  min-width: 0;
+}
+
+.act-stat dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.act-stat dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .act-stats {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+}
+
+/* ── Filters ──────────────────────────────────────────────────────────── */
+.act-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: end;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+@media (min-width: 640px) {
+  .act-filters {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+}
+
+.act-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.act-field label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.act-input {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.act-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  font-weight: 600;
+}
+
+.act-check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-accent);
+}
+
+.act-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.act-empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.act-error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.act-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Tables (cards below 640px) ───────────────────────────────────────── */
+.act-table-wrap {
+  width: 100%;
+}
+
+.act-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.act-table caption {
+  padding: 0 0 var(--space-2);
+  text-align: left;
+  font-weight: 700;
+}
+
+.act-table th,
+.act-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-top: 1px solid var(--color-border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.act-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.act-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  .act-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .act-table tr {
+    display: block;
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .act-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .act-table td::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .act-table .num {
+    text-align: right;
+  }
+}
+
+@media (min-width: 640px) {
+  .act-table-wrap {
+    overflow-x: auto;
+  }
+}
+
+/* ── Bars (CSS chart) ─────────────────────────────────────────────────── */
+.act-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+}
+
+.act-toggle button {
+  min-height: calc(var(--touch-target) - 4px);
+  min-width: 4.5rem;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.act-toggle button[aria-pressed='true'] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.act-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.act-bar {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 2.5rem;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.act-bar-label {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.act-bar-track {
+  height: 0.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.act-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.act-bar-value {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Notification list (hub /notifications) ───────────────────────────── */
+.nc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nc-item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.nc-item[data-unread='true'] {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.nc-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.nc-item[data-unread='true'] .nc-dot {
+  background: var(--color-accent);
+}
+
+.nc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nc-title {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.nc-title:hover {
+  text-decoration: underline;
+}
+
+.nc-item[data-unread='true'] .nc-title {
+  font-weight: 700;
+}
+
+.nc-body {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.nc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.nc-tag {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.nc-mark {
+  flex: none;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nc-mark:hover {
+  background: var(--color-surface-2);
+}
+
+.nc-more {
+  align-self: center;
+  margin-top: var(--space-3);
+}

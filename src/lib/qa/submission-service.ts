@@ -209,7 +209,7 @@ async function notifySubmission(contract: ContractRow, submission: SubmissionRow
   await notifySafe(contract.customer_user_id, 'submission_received', payload, `submission_received:${submission.id}:customer`);
   for (const adminId of await adminUserIdsForNotify()) {
     if (adminId === contract.customer_user_id || adminId === contract.provider_user_id) continue;
-    await notifySafe(adminId, 'submission_received', payload, `submission_received:${submission.id}:admin:${adminId}`);
+    await notifySafe(adminId, 'submission_awaiting_qa', payload, `submission_awaiting_qa:${submission.id}:admin:${adminId}`);
   }
 }
 

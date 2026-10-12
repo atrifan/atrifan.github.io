@@ -1,11 +1,16 @@
 import { waitUntil } from '@vercel/functions';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
+import { createSupabaseClient } from '@/src/lib/supabase';
+import { createEnqueue, type ChannelsResult } from './channels.ts';
 import { contactFromClerkUser } from './contacts.ts';
-import { createNotifier, type DispatchSummary, type EnqueueResult, type Notifier } from './notifier.ts';
+import { SupabaseInAppStore } from './inapp-supabase-store.ts';
+import type { InAppStore } from './inapp-store.ts';
+import { createNotifier, type DispatchSummary, type Notifier } from './notifier.ts';
 import { PgNotifyStore } from './pg-store.ts';
 import type { NotifyStore } from './store.ts';
 import { createResendTransport } from './transport.ts';
-import { isNotificationType, parsePayload, type NotificationType, type PayloadInput } from './types.ts';
+import type { NotificationType, PayloadInput } from './types.ts';
 
 /**
  * Production wiring: Postgres outbox + Resend + waitUntil.
@@ -66,34 +71,43 @@ export function getNotifier(): Notifier {
   return notifier;
 }
 
+let inAppStore: InAppStore | null = null;
+
+/** The in-app feed store (service-role Supabase, STORAGE_SUPABASE_URL). Throws if not configured. */
+export function getInAppStore(): InAppStore {
+  if (!inAppStore) inAppStore = new SupabaseInAppStore(createSupabaseClient({ noStore: true }) as unknown as SupabaseClient);
+  return inAppStore;
+}
+
+function getInAppStoreOrNull(): InAppStore | null {
+  try {
+    return getInAppStore();
+  } catch (err) {
+    console.error('[notify] in-app not configured:', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+const enqueueBoth = createEnqueue({ notifier: getNotifierOrNull, inApp: getInAppStoreOrNull });
+
 /**
- * Queue an email for `userId` and start sending it right away (via waitUntil).
- * The cron at /api/notifications/dispatch picks up anything that didn't go out.
+ * Notify `userId` of an event on both channels: the in-app feed (the header bell, hub
+ * /notifications) and email. The email is queued and sent right away (via waitUntil); the cron
+ * at /api/notifications/dispatch picks up anything that didn't go out. Preferences apply per
+ * channel (src/lib/notify/preferences.ts).
  *
  * - Throws on programmer errors: unknown type, invalid payload, empty dedupeKey.
  * - Never throws on infrastructure errors (DB down, env missing): it logs and returns
- *   `{ status: 'error' }`, so a failed email never breaks the caller's main flow.
+ *   `{ status: 'error' }` (and `inApp.status: 'error'`), so a failed notification never breaks
+ *   the caller's main flow.
  */
 export async function enqueue<T extends NotificationType>(
   userId: string,
   type: T,
   payload: PayloadInput<T>,
   dedupeKey: string,
-): Promise<EnqueueResult | { status: 'error'; id: null; error: string }> {
-  if (!isNotificationType(type)) throw new Error(`enqueue: unknown notification type ${String(type)}`);
-  if (!userId) throw new Error('enqueue: userId is required');
-  if (!dedupeKey) throw new Error('enqueue: dedupeKey is required');
-  parsePayload(type, payload);
-  const n = getNotifierOrNull();
-  if (!n) return { status: 'error', id: null, error: 'notifications are not configured' };
-  try {
-    return await n.enqueue(userId, type, payload, dedupeKey);
-  } catch (err) {
-    if (isProgrammerError(err)) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[notify] enqueue failed', type, dedupeKey, message);
-    return { status: 'error', id: null, error: message };
-  }
+): Promise<ChannelsResult> {
+  return enqueueBoth(userId, type, payload, dedupeKey);
 }
 
 /** Drain due rows from the outbox (used by the cron route). */
@@ -108,11 +122,6 @@ function getNotifierOrNull(): Notifier | null {
     console.error('[notify] not configured:', err instanceof Error ? err.message : String(err));
     return null;
   }
-}
-
-function isProgrammerError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  return err.name === 'ZodError' || err.message.startsWith('enqueue:');
 }
 
 /** Upsert the contact for a Clerk user (webhook payload or Backend SDK object). */

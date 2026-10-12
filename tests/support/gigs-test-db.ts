@@ -7,7 +7,8 @@
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql,
  * 20261115_job_room.sql, 20261201_qa.sql and its follow-ups (20261202, 20261203),
- * the job room follow-ups (20261206), scope credits and snapshots (20261216), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
+ * the job room follow-ups (20261206), scope credits and snapshots (20261216), in-app notifications
+ * (20261220), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
  * (Phase 5), and the
  * marketplace package migrations into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
@@ -189,6 +190,8 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261215_delivery_trust.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261206_job_room_followups.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261216_scope_credit_and_snapshot.sql'), 'utf8'));
+    // In-app notifications (the header bell); needs 20261102_notifications.sql above.
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261220_inapp_notifications.sql'), 'utf8'));
     // Marketplace: packages, ratings/installs, and the new kinds + catalog view.
     for (const m of [
       '20260521_packages.sql',
@@ -248,7 +251,7 @@ export async function resetGigsTables(pgUrl: string, schema: string): Promise<vo
       'offers', 'job_spec_versions', 'jobs', 'provider_profiles', 'agent_identities', 'principals',
       'user_budgets', 'paid_usage_analytics',
       'qa_credit_holds', 'qa_usage_log', 'qa_reviews', 'qa_requests', 'audit_events', 'submissions', 'api_keys',
-      'user_contacts', 'notifications', 'notification_preferences',
+      'user_contacts', 'notifications', 'notification_preferences', 'user_notifications',
       'package_installs', 'package_ratings', 'package_versions', 'packages',
     ].map((t) => `${schema}.${t}`).join(', ')} CASCADE
   `);

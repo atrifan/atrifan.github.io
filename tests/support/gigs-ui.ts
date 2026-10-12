@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { existsSync, readFileSync } from 'node:fs';
 import { FAKE_REPOS, FAKE_TOKENS } from './fake-github';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
+import { quietBell } from '../e2e/surface-helpers';
 
 /**
  * Shared helpers for the gigs UI specs (tests/e2e/gigs-ui.spec.ts,
@@ -365,6 +366,7 @@ export const AD_SLOT = '[data-ad-slot]:not(ins)';
  */
 export async function openGigs(page: Page, path: string, opts: { signedIn?: boolean } = {}): Promise<Response | null> {
   await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
+  await quietBell(page);
   const res = await page.goto(path, { waitUntil: 'load' });
   await settle(page, opts);
   return res;

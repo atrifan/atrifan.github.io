@@ -57,4 +57,10 @@ describe('footerAdAllowed', () => {
       expect(ok('gigs', p), p).toBe(false);
     }
   });
+
+  it('never shows ads on the notification centre or the activity views', () => {
+    for (const p of ['/notifications', '/admin/activity']) expect(ok('hub', p)).toBe(false);
+    for (const p of ['/marketplace/publisher/activity', '/publisher/activity']) expect(ok('marketplace', p), p).toBe(false);
+    for (const p of ['/gigs/activity', '/activity']) expect(ok('gigs', p), p).toBe(false);
+  });
 });

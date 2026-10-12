@@ -46,6 +46,8 @@ const DEFAULT_SPECS = [
   'tests/e2e/gigs-room.spec.ts',
   'tests/a11y/gigs-room.a11y.spec.ts',
   'tests/visual/gigs-room.visual.spec.ts',
+  // notification centre: the in-app feed API over real gigs flows
+  'tests/e2e/notifications-api.spec.ts',
 ];
 // GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
 const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -170,11 +172,13 @@ async function main() {
       ['POST', `/api/contracts/${id}/progress`], ['GET', `/api/contracts/${id}/qa`],
       ['POST', `/api/contracts/${id}/steering/${id}/respond`], ['POST', `/api/contracts/${id}/steering/${id}/topup`],
       ['POST', `/api/contracts/${id}/versions/${id}/accept`],
+      ['GET', '/api/notifications'], ['POST', '/api/notifications/read'], ['GET', '/api/notifications/unread-count'],
+      ['GET', '/api/activity/gigs'],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }
     // The gigs pages too (signed out: public pages render, signed-in ones redirect).
-    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, `/gigs/contracts/${id}/delivery`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/sitemap.xml']) {
+    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, `/gigs/contracts/${id}/delivery`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/gigs/activity', '/sitemap.xml']) {
       await fetch(`${baseUrl}${page}`, { redirect: 'manual' });
     }
 

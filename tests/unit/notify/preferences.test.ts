@@ -1,14 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gateNotification, resolvePreferences } from '../../../src/lib/notify/preferences.ts';
+import { EMAIL_OFF_BY_DEFAULT, gateInApp, gateNotification, resolveInAppPreferences, resolvePreferences } from '../../../src/lib/notify/preferences.ts';
 import { NOTIFICATION_TYPES, type Contact } from '../../../src/lib/notify/types.ts';
 
 const contact: Contact = { userId: 'u1', email: 'a@example.com', name: 'Ana', locale: null, emailVerified: true };
 
-test('every type is enabled when the user has no preference rows', () => {
+test('every type is enabled when the user has no preference rows, except the email-off-by-default ones', () => {
   const prefs = resolvePreferences([]);
   assert.deepEqual(Object.keys(prefs).sort(), [...NOTIFICATION_TYPES].sort());
-  for (const type of NOTIFICATION_TYPES) assert.equal(prefs[type], true, type);
+  assert.deepEqual([...EMAIL_OFF_BY_DEFAULT], ['package_installed']);
+  for (const type of NOTIFICATION_TYPES) assert.equal(prefs[type], type !== 'package_installed', type);
+});
+
+test('package installs send no email by default but can be switched on', () => {
+  assert.deepEqual(gateNotification(contact, [], 'package_installed'), { send: false, reason: 'unsubscribed' });
+  assert.deepEqual(gateNotification(contact, [{ type: 'package_installed', emailEnabled: true }], 'package_installed'), { send: true });
+});
+
+test('a row with no email choice (null) keeps the email default', () => {
+  const prefs = resolvePreferences([
+    { type: 'bid_received', emailEnabled: null, inAppEnabled: false },
+    { type: 'package_installed', emailEnabled: null, inAppEnabled: false },
+  ]);
+  assert.equal(prefs.bid_received, true);
+  assert.equal(prefs.package_installed, false);
+});
+
+test('in-app is on for every type by default; a row turns one type off; null keeps the default', () => {
+  const none = resolveInAppPreferences([]);
+  assert.deepEqual(Object.keys(none).sort(), [...NOTIFICATION_TYPES].sort());
+  for (const type of NOTIFICATION_TYPES) assert.equal(none[type], true, type);
+  const some = resolveInAppPreferences([
+    { type: 'bid_received', emailEnabled: true, inAppEnabled: false },
+    { type: 'payout_sent', emailEnabled: false, inAppEnabled: null },
+    { type: 'qa_verdict', emailEnabled: false },
+    { type: 'nope' as never, emailEnabled: false, inAppEnabled: false },
+  ]);
+  assert.equal(some.bid_received, false);
+  assert.equal(some.payout_sent, true);
+  assert.equal(some.qa_verdict, true);
+  assert.equal(Object.keys(some).length, NOTIFICATION_TYPES.length);
+});
+
+test('the in-app gate needs no contact or email, only the preference', () => {
+  assert.equal(gateInApp([], 'bid_received'), true);
+  assert.equal(gateInApp([{ type: 'bid_received', emailEnabled: false, inAppEnabled: true }], 'bid_received'), true);
+  assert.equal(gateInApp([{ type: 'bid_received', emailEnabled: true, inAppEnabled: false }], 'bid_received'), false);
+  assert.equal(gateInApp([{ type: 'bid_received', emailEnabled: true, inAppEnabled: false }], 'payout_sent'), true);
 });
 
 test('a disabled row turns off only that type', () => {

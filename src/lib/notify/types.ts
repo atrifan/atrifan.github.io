@@ -26,6 +26,10 @@ export const NOTIFICATION_TYPES = [
   'review_requested',
   'progress_update',
   'milestone_completed',
+  'package_installed',
+  'package_approved',
+  'package_rejected',
+  'submission_awaiting_qa',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -67,7 +71,8 @@ export const payloadSchemas = {
   }),
   delivery_ready: z.object({ ...contract }),
   auto_accept_reminder: z.object({ ...contract, autoAcceptAt: z.string().datetime({ offset: true }) }),
-  dispute_opened: z.object({ ...contract, openedBy: personName, reason: summary.optional() }),
+  /** `audience: 'admin'` links admins to the hub disputes queue instead of the delivery page. */
+  dispute_opened: z.object({ ...contract, openedBy: personName, reason: summary.optional(), audience: z.enum(['party', 'admin']).optional() }),
   dispute_resolved: z.object({ ...contract, outcome: summary }),
   payout_sent: z.object({
     amountCents,
@@ -87,6 +92,12 @@ export const payloadSchemas = {
   /** Sent at most once per contract per hour (src/lib/jobs/room-service.ts). */
   progress_update: z.object({ ...contract, summary, percentComplete: z.number().int().min(0).max(100).optional() }),
   milestone_completed: z.object({ ...contract, milestoneTitle: title }),
+  /** To the publisher. In-app it aggregates to one item per package per hour; email is off by default. */
+  package_installed: z.object({ packageId: id, packageName: title, version: z.string().max(100).optional(), url }),
+  package_approved: z.object({ packageId: id, packageName: title, url }),
+  package_rejected: z.object({ packageId: id, packageName: title, reason: summary.optional(), url }),
+  /** To admins: a gigs submission is waiting in the QA queue. */
+  submission_awaiting_qa: z.object({ ...contract, providerName: personName }),
 } satisfies Record<NotificationType, z.ZodTypeAny>;
 
 /** Payload a caller passes to `enqueue` (defaults such as `currency` optional). */
@@ -108,9 +119,11 @@ export interface Contact {
   emailVerified: boolean;
 }
 
+/** A stored preference. `null` (or absent) means "no choice made": the type's default applies. */
 export interface PreferenceRow {
   type: NotificationType;
-  emailEnabled: boolean;
+  emailEnabled: boolean | null;
+  inAppEnabled?: boolean | null;
 }
 
 export interface NotificationRow {
@@ -147,4 +160,8 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   review_requested: 'Review reminders',
   progress_update: 'Progress updates',
   milestone_completed: 'Milestones completed',
+  package_installed: 'Package installs',
+  package_approved: 'Package approved',
+  package_rejected: 'Package not approved',
+  submission_awaiting_qa: 'Submissions awaiting QA',
 };

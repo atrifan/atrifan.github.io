@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test';
+import { quietBell } from '../e2e/surface-helpers';
 import type { E2ERole } from '../fixtures/clerk-users';
 
 /**
@@ -50,6 +51,7 @@ const DETAIL = {
 };
 
 export async function mockHubApis(page: Page): Promise<void> {
+  await quietBell(page);
   await page.route('**/api/connect/status**', (r) =>
     json(r, { connected: true, account_id: 'acct_x', connect_status: 'pending', payouts_enabled: false, charges_enabled: false, details_submitted: false, country: 'DE' }),
   );
