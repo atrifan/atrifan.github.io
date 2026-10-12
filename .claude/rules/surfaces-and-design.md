@@ -64,8 +64,9 @@ background at WCAG AA. Shared classes (`.page`, `.hero`, `.btn`, `.btn-primary`,
 Theme: `src/lib/theme.ts` (choice light/dark/system in localStorage `tulzo-theme`), the no-flash inline
 script in `app/layout.tsx`, `ThemeProvider` / `useTheme()` and `ThemeToggle` in `src/components/theme/`.
 The resolved scheme drives the Spectrum `Provider colorScheme` and Clerk `appearance` in `app/providers.tsx`.
-The control panel, package admin and remote chat are still dark-only (`.dark-island`) until their tracks
-restyle them.
+The control panel and package admin are still dark-only (`.dark-island`) until their tracks restyle them.
+The chat (`app/(chat)/chat`, `src/views/remote-chat/`) follows the theme: `ChatApp.css` for its layout,
+`RemoteChat.css` (tokens only) for the ported panel components.
 
 ## Brand
 
