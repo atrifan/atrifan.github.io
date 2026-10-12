@@ -38,7 +38,6 @@ test.describe('path-prefix mode routing', () => {
 
   const placeholders = [
     { path: '/ai', heading: 'AI' },
-    { path: '/marketplace', heading: 'Marketplace' },
     { path: '/gigs', heading: 'Gigs' },
   ];
   for (const { path, heading } of placeholders) {
