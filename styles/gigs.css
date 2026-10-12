@@ -567,15 +567,32 @@
 .gigs-row {
   display: grid;
   gap: var(--space-4);
-  align-items: end;
 }
 
+/* Side by side, the fields of a row share one grid: label, control, hint and error each get a row
+   track, so labels start on one line and controls on the next even when a label wraps or only one
+   field has a hint. */
 @media (min-width: 600px) {
   .gigs-row {
     grid-template-columns: 1fr 1fr;
+    row-gap: 0;
   }
   .gigs-row-3 {
     grid-template-columns: 1fr 1fr 1fr;
+  }
+  .gigs-row > .gigs-field {
+    display: grid;
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    align-content: start;
+    gap: 0;
+  }
+  .gigs-row > .gigs-field > label {
+    padding-bottom: var(--space-1);
+  }
+  .gigs-row > .gigs-field > .gigs-hint,
+  .gigs-row > .gigs-field > .gigs-error {
+    margin-top: var(--space-1);
   }
 }
 

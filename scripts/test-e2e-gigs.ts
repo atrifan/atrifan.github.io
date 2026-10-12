@@ -36,6 +36,7 @@ const DEFAULT_SPECS = [
   'tests/e2e/jobs-mcp.spec.ts',
   // gigs UI: pages, a11y (axe) and visual baselines, in light/dark x desktop/mobile
   'tests/e2e/gigs-ui.spec.ts',
+  'tests/e2e/gigs-form-layout.spec.ts',
   'tests/a11y/gigs.a11y.spec.ts',
   'tests/visual/gigs.visual.spec.ts',
   // Phase 5: delivery, acceptance, disputes, reviews, trust (API + the delivery page)
