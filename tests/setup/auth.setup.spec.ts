@@ -10,16 +10,19 @@ import { E2E_USERS, ensureE2EUsers, hasClerkTestEnv, storageStatePath, type E2ER
  */
 setup.describe.configure({ mode: 'serial' });
 
-setup('clerk users and sessions', async ({ page }) => {
+setup('clerk users and sessions', async ({ browser, baseURL }) => {
   setup.skip(!hasClerkTestEnv(), 'Clerk development keys not configured');
   await clerkSetup();
   await ensureE2EUsers();
   for (const role of Object.keys(E2E_USERS) as E2ERole[]) {
+    // One context per role, closed rather than signed out: signing out revokes the
+    // session, which would make the saved storage state unusable.
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
     await page.goto('/');
     await clerk.signIn({ page, emailAddress: E2E_USERS[role].email });
     await page.goto('/');
-    await page.context().storageState({ path: storageStatePath(role) });
-    await clerk.signOut({ page });
-    await page.context().clearCookies();
+    await context.storageState({ path: storageStatePath(role) });
+    await context.close();
   }
 });
