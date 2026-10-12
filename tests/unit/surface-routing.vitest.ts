@@ -243,10 +243,15 @@ describe('routeRequest uses surfaceUrl for cross-surface destinations', () => {
 });
 
 describe('isProtectedPath', () => {
-  it('protects /dashboard, /chat, /ai and the hub account and admin pages, and everything below them', () => {
-    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat', '/chat/x', '/profile', '/profile/account', '/credits', '/admin', '/admin/qa', '/ai', '/ai/secrets']) {
+  it('protects /dashboard, /ai and the hub account and admin pages, and everything below them', () => {
+    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat/x', '/chat/sessions/1', '/profile', '/profile/account', '/credits', '/admin', '/admin/qa', '/ai', '/ai/secrets']) {
       expect(isProtectedPath(p)).toBe(true);
     }
+  });
+
+  it('leaves the chat landing (/chat, chat. /) public: signed out it explains remote chat', () => {
+    expect(isProtectedPath('/chat')).toBe(false);
+    expect(isProtectedPath('/chat/')).toBe(true);
   });
 
   it('leaves public pages and lookalikes alone', () => {

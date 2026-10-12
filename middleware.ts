@@ -6,8 +6,9 @@ import { surfaceUrl } from '@/src/lib/surface-url';
 /**
  * 1. Surface routing (src/lib/surface-routing.ts) decides next / rewrite /
  *    redirect (308) / 404 from TULZO_SURFACE and the path.
- * 2. Pages under /dashboard and /chat need a signed-in user. The check runs on
- *    the rewritten path, so `chat.` `/` (rewritten to /chat) is protected too.
+ * 2. Signed-in pages (isProtectedPath: /dashboard, /ai, the hub account pages, …) need a
+ *    user. The check runs on the rewritten path. `chat.` `/` (rewritten to /chat) is public:
+ *    signed out it is the remote-chat landing, signed in the chat itself.
  *
  * 0. `www.<root>` 308s to the apex: the hub lives at the root domain (tulzo.online).
  *    The www domain only needs to be attached to the hub's Vercel project; Vercel's own

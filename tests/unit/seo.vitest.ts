@@ -5,9 +5,15 @@ const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' };
 const urls = (s: Parameters<typeof sitemapFor>[0], e: Record<string, string> = env) => sitemapFor(s, e).map((x) => x.url);
 
 describe('robotsFor', () => {
-  it('closes the private surfaces completely', () => {
+  it('closes ai. completely', () => {
     expect(robotsFor('ai', env)).toEqual({ rules: { userAgent: '*', disallow: '/' } });
-    expect(robotsFor('chat', env)).toEqual({ rules: { userAgent: '*', disallow: '/' } });
+  });
+
+  it('opens chat. for its public landing, with its own sitemap', () => {
+    expect(robotsFor('chat', env)).toEqual({
+      rules: { userAgent: '*', allow: '/', disallow: ['/api/'] },
+      sitemap: 'https://chat.tulzo.online/sitemap.xml',
+    });
   });
 
   it('points the hub at its own sitemap and keeps APIs and account pages out', () => {
@@ -28,7 +34,9 @@ describe('robotsFor', () => {
   it('in path-prefix mode also disallows the private prefixes', () => {
     const r = robotsFor(null, {});
     expect(r.sitemap).toBe('http://localhost:3000/sitemap.xml');
-    expect((r.rules as { disallow: string[] }).disallow).toEqual(expect.arrayContaining(['/api/', '/dashboard', '/chat', '/ai']));
+    const disallow = (r.rules as { disallow: string[] }).disallow;
+    expect(disallow).toEqual(expect.arrayContaining(['/api/', '/dashboard', '/ai']));
+    expect(disallow).not.toContain('/chat');
   });
 });
 
@@ -42,9 +50,9 @@ describe('sitemapFor', () => {
     ]);
   });
 
-  it('lists nothing for private surfaces', () => {
+  it('lists nothing for ai., and the landing for chat.', () => {
     expect(urls('ai')).toEqual([]);
-    expect(urls('chat')).toEqual([]);
+    expect(urls('chat')).toEqual(['https://chat.tulzo.online/']);
   });
 
   it('lists the surface home for marketplace and gigs', () => {
@@ -52,7 +60,7 @@ describe('sitemapFor', () => {
     expect(urls('gigs')).toEqual(['https://gigs.tulzo.online/']);
   });
 
-  it('lists hub pages plus marketplace and gigs homes in path-prefix mode', () => {
+  it('lists hub pages plus the marketplace, gigs and chat homes in path-prefix mode', () => {
     expect(urls(null, {})).toEqual([
       'http://localhost:3000/',
       'http://localhost:3000/pricing',
@@ -60,6 +68,7 @@ describe('sitemapFor', () => {
       'http://localhost:3000/legal',
       'http://localhost:3000/marketplace',
       'http://localhost:3000/gigs',
+      'http://localhost:3000/chat',
     ]);
   });
 

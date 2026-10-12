@@ -10,7 +10,7 @@ type Env = Record<string, string | undefined>;
  * Pages that need sign-in are never listed and are disallowed.
  */
 
-const PRIVATE_SURFACES: readonly Surface[] = ['ai', 'chat'];
+const PRIVATE_SURFACES: readonly Surface[] = ['ai'];
 
 /** Public pages per surface, as surface-local paths. */
 const PUBLIC_PAGES: Record<Surface, readonly string[]> = {
@@ -18,7 +18,8 @@ const PUBLIC_PAGES: Record<Surface, readonly string[]> = {
   ai: [],
   marketplace: ['/'],
   gigs: ['/'],
-  chat: [],
+  // Signed out, chat. `/` is a small public landing; signed in it is the (noindex) chat.
+  chat: ['/'],
 };
 
 const HUB_DISALLOW = ['/api/', '/dashboard', '/sign-in', '/sign-up', '/profile', '/credits', '/admin'];
@@ -28,7 +29,7 @@ export function robotsFor(surface: Surface | null, env: Env = process.env): Meta
     return { rules: { userAgent: '*', disallow: '/' } };
   }
   const disallow =
-    surface === null ? [...HUB_DISALLOW, '/chat', '/ai'] : surface === 'hub' ? HUB_DISALLOW : ['/api/'];
+    surface === null ? [...HUB_DISALLOW, '/ai'] : surface === 'hub' ? HUB_DISALLOW : ['/api/'];
   return {
     rules: { userAgent: '*', allow: '/', disallow },
     sitemap: absoluteSurfaceUrl(surface ?? 'hub', '/sitemap.xml', env),
@@ -42,6 +43,7 @@ export function sitemapFor(surface: Surface | null, env: Env = process.env): Met
           ...PUBLIC_PAGES.hub.map((p): [Surface, string] => ['hub', p]),
           ['marketplace', '/'],
           ['gigs', '/'],
+          ['chat', '/'],
         ]
       : PUBLIC_PAGES[surface].map((p): [Surface, string] => [surface, p]);
   return entries.map(([s, p]) => ({ url: absoluteSurfaceUrl(s, p, env), changeFrequency: 'weekly' }));

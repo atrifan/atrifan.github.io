@@ -1,19 +1,26 @@
 import type { Metadata } from 'next';
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
 import { ChatApp } from '@/src/views/remote-chat/ChatApp';
+import { ChatLanding } from '@/src/views/remote-chat/ChatLanding';
+import { absoluteSurfaceUrl } from '@/src/lib/site-url';
 
-// The chat is signed-in only: never indexed, and no ads on chat. (src/lib/ads-policy.ts).
-export const metadata: Metadata = {
-  title: 'Chat',
-  description: 'Chat with your Tex assistant from any device and watch it work in your browser.',
-  robots: { index: false, follow: false },
-};
+const DESCRIPTION = 'Chat with your Tex assistant from any device and watch it work in your browser.';
+
+// Signed out: a public, indexable landing. Signed in: the chat itself, never indexed.
+// No ads on chat. either way (src/lib/ads-policy.ts).
+export async function generateMetadata(): Promise<Metadata> {
+  const { userId } = await auth();
+  if (userId) return { title: 'Chat', description: DESCRIPTION, robots: { index: false, follow: false } };
+  const canonical = absoluteSurfaceUrl('chat', '/');
+  return {
+    title: 'Remote chat',
+    description: DESCRIPTION,
+    alternates: { canonical },
+    openGraph: { title: 'Remote chat | Tulzo', description: DESCRIPTION, url: canonical },
+  };
+}
 
 export default async function Chat() {
   const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
-  return <ChatApp />;
+  return userId ? <ChatApp /> : <ChatLanding />;
 }

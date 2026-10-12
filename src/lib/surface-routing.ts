@@ -50,7 +50,10 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
 };
 
 /** Pages that require a signed-in user. `/ai` is the control panel (rewritten from ai. `/x`). */
-const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/ai', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
+const PROTECTED_PREFIXES = ['/dashboard', '/ai', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
+
+/** Public at the prefix itself (the signed-out chat landing), signed-in below it. */
+const PROTECTED_BELOW = ['/chat'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
 const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa', '/admin/disputes'];
@@ -139,7 +142,7 @@ export function routeRequest({ surface, pathname, rootDomain }: RouteInput): Rou
 
 /** True for paths that need a signed-in user. Pass the rewritten path, if any. */
 export function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((p) => underPrefix(pathname, p));
+  return PROTECTED_PREFIXES.some((p) => underPrefix(pathname, p)) || PROTECTED_BELOW.some((p) => pathname.startsWith(`${p}/`));
 }
 
 /** Which surface a page belongs to, for highlighting the nav. */

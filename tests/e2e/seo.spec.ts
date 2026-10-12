@@ -31,7 +31,8 @@ test.describe('SEO (path-prefix mode)', () => {
     const paths = locs.map((loc) => new URL(loc).pathname.replace(/\/$/, '') || '/');
     expect(paths).toContain('/');
     expect(paths).toContain('/pricing');
-    for (const banned of ['/dashboard', '/chat', '/sign-in', '/sign-up']) {
+    expect(paths, 'the signed-out chat landing is public').toContain('/chat');
+    for (const banned of ['/dashboard', '/ai', '/sign-in', '/sign-up']) {
       expect(
         paths.filter((p) => p === banned || p.startsWith(`${banned}/`)),
         `sitemap must not list ${banned}`,
