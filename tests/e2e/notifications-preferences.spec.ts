@@ -1,4 +1,5 @@
 import { test, expect, type APIResponse } from '@playwright/test';
+import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 
 // Behavior-only contract tests for the Clerk-gated notification preferences API.
 //
@@ -35,6 +36,9 @@ const TYPES = [
   'submission_awaiting_qa',
 ] as const;
 
+/** Types in the admin-only group: listed for admins only, refused for everyone else. */
+const ADMIN_ONLY_TYPES: readonly string[] = ['submission_awaiting_qa'];
+
 type Pref = { type: string; label: string; emailEnabled: boolean };
 
 async function expectJsonError(res: APIResponse, status: number) {
@@ -47,10 +51,11 @@ async function expectJsonError(res: APIResponse, status: number) {
 
 async function expectPrefsShape(res: APIResponse): Promise<Map<string, boolean>> {
   expect(res.status()).toBe(200);
-  const body = (await res.json()) as { preferences: Pref[] };
+  const body = (await res.json()) as { preferences: Pref[]; admin?: boolean };
   expect(Array.isArray(body.preferences)).toBe(true);
-  expect(body.preferences).toHaveLength(TYPES.length);
-  expect(body.preferences.map((p) => p.type).sort()).toEqual([...TYPES].sort());
+  const expected = TYPES.filter((t) => body.admin === true || !ADMIN_ONLY_TYPES.includes(t));
+  expect(body.preferences).toHaveLength(expected.length);
+  expect(body.preferences.map((p) => p.type).sort()).toEqual([...expected].sort());
   for (const p of body.preferences) {
     expect(typeof p.label).toBe('string');
     expect(p.label.trim().length).toBeGreaterThan(0);
@@ -104,9 +109,9 @@ test.describe('preferences with a Clerk session', () => {
     test.skip(!CLERK_STATE, 'requires E2E_CLERK_STORAGE_STATE (saved Clerk session)');
   });
 
-  test('GET → 200 with exactly one entry per type', async ({ request }) => {
+  test('GET → 200 with exactly one entry per type the user can receive', async ({ request }) => {
     const prefs = await expectPrefsShape(await request.get(URL_PATH));
-    expect(prefs.size).toBe(TYPES.length);
+    expect(prefs.size).toBeGreaterThanOrEqual(TYPES.length - ADMIN_ONLY_TYPES.length);
   });
 
   test('PUT bid_received=false → 200, only that type changes, GET reflects it', async ({ request }) => {
@@ -149,5 +154,62 @@ test.describe('preferences with a Clerk session', () => {
       headers: { 'content-type': 'application/json' },
     });
     expect(res.status()).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin-only types (the "Admin" group): only admins see or change them
+// ---------------------------------------------------------------------------
+test.describe('admin-only preferences, customer', () => {
+  test.use({ storageState: storageStatePath('customer') });
+  test.beforeEach(() => {
+    test.skip(!hasClerkTestEnv(), 'Clerk dev keys not configured');
+  });
+
+  test('GET says admin: false and leaves the admin-only types out', async ({ request }) => {
+    const res = await request.get(URL_PATH);
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as { preferences: Pref[]; admin: boolean };
+    expect(body.admin).toBe(false);
+    const types = body.preferences.map((p) => p.type);
+    for (const t of ADMIN_ONLY_TYPES) expect(types).not.toContain(t);
+    expect(types).toContain('bid_received');
+  });
+
+  for (const [name, data] of [
+    ['an admin-only email type', { preferences: { submission_awaiting_qa: false } }],
+    ['the admin in-app group', { inApp: { admin: false } }],
+  ] as const) {
+    test(`PUT with ${name} → 403 { error }`, async ({ request }) => {
+      await expectJsonError(await request.put(URL_PATH, { data }), 403);
+    });
+  }
+
+  test('the profile page shows no "Admin" notification group', async ({ page }) => {
+    await page.goto('/profile');
+    await expect(page.getByText('Your job is posted').first()).toBeVisible();
+    await expect(page.getByText('Submissions waiting in the QA queue')).toHaveCount(0);
+    await expect(page.locator('#main').getByText(/^Admin$/)).toHaveCount(0);
+  });
+});
+
+test.describe('admin-only preferences, admin', () => {
+  test.use({ storageState: storageStatePath('admin') });
+  test.beforeEach(() => {
+    test.skip(!hasClerkTestEnv(), 'Clerk dev keys not configured');
+  });
+
+  test('GET says admin: true and lists the admin-only types', async ({ request }) => {
+    const res = await request.get(URL_PATH);
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as { preferences: Pref[]; admin: boolean };
+    expect(body.admin).toBe(true);
+    const types = body.preferences.map((p) => p.type);
+    for (const t of ADMIN_ONLY_TYPES) expect(types).toContain(t);
+  });
+
+  test('the profile page shows the "Admin" notification group', async ({ page }) => {
+    await page.goto('/profile');
+    await expect(page.locator('#main').getByText(/^Admin$/).first()).toBeVisible();
   });
 });

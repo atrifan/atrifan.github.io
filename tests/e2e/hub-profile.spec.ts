@@ -33,14 +33,14 @@ async function mockStatus(page: Page, s: ConnectStatus) {
   await page.route(apiPath('/api/connect/status'), (route) => fulfillJson(route, connectStatus(s)));
 }
 
-async function mockPrefs(page: Page, put?: (body: unknown) => { status: number; body: unknown }) {
+async function mockPrefs(page: Page, put?: (body: unknown) => { status: number; body: unknown }, { admin }: { admin?: boolean } = {}) {
   await page.route(apiPath('/api/notifications/preferences'), async (route) => {
     const req = route.request();
     if (req.method() === 'PUT' && put) {
       const r = put(req.postDataJSON());
       return fulfillJson(route, r.body, r.status);
     }
-    return fulfillJson(route, { preferences: PREFS });
+    return fulfillJson(route, admin === undefined ? { preferences: PREFS } : { preferences: PREFS, admin });
   });
 }
 
@@ -187,17 +187,31 @@ test.describe('hub profile, signed in (customer)', () => {
   });
 
   test.describe('email notifications', () => {
-    test('every notification type has a switch, grouped Gigs / Payments / QA / Account / Marketplace / Admin, checked by emailEnabled', async ({ page }) => {
+    test('every notification type but the admin-only ones has a switch, grouped Gigs / Payments / QA / Account / Marketplace, checked by emailEnabled', async ({ page }) => {
       await page.goto('/profile');
       const s = sectionByH2(page, 'Email notifications');
-      await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length);
-      await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account', 'Marketplace', 'Admin']);
+      await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length - 1);
+      await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account', 'Marketplace']);
       const gigs = s.getByRole('group', { name: 'Gigs' });
       await expect(gigs.getByRole('switch', { name: 'New bids on your jobs', exact: true })).toBeChecked();
       await expect(s.getByRole('group', { name: 'QA' }).getByRole('switch', { name: 'QA verdicts', exact: true })).not.toBeChecked();
       // types the server didn't send default to on
       await expect(s.getByRole('group', { name: 'Payments' }).getByRole('switch', { name: 'Payout sent to you', exact: true })).toBeChecked();
       await expect(s.getByRole('group', { name: 'Account' }).getByRole('switch', { name: 'Reminders to leave a review', exact: true })).toBeChecked();
+    });
+
+    test('the Admin group (email and in-app) appears only when the server says admin: true', async ({ page }) => {
+      await mockPrefs(page, undefined, { admin: true });
+      await page.goto('/profile');
+      await expect(sectionByH2(page, 'Email notifications').getByRole('heading', { level: 3 })).toHaveText([
+        'Gigs',
+        'Payments',
+        'QA',
+        'Account',
+        'Marketplace',
+        'Admin',
+      ]);
+      await expect(sectionByH2(page, 'In-app notifications').getByRole('switch', { name: 'Admin', exact: true })).toBeVisible();
     });
 
     test('toggling "New bids on your jobs" PUTs { bid_received: false } and shows "Saved"', async ({ page }) => {
@@ -226,7 +240,7 @@ test.describe('hub profile, signed in (customer)', () => {
       });
       await page.goto('/profile');
       const s = sectionByH2(page, 'In-app notifications');
-      await expect(s.getByRole('switch')).toHaveCount(6);
+      await expect(s.getByRole('switch')).toHaveCount(5);
       const gigs = s.getByRole('switch', { name: 'Gigs', exact: true });
       await expect(gigs).toBeChecked();
       await gigs.click();

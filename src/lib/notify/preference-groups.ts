@@ -8,7 +8,8 @@ import type { NotificationType } from './types';
 
 export type PreferenceGroupId = 'gigs' | 'payments' | 'qa' | 'account' | 'marketplace' | 'admin';
 
-export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: string; types: NotificationType[] }> = [
+/** `adminOnly` groups are shown to, and changeable by, admins only (src/lib/admin.ts). */
+export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: string; types: NotificationType[]; adminOnly?: true }> = [
   {
     id: 'gigs',
     title: 'Gigs',
@@ -29,8 +30,19 @@ export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: st
   { id: 'qa', title: 'QA', types: ['submission_received', 'qa_verdict'] },
   { id: 'account', title: 'Account', types: ['review_received', 'review_requested'] },
   { id: 'marketplace', title: 'Marketplace', types: ['package_installed', 'package_approved', 'package_rejected'] },
-  { id: 'admin', title: 'Admin', types: ['submission_awaiting_qa'] },
+  { id: 'admin', title: 'Admin', types: ['submission_awaiting_qa'], adminOnly: true },
 ];
+
+/** Types in admin-only groups. */
+export const ADMIN_ONLY_TYPES: readonly NotificationType[] = PREFERENCE_GROUPS.filter((g) => g.adminOnly).flatMap((g) => g.types);
+
+export function isAdminOnlyType(type: string): boolean {
+  return (ADMIN_ONLY_TYPES as readonly string[]).includes(type);
+}
+
+export function isAdminOnlyGroup(id: string): boolean {
+  return PREFERENCE_GROUPS.some((g) => g.id === id && g.adminOnly === true);
+}
 
 /** The types in a group (empty for an unknown id). */
 export function groupTypes(id: string): NotificationType[] {
@@ -78,12 +90,12 @@ export interface PreferenceGroupView {
 
 type SavedPreference = { type: string; emailEnabled?: boolean | null; inAppEnabled?: boolean | null };
 
-/** Every type in its group; a type the server didn't send gets its default. */
-export function groupPreferences(prefs: ReadonlyArray<SavedPreference>): PreferenceGroupView[] {
+/** Every type in its group; a type the server didn't send gets its default. Admin-only groups only for admins. */
+export function groupPreferences(prefs: ReadonlyArray<SavedPreference>, { admin = true }: { admin?: boolean } = {}): PreferenceGroupView[] {
   // Unknown types are never looked up; a null/absent choice falls back to the default below.
   const email = new Map(prefs.map((p) => [p.type, p.emailEnabled]));
   const inApp = new Map(prefs.map((p) => [p.type, p.inAppEnabled]));
-  return PREFERENCE_GROUPS.map((g) => ({
+  return PREFERENCE_GROUPS.filter((g) => admin || !g.adminOnly).map((g) => ({
     id: g.id,
     title: g.title,
     inAppEnabled: g.types.some((type) => inApp.get(type) ?? true),
