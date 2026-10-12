@@ -49,7 +49,8 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   ],
   marketplace: ['/api/marketplace', '/api/packages', '/api/admin/downloads'],
   // Stripe Connect onboarding (/api/connect) and the billing webhook stay on the hub.
-  gigs: ['/api/jobs', '/api/offers', '/api/bids'],
+  // /api/jobs covers the Jobs MCP (/api/jobs/mcp); /api/contracts is the job room API.
+  gigs: ['/api/jobs', '/api/offers', '/api/bids', '/api/contracts'],
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 

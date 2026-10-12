@@ -183,7 +183,49 @@ describe('routeRequest: non-hub surfaces', () => {
   it('lists an allow-list for every surface, hub as all', () => {
     expect(SURFACE_API_ALLOWLIST.hub).toBe('all');
     expect(SURFACE_API_ALLOWLIST.chat).toContain('/api/plugin/chat');
-    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids']);
+    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids', '/api/contracts']);
+  });
+});
+
+describe('routeRequest: Jobs MCP and the job room API', () => {
+  const ROOM_API = [
+    '/api/jobs/mcp',
+    '/.well-known/oauth-protected-resource/api/jobs/mcp',
+    '/api/contracts',
+    '/api/contracts/c1',
+    '/api/contracts/c1/messages',
+    '/api/contracts/c1/activity',
+    '/api/contracts/c1/milestones',
+    '/api/contracts/c1/progress',
+    '/api/contracts/c1/qa',
+    '/api/contracts/c1/steering',
+    '/api/contracts/c1/steering/s1/approve',
+    '/api/contracts/c1/steering/s1/reject',
+    '/api/contracts/c1/steering/s1/respond',
+    '/api/contracts/c1/steering/s1/topup',
+    '/api/contracts/c1/versions/v1/accept',
+    // Phase 5 routes under the same prefix (delivery, accept, dispute, reviews)
+    '/api/contracts/c1/delivery',
+  ];
+
+  it.each(ROOM_API)('gigs serves %s', (p) => {
+    expect(route('gigs', p)).toEqual({ action: 'next' });
+  });
+
+  it.each(ROOM_API)('the hub serves %s', (p) => {
+    expect(route('hub', p)).toEqual({ action: 'next' });
+  });
+
+  it.each(ROOM_API)('path-prefix mode serves %s', (p) => {
+    expect(route(null, p)).toEqual({ action: 'next' });
+  });
+
+  it('the other surfaces do not serve the room API', () => {
+    for (const s of ['ai', 'marketplace', 'chat'] as Surface[]) {
+      expect(route(s, '/api/contracts/c1/messages')).toEqual({ action: 'notFound' });
+      expect(route(s, '/api/jobs/mcp')).toEqual({ action: 'notFound' });
+    }
+    expect(route('gigs', '/api/contractsx')).toEqual({ action: 'notFound' });
   });
 });
 
