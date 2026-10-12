@@ -5,6 +5,8 @@ export interface EmailMessage {
   html: string;
   text: string;
   headers: Record<string, string>;
+  /** Reply-To address (support mail: the complainant or original sender). */
+  replyTo?: string;
   /** Passed to the provider so a retried request is not sent twice. */
   idempotencyKey?: string;
 }
@@ -34,15 +36,20 @@ export function isRetryableError(err: unknown): boolean {
   return err instanceof TransportError ? err.retryable : true;
 }
 
-const RESEND_URL = 'https://api.resend.com/emails';
+export const RESEND_API_BASE = 'https://api.resend.com';
+
+/** Resend's API root: RESEND_API_BASE (tests point it at tests/support/fake-resend.ts) or the real API. */
+export function resendApiBase(env: Record<string, string | undefined> = process.env): string {
+  return (env.RESEND_API_BASE || RESEND_API_BASE).replace(/\/+$/, '');
+}
 
 /** Resend over plain fetch, so status codes map cleanly onto retryable vs. not. */
-export function createResendTransport(apiKey: string, fetchImpl: typeof fetch = fetch): EmailTransport {
+export function createResendTransport(apiKey: string, fetchImpl: typeof fetch = fetch, apiBase: string = resendApiBase()): EmailTransport {
   return {
     async send(message) {
       let res: Response;
       try {
-        res = await fetchImpl(RESEND_URL, {
+        res = await fetchImpl(`${apiBase}/emails`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -56,6 +63,7 @@ export function createResendTransport(apiKey: string, fetchImpl: typeof fetch = 
             html: message.html,
             text: message.text,
             headers: message.headers,
+            ...(message.replyTo ? { reply_to: message.replyTo } : {}),
           }),
         });
       } catch (err) {

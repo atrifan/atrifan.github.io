@@ -38,6 +38,7 @@ export function JobDetail({
   bps,
   bounds,
   qaCosts,
+  windowsNotice,
   published,
 }: {
   data: JobPageData;
@@ -49,6 +50,8 @@ export function JobDetail({
   bps: number;
   bounds: { minCents: number; maxCents: number };
   qaCosts: Record<QaCheck, number>;
+  /** The dispute and claim windows line for the accept dialog (gigsConfig().windowsNotice). */
+  windowsNotice: string;
   published: boolean;
 }) {
   const { job, spec, bidCount, isOwner, myBid, bids, contractId } = data;
@@ -183,7 +186,7 @@ export function JobDetail({
               </section>
             </>
           ) : null}
-          {isOwner && job.status !== 'draft' ? <BidCompare jobId={job.id} bids={compare} canAccept={open} qaCosts={qaCosts} /> : null}
+          {isOwner && job.status !== 'draft' ? <BidCompare jobId={job.id} bids={compare} canAccept={open} qaCosts={qaCosts} windowsNotice={windowsNotice} /> : null}
         </div>
         <aside className="gigs-detail-aside">{action}</aside>
       </div>

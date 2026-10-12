@@ -41,6 +41,16 @@ fresh Checkout for an unpaid top-up), `versions/[vid]/accept` (provider signs cu
 `plugin/config`, `plugin/report`, `plugin/query`, `plugin/devices`, `plugin/version`;
 `keys/{generate,list,delete}`; `dashboard/activity`, `dashboard/paid-stats`.
 
+## Legal, consent, complaints and the support inbox
+`legal/complaints` (POST, signed in or out: the hub /legal/complaints form; honeypot `website`, 5 per hour per
+IP → 429), `legal/consent` (POST, session: the subscription withdrawal waiver before Clerk's PricingTable),
+`webhooks/resend` (POST, Svix-signed with `RESEND_WEBHOOK_SECRET`, event `email.received`), and admin
+`admin/inbox` (GET `?source=&status=`), `admin/inbox/[id]` (GET/PATCH `{status, notes}`),
+`admin/inbox/[id]/reply` (POST `{text}`). `billing/checkout` and `bids/[id]/accept` refuse without
+`withdrawal_consent: true` (400 `consent_required`) and record the consent (`purchase_consents`). Services in
+`src/lib/legal` (facts, consent) and `src/lib/support` (support-service; pure: reference, sanitize-html,
+complaint, mail-headers).
+
 ## Gigs delivery, disputes, reviews, trust, plan credits (Phase 5)
 Contract parties (Clerk session; `x-e2e-user` in tests): `contracts/[id]/delivery` (GET view),
 `delivery/download` (GET, customer: the QA'd SHA as .tar.gz, audited), `delivery/push` (POST

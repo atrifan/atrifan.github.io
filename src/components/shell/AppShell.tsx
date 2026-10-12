@@ -202,20 +202,24 @@ export function AppShell({ surface, children }: { surface: Surface | null; child
         <div className="container footer-inner">
           {showAd && <AdBanner />}
           <nav aria-label="Legal" className="footer-links">
+            <a href={surfaceUrl('hub', '/legal/terms')}>Terms</a>
+            <a href={surfaceUrl('hub', '/legal/payments')}>Payments &amp; refunds</a>
+            <a href={surfaceUrl('hub', '/legal/disclaimers')}>Disclaimers</a>
+            <a href={surfaceUrl('hub', '/legal/complaints')}>Complaints</a>
+            <a href={surfaceUrl('hub', '/legal/imprint')}>Imprint</a>
             <a href="https://www.iubenda.com/privacy-policy/11077306" className="iubenda-noiframe">
               Privacy
             </a>
             <a href="https://www.iubenda.com/privacy-policy/11077306/cookie-policy" className="iubenda-noiframe">
               Cookies
             </a>
-            <a href="https://www.iubenda.com/terms-and-conditions/11077306" className="iubenda-noiframe">
-              Terms
-            </a>
             {/* iubenda reopens the consent preferences on elements with this class. */}
             <button type="button" className="footer-link-button iubenda-cs-preferences-link">
               Cookie settings
             </button>
-            <a href={surfaceUrl('hub', '/legal')}>Legal</a>
+          </nav>
+          <nav aria-label="Site" className="footer-links">
+            <a href={surfaceUrl('hub', '/legal')}>All legal documents</a>
             <a href={surfaceUrl('hub', '/docs')}>Docs</a>
             <a href={surfaceUrl('hub', '/pricing')}>Pricing</a>
           </nav>

@@ -269,7 +269,7 @@ export async function acceptBid(
 ): Promise<{ contractId: string; checkoutUrl: string; totalCents: number }> {
   const res = await request.post(`/api/bids/${bidId}/accept`, {
     headers: auth(userId),
-    data: qaChecks ? { qa_checks: qaChecks } : {},
+    data: qaChecks ? { qa_checks: qaChecks, withdrawal_consent: true } : { withdrawal_consent: true },
   });
   expect(res.status(), await res.text()).toBe(201);
   const body = (await res.json()) as {

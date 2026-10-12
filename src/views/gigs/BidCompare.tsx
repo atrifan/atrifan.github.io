@@ -13,6 +13,8 @@ import { normalizeQaChecks, parseStoredQaChecks, qaOptions, qaReserveCredits, qa
 import type { QaCheck } from '@/src/config/qa.config';
 import { QaChecksFieldset } from './QaChecksFieldset';
 import { TrustBadge } from './ui';
+import { GigsWindowsNote } from './GigsWindowsNote';
+import { CONSENT_TEXT } from '@/src/lib/legal/consent';
 import type { TrustBadgeData } from '@/src/lib/trust/badges';
 
 export interface CompareBid {
@@ -44,17 +46,21 @@ export function BidCompare({
   bids,
   canAccept,
   qaCosts,
+  windowsNotice,
 }: {
   jobId: string;
   bids: CompareBid[];
   canAccept: boolean;
   qaCosts: Record<QaCheck, number>;
+  /** The dispute and claim windows line (gigsConfig().windowsNotice). */
+  windowsNotice: string;
 }) {
   const [sort, setSort] = useState<BidSort>('price');
   const [accepting, setAccepting] = useState<CompareBid | null>(null);
   const [qa, setQa] = useState<QaCheck[]>(['basic']);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [consent, setConsent] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const sorted = sortBids(bids, sort);
   const options = qaOptions(qaCosts);
@@ -66,6 +72,7 @@ export function BidCompare({
   function open(bid: CompareBid) {
     setQa(parseStoredQaChecks(window.sessionStorage.getItem(qaStorageKey(jobId))));
     setProblem(null);
+    setConsent(false);
     setAccepting(bid);
   }
 
@@ -76,13 +83,18 @@ export function BidCompare({
 
   async function accept() {
     if (!accepting) return;
+    if (!consent) {
+      setProblem('Tick the box to confirm before you pay.');
+      document.getElementById('accept-consent')?.focus();
+      return;
+    }
     setBusy(true);
     setProblem(null);
     const checks = normalizeQaChecks(qa);
     window.sessionStorage.setItem(qaStorageKey(jobId), JSON.stringify(checks));
     const res = await apiJson<{ checkout_url: string; contract: { id: string } }>(`/api/bids/${accepting.id}/accept`, {
       method: 'POST',
-      body: { qa_checks: checks },
+      body: { qa_checks: checks, withdrawal_consent: true },
     });
     if (res.ok && res.data?.checkout_url) {
       window.location.assign(res.data.checkout_url);
@@ -185,6 +197,19 @@ export function BidCompare({
               onChange={(id, on) => setQa(normalizeQaChecks(on ? [...qa, id] : qa.filter((c) => c !== id)))}
               reserve={qaReserveCredits(qa, qaCosts)}
             />
+            <GigsWindowsNote text={windowsNotice} />
+            <div className="gigs-consent">
+              <input
+                id="accept-consent"
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => {
+                  setConsent(e.target.checked);
+                  if (e.target.checked) setProblem(null);
+                }}
+              />
+              <label htmlFor="accept-consent">{CONSENT_TEXT.gig_contract}</label>
+            </div>
             {problem ? (
               <p role="alert" className="gigs-notice gigs-notice-danger">
                 {problem}

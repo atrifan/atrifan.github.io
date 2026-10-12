@@ -8,8 +8,10 @@ const contact: Contact = { userId: 'u1', email: 'a@example.com', name: 'Ana', lo
 test('every type is enabled when the user has no preference rows, except the email-off-by-default ones', () => {
   const prefs = resolvePreferences([]);
   assert.deepEqual(Object.keys(prefs).sort(), [...NOTIFICATION_TYPES].sort());
-  assert.deepEqual([...EMAIL_OFF_BY_DEFAULT], ['package_installed']);
-  for (const type of NOTIFICATION_TYPES) assert.equal(prefs[type], type !== 'package_installed', type);
+  // Support notices: admins already get the forwarded email (src/lib/support/support-service.ts).
+  const off = ['package_installed', 'support_complaint_received', 'support_email_received'];
+  assert.deepEqual([...EMAIL_OFF_BY_DEFAULT], off);
+  for (const type of NOTIFICATION_TYPES) assert.equal(prefs[type], !off.includes(type), type);
 });
 
 test('package installs send no email by default but can be switched on', () => {

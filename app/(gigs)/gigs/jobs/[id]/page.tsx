@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params, searchParams }: Props) {
   const { viewer, data } = await load(params.id);
   if (!data) notFound();
-  const { base, bps, bounds, qaCosts } = gigsConfig();
+  const { base, bps, bounds, qaCosts, windowsNotice } = gigsConfig();
   const url = absoluteSurfaceUrl('gigs', `/jobs/${data.job.id}`);
   const back = surfaceUrl('gigs', `/jobs/${data.job.id}`);
   return (
@@ -54,6 +54,7 @@ export default async function Page({ params, searchParams }: Props) {
         bps={bps}
         bounds={bounds}
         qaCosts={qaCosts}
+        windowsNotice={windowsNotice}
         published={searchParams.published === '1'}
       />
     </>

@@ -141,7 +141,11 @@ export type CreateBidInput = z.infer<typeof CreateBidSchema>;
 
 /** Accepting a bid: the QA checks the customer pays for (basic is always included). */
 export const AcceptBidSchema = z
-  .object({ qa_checks: z.array(z.enum(QA_CHECKS as unknown as [QaCheck, ...QaCheck[]])).max(QA_CHECKS.length * 2).optional() })
+  .object({
+    qa_checks: z.array(z.enum(QA_CHECKS as unknown as [QaCheck, ...QaCheck[]])).max(QA_CHECKS.length * 2).optional(),
+    /** The right-of-withdrawal waiver (src/lib/legal/consent.ts); the route refuses without `true`. */
+    withdrawal_consent: z.boolean().optional(),
+  })
   .strict();
 export type AcceptBidInput = z.infer<typeof AcceptBidSchema>;
 

@@ -89,15 +89,16 @@ test.describe('hub credits, signed in (customer)', () => {
     });
   }
 
-  test('"Buy $10" posts { amount: 10 } and goes to Stripe Checkout', async ({ page }) => {
+  test('"Buy $10" posts { amount: 10, withdrawal_consent: true } and goes to Stripe Checkout', async ({ page }) => {
     await mockCheckout(page);
     await page.goto('/credits');
+    await page.getByRole('checkbox', { name: /lose my 14-day right of withdrawal/ }).check();
     const [req] = await Promise.all([
       page.waitForRequest((r) => isCheckout(r.url())),
       page.getByRole('button', { name: /^Buy \$10(?!\d)/ }).click(),
     ]);
     expect(req.method()).toBe('POST');
-    expect(req.postDataJSON()).toEqual({ amount: 10 });
+    expect(req.postDataJSON()).toEqual({ amount: 10, withdrawal_consent: true });
     await page.waitForURL(CHECKOUT_URL);
   });
 
@@ -105,21 +106,23 @@ test.describe('hub credits, signed in (customer)', () => {
     const checkout = recordRequests(page, '/api/billing/checkout');
     await page.goto('/credits');
     await page.getByRole('spinbutton', { name: 'Custom amount (USD)' }).fill('4');
+    await page.getByRole('checkbox', { name: /lose my 14-day right of withdrawal/ }).check();
     await page.getByRole('button', { name: 'Buy credits', exact: true }).click();
     await expect(page.getByText('The minimum top-up is $5.')).toBeVisible();
     await page.waitForTimeout(300);
     expect(checkout).toHaveLength(0);
   });
 
-  test('custom amount 7 posts { amount: 7 }', async ({ page }) => {
+  test('custom amount 7 posts { amount: 7, withdrawal_consent: true }', async ({ page }) => {
     await mockCheckout(page);
     await page.goto('/credits');
+    await page.getByRole('checkbox', { name: /lose my 14-day right of withdrawal/ }).check();
     await page.getByRole('spinbutton', { name: 'Custom amount (USD)' }).fill('7');
     const [req] = await Promise.all([
       page.waitForRequest((r) => isCheckout(r.url())),
       page.getByRole('button', { name: 'Buy credits', exact: true }).click(),
     ]);
-    expect(req.postDataJSON()).toEqual({ amount: 7 });
+    expect(req.postDataJSON()).toEqual({ amount: 7, withdrawal_consent: true });
     await page.waitForURL(CHECKOUT_URL);
   });
 

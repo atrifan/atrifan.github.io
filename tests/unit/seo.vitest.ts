@@ -47,6 +47,13 @@ describe('sitemapFor', () => {
       'https://tulzo.online/pricing',
       'https://tulzo.online/docs',
       'https://tulzo.online/legal',
+      'https://tulzo.online/legal/terms',
+      'https://tulzo.online/legal/payments',
+      'https://tulzo.online/legal/disclaimers',
+      'https://tulzo.online/legal/acceptable-use',
+      'https://tulzo.online/legal/marketplace-publishers',
+      'https://tulzo.online/legal/complaints',
+      'https://tulzo.online/legal/imprint',
     ]);
   });
 
@@ -66,6 +73,13 @@ describe('sitemapFor', () => {
       'http://localhost:3000/pricing',
       'http://localhost:3000/docs',
       'http://localhost:3000/legal',
+      'http://localhost:3000/legal/terms',
+      'http://localhost:3000/legal/payments',
+      'http://localhost:3000/legal/disclaimers',
+      'http://localhost:3000/legal/acceptable-use',
+      'http://localhost:3000/legal/marketplace-publishers',
+      'http://localhost:3000/legal/complaints',
+      'http://localhost:3000/legal/imprint',
       'http://localhost:3000/marketplace',
       'http://localhost:3000/gigs',
       'http://localhost:3000/chat',

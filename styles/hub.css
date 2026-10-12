@@ -689,3 +689,241 @@ textarea.input {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)) !important;
   gap: var(--space-4) !important;
 }
+
+/* ── Legal documents (/legal/*): side nav ≥ 960px, a select below ───────── */
+.legal-page {
+  max-width: var(--container-max);
+}
+
+.legal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+.legal-aside {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .legal-layout {
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+
+  .legal-aside {
+    display: block;
+  }
+
+  .legal-select {
+    display: none !important;
+  }
+}
+
+.legal-nav {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legal-nav ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legal-nav a {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.legal-nav a:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+
+.legal-nav a[aria-current='page'] {
+  color: var(--color-text);
+  background: var(--color-accent-soft);
+  font-weight: 600;
+}
+
+.legal-nav .legal-nav-all {
+  font-size: var(--text-sm);
+  text-decoration: underline;
+}
+
+.legal-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  max-width: 46rem;
+}
+
+.legal-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legal-header h1 {
+  font-size: var(--text-2xl);
+}
+
+.legal-meta {
+  font-size: var(--text-sm);
+}
+
+.legal-summary {
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.legal-summary-title,
+.legal-toc-title {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
+}
+
+.legal-summary ul,
+.legal-toc ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.legal-toc a {
+  display: inline-block;
+  padding-block: var(--space-1);
+}
+
+.legal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+}
+
+.legal-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legal-section-head h2 {
+  font-size: var(--text-xl);
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+}
+
+.legal-anchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.legal-anchor:hover,
+.legal-anchor:focus-visible {
+  color: var(--color-text);
+}
+
+.legal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.legal-body ul,
+.legal-body ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.legal-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.legal-facts dt {
+  font-weight: 600;
+}
+
+.legal-facts dd {
+  margin: 0;
+}
+
+/* Complaints form */
+.complaint-form {
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-3);
+}
+
+.field-help {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.checkbox-row input[type='checkbox'] {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--color-accent);
+}
+
+.field .checkbox-row label,
+.checkbox-row label {
+  font-weight: 400;
+  font-size: var(--text-md);
+}
+
+/* Bots fill every input in the markup; people never see this one. */
+.honeypot {
+  display: none;
+}
+
+/* Withdrawal consent next to checkouts (/credits, /pricing) */
+.consent-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}

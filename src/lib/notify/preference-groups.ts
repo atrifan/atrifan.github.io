@@ -29,7 +29,7 @@ export const PREFERENCE_GROUPS: ReadonlyArray<{ id: PreferenceGroupId; title: st
   { id: 'qa', title: 'QA', types: ['submission_received', 'qa_verdict'] },
   { id: 'account', title: 'Account', types: ['review_received', 'review_requested'] },
   { id: 'marketplace', title: 'Marketplace', types: ['package_installed', 'package_approved', 'package_rejected'] },
-  { id: 'admin', title: 'Admin', types: ['submission_awaiting_qa'] },
+  { id: 'admin', title: 'Admin', types: ['submission_awaiting_qa', 'support_complaint_received', 'support_email_received'] },
 ];
 
 /** The types in a group (empty for an unknown id). */
@@ -60,6 +60,8 @@ export const PREFERENCE_LABELS: Record<NotificationType, string> = {
   package_approved: 'Your package is approved',
   package_rejected: "Your package wasn't approved",
   submission_awaiting_qa: 'Submissions waiting in the QA queue',
+  support_complaint_received: 'A complaint arrives through the form',
+  support_email_received: 'An email arrives at the support address',
 };
 
 export interface PreferenceItem {

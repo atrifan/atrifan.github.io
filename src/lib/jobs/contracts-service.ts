@@ -12,6 +12,8 @@ import { ensureUserPrincipal } from './principals';
 import { computeCommission, commissionBpsFromEnv } from './commission';
 import { assertContractTransition, canTransitionContract, type ContractStatus } from './job-state';
 import { buildContractCheckoutParams, transferGroupFor } from './checkout-params';
+import { CONSENT_REQUIRED_MESSAGE } from '../legal/consent';
+import { consentMetadata, recordConsent } from '../legal/consent-service';
 import { getStripe, appBaseUrl, stripeFailure } from './stripe';
 import { creditValueUsdFromEnv, qaCostsFromEnv, type QaCheck } from '@/src/config/qa.config';
 import { computeReserve, creditsToUsd, normalizeChecks } from '@/src/lib/qa/qa-credits';
@@ -100,8 +102,9 @@ export async function moveContractIfAllowed(contract: ContractRow, to: ContractS
 export async function acceptBid(
   userId: string,
   bidId: string,
-  opts: { qaChecks?: readonly string[] } = {},
+  opts: { qaChecks?: readonly string[]; withdrawalConsent?: boolean } = {},
 ): Promise<AcceptBidResult> {
+  if (opts.withdrawalConsent !== true) throw new JobsError('consent_required', 400, CONSENT_REQUIRED_MESSAGE);
   const qa = qaReserveView(opts.qaChecks);
   const bid = await loadBid(bidId);
   if (!bid) throw notFound('Bid not found');
@@ -184,6 +187,20 @@ export async function acceptBid(
       .single();
     if (versionError) throw dbError(versionError, 'create contract version');
 
+    let consent;
+    try {
+      consent = await recordConsent({
+        userId,
+        purchase: 'gig_contract',
+        amountCents: breakdown.customerTotalCents,
+        currency: bid.currency,
+        reference: contractId,
+      });
+    } catch (err) {
+      console.error('[jobs]', err instanceof Error ? err.message : err);
+      throw new JobsError('consent_not_recorded', 503, 'Could not record your consent; try again');
+    }
+
     const { successUrl, cancelUrl } = contractCheckoutUrls(contractId);
     let session;
     try {
@@ -198,6 +215,7 @@ export async function acceptBid(
           successUrl,
           cancelUrl,
           note: qaCheckoutNote(qa),
+          metadata: consentMetadata(consent),
         }),
         { idempotencyKey: `contract_checkout_${contractId}` },
       );

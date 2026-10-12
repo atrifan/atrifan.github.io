@@ -1628,3 +1628,23 @@
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
+
+/* Withdrawal consent in the accept dialog (src/views/gigs/BidCompare.tsx). */
+.gigs-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.gigs-consent input[type='checkbox'] {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--color-accent);
+}
+
+.gigs-windows-note a {
+  color: inherit;
+  text-decoration: underline;
+}

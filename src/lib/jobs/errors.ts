@@ -24,6 +24,11 @@ export type JobsErrorCode =
   | 'stripe_error'
   | 'stripe_not_configured'
   | 'db_error'
+  // withdrawal consent (src/lib/legal/consent.ts)
+  | 'consent_required'
+  | 'consent_not_recorded'
+  // support inbox (src/lib/support)
+  | 'email_failed'
   // job room (Phase 3)
   | 'work_paused'
   // submissions and QA (Phase 4)

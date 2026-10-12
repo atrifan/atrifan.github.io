@@ -598,6 +598,7 @@ test.describe('post a job wizard', () => {
     await expect(dialog.getByRole('checkbox', { name: /Code review/ })).toBeChecked();
     await expect(dialog.getByRole('checkbox', { name: /Security review/ })).not.toBeChecked();
     const acceptReq = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes(`/api/bids/${bid.id}/accept`));
+    await dialog.getByRole('checkbox', { name: /lose my 14-day right of withdrawal/ }).check();
     await dialog.getByRole('button', { name: 'Continue to payment' }).click();
     const body = (await acceptReq).postDataJSON() as { qa_checks?: string[] };
     expect(body.qa_checks).toContain('basic');
@@ -1055,6 +1056,7 @@ test.describe('owner: compare and accept bids', () => {
       accepted.value = { status: upstream.status(), body: await upstream.json() };
       await route.fulfill({ response: upstream });
     });
+    await dialog.getByRole('checkbox', { name: /lose my 14-day right of withdrawal/ }).check();
     await dialog.getByRole('button', { name: 'Continue to payment' }).click();
     const sent = (await acceptReq).postDataJSON() as { qa_checks?: string[] };
     expect(sent.qa_checks).toContain('basic');

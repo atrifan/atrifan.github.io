@@ -19,6 +19,8 @@ export interface ContractCheckoutInput {
   cancelUrl: string;
   /** Shown above the pay button, e.g. the QA credit reserve. */
   note?: string;
+  /** Extra metadata, e.g. the withdrawal consent (src/lib/legal/consent-service.ts). */
+  metadata?: Record<string, string>;
 }
 
 export function transferGroupFor(contractId: string): string {
@@ -71,7 +73,7 @@ export function buildTopupCheckoutParams(input: TopupCheckoutInput): Stripe.Chec
 }
 
 export function buildContractCheckoutParams(input: ContractCheckoutInput): Stripe.Checkout.SessionCreateParams {
-  const metadata = { kind: 'contract', contract_id: input.contractId, job_id: input.jobId, bid_id: input.bidId };
+  const metadata = { ...input.metadata, kind: 'contract', contract_id: input.contractId, job_id: input.jobId, bid_id: input.bidId };
   return {
     mode: 'payment',
     client_reference_id: input.contractId,

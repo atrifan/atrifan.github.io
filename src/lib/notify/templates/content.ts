@@ -240,6 +240,20 @@ const builders: Builders = {
     paragraphs: [`${p.providerName} submitted "${p.jobTitle}" and it is waiting in the QA queue.`],
     cta: { label: 'Open the QA queue', url: p.url ?? appUrl('hub', '/admin/qa') },
   }),
+  support_complaint_received: (p) => ({
+    subject: `Complaint ${p.reference}: ${p.category}`,
+    preheader: `From ${p.fromName}.`,
+    heading: 'A complaint was received',
+    paragraphs: [`${p.fromName} sent a complaint (${p.category}). Reference ${p.reference}.`],
+    cta: { label: 'Open the inbox', url: p.url ?? appUrl('hub', `/admin/inbox?thread=${encodeURIComponent(p.threadId)}`) },
+  }),
+  support_email_received: (p) => ({
+    subject: `Support email ${p.reference}: ${p.subject}`,
+    preheader: `From ${p.fromAddress}.`,
+    heading: 'A support email was received',
+    paragraphs: [`${p.fromAddress} wrote "${p.subject}". Reference ${p.reference}.`],
+    cta: { label: 'Open the inbox', url: p.url ?? appUrl('hub', `/admin/inbox?thread=${encodeURIComponent(p.threadId)}`) },
+  }),
 };
 
 export function buildContent<T extends NotificationType>(type: T, payload: Payload<T>): EmailContent {

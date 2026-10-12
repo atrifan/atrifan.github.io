@@ -73,7 +73,7 @@ const PROTECTED_PREFIXES = [
 const PROTECTED_BELOW = ['/chat'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
-const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/notifications', '/admin/qa', '/admin/disputes', '/admin/activity'];
+const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/notifications', '/admin/qa', '/admin/disputes', '/admin/activity', '/admin/inbox', '/admin/complaints'];
 
 /** Auth pages; on non-hub surfaces they redirect to the hub. */
 const AUTH_PREFIXES = ['/sign-in', '/sign-up'];

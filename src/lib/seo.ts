@@ -14,7 +14,19 @@ const PRIVATE_SURFACES: readonly Surface[] = ['ai'];
 
 /** Public pages per surface, as surface-local paths. */
 const PUBLIC_PAGES: Record<Surface, readonly string[]> = {
-  hub: ['/', '/pricing', '/docs', '/legal'],
+  hub: [
+    '/',
+    '/pricing',
+    '/docs',
+    '/legal',
+    '/legal/terms',
+    '/legal/payments',
+    '/legal/disclaimers',
+    '/legal/acceptable-use',
+    '/legal/marketplace-publishers',
+    '/legal/complaints',
+    '/legal/imprint',
+  ],
   ai: [],
   marketplace: ['/'],
   gigs: ['/'],

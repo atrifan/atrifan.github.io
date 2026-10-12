@@ -133,11 +133,11 @@ test('accept: contract + version v1 + Checkout Session for the customer total; w
   const placed = await bid(id, PROVIDER);
   const bidId = placed.body.bid.id;
 
-  const stranger = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: PROVIDER });
+  const stranger = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: PROVIDER, body: { withdrawal_consent: true } });
   assert.equal(stranger.status, 404);
 
   const before = stripe.requests.length;
-  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: CUSTOMER });
+  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: CUSTOMER, body: { withdrawal_consent: true } });
   assert.equal(res.status, 201, JSON.stringify(res.body));
   const contractId = res.body.contract.id;
   assert.equal(res.body.contract.status, 'pending_payment');
@@ -174,7 +174,7 @@ test('accept: contract + version v1 + Checkout Session for the customer total; w
   const [bidRow] = await sql<{ status: string }>(`SELECT status FROM bids WHERE id = $1`, [bidId]);
   assert.equal(bidRow.status, 'accepted');
 
-  const again = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: CUSTOMER });
+  const again = await call(accept.POST, { method: 'POST', url: `/api/bids/${bidId}/accept`, params: { id: bidId }, user: CUSTOMER, body: { withdrawal_consent: true } });
   assert.equal(again.status, 409);
 
   // unsigned / badly signed webhooks are rejected
@@ -234,7 +234,7 @@ test('accept: contract + version v1 + Checkout Session for the customer total; w
 test('checkout amount mismatch does not activate the contract', async () => {
   const id = await openJob('Mismatch job');
   const placed = await bid(id, PROVIDER);
-  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER });
+  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER, body: { withdrawal_consent: true } });
   const contractId = res.body.contract.id;
   const event = stripeEvent('checkout.session.completed', {
     id: 'cs_test_mismatch', object: 'checkout.session', mode: 'payment', payment_status: 'paid', status: 'complete',
@@ -251,7 +251,7 @@ test('checkout amount mismatch does not activate the contract', async () => {
 test('dispute marks payment, contract and job disputed', async () => {
   const id = await openJob('Dispute job');
   const placed = await bid(id, PROVIDER);
-  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER });
+  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER, body: { withdrawal_consent: true } });
   const contractId = res.body.contract.id;
   await postWebhook(stripeEvent('checkout.session.completed', {
     id: 'cs_test_dispute', object: 'checkout.session', mode: 'payment', payment_status: 'paid', status: 'complete',
@@ -272,7 +272,7 @@ test('dispute marks payment, contract and job disputed', async () => {
 test('an expired checkout releases the job back to open', async () => {
   const id = await openJob('Expiring job');
   const placed = await bid(id, PROVIDER);
-  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER });
+  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER, body: { withdrawal_consent: true } });
   const contractId = res.body.contract.id;
   const stale = await postWebhook(stripeEvent('checkout.session.expired', {
     id: 'cs_test_some_older_session', object: 'checkout.session', status: 'expired', metadata: { kind: 'contract', contract_id: contractId },
@@ -293,7 +293,7 @@ test('an expired checkout releases the job back to open', async () => {
   const [b] = await sql<{ status: string }>(`SELECT status FROM bids WHERE id = $1`, [placed.body.bid.id]);
   assert.equal(b.status, 'active');
   // and the bid can be accepted again
-  const again = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER });
+  const again = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER, body: { withdrawal_consent: true } });
   assert.equal(again.status, 201);
 });
 
@@ -301,7 +301,7 @@ test('a Stripe failure during accept rolls the bid and job back', async () => {
   const id = await openJob('Stripe down job');
   const placed = await bid(id, PROVIDER);
   stripe.failNext('/v1/checkout/sessions');
-  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER });
+  const res = await call(accept.POST, { method: 'POST', url: `/api/bids/${placed.body.bid.id}/accept`, params: { id: placed.body.bid.id }, user: CUSTOMER, body: { withdrawal_consent: true } });
   assert.equal(res.status, 502);
   assert.equal(res.body.error, 'stripe_error');
   const [j] = await sql<{ status: string }>(`SELECT status FROM jobs WHERE id = $1`, [id]);
