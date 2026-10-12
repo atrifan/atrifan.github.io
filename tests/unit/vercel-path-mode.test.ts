@@ -37,3 +37,20 @@ test('crons stay daily and there is no email dispatch cron', () => {
   assert.ok(crons.every((c) => !c.path.includes('dispatch')));
   assert.ok(crons.every((c) => /^\d+ \d+ \* \* \*$/.test(c.schedule)));
 });
+
+test('host redirects exist only for the four surface subdomains, jobs and www', () => {
+  const hosts = new Set((config.redirects ?? []).flatMap((r) => (r.has ?? []).filter((h) => h.type === 'host').map((h) => h.value)));
+  assert.deepEqual([...hosts].sort(), ['ai', 'chat', 'gigs', 'jobs', 'marketplace', 'www'].map((s) => `${s}.tulzo.online`));
+  assert.equal((config.redirects ?? []).length, 15);
+});
+
+// The switch-over to real subdomains (once Clerk is on production keys) is documented in the surfaces rule.
+test('the surfaces rule documents the hybrid deployment and the switch-over', () => {
+  const rule = readFileSync('.claude/rules/surfaces-and-design.md', 'utf8');
+  const section = rule.slice(rule.indexOf('### Current deployment'), rule.indexOf('### Domains'));
+  for (const fact of ['TULZO_ROUTING=hybrid', 'TULZO_LINKS=path', 'TULZO_LINKS=host', 'NEXT_PUBLIC_ROOT_DOMAIN=tulzo.online', 'vercel-path-mode.test.ts']) {
+    assert.ok(section.includes(fact), `Current deployment section names ${fact}`);
+  }
+  assert.ok(!section.includes('TULZO_SURFACE=hub'), 'no per-project TULZO_SURFACE');
+  assert.ok(!/tulzo-(ai|marketplace|gigs|chat)\b|five Vercel projects|four surface projects/.test(rule), 'no per-surface Vercel projects');
+});

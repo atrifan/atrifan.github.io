@@ -22,12 +22,16 @@ Pick the file suffix by runner: `*.test.ts` node:test, `*.vitest.ts` Vitest, `*.
 
 ## Playwright projects (`playwright.config.ts`)
 
-- `chromium`: `tests/e2e/**` against :3000 (path-prefix mode, `TULZO_SURFACE` unset).
+- `chromium`: `tests/e2e/**` against :3000 (path-prefix mode, `TULZO_ROUTING` and `TULZO_SURFACE` unset).
 - `light-desktop`, `light-mobile`, `dark-desktop`, `dark-mobile`: `tests/visual/**` and `tests/a11y/**`
   (`colorScheme` light/dark, 1280x800 and 390x844).
 - `surface-ai` (:3001, `TULZO_SURFACE=ai`) and `surface-hub` (:3002, `TULZO_SURFACE=hub`): files named
-  `*.surface-ai.spec.ts` / `*.surface-hub.spec.ts`. Both servers use `NEXT_PUBLIC_ROOT_DOMAIN=tulzo.test`
-  and their own `NEXT_DIST_DIR`. Assert cross-surface redirects from the `Location` header.
+  `*.surface-ai.spec.ts` / `*.surface-hub.spec.ts`. Both servers use `NEXT_PUBLIC_ROOT_DOMAIN=tulzo.test`,
+  `TULZO_LINKS=host` and their own `NEXT_DIST_DIR`. Assert cross-surface redirects from the `Location` header.
+- `host-routing` (:3003, `TULZO_ROUTING=hybrid`, `TULZO_LINKS=path`, root `tulzo.test`): files named
+  `*.host-routing.spec.ts`. API checks send `Host:` headers to localhost; the browser maps `*.tulzo.test` to
+  127.0.0.1 (`--host-resolver-rules`), so pages load as `http://marketplace.tulzo.test:3003/`.
+  `PW_PORT` / `PW_AI_PORT` / `PW_HUB_PORT` / `PW_HOST_PORT` move the servers.
 - `integration`: `tests/integration/*.spec.ts`.
 
 Locally the servers are `next dev` (reused if running); in CI the main one is `next start`, so build first.

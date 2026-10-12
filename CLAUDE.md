@@ -21,7 +21,7 @@ frontmatter (`description`, `appliesTo` globs, `alwaysApply`). Read the ones rel
 | [plugin-control-plane](.claude/rules/plugin-control-plane.md) | Assistant ↔ Tulzo, API keys, observability |
 | [plugin-admin](.claude/rules/plugin-admin.md) | Skill enable/disable, settings, notification channels, schedules, plugin catalog |
 | [api-routes](.claude/rules/api-routes.md) | API route reference |
-| [surfaces-and-design](.claude/rules/surfaces-and-design.md) | `TULZO_SURFACE` routing, `surfaceUrl`, AppShell, tokens, theme, brand icons, ads |
+| [surfaces-and-design](.claude/rules/surfaces-and-design.md) | Host/path surface routing (`TULZO_ROUTING`, `TULZO_LINKS`), `surfaceUrl`, AppShell, tokens, theme, brand icons, ads |
 
 ## Quick start
 
@@ -38,7 +38,7 @@ npm run test:unit    # node:test + Vitest
 npm test             # Playwright: e2e, surfaces, a11y + visual in light/dark (see testing rule)
 ```
 
-`.env.local` is not in the repo; copy it from a teammate. Leave `TULZO_SURFACE` unset locally (see the
+`.env.local` is not in the repo; copy it from a teammate. Leave `TULZO_ROUTING`, `TULZO_LINKS` and `TULZO_SURFACE` unset locally (see the
 [surfaces-and-design](.claude/rules/surfaces-and-design.md) rule).
 
 ## Conventions worth stating up front
