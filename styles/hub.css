@@ -344,7 +344,20 @@ textarea.input {
   text-align: center;
 }
 
-/* Switch rows (notification preferences) */
+/* Switch rows (notification preferences), in groups */
+.switch-group + .switch-group {
+  margin-top: var(--space-4);
+}
+
+.switch-group-title {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .switch-list {
   display: flex;
   flex-direction: column;

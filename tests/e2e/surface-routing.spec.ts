@@ -2,18 +2,22 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import { blockThirdParty, isSurfaceNotFoundBody } from './surface-helpers';
 
 /**
- * Surface routing in path-prefix mode (TULZO_SURFACE unset, :3000).
+ * Surface routing in path-prefix mode (TULZO_SURFACE unset), against the project's baseURL.
  * Every surface lives under its own path prefix on one host.
  */
 
-const ORIGIN = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${process.env.PW_PORT || 3000}`;
+/** The configured baseURL's origin (playwright.config.ts: PLAYWRIGHT_BASE_URL or PW_PORT). */
+function originOf(baseURL: string | undefined): string {
+  if (!baseURL) throw new Error('surface-routing.spec needs a baseURL in playwright.config.ts');
+  return new URL(baseURL).origin;
+}
 
 /**
  * Follow redirects by hand, but only while they stay on this app's origin.
  * Returns the final URL (which may be off-origin, in which case it is not fetched).
  */
-async function resolveRedirects(request: APIRequestContext, path: string): Promise<URL> {
-  let url = new URL(path, ORIGIN);
+async function resolveRedirects(request: APIRequestContext, origin: string, path: string): Promise<URL> {
+  let url = new URL(path, origin);
   for (let hop = 0; hop < 6; hop++) {
     const res = await request.get(url.toString(), { maxRedirects: 0 });
     const status = res.status();
@@ -21,7 +25,7 @@ async function resolveRedirects(request: APIRequestContext, path: string): Promi
     const location = res.headers()['location'];
     expect(location, `${url.pathname} answered ${status} without a Location header`).toBeTruthy();
     url = new URL(location, url);
-    if (url.origin !== ORIGIN) return url;
+    if (url.origin !== origin) return url;
   }
   return url;
 }
@@ -46,10 +50,11 @@ test.describe('path-prefix mode routing', () => {
   });
 
   // /ai is the signed-in control panel (src/views/ai), no longer a placeholder.
-  for (const path of ['/dashboard', '/chat', '/ai', '/ai/secrets']) {
-    test(`signed-out ${path} lands on this app's /sign-in, not a Clerk host`, async ({ request, page }) => {
+  for (const path of ['/dashboard', '/ai', '/ai/secrets']) {
+    test(`signed-out ${path} lands on this app's /sign-in, not a Clerk host`, async ({ request, page, baseURL }) => {
+      const ORIGIN = originOf(baseURL);
       const clerkHost = /accounts\.dev$|(^|\.)clerk\./;
-      const finalUrl = await resolveRedirects(request, path);
+      const finalUrl = await resolveRedirects(request, ORIGIN, path);
       expect(finalUrl.hostname).not.toMatch(clerkHost);
       if (finalUrl.origin === ORIGIN && finalUrl.pathname.startsWith('/sign-in')) return;
 

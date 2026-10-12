@@ -415,6 +415,40 @@
   color: var(--color-success);
 }
 
+/* On a card the top row never wraps: the kind icon and pill keep their size and the badges
+   share what is left, truncating with an ellipsis (the full text stays in the title). */
+.mp-card-top {
+  flex-wrap: nowrap;
+}
+
+.mp-card-top .mp-badges {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.mp-card-top .mp-pill {
+  flex: none;
+  white-space: nowrap;
+}
+
+.mp-card-top .mp-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.mp-badge > svg {
+  flex: none;
+}
+
+.mp-card-top .mp-badge-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mp-card-head {
   display: flex;
   flex-direction: column;

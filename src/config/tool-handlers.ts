@@ -9,7 +9,6 @@
  */
 
 import { ToolExecuteHandler, ToolWidgetRenderer, ToolTextFormatter, ToolResult } from './tools-definitions';
-import { clerkClient } from '@clerk/nextjs/server';
 import { generateText } from 'ai';
 import { AI_MODELS, calculateTokenCost } from './ai-tokens.config';
 import { createClient } from '@supabase/supabase-js';
@@ -570,106 +569,6 @@ export const executeHandlers: Record<string, ToolExecuteHandler> = {
       isBabyMode,
       steps,
     };
-  },
-
-  // ============ NOTIFICATIONS ============
-  send_push_notification: async (args, context) => {
-    if (!context?.userId) {
-      return { success: false, sent: 0, failed: 0, message: 'User not authenticated' };
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_HOST || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-
-    try {
-      const response = await fetch(`${baseUrl}/api/push/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
-        },
-        body: JSON.stringify({
-          userId: context.userId,
-          title: args.title as string,
-          body: args.body as string,
-          data: {
-            url: args.url as string,
-            type: args.type as string || 'info',
-            automationId: args.automationId as string,
-            executionId: args.executionId as string,
-          },
-          tag: args.tag as string,
-          requireInteraction: args.requireInteraction as boolean,
-          // Send to all channels by default (don't filter by type) - matches CLI behavior
-          channels: args.channels as string[] || ['all'],
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        return { success: false, sent: 0, failed: 0, message: error.error || 'Failed to send notification' };
-      }
-
-      return await response.json();
-    } catch (error) {
-      return {
-        success: false,
-        sent: 0,
-        failed: 0,
-        message: error instanceof Error ? error.message : 'Failed to send notification'
-      };
-    }
-  },
-
-  send_email: async (args, context) => {
-    if (!context?.userId) {
-      return { success: false, error: 'User not authenticated' };
-    }
-
-    // If no 'to' address provided, get user's email from Clerk
-    let toEmail = args.to as string;
-    if (!toEmail) {
-      try {
-        const clerk = await clerkClient();
-        const user = await clerk.users.getUser(context.userId);
-        toEmail = user.emailAddresses?.[0]?.emailAddress || '';
-        if (!toEmail) {
-          return { success: false, error: 'No email address found for user' };
-        }
-      } catch (e) {
-        return { success: false, error: 'Failed to fetch user email' };
-      }
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_HOST || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-
-    try {
-      const response = await fetch(`${baseUrl}/api/email/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Call': process.env.INTERNAL_API_SECRET || '',
-          'X-User-Id': context.userId,
-        },
-        body: JSON.stringify({
-          to: toEmail,
-          subject: args.subject as string,
-          body: args.body as string,
-          isHtml: args.isHtml as boolean,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        return { success: false, error: error.error || 'Failed to send email' };
-      }
-
-      return await response.json();
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to send email'
-      };
-    }
   },
 
   // ============ AI ============

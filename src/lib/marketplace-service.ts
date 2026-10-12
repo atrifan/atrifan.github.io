@@ -192,6 +192,23 @@ export async function queryCatalog(
   };
 }
 
+/** Public packages for the marketplace sitemap (id, visibility, last change); [] on any error. */
+export async function listPackagesForSitemap(limit = 1000): Promise<Array<{ id: string; visibility: string; updatedAt: string }>> {
+  try {
+    const { data, error } = await getClient()
+      .from('package_catalog')
+      .select('id, visibility, updated_at')
+      .eq('visibility', 'public')
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as Array<{ id: string; visibility: string; updated_at: string }>).map((r) => ({ id: r.id, visibility: r.visibility, updatedAt: r.updated_at }));
+  } catch (err) {
+    console.error('[marketplace] sitemap packages failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 // ============ Package detail ============
 
 export interface PackageDetail {

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 import { apiPath, expectNoAdSlots, fulfillJson, guardPage, recordRequests, sectionByH2 } from './hub-helpers';
+import { NOTIFICATION_TYPES } from '../../src/lib/notify/types';
 
 /** Hub profile page `/profile`: account, Stripe Connect payouts, email notifications, reviews, trust. */
 
@@ -186,15 +187,20 @@ test.describe('hub profile, signed in (customer)', () => {
   });
 
   test.describe('email notifications', () => {
-    test('one switch per type, named by label, checked by emailEnabled', async ({ page }) => {
+    test('every notification type has a switch, grouped Gigs / Payments / QA / Account, checked by emailEnabled', async ({ page }) => {
       await page.goto('/profile');
       const s = sectionByH2(page, 'Email notifications');
-      await expect(s.getByRole('switch')).toHaveCount(2);
-      await expect(s.getByRole('switch', { name: 'New bids', exact: true })).toBeChecked();
-      await expect(s.getByRole('switch', { name: 'QA verdicts', exact: true })).not.toBeChecked();
+      await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length);
+      await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account']);
+      const gigs = s.getByRole('group', { name: 'Gigs' });
+      await expect(gigs.getByRole('switch', { name: 'New bids on your jobs', exact: true })).toBeChecked();
+      await expect(s.getByRole('group', { name: 'QA' }).getByRole('switch', { name: 'QA verdicts', exact: true })).not.toBeChecked();
+      // types the server didn't send default to on
+      await expect(s.getByRole('group', { name: 'Payments' }).getByRole('switch', { name: 'Payout sent to you', exact: true })).toBeChecked();
+      await expect(s.getByRole('group', { name: 'Account' }).getByRole('switch', { name: 'Reminders to leave a review', exact: true })).toBeChecked();
     });
 
-    test('toggling "New bids" PUTs { bid_received: false } and shows "Saved"', async ({ page }) => {
+    test('toggling "New bids on your jobs" PUTs { bid_received: false } and shows "Saved"', async ({ page }) => {
       const bodies: unknown[] = [];
       await mockPrefs(page, (body) => {
         bodies.push(body);
@@ -204,7 +210,7 @@ test.describe('hub profile, signed in (customer)', () => {
         };
       });
       await page.goto('/profile');
-      const sw = sectionByH2(page, 'Email notifications').getByRole('switch', { name: 'New bids', exact: true });
+      const sw = sectionByH2(page, 'Email notifications').getByRole('switch', { name: 'New bids on your jobs', exact: true });
       await expect(sw).toBeChecked();
       await sw.click();
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
@@ -215,7 +221,7 @@ test.describe('hub profile, signed in (customer)', () => {
     test('a 500 shows "Couldn\'t save. Try again." and reverts the switch', async ({ page }) => {
       await mockPrefs(page, () => ({ status: 500, body: { error: 'boom' } }));
       await page.goto('/profile');
-      const sw = sectionByH2(page, 'Email notifications').getByRole('switch', { name: 'New bids', exact: true });
+      const sw = sectionByH2(page, 'Email notifications').getByRole('switch', { name: 'New bids on your jobs', exact: true });
       await expect(sw).toBeChecked();
       await sw.click();
       await expect(page.getByText(/Couldn.t save\. Try again\./)).toBeVisible();

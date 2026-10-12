@@ -17,12 +17,12 @@ export function PackageBadges({ verified, translatedFrom }: { verified: boolean;
       {verified && (
         <span className="mp-badge mp-badge-verified" title="Approved by a Tulzo admin">
           <VerifiedIcon />
-          Verified
+          <span className="mp-badge-text">Verified</span>
         </span>
       )}
       {translatedFrom && (
         <span className="mp-badge" title={`Translated from ${translatedFrom}`}>
-          Translated
+          <span className="mp-badge-text">Translated</span>
         </span>
       )}
     </span>

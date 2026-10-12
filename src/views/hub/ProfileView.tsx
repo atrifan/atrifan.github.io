@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { connectCard, connectNotice, type ConnectReturn } from '@/src/lib/connect-view';
 import { CONNECT_COUNTRIES } from '@/src/lib/connect-countries';
+import { groupPreferences } from '@/src/lib/notify/preference-groups';
 import { ProfileReputation } from './ProfileReputation';
 
 interface ConnectStatusView {
@@ -244,27 +245,33 @@ function NotificationsPanel() {
       <p className="muted">Choose which emails we send you. Account and security emails always go out.</p>
       {failed && <p className="field-error">We couldn&apos;t load your preferences. Refresh to try again.</p>}
       {!prefs && !failed && <p className="muted">Loading…</p>}
-      {prefs && (
-        <ul className="switch-list" role="list">
-          {prefs.map((p) => {
-            const id = `notify-${p.type}`;
-            return (
-              <li key={p.type} className="switch-row">
-                <label htmlFor={id}>{p.label}</label>
-                <input
-                  id={id}
-                  type="checkbox"
-                  role="switch"
-                  className="switch"
-                  checked={p.emailEnabled}
-                  aria-checked={p.emailEnabled}
-                  onChange={(e) => void toggle(p.type, e.target.checked)}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {prefs &&
+        groupPreferences(prefs).map((group) => (
+          <div key={group.id} className="switch-group" role="group" aria-labelledby={`notify-group-${group.id}`}>
+            <h3 id={`notify-group-${group.id}`} className="switch-group-title">
+              {group.title}
+            </h3>
+            <ul className="switch-list" role="list">
+              {group.items.map((p) => {
+                const id = `notify-${p.type}`;
+                return (
+                  <li key={p.type} className="switch-row">
+                    <label htmlFor={id}>{p.label}</label>
+                    <input
+                      id={id}
+                      type="checkbox"
+                      role="switch"
+                      className="switch"
+                      checked={p.emailEnabled}
+                      aria-checked={p.emailEnabled}
+                      onChange={(e) => void toggle(p.type, e.target.checked)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
     </section>
   );
 }

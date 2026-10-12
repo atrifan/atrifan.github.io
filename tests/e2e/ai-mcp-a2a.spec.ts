@@ -137,10 +137,17 @@ test.describe('A2A peers /ai/a2a', () => {
     await expect(page.getByRole('button', { name: 'Sign in to Calendar bot', exact: true })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Client authentication for Calendar bot', exact: true })).toHaveCount(0);
 
+    // One of Sign in / Sign out, by the peer's state: Travel planner is signed in, Research peer isn't.
+    await expect(page.getByRole('button', { name: 'Sign in to Travel planner', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign out of Research peer', exact: true })).toHaveCount(0);
+
     await page.getByRole('button', { name: 'Sign in to Research peer', exact: true }).click();
     await bridge.expectSent('A2A_AUTHENTICATE', { agentId: 'a2a_2' });
+    await expect(page.getByRole('button', { name: 'Sign out of Research peer', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in to Research peer', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Sign out of Travel planner', exact: true }).click();
     await bridge.expectSent('A2A_AUTH_REVOKE', { agentId: 'a2a_1' });
+    await expect(page.getByRole('button', { name: 'Sign in to Travel planner', exact: true })).toBeVisible();
 
     const select = page.getByRole('combobox', { name: 'Client authentication for Travel planner', exact: true });
     await expect(select.locator('option')).toHaveText(CLIENT_AUTH_OPTIONS);

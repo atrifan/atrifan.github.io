@@ -76,12 +76,15 @@ export function A2aTab() {
                         ) : null}
                         {a.hasOAuth ? (
                           <>
-                            <Button onClick={() => change(`in:${a.id}`, request('A2A_AUTHENTICATE', { agentId: a.id }))} busy={action.busy === `in:${a.id}`} aria-label={`Sign in to ${a.name}`}>
-                              Sign in
-                            </Button>
-                            <Button variant="ghost" onClick={() => change(`out:${a.id}`, request('A2A_AUTH_REVOKE', { agentId: a.id }))} busy={action.busy === `out:${a.id}`} aria-label={`Sign out of ${a.name}`}>
-                              Sign out
-                            </Button>
+                            {a.authStatus === 'ok' ? (
+                              <Button variant="ghost" onClick={() => change(`out:${a.id}`, request('A2A_AUTH_REVOKE', { agentId: a.id }))} busy={action.busy === `out:${a.id}`} aria-label={`Sign out of ${a.name}`}>
+                                Sign out
+                              </Button>
+                            ) : (
+                              <Button onClick={() => change(`in:${a.id}`, request('A2A_AUTHENTICATE', { agentId: a.id }))} busy={action.busy === `in:${a.id}`} aria-label={`Sign in to ${a.name}`}>
+                                Sign in
+                              </Button>
+                            )}
                             <SelectField
                               hideLabel
                               label={`Client authentication for ${a.name}`}
