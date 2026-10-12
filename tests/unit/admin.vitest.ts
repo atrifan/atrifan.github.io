@@ -101,6 +101,11 @@ describe('isAdminUserId', () => {
     expect(await isAdminUserId('u_other', { env: ENV, lookup: null })).toBe(false);
   });
 
+  it('judges the requested id, not whatever id the lookup returns', async () => {
+    const lookup = async () => user({ id: 'user_ids_admin' });
+    expect(await isAdminUserId('u_someone', { env: ENV, lookup })).toBe(false);
+  });
+
   it('a failed lookup is not admin', async () => {
     const lookup = async () => {
       throw new Error('clerk down');
@@ -121,6 +126,7 @@ describe('adminRecipientIds', () => {
       env: ENV,
       contacts: [
         { userId: 'c_admin', email: 'Boss@tulzo.online', emailVerified: true },
+        { userId: 'c_only', email: 'ops@tulzo.online', emailVerified: true },
         { userId: 'c_unverified', email: 'ops@tulzo.online', emailVerified: false },
         { userId: 'c_plain', email: 'a@b.c', emailVerified: true },
         { userId: 'c_none', email: null, emailVerified: false },
@@ -132,7 +138,7 @@ describe('adminRecipientIds', () => {
         user({ id: 'c_admin', emailAddresses: [verified('boss@tulzo.online')] }),
       ],
     });
-    expect(ids.sort()).toEqual(['c_admin', 'k_mail', 'k_role', 'user_ids_admin']);
+    expect(ids.sort()).toEqual(['c_admin', 'c_only', 'k_mail', 'k_role', 'user_ids_admin']);
   });
 
   it('is empty when nobody matches', () => {
