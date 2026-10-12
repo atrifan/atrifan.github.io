@@ -1,15 +1,16 @@
 /**
- * Tulzo is one build deployed as five surfaces (see src/lib/surface-routing.ts):
- * the hub at the root domain, and ai., marketplace., gigs., chat. subdomains.
+ * Tulzo is one build and one deploy serving five surfaces (see src/lib/surface-routing.ts):
+ * the hub at the root domain, ai, marketplace, gigs and chat under a path prefix on any host,
+ * or at the root of their own subdomain.
  *
  * `surfaceUrl()` builds a link to a page on any surface:
- * - NEXT_PUBLIC_ROOT_DOMAIN set (e.g. `tulzo.online`): absolute URL on that
- *   surface's host, `https://ai.tulzo.online/keys`. A scheme and port may be
- *   included for local testing (`http://lvh.me:3000`).
- * - Unset (localhost, previews): a root-relative path under the surface's
- *   prefix, `/ai/keys`, which works because every surface is served from one
- *   deploy in path-prefix mode.
+ * - NEXT_PUBLIC_ROOT_DOMAIN set (e.g. `tulzo.online`; a scheme and port may be included for local
+ *   testing, `http://lvh.me:3000`), the link is absolute and TULZO_LINKS picks the host:
+ *   - `path` (default): the apex with the surface prefix, `https://tulzo.online/ai/keys`;
+ *   - `host`: the surface subdomain, `https://ai.tulzo.online/keys`.
+ * - Unset (localhost, previews): a root-relative path under the surface's prefix, `/ai/keys`.
  *
+ * TULZO_LINKS is inlined at build time by next.config.mjs, so client code sees it too.
  * Pure: safe in middleware, server and client code.
  */
 
@@ -26,9 +27,26 @@ export const SURFACE_PREFIX: Readonly<Record<Surface, string>> = {
   chat: '/chat',
 };
 
+/** Where cross-surface links point: the apex with a prefix, or the surface subdomains. */
+export type LinkMode = 'path' | 'host';
+
+/** TULZO_LINKS, leniently: only `host` means host links (middleware validates it strictly). */
+export function linkMode(value: string | undefined): LinkMode {
+  return (value ?? '').trim().toLowerCase() === 'host' ? 'host' : 'path';
+}
+
 export interface SurfaceUrlOptions {
   /** Overrides NEXT_PUBLIC_ROOT_DOMAIN (tests, middleware). */
   rootDomain?: string;
+  /** Overrides TULZO_LINKS. */
+  links?: LinkMode;
+}
+
+/** `path` under the surface prefix: a surface home is `/ai`, not `/ai/`; a query or hash stays attached. */
+function prefixed(surface: Surface, path: string): string {
+  const prefix = SURFACE_PREFIX[surface];
+  if (prefix && /^\/(?=[?#]|$)/.test(path)) return prefix + path.slice(1);
+  return prefix + path;
 }
 
 export function surfaceUrl(surface: Surface, path: string = '/', opts?: SurfaceUrlOptions): string {
@@ -37,15 +55,12 @@ export function surfaceUrl(surface: Surface, path: string = '/', opts?: SurfaceU
   const normalized = path.startsWith('/') ? path : `/${path}`;
   const root = (rawRoot ?? '').trim().replace(/\/+$/, '');
 
-  if (!root) {
-    const prefix = SURFACE_PREFIX[surface];
-    // A surface home is `/ai`, not `/ai/`; a query or hash stays attached.
-    if (prefix && /^\/(?=[?#]|$)/.test(normalized)) return prefix + normalized.slice(1);
-    return prefix + normalized;
-  }
+  if (!root) return prefixed(surface, normalized);
 
   const scheme = /^https?:\/\//.exec(root)?.[0];
   const host = scheme ? root.slice(scheme.length) : root;
+  const origin = scheme ?? 'https://';
+  if ((opts?.links ?? linkMode(process.env.TULZO_LINKS)) === 'path') return `${origin}${host}${prefixed(surface, normalized)}`;
   const fullHost = surface === 'hub' ? host : `${surface}.${host}`;
-  return `${scheme ?? 'https://'}${fullHost}${normalized}`;
+  return `${origin}${fullHost}${normalized}`;
 }

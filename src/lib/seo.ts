@@ -6,9 +6,16 @@ type Env = Record<string, string | undefined>;
 
 /**
  * robots.txt and sitemap.xml per surface (app/robots.txt/route.ts, app/sitemap.ts).
- * `surface` null is path-prefix mode: one deploy serving everything.
+ * `surface` is the request's surface (requestSurface()): a single-surface host describes
+ * only itself, with absolute URLs on its own host; null is path-prefix mode, one sitemap
+ * covering every prefix, its URLs following TULZO_LINKS.
  * Pages that need sign-in are never listed and are disallowed.
  */
+
+/** The env to build a host's robots/sitemap URLs with: a single surface always uses its own host. */
+export function seoEnv(surface: Surface | null, env: Env = process.env): Env {
+  return surface === null ? env : { ...env, TULZO_LINKS: 'host' };
+}
 
 const PRIVATE_SURFACES: readonly Surface[] = ['ai'];
 
@@ -44,7 +51,7 @@ export function robotsFor(surface: Surface | null, env: Env = process.env): Meta
     surface === null ? [...HUB_DISALLOW, '/ai'] : surface === 'hub' ? HUB_DISALLOW : ['/api/'];
   return {
     rules: { userAgent: '*', allow: '/', disallow },
-    sitemap: absoluteSurfaceUrl(surface ?? 'hub', '/sitemap.xml', env),
+    sitemap: absoluteSurfaceUrl(surface ?? 'hub', '/sitemap.xml', seoEnv(surface, env)),
   };
 }
 
@@ -58,7 +65,8 @@ export function sitemapFor(surface: Surface | null, env: Env = process.env): Met
           ['chat', '/'],
         ]
       : PUBLIC_PAGES[surface].map((p): [Surface, string] => [surface, p]);
-  return entries.map(([s, p]) => ({ url: absoluteSurfaceUrl(s, p, env), changeFrequency: 'weekly' }));
+  const urlEnv = seoEnv(surface, env);
+  return entries.map(([s, p]) => ({ url: absoluteSurfaceUrl(s, p, urlEnv), changeFrequency: 'weekly' }));
 }
 
 /** robots.txt text for robotsFor(). */

@@ -97,7 +97,8 @@ test('newItemsMessage announces only growth after the first poll', () => {
 test('itemHref puts the item url on its surface', () => {
   assert.equal(itemHref({ surface: 'gigs', url: '/jobs/j1' }, ''), '/gigs/jobs/j1');
   assert.equal(itemHref({ surface: 'hub', url: '/admin/qa' }, ''), '/admin/qa');
-  assert.equal(itemHref({ surface: 'marketplace', url: '/publisher/activity' }, 'tulzo.online'), 'https://marketplace.tulzo.online/publisher/activity');
+  // TULZO_LINKS unset: path links, on the apex.
+  assert.equal(itemHref({ surface: 'marketplace', url: '/publisher/activity' }, 'tulzo.online'), 'https://tulzo.online/marketplace/publisher/activity');
   // never an off-site link, whatever is stored
   assert.equal(itemHref({ surface: 'gigs', url: 'https://evil.test/x' }, ''), '/gigs');
   assert.equal(itemHref({ surface: 'gigs', url: '//evil.test/x' }, ''), '/gigs');
@@ -140,9 +141,12 @@ test('itemHref uses NEXT_PUBLIC_ROOT_DOMAIN when no root domain is passed; a rel
   const before = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
   try {
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'tulzo.test';
+    assert.equal(itemHref({ surface: 'gigs', url: '/jobs/1' }), 'https://tulzo.test/gigs/jobs/1');
+    assert.equal(itemHref({ surface: 'gigs', url: 'jobs/1' }), 'https://tulzo.test/gigs');
+    process.env.TULZO_LINKS = 'host';
     assert.equal(itemHref({ surface: 'gigs', url: '/jobs/1' }), 'https://gigs.tulzo.test/jobs/1');
-    assert.equal(itemHref({ surface: 'gigs', url: 'jobs/1' }), 'https://gigs.tulzo.test/');
   } finally {
+    delete process.env.TULZO_LINKS;
     if (before === undefined) delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
     else process.env.NEXT_PUBLIC_ROOT_DOMAIN = before;
   }

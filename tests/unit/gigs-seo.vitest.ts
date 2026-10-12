@@ -77,8 +77,15 @@ describe('serializeJsonLd', () => {
 });
 
 describe('MCP URLs', () => {
-  it('puts the Jobs MCP on the gigs host and the admin QA MCP on the hub', () => {
+  it('with path links (the default) puts both MCPs on the apex: APIs are not under /gigs', () => {
     const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' };
+    expect(jobsMcpUrl(env)).toBe('https://tulzo.online/api/jobs/mcp');
+    expect(adminQaMcpUrl(env)).toBe('https://tulzo.online/api/admin/qa/mcp');
+    expect(jobsMcpUrl({ ...env, TULZO_LINKS: 'path' })).toBe('https://tulzo.online/api/jobs/mcp');
+  });
+
+  it('with host links puts the Jobs MCP on the gigs host and the admin QA MCP on the hub', () => {
+    const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online', TULZO_LINKS: 'host' };
     expect(jobsMcpUrl(env)).toBe('https://gigs.tulzo.online/api/jobs/mcp');
     expect(adminQaMcpUrl(env)).toBe('https://tulzo.online/api/admin/qa/mcp');
   });
@@ -96,7 +103,8 @@ describe('sitemap entries', () => {
   });
 
   it('lists open jobs at their canonical URL with their last change', () => {
-    const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' };
+    expect(gigsJobSitemapEntries([job], { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' })[0].url).toBe(`https://tulzo.online/gigs/jobs/${job.id}`);
+    const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online', TULZO_LINKS: 'host' };
     expect(gigsJobSitemapEntries([job], env)).toEqual([
       { url: `https://gigs.tulzo.online/jobs/${job.id}`, lastModified: '2026-10-02T09:00:00.000Z', changeFrequency: 'daily' },
     ]);
@@ -105,7 +113,7 @@ describe('sitemap entries', () => {
 
   it('never lists jobs that are not public', () => {
     const rows = ['draft', 'cancelled', 'open', 'awarded'].map((status, i) => ({ ...job, id: String(i), status }));
-    expect(gigsJobSitemapEntries(rows, { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' }).map((e) => e.url)).toEqual([
+    expect(gigsJobSitemapEntries(rows, { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online', TULZO_LINKS: 'host' }).map((e) => e.url)).toEqual([
       'https://gigs.tulzo.online/jobs/2',
     ]);
   });

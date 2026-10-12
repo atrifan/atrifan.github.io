@@ -69,14 +69,18 @@ describe('routeRequest: hub', () => {
   it('308-redirects /dashboard to the ai surface home', () => {
     expect(route('hub', '/dashboard')).toEqual({ action: 'redirect', destination: '/ai' });
     expect(route('hub', '/dashboard/')).toEqual({ action: 'redirect', destination: '/ai' });
-    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', rootDomain: 'tulzo.online' })).toEqual({
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', rootDomain: 'tulzo.online', links: 'host' })).toEqual({
       action: 'redirect',
       destination: 'https://ai.tulzo.online/',
+    });
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', rootDomain: 'tulzo.online', links: 'path' })).toEqual({
+      action: 'redirect',
+      destination: 'https://tulzo.online/ai',
     });
   });
 
   it('keeps the rest of a /dashboard deep link on the ai surface', () => {
-    expect(routeRequest({ surface: 'hub', pathname: '/dashboard/admin/packages', rootDomain: 'tulzo.online' })).toEqual({
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard/admin/packages', rootDomain: 'tulzo.online', links: 'host' })).toEqual({
       action: 'redirect',
       destination: 'https://ai.tulzo.online/admin/packages',
     });
@@ -256,9 +260,11 @@ describe('routeRequest: Jobs MCP and the job room API', () => {
 
 describe('routeRequest uses surfaceUrl for cross-surface destinations', () => {
   it('matches surfaceUrl in both modes', () => {
-    expect(routeRequest({ surface: 'hub', pathname: '/dashboard', rootDomain: 'x.dev' }).destination).toBe(
-      surfaceUrl('ai', '/', { rootDomain: 'x.dev' }),
-    );
+    for (const links of ['path', 'host'] as const) {
+      expect(routeRequest({ surface: 'hub', pathname: '/dashboard', rootDomain: 'x.dev', links }).destination).toBe(
+        surfaceUrl('ai', '/', { rootDomain: 'x.dev', links }),
+      );
+    }
     expect(route('hub', '/dashboard').destination).toBe(surfaceUrl('ai', '/', { rootDomain: '' }));
   });
 });
@@ -326,8 +332,10 @@ describe('routeRequest without an explicit rootDomain', () => {
     vi.unstubAllEnvs();
   });
 
-  it('reads NEXT_PUBLIC_ROOT_DOMAIN, as middleware calls it', () => {
+  it('reads NEXT_PUBLIC_ROOT_DOMAIN and TULZO_LINKS when they are not passed', () => {
     vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'tulzo.test');
+    expect(routeRequest({ surface: 'hub', pathname: '/dashboard' })).toEqual({ action: 'redirect', destination: 'https://tulzo.test/ai' });
+    vi.stubEnv('TULZO_LINKS', 'host');
     expect(routeRequest({ surface: 'hub', pathname: '/dashboard' })).toEqual({
       action: 'redirect',
       destination: 'https://ai.tulzo.test/',

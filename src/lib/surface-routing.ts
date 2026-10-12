@@ -1,11 +1,14 @@
 /**
- * Per-surface request routing, used by middleware.ts. Pure: no Next imports.
+ * Per-request surface routing, used by middleware.ts. Pure: no Next imports.
  *
- * Each Vercel project sets TULZO_SURFACE to one of hub | ai | marketplace |
- * gigs | chat. Pages for a non-hub surface live under its prefix folder
- * (`app/ai/**`, later `app/(ai)/ai/**`), so:
+ * One deploy serves every surface. middleware.ts picks the surface of each request with
+ * resolveRequestSurface(): TULZO_SURFACE (test servers) forces one; otherwise
+ * TULZO_ROUTING=path (default) is path-prefix mode on every host, and TULZO_ROUTING=hybrid
+ * reads it from the Host (surfaceFromHost): `<surface>.<root>` is that surface, the apex,
+ * vercel.app and localhost stay in path-prefix mode. Pages for a non-hub surface live under
+ * its prefix folder (`app/(ai)/ai/**`), and routeRequest() maps the path:
  *
- * - Unset: path-prefix mode. Everything is served as-is; the hub is at `/`,
+ * - null: path-prefix mode. Everything is served as-is; the hub is at `/`,
  *   the others at `/ai`, `/marketplace`, `/gigs`, `/chat`.
  * - hub: serves its root pages and ALL `/api/*` (the assistant device calls
  *   /api/verify, /api/plugin/*, /api/chat and /api/oauth/plugin/* here).
@@ -17,7 +20,7 @@
  * - Always passed through: `/_next/*`, `/__next*`, `/.well-known/*`, and
  *   root-level files with an extension (favicon, robots.txt, sitemap.xml).
  */
-import { SURFACES, SURFACE_PREFIX, surfaceUrl, type Surface } from './surface-url';
+import { SURFACES, SURFACE_PREFIX, surfaceUrl, type LinkMode, type Surface } from './surface-url';
 
 export type RouteAction = 'next' | 'rewrite' | 'redirect' | 'notFound';
 
@@ -112,9 +115,11 @@ export interface RouteInput {
   pathname: string;
   /** Passed to surfaceUrl for cross-surface redirects. */
   rootDomain?: string;
+  /** Passed to surfaceUrl (default: TULZO_LINKS). */
+  links?: LinkMode;
 }
 
-export function routeRequest({ surface, pathname, rootDomain }: RouteInput): RouteDecision {
+export function routeRequest({ surface, pathname, rootDomain, links }: RouteInput): RouteDecision {
   const next: RouteDecision = { action: 'next' };
   if (surface === null) return next;
   if (pathname.startsWith('/_next') || pathname.startsWith('/__next') || underPrefix(pathname, '/.well-known')) {
@@ -122,7 +127,7 @@ export function routeRequest({ surface, pathname, rootDomain }: RouteInput): Rou
   }
 
   // Omitted rootDomain means "read NEXT_PUBLIC_ROOT_DOMAIN" (surfaceUrl's default).
-  const url = (s: Surface, p: string) => surfaceUrl(s, p, rootDomain === undefined ? undefined : { rootDomain });
+  const url = (s: Surface, p: string) => surfaceUrl(s, p, rootDomain === undefined ? { links } : { rootDomain, links });
 
   if (underPrefix(pathname, '/api')) {
     const allow = SURFACE_API_ALLOWLIST[surface];
@@ -184,10 +189,116 @@ export function wwwRedirect({
 }): string | null {
   const root = (rootDomain ?? '').trim().replace(/\/+$/, '');
   if (!root || !host) return null;
-  const scheme = /^https?:\/\//.exec(root)?.[0];
-  const apex = (scheme ? root.slice(scheme.length) : root).toLowerCase();
-  const apexHost = apex.replace(/:\d+$/, '');
-  const reqHost = host.trim().toLowerCase().replace(/:\d+$/, '');
-  if (reqHost !== `www.${apexHost}`) return null;
+  if (bareHost(host) !== `www.${bareHost(root)}`) return null;
   return surfaceUrl('hub', pathAndQuery, { rootDomain: root });
+}
+
+/** Lower-case host name without scheme, port, path or trailing dot. */
+function bareHost(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/\.$/, '');
+}
+
+/** TULZO_ROUTING: `path` (default) or `hybrid`. */
+export type RoutingMode = 'path' | 'hybrid';
+
+function parseEnum<T extends string>(name: string, values: readonly T[], value: string | undefined): T {
+  const v = (value ?? '').trim().toLowerCase();
+  if (!v) return values[0];
+  if ((values as readonly string[]).includes(v)) return v as T;
+  throw new Error(`Invalid ${name} "${value}"; expected one of ${values.join(', ')}`);
+}
+
+/** Parse TULZO_ROUTING. Unset is `path`; an unknown value throws. */
+export function resolveRoutingMode(value: string | undefined): RoutingMode {
+  return parseEnum<RoutingMode>('TULZO_ROUTING', ['path', 'hybrid'], value);
+}
+
+/** Parse TULZO_LINKS strictly (surfaceUrl reads it leniently). Unset is `path`; an unknown value throws. */
+export function resolveLinkMode(value: string | undefined): LinkMode {
+  return parseEnum<LinkMode>('TULZO_LINKS', ['path', 'host'], value);
+}
+
+/** The request's host: the Host header, or x-forwarded-host (first value) only when Host is missing. */
+export function requestHost(headers: { get(name: string): string | null }): string | null {
+  const host = headers.get('host')?.trim();
+  if (host) return host;
+  return headers.get('x-forwarded-host')?.split(',')[0].trim() || null;
+}
+
+/** Subdomains that serve a surface at their root. The hub has none: the apex is path-prefix mode. */
+const SUBDOMAIN_SURFACES: readonly Surface[] = ['ai', 'marketplace', 'gigs', 'chat'];
+
+/** Old name of the gigs surface; its host 308s to gigs.<root>. */
+const JOBS_ALIAS = 'jobs';
+
+/**
+ * The surface a host names, under `rootDomain` (case, port and a trailing dot ignored):
+ * `ai|marketplace|gigs|chat.<root>` → that surface; `jobs.<root>` → a redirect to `gigs.<root>` and
+ * `www.<root>` → a redirect to the apex, both keeping `pathAndQuery`. Everything else (the apex, unknown
+ * subdomains, localhost, *.vercel.app, no host or root) → null: path-prefix mode.
+ */
+export function surfaceFromHost(
+  host: string | null | undefined,
+  rootDomain: string | undefined,
+  pathAndQuery: string = '/',
+): Surface | null | { redirect: string } {
+  const root = (rootDomain ?? '').trim().replace(/\/+$/, '');
+  if (!host || !root) return null;
+  const www = wwwRedirect({ host, pathAndQuery, rootDomain: root });
+  if (www) return { redirect: www };
+  const suffix = `.${bareHost(root)}`;
+  const name = bareHost(host);
+  if (!name.endsWith(suffix)) return null;
+  const label = name.slice(0, -suffix.length);
+  if (label === JOBS_ALIAS) return { redirect: surfaceUrl('gigs', pathAndQuery, { rootDomain: root, links: 'host' }) };
+  return SUBDOMAIN_SURFACES.find((s) => s === label) ?? null;
+}
+
+export interface RequestSurfaceInput {
+  mode: RoutingMode;
+  /** TULZO_SURFACE, parsed: wins over both modes. */
+  override: Surface | null;
+  host: string | null | undefined;
+  rootDomain: string | undefined;
+  pathAndQuery: string;
+}
+
+/** The surface middleware routes this request as (null = path-prefix mode), or a host redirect (308). */
+export function resolveRequestSurface({
+  mode,
+  override,
+  host,
+  rootDomain,
+  pathAndQuery,
+}: RequestSurfaceInput): { surface: Surface | null } | { redirect: string } {
+  if (mode === 'hybrid' && override === null) {
+    const fromHost = surfaceFromHost(host, rootDomain, pathAndQuery);
+    return typeof fromHost === 'object' && fromHost !== null ? fromHost : { surface: fromHost };
+  }
+  const www = wwwRedirect({ host, pathAndQuery, rootDomain });
+  return www ? { redirect: www } : { surface: override };
+}
+
+/** Request header carrying the resolved surface from middleware to pages and route handlers. */
+export const SURFACE_HEADER = 'x-tulzo-surface';
+const PATH_MODE = 'path';
+
+/** A copy of the request headers with any client-sent x-tulzo-surface replaced by `surface`. */
+export function withSurfaceHeader(incoming: Headers, surface: Surface | null): Headers {
+  const out = new Headers(incoming);
+  // set() replaces every client-sent value of the header.
+  out.set(SURFACE_HEADER, surface ?? PATH_MODE);
+  return out;
+}
+
+/** Read x-tulzo-surface: a surface, null for path mode, undefined when middleware did not set it. */
+export function surfaceFromHeader(value: string | null | undefined): Surface | null | undefined {
+  if (value === PATH_MODE) return null;
+  return SURFACES.find((s) => s === value);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { robotsFor, robotsTxt, sitemapFor } from '@/src/lib/seo';
+import { robotsFor, robotsTxt, seoEnv, sitemapFor } from '@/src/lib/seo';
 
 const env = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.online' };
 const urls = (s: Parameters<typeof sitemapFor>[0], e: Record<string, string> = env) => sitemapFor(s, e).map((x) => x.url);
@@ -100,5 +100,33 @@ describe('robotsTxt', () => {
     expect(robotsTxt('gigs', env)).toBe(
       'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://gigs.tulzo.online/sitemap.xml\n',
     );
+  });
+});
+
+describe('robots and sitemap per host (hybrid routing)', () => {
+  const root = { NEXT_PUBLIC_ROOT_DOMAIN: 'tulzo.test' };
+
+  it('a surface subdomain describes itself on its own host, even with path links', () => {
+    expect(robotsFor('marketplace', { ...root, TULZO_LINKS: 'path' }).sitemap).toBe('https://marketplace.tulzo.test/sitemap.xml');
+    expect(urls('gigs', { ...root, TULZO_LINKS: 'path' })).toEqual(['https://gigs.tulzo.test/']);
+    expect(urls('chat', root)).toEqual(['https://chat.tulzo.test/']);
+  });
+
+  it('path mode on the apex: one sitemap on the apex covering every prefix, with path links', () => {
+    expect(robotsFor(null, root).sitemap).toBe('https://tulzo.test/sitemap.xml');
+    expect(urls(null, root)).toEqual(expect.arrayContaining(['https://tulzo.test/', 'https://tulzo.test/pricing', 'https://tulzo.test/marketplace', 'https://tulzo.test/gigs', 'https://tulzo.test/chat']));
+    expect(urls(null, root).every((u) => u.startsWith('https://tulzo.test/'))).toBe(true);
+  });
+
+  it('path mode with host links lists each surface home on its subdomain', () => {
+    expect(urls(null, { ...root, TULZO_LINKS: 'host' })).toEqual(
+      expect.arrayContaining(['https://tulzo.test/', 'https://marketplace.tulzo.test/', 'https://gigs.tulzo.test/', 'https://chat.tulzo.test/']),
+    );
+  });
+
+  it('seoEnv forces host links for a single surface and leaves path mode alone', () => {
+    expect(seoEnv('gigs', { ...root, TULZO_LINKS: 'path', PORT: '1' })).toEqual({ ...root, TULZO_LINKS: 'host', PORT: '1' });
+    const env = { ...root, TULZO_LINKS: 'path' };
+    expect(seoEnv(null, env)).toBe(env);
   });
 });

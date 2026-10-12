@@ -3,7 +3,7 @@
  * shown in the docs, and sitemap entries for open jobs. Pure (env passed in).
  */
 import { absoluteSurfaceUrl } from '../../site-url';
-import { surfaceUrl } from '../../surface-url';
+import { linkMode, surfaceUrl } from '../../surface-url';
 import { categoryLabel } from './format';
 
 type Env = Record<string, string | undefined>;
@@ -72,12 +72,12 @@ export function serializeJsonLd(data: unknown): string {
 }
 
 /**
- * API routes are not under the surface prefix, so in path-prefix mode (no root domain)
- * they live on this deploy's own origin.
+ * API routes are not under the surface prefix: with host links they are on the surface host,
+ * with path links on the apex, and without a root domain on this deploy's own origin.
  */
 function apiUrl(surface: 'gigs' | 'hub', path: string, env: Env): string {
   const rootDomain = (env.NEXT_PUBLIC_ROOT_DOMAIN ?? '').trim();
-  if (rootDomain) return surfaceUrl(surface, path, { rootDomain });
+  if (rootDomain && linkMode(env.TULZO_LINKS) === 'host') return surfaceUrl(surface, path, { rootDomain, links: 'host' });
   return absoluteSurfaceUrl('hub', path, env);
 }
 

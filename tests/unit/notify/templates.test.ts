@@ -89,11 +89,27 @@ test('greeting falls back when the name is unknown', () => {
 
 test('appUrl builds surface URLs from the root domain', () => {
   assert.equal(appUrl('hub', '/profile', 'tulzo.online'), 'https://tulzo.online/profile');
-  assert.equal(appUrl('gigs', '/jobs/1', 'tulzo.online'), 'https://gigs.tulzo.online/jobs/1');
-  assert.equal(appUrl('gigs', 'jobs/1', 'tulzo.online'), 'https://gigs.tulzo.online/jobs/1');
+  assert.equal(appUrl('gigs', '/jobs/1', 'tulzo.online', 'host'), 'https://gigs.tulzo.online/jobs/1');
+  assert.equal(appUrl('gigs', 'jobs/1', 'tulzo.online', 'host'), 'https://gigs.tulzo.online/jobs/1');
   assert.equal(appUrl('gigs', '/jobs/1', 'localhost:3000'), 'http://localhost:3000/gigs/jobs/1');
   assert.equal(appUrl('hub', '/profile', 'localhost:3000'), 'http://localhost:3000/profile');
   assert.equal(appUrl('hub', '/x', 'https://tulzo.online/'), 'https://tulzo.online/x');
+});
+
+test('appUrl with path links (TULZO_LINKS unset or path) keeps every surface on the apex', () => {
+  const before = process.env.TULZO_LINKS;
+  try {
+    delete process.env.TULZO_LINKS;
+    assert.equal(appUrl('gigs', '/jobs/1', 'tulzo.online'), 'https://tulzo.online/gigs/jobs/1');
+    assert.equal(appUrl('marketplace', 'p', 'tulzo.online', 'path'), 'https://tulzo.online/marketplace/p');
+    assert.equal(appUrl('hub', '/profile', 'tulzo.online', 'path'), 'https://tulzo.online/profile');
+    process.env.TULZO_LINKS = 'host';
+    assert.equal(appUrl('gigs', '/jobs/1', 'tulzo.online'), 'https://gigs.tulzo.online/jobs/1');
+    assert.equal(appUrl('gigs', '/jobs/1', 'tulzo.online', 'path'), 'https://tulzo.online/gigs/jobs/1');
+  } finally {
+    if (before === undefined) delete process.env.TULZO_LINKS;
+    else process.env.TULZO_LINKS = before;
+  }
 });
 
 test('progress_update and milestone_completed link to the job room and quote the update', () => {
