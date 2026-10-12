@@ -4,7 +4,6 @@ import { ContractView } from '@/src/views/gigs/ContractView';
 import { loadContractPage } from '@/src/lib/jobs/ui/loaders';
 import { requireUserId } from '@/src/lib/jobs/ui/session';
 import { gigsConfig } from '@/src/lib/jobs/ui/config';
-import { jobRoomEnabled } from '@/src/lib/jobs/client/room';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,5 +19,5 @@ export default async function Page({ params, searchParams }: Props) {
   const data = await loadContractPage(params.id, userId);
   if (!data) notFound();
   const checkout = searchParams.checkout === 'success' || searchParams.checkout === 'cancelled' ? searchParams.checkout : null;
-  return <ContractView data={data} base={gigsConfig().base} checkout={checkout} roomEnabled={jobRoomEnabled(process.env)} />;
+  return <ContractView data={data} base={gigsConfig().base} checkout={checkout} />;
 }

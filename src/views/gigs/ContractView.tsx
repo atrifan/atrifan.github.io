@@ -1,36 +1,20 @@
-/** A contract for its two parties: summary, checkout return states and the job room. */
+/** A contract for its two parties: summary, checkout return states and the job room (always on). */
 import Link from 'next/link';
 import { contractStatusLabel, deadlineLabel, formatEuros } from '@/src/lib/jobs/client/format';
 import { percentFromBps } from '@/src/lib/jobs/client/pricing';
 import type { ContractPageData } from '@/src/lib/jobs/ui/loaders';
 import { gigsHref, type GigsBase } from '@/src/lib/jobs/ui/paths';
-import type { ContractStatus } from '@/src/lib/jobs/job-state';
 import { ContractQaChecks } from './ContractQaChecks';
 import { JobRoom } from './JobRoom';
-
-const STATUS_HINT: Record<ContractStatus, string> = {
-  pending_payment: 'Waiting for the customer to pay through Stripe. Work starts once the payment is confirmed.',
-  active: 'Paid. The provider is working on it.',
-  submitted: 'The provider submitted the work.',
-  in_qa: 'An independent reviewer is checking the work against the acceptance criteria.',
-  rework: 'QA asked for changes. The provider is fixing them.',
-  delivered: 'QA validated the work. The delivery is ready.',
-  completed: 'Done. The provider has been paid.',
-  disputed: 'Under review by Tulzo.',
-  cancelled: 'This contract was cancelled.',
-  refunded: 'The payment was refunded.',
-};
 
 export function ContractView({
   data,
   base,
   checkout,
-  roomEnabled,
 }: {
   data: ContractPageData;
   base: GigsBase;
   checkout: 'success' | 'cancelled' | null;
-  roomEnabled: boolean;
 }) {
   const { contract, role, version, job, spec, bid } = data;
   const status = contract.status;
@@ -89,14 +73,7 @@ export function ContractView({
             </>
           ) : null}
 
-          <JobRoom
-            contractId={contract.id}
-            role={role}
-            plan={bid?.plan ?? null}
-            statusLabel={contractStatusLabel(status)}
-            statusHint={STATUS_HINT[status]}
-            enabled={roomEnabled}
-          />
+          <JobRoom contractId={contract.id} role={role} plan={bid?.plan ?? null} initialStatus={status} initialDeadline={version?.deadline ?? null} />
         </div>
 
         <aside className="gigs-detail-aside">

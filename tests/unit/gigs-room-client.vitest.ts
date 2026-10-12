@@ -5,7 +5,6 @@ import {
   actorLabel,
   apiErrorFrom,
   createRoomClient,
-  jobRoomEnabled,
   mergeFeed,
   milestoneSummary,
   toActivityItems,
@@ -14,18 +13,10 @@ import {
   toSteeringItems,
 } from '@/src/lib/jobs/client/room';
 
-describe('ROOM_TABS and the feature flag', () => {
+describe('ROOM_TABS', () => {
   it('has the nine job-room tabs in order', () => {
     expect(ROOM_TABS.map((t) => t.label)).toEqual(['Plan', 'Status', 'Activity', 'Artifacts', 'Milestones', 'Messages', 'Steering', 'QA', 'Delivery']);
     expect(ROOM_TABS.map((t) => t.id)).toEqual(['plan', 'status', 'activity', 'artifacts', 'milestones', 'messages', 'steering', 'qa', 'delivery']);
-  });
-
-  it('is off unless NEXT_PUBLIC_GIGS_JOB_ROOM is 1 or true', () => {
-    expect(jobRoomEnabled({})).toBe(false);
-    expect(jobRoomEnabled({ NEXT_PUBLIC_GIGS_JOB_ROOM: '0' })).toBe(false);
-    expect(jobRoomEnabled({ NEXT_PUBLIC_GIGS_JOB_ROOM: 'yes' })).toBe(false);
-    expect(jobRoomEnabled({ NEXT_PUBLIC_GIGS_JOB_ROOM: '1' })).toBe(true);
-    expect(jobRoomEnabled({ NEXT_PUBLIC_GIGS_JOB_ROOM: ' TRUE ' })).toBe(true);
   });
 });
 
