@@ -12,16 +12,21 @@ const forHost = (host: string) => (config.redirects ?? []).filter((r) => r.has?.
 for (const s of ['ai', 'marketplace', 'gigs', 'chat']) {
   test(`${s}.tulzo.online pages go to tulzo.online/${s} and its API to tulzo.online/api`, () => {
     const rules = forHost(`${s}.tulzo.online`);
-    assert.equal(rules.length, 2);
+    assert.equal(rules.length, 3);
     assert.deepEqual(rules[0], { source: '/api/:path*', has: [{ type: 'host', value: `${s}.tulzo.online` }], destination: 'https://tulzo.online/api/:path*', permanent: false });
-    assert.equal(rules[1].source, '/:path*');
-    assert.equal(rules[1].destination, `https://tulzo.online/${s}/:path*`);
+    // Vercel's `/:path*` does not match the bare root, so `/` has its own rule (measured on the live site).
+    assert.equal(rules[1].source, '/');
+    assert.equal(rules[1].destination, `https://tulzo.online/${s}`);
     assert.equal(rules[1].permanent, false);
+    assert.equal(rules[2].source, '/:path*');
+    assert.equal(rules[2].destination, `https://tulzo.online/${s}/:path*`);
+    assert.equal(rules[2].permanent, false);
   });
 }
 
 test('jobs goes to gigs, www goes to the apex permanently', () => {
-  assert.equal(forHost('jobs.tulzo.online')[0].destination, 'https://tulzo.online/gigs/:path*');
+  const jobs = forHost('jobs.tulzo.online');
+  assert.deepEqual(jobs.map((r) => [r.source, r.destination]), [['/', 'https://tulzo.online/gigs'], ['/:path*', 'https://tulzo.online/gigs/:path*']]);
   const www = forHost('www.tulzo.online')[0];
   assert.equal(www.destination, 'https://tulzo.online/:path*');
   assert.equal(www.permanent, true);

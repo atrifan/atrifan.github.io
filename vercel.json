@@ -30,6 +30,17 @@
       "permanent": false
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "ai.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/ai",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         {
@@ -49,6 +60,17 @@
         }
       ],
       "destination": "https://tulzo.online/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "marketplace.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/marketplace",
       "permanent": false
     },
     {
@@ -74,6 +96,17 @@
       "permanent": false
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "gigs.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/gigs",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         {
@@ -96,6 +129,17 @@
       "permanent": false
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "chat.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/chat",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         {
@@ -104,6 +148,17 @@
         }
       ],
       "destination": "https://tulzo.online/chat/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "jobs.tulzo.online"
+        }
+      ],
+      "destination": "https://tulzo.online/gigs",
       "permanent": false
     },
     {
