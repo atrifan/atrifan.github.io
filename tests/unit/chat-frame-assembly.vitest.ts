@@ -19,7 +19,7 @@ describe('contentText', () => {
   });
 
   it('returns an empty string for anything else', () => {
-    for (const v of [undefined, null, 5, {}, { text: 4 }, [], [{ type: 'text' }], [{ type: 'image', text: 'x' }]]) {
+    for (const v of [undefined, null, 5, {}, { text: 4 }, [], [{ type: 'text' }], [{ type: 'text', text: 5 }], [{ type: 'image', text: 'x' }]]) {
       expect(contentText(v)).toBe('');
     }
   });
@@ -114,6 +114,8 @@ describe('applyStreamFrame', () => {
     });
     expect(applyStreamFrame(base({ content: 'partial' }), { type: 'STREAM_ERROR', error: 'boom' }).content).toBe('partial');
     expect(applyStreamFrame(base(), { type: 'STREAM_ERROR' }).content).toBe('The request failed.');
+    expect(applyStreamFrame(base(), { type: 'STREAM_ERROR', error: 5 }).content).toBe('The request failed.');
+    expect(applyStreamFrame(base(), { type: 'STREAM_ERROR', error: '' }).content).toBe('The request failed.');
   });
 
   it('returns the same entry for frames it does not own', () => {

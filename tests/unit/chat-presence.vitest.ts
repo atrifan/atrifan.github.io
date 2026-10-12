@@ -87,6 +87,11 @@ describe('sortDevices', () => {
     expect(sortDevices(list).map((d) => d.id)).toEqual(['on', 'recent', 'old', 'never']);
   });
 
+  it('an online device beats an offline one seen more recently', () => {
+    const list = [dev('fresh-offline', 'offline', 10), dev('on', 'online', 300)];
+    expect(sortDevices(list).map((d) => d.id)).toEqual(['on', 'fresh-offline']);
+  });
+
   it('a live-bridge device counts as online', () => {
     const list = [dev('a', 'offline', 100), dev('b', 'offline', 9000)];
     expect(sortDevices(list, (d) => d.id === 'b').map((d) => d.id)).toEqual(['b', 'a']);
