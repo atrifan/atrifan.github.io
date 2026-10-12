@@ -118,7 +118,7 @@ describe('routeRequest: non-hub surfaces', () => {
   });
 
   it.each(NON_HUB)('%s: returns 404 for hub-only pages', (s) => {
-    for (const p of ['/pricing', '/profile', '/credits', '/dashboard', '/admin/qa', '/admin/disputes']) {
+    for (const p of ['/pricing', '/profile', '/credits', '/dashboard', '/admin/qa', '/admin/disputes', '/admin/activity', '/notifications']) {
       expect(route(s, p)).toEqual({ action: 'notFound' });
     }
   });
@@ -184,10 +184,29 @@ describe('routeRequest: non-hub surfaces', () => {
     expect(route('chat', '/api/plugin/chat')).toEqual({ action: 'next' });
   });
 
+  it('every surface serves the notification feed routes (the bell is on every page), and nothing else under /api/notifications', () => {
+    for (const s of NON_HUB) {
+      for (const p of ['/api/notifications', '/api/notifications/read', '/api/notifications/unread-count']) {
+        expect(route(s, p)).toEqual({ action: 'next' });
+      }
+      for (const p of ['/api/notifications/dispatch', '/api/notifications/preferences', '/api/notifications/unsubscribe', '/api/notifications/read/x', '/api/notificationsx']) {
+        expect(route(s, p)).toEqual({ action: 'notFound' });
+      }
+    }
+    expect(route('hub', '/api/notifications/preferences')).toEqual({ action: 'next' });
+  });
+
+  it('activity APIs live on their surfaces: gigs ledger on gigs, publisher installs on marketplace, admin on the hub', () => {
+    expect(route('gigs', '/api/activity/gigs')).toEqual({ action: 'next' });
+    expect(route('marketplace', '/api/marketplace/publisher/activity')).toEqual({ action: 'next' });
+    for (const s of NON_HUB) expect(route(s, '/api/admin/activity')).toEqual({ action: 'notFound' });
+    expect(route('marketplace', '/api/activity/gigs')).toEqual({ action: 'notFound' });
+  });
+
   it('lists an allow-list for every surface, hub as all', () => {
     expect(SURFACE_API_ALLOWLIST.hub).toBe('all');
     expect(SURFACE_API_ALLOWLIST.chat).toContain('/api/plugin/chat');
-    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust']);
+    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust', '/api/activity/gigs']);
   });
 });
 
@@ -267,6 +286,13 @@ describe('isProtectedPath', () => {
     for (const p of ['/marketplace/fx-github-mcp', '/marketplace/publisher-tools', '/marketplace/administrator']) {
       expect(isProtectedPath(p)).toBe(false);
     }
+  });
+
+  it('protects the notification centre, the publisher activity and the admin activity pages', () => {
+    for (const p of ['/notifications', '/marketplace/publisher', '/marketplace/publisher/activity', '/admin/activity']) {
+      expect(isProtectedPath(p)).toBe(true);
+    }
+    expect(isProtectedPath('/notificationsx')).toBe(false);
   });
 });
 
