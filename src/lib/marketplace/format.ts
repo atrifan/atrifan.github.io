@@ -7,11 +7,11 @@ function compact(n: number): string {
 }
 
 function trim(n: number): string {
-  return n.toFixed(1).replace(/\.0$/, '');
+  return String(Math.round(n * 10) / 10);
 }
 
 export function formatInstalls(count: number): string {
-  const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  const n = Math.max(0, Math.floor(count) || 0);
   return `${compact(n)} ${n === 1 ? 'install' : 'installs'}`;
 }
 

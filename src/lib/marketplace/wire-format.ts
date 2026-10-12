@@ -78,8 +78,7 @@ function toNumber(v: number | string | null | undefined): number | null {
 }
 
 export function provenanceOf(value: unknown): Provenance | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const t = (value as Record<string, unknown>).translated_from;
+  const t = (value as Record<string, unknown> | null | undefined)?.translated_from;
   return typeof t === 'string' && t ? { translated_from: t } : undefined;
 }
 

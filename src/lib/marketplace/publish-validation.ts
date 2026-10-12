@@ -35,9 +35,8 @@ function trimmed(v: unknown): string {
 }
 
 function isHttpUrl(v: unknown): boolean {
-  if (typeof v !== 'string') return false;
   try {
-    const u = new URL(v);
+    const u = new URL(String(v));
     return u.protocol === 'http:' || u.protocol === 'https:';
   } catch {
     return false;
@@ -46,7 +45,7 @@ function isHttpUrl(v: unknown): boolean {
 
 function mcpConfigError(cfg: { transport?: unknown; url?: unknown; command?: unknown } | null): string | null {
   if (!cfg) return 'MCP type requires config_json';
-  if (typeof cfg.transport !== 'string' || !['http', 'sse', 'stdio'].includes(cfg.transport)) {
+  if (!['http', 'sse', 'stdio'].includes(cfg.transport as string)) {
     return 'config_json must include transport (http, sse, or stdio)';
   }
   if (cfg.transport !== 'stdio' && !cfg.url) return 'config_json must include url for http/sse transport';

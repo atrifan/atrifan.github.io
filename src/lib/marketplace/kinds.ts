@@ -23,7 +23,7 @@ export const CATALOG_KINDS: ReadonlyArray<{ kind: PackageKind; label: string; pl
 ).map((kind) => ({ kind, ...LABELS[kind] }));
 
 export function isPackageKind(value: unknown): value is PackageKind {
-  return typeof value === 'string' && (PACKAGE_KINDS as readonly string[]).includes(value);
+  return (PACKAGE_KINDS as readonly unknown[]).includes(value);
 }
 
 export function kindLabel(kind: PackageKind): string {
@@ -55,7 +55,7 @@ export const CATEGORIES = [
 export type CategorySlug = (typeof CATEGORIES)[number]['slug'];
 
 export function isCategory(value: unknown): value is CategorySlug {
-  return typeof value === 'string' && CATEGORIES.some((c) => c.slug === value);
+  return CATEGORIES.some((c) => c.slug === value);
 }
 
 export function categoryLabel(slug: string | null | undefined): string | null {
@@ -69,7 +69,7 @@ export function slugify(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-|-$/g, '');
 }
 
 const MAX_TAGS = 8;

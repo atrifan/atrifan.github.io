@@ -42,8 +42,8 @@ export function parseCatalogQuery(params: ParamsInput): CatalogQuery {
     category: isCategory(category) ? category : null,
     tag: tag || null,
     installed: installed === '1' || installed === 'true',
-    sort: (CATALOG_SORTS as readonly string[]).includes(sort ?? '') ? (sort as CatalogSort) : 'popular',
-    page: Number.isFinite(page) && page >= 1 ? Math.min(page, MAX_PAGE) : 1,
+    sort: (CATALOG_SORTS as readonly unknown[]).includes(sort) ? (sort as CatalogSort) : 'popular',
+    page: Number.isFinite(page) ? Math.min(Math.max(page, 1), MAX_PAGE) : 1,
   };
 }
 

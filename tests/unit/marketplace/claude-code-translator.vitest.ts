@@ -63,6 +63,14 @@ describe('parseFrontmatter', () => {
     expect(parseFrontmatter('---\n- a\n- b\n---\nx').data).toBeNull();
   });
 
+  it('needs the frontmatter at the very start, and accepts it without a trailing newline', () => {
+    expect(parseFrontmatter('x\n---\nname: a\n---\nB').data).toBeNull();
+    expect(parseFrontmatter('---\nname: a\n---')).toEqual({ data: { name: 'a' }, body: '' });
+    expect(parseFrontmatter('---\nname: a\n---\n\nBody')).toEqual({ data: { name: 'a' }, body: '\nBody' });
+    expect(parseFrontmatter('---\n42\n---\nx').data).toBeNull();
+    expect(parseFrontmatter('---\n~\n---\nx').data).toBeNull();
+  });
+
   it('handles CRLF line endings', () => {
     expect(parseFrontmatter('---\r\nname: a\r\n---\r\nB').data).toEqual({ name: 'a' });
   });
@@ -93,6 +101,17 @@ describe('mapClaudeTools', () => {
     expect(mapClaudeTools('Bash(git:*), Read').tools).toEqual(['CLI_EXEC', 'FS_READ_FILE']);
   });
 
+  it('sorts MCP servers and ignores blanks', () => {
+    expect(mapClaudeTools('mcp__zeta__a, , mcp__alpha__b, mcp__multi_part__c')).toEqual({
+      tools: ['MCP_CALL'],
+      unsupported: [],
+      mcp: ['alpha', 'multi_part', 'zeta'],
+    });
+    expect(mapClaudeTools(['Read', 3, 'Bash']).tools).toEqual(['CLI_EXEC', 'FS_READ_FILE']);
+    expect(mapClaudeTools('Bash(npm test:*)x, Read').tools).toEqual(['CLI_EXEC', 'FS_READ_FILE']);
+    expect(mapClaudeTools('xmcp__a__b').unsupported).toEqual(['xmcp__a__b']);
+  });
+
   it('treats a missing list as no tools', () => {
     expect(mapClaudeTools(undefined)).toEqual({ tools: [], unsupported: [], mcp: [] });
     expect(mapClaudeTools(42)).toEqual({ tools: [], unsupported: [], mcp: [] });
@@ -121,11 +140,12 @@ describe('translateClaudeCode: plugin', () => {
     'README.md': '# Feature dev',
     'scripts/run.sh': 'echo hi',
   };
-  const result = translateClaudeCode({ upstreamId: 'feature-dev', kind: 'plugin', files });
+  // Translate inside each test (not at collection time) so mutation testing sees it.
+  const run = () => translateClaudeCode({ upstreamId: 'feature-dev', kind: 'plugin', files });
 
   it('emits a plugin package with provenance', () => {
-    expect(result.ok).toBe(true);
-    const pkg = result.package!;
+    expect(run().ok).toBe(true);
+    const pkg = run().package!;
     expect(pkg).toMatchObject({
       id: 'cc-feature-dev',
       name: 'Feature Dev',
@@ -138,7 +158,7 @@ describe('translateClaudeCode: plugin', () => {
   });
 
   it('writes assistant-shaped PLUGIN.md, SKILL.md and SUBAGENT.md', () => {
-    const f = result.package!.files;
+    const f = run().package!.files;
     expect(Object.keys(f).sort()).toEqual([
       'PLUGIN.md',
       'README.md',
@@ -173,10 +193,18 @@ describe('translateClaudeCode: plugin', () => {
     expect(f['README.md']).toBe('# Feature dev');
   });
 
+  it('writes exact frontmatter blocks', () => {
+    const f = run().package!.files;
+    expect(f['PLUGIN.md']).toBe(
+      '---\nid: cc-feature-dev\nname: Feature Dev\nversion: 1.2.0\ndescription: Guided feature development\n' +
+        'translated_from: claude-code:feature-dev\n---\n\n# Feature Dev\n\nGuided feature development\n',
+    );
+  });
+
   it('reports refused and skipped parts with reasons', () => {
-    expect(result.report.translated).toEqual(['skills/code-explorer/SKILL.md', 'agents/code-architect.md']);
+    expect(run().report.translated).toEqual(['skills/code-explorer/SKILL.md', 'agents/code-architect.md']);
     // Skills first, then every other path in sorted order.
-    expect(result.report.refused).toEqual([
+    expect(run().report.refused).toEqual([
       { path: '.mcp.json', reason: 'Bundled MCP servers must be published as separate MCP server packages' },
       { path: 'agents/planner.md', reason: 'Uses Claude Code tools with no assistant equivalent: TodoWrite' },
       { path: 'commands/feature.md', reason: 'Slash commands have no assistant equivalent' },
@@ -187,11 +215,11 @@ describe('translateClaudeCode: plugin', () => {
 
   it('hashes the emitted files deterministically', () => {
     const again = translateClaudeCode({ upstreamId: 'feature-dev', kind: 'plugin', files: { ...files } });
-    expect(again.package!.files_hash).toBe(result.package!.files_hash);
-    const f = result.package!.files;
+    expect(again.package!.files_hash).toBe(run().package!.files_hash);
+    const f = run().package!.files;
     const h = createHash('sha256');
     for (const p of Object.keys(f).sort()) h.update(`${p}\0${f[p]}\0`);
-    expect(result.package!.files_hash).toBe(`sha256:${h.digest('hex')}`);
+    expect(run().package!.files_hash).toBe(`sha256:${h.digest('hex')}`);
   });
 
   it('refuses a plugin with nothing translatable', () => {
@@ -242,6 +270,114 @@ describe('translateClaudeCode: plugin', () => {
   });
 });
 
+describe('translateClaudeCode: details', () => {
+  const plugin = (files: Record<string, string>, manifest: Record<string, unknown> = { name: 'my_cool plugin' }) =>
+    translateClaudeCode({ upstreamId: 'u', kind: 'plugin', files: { '.claude-plugin/plugin.json': JSON.stringify(manifest), ...files } });
+
+  it('title-cases names and trims descriptions', () => {
+    const r = plugin({ 'agents/a.md': '---\nname: data_wrangler--pro\ndescription: "  Wrangles  "\n---\nx' });
+    expect(r.package!.name).toBe('My Cool Plugin');
+    expect(r.package!.id).toBe('cc-my-cool-plugin');
+    expect(r.package!.description).toBe('');
+    expect(r.package!.tags).toEqual(['claude-code']);
+    expect(r.package!.type).toBe('plugin');
+    expect(fm(r.package!.files['sub-agents/data-wrangler-pro/SUBAGENT.md'])).toMatchObject({ name: 'Data Wrangler Pro', description: 'Wrangles' });
+  });
+
+  it('refuses artifacts with blank or non-string name/description', () => {
+    const r = plugin({
+      'agents/a.md': '---\nname: "  "\ndescription: d\n---\nx',
+      'agents/b.md': '---\nname: b\ndescription: 7\n---\nx',
+      'agents/c.md': '---\nname: c\n---\nx',
+      'agents/d.md': '---\nname: 7\ndescription: d\n---\nx',
+      'agents/ok.md': '---\nname: ok\ndescription: d\n---\nx',
+    });
+    expect(r.report.refused.map((x) => x.path)).toEqual(['agents/a.md', 'agents/b.md', 'agents/c.md', 'agents/d.md']);
+    expect(r.report.refused[0].reason).toBe('Missing frontmatter name or description');
+  });
+
+  it('omits tools and warnings when there is nothing to say', () => {
+    const r = plugin({ 'agents/a.md': '---\nname: a\ndescription: d\nmodel: 3\n---\n\n\n\nPlain body' });
+    const meta = fm(r.package!.files['sub-agents/a/SUBAGENT.md']);
+    expect(meta).not.toHaveProperty('tools');
+    expect(meta).not.toHaveProperty('model_role');
+    expect(r.report.warnings).toEqual([]);
+    expect(r.package!.files['sub-agents/a/SUBAGENT.md'].endsWith('\n\nPlain body')).toBe(true);
+  });
+
+  it('does not read a model on skills', () => {
+    const r = plugin({ 'skills/s/SKILL.md': '---\nname: s\ndescription: d\nmodel: gpt-9\n---\nx' });
+    expect(r.report.warnings).toEqual([]);
+    expect(fm(r.package!.files['skills/s/SKILL.md'])).not.toHaveProperty('model_role');
+  });
+
+  it('keeps supporting files only under translated skills, by type', () => {
+    const r = plugin({
+      'skills/s/SKILL.md': '---\nname: s\ndescription: d\n---\nx',
+      'skills/s/notes.yml': 'a: 1',
+      'skills/s/data.yaml.bak': 'x',
+      'skills/s/run.sh': 'echo',
+      'skills/bad/SKILL.md': '# none',
+      'skills/bad/ref.md': 'r',
+      'skills/s/SKILL.md.orig': 'old',
+      'nested/skills/x/SKILL.md': '---\nname: x\ndescription: d\n---\nx',
+      'nested/agents/y.md': 'y',
+      'agents/sub/z.md': 'z',
+      'agents/a.mdx': 'z',
+      'xcommands/a.md': 'c',
+      'x.mcp.json': '{}',
+    });
+    expect(Object.keys(r.package!.files).sort()).toEqual(['PLUGIN.md', 'skills/s/SKILL.md', 'skills/s/notes.yml']);
+    expect(r.report.refused.map((x) => x.path)).toEqual([
+      'skills/bad/SKILL.md',
+      'agents/a.mdx',
+      'agents/sub/z.md',
+      'nested/agents/y.md',
+      'nested/skills/x/SKILL.md',
+      'skills/s/SKILL.md.orig',
+      'skills/s/data.yaml.bak',
+      'skills/s/run.sh',
+      'x.mcp.json',
+      'xcommands/a.md',
+    ]);
+  });
+
+  it('uses manifest keywords and description when present', () => {
+    const r = plugin({ 'agents/a.md': '---\nname: a\ndescription: d\n---\nx' }, { name: 'k', keywords: 'not-a-list', description: 9 });
+    expect(r.package!.tags).toEqual(['claude-code']);
+    expect(r.package!.description).toBe('');
+  });
+
+  it('refuses manifests that are not objects or have a blank name', () => {
+    for (const m of ['null', '"name"', '{"name":"  "}', '{"name":3}']) {
+      const r = translateClaudeCode({ upstreamId: 'u', kind: 'plugin', files: { '.claude-plugin/plugin.json': m } });
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  it('starts every translation with an empty report', () => {
+    expect(translateClaudeCode({ upstreamId: 'a', kind: 'agent', files: { 'a.md': AGENT_MD } }).report).toEqual({
+      translated: ['a.md'],
+      refused: [],
+      warnings: [],
+    });
+  });
+
+  it('only counts .md files as agent files and trims standalone descriptions', () => {
+    const r = translateClaudeCode({
+      upstreamId: 'a',
+      kind: 'agent',
+      files: { 'a.md': '---\nname: a\ndescription: "  spaced  "\n---\nx', 'notes.txt': 'n' },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.package).toMatchObject({ description: 'spaced', version: '1.0.0', tags: ['claude-code'] });
+    const s = translateClaudeCode({ upstreamId: 's', kind: 'skill', files: { 'SKILL.md': '---\nname: s\ndescription: "  sp  "\n---\nx', 'b.md': 'b', 'a.json': '{}' } });
+    expect(s.package).toMatchObject({ description: 'sp', version: '1.0.0', tags: ['claude-code'] });
+    expect(Object.keys(s.package!.files)).toEqual(['SKILL.md', 'a.json', 'b.md']);
+    expect(s.report.translated).toEqual(['SKILL.md']);
+  });
+});
+
 describe('translateClaudeCode: standalone skill and agent', () => {
   it('translates a skill directory into a skill package', () => {
     const r = translateClaudeCode({
@@ -277,6 +413,7 @@ describe('translateClaudeCode: standalone skill and agent', () => {
     expect(fm(agent('opus').package!.files['SUBAGENT.md']).model_role).toBe('orchestrator');
     expect(fm(agent('haiku').package!.files['SUBAGENT.md']).model_role).toBe('profile');
     expect(fm(agent('inherit').package!.files['SUBAGENT.md'])).not.toHaveProperty('model_role');
+    expect(agent('inherit').report.warnings).toEqual([]);
     expect(agent('gpt-9').report.warnings).toContainEqual({ path: 'a.md', message: 'Unknown model "gpt-9"; the sub-agent follows the main model' });
   });
 

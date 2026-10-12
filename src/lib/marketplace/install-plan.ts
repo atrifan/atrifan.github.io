@@ -36,8 +36,8 @@ export function buildInstallCommand(pkg: InstallTarget): InstallCommand {
   const mode = installMode(pkg.type);
   const cfg = pkg.config;
   if (mode === 'mcp') {
-    const transport = cfg?.transport;
-    if (!cfg || typeof transport !== 'string' || !TRANSPORTS.includes(transport)) {
+    const transport = cfg?.transport as string;
+    if (!cfg || !TRANSPORTS.includes(transport)) {
       return { ok: false, error: 'This MCP server has no connection details.' };
     }
     const params: Record<string, unknown> = { id: MARKETPLACE_PREFIX + pkg.id, name: pkg.name, transport };
@@ -115,9 +115,8 @@ export function cliInstallCommand(pkg: InstallTarget): string | null {
 }
 
 function hostOf(url: unknown): string | null {
-  if (typeof url !== 'string') return null;
   try {
-    return new URL(url).host || null;
+    return new URL(String(url)).host || null;
   } catch {
     return null;
   }
