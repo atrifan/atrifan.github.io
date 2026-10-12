@@ -38,7 +38,8 @@
     ".next-surface-ai/types/**/*.ts",
     ".next-surface-hub/types/**/*.ts",
     ".next-marketplace-e2e/types/**/*.ts",
-    ".next-gigs-e2e/types/**/*.ts"
+    ".next-gigs-e2e/types/**/*.ts",
+    ".next-host-routing/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -14,6 +14,8 @@ loadEnv({ path: '.env.local' });
  *                   1280x800 and 390x844
  * - surface-ai      tests/e2e/**\/*.surface-ai.spec.ts  on :3001 (TULZO_SURFACE=ai)
  * - surface-hub     tests/e2e/**\/*.surface-hub.spec.ts on :3002 (TULZO_SURFACE=hub)
+ * - host-routing    tests/e2e/**\/*.host-routing.spec.ts on :3003 (TULZO_ROUTING=hybrid): the surface
+ *                   comes from the Host header (tulzo.test, ai.tulzo.test, …, localhost)
  *
  * The surface servers run with NEXT_PUBLIC_ROOT_DOMAIN=tulzo.test, so
  * cross-surface redirects point at https://<surface>.tulzo.test (asserted from
@@ -24,10 +26,11 @@ loadEnv({ path: '.env.local' });
  * it is `npm run start`, so run `npm run build` first.
  * PLAYWRIGHT_BASE_URL overrides the main server URL (then no server is started for it).
  */
-// PW_PORT / PW_AI_PORT / PW_HUB_PORT move the servers (e.g. parallel worktrees on one machine).
+// PW_PORT / PW_AI_PORT / PW_HUB_PORT / PW_HOST_PORT move the servers (e.g. parallel worktrees on one machine).
 const PORT = Number(process.env.PW_PORT) || 3000;
 const AI_PORT = Number(process.env.PW_AI_PORT) || 3001;
 const HUB_PORT = Number(process.env.PW_HUB_PORT) || 3002;
+const HOST_PORT = Number(process.env.PW_HOST_PORT) || 3003;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`;
 const CI = !!process.env.CI;
 
@@ -40,11 +43,29 @@ const surfaceServer = (surface: 'ai' | 'hub', port: number) => ({
   timeout: 180_000,
   env: {
     TULZO_SURFACE: surface,
+    // Single-surface test servers link to the other surfaces' subdomains.
+    TULZO_LINKS: 'host',
     NEXT_PUBLIC_ROOT_DOMAIN: SURFACE_TEST_ROOT_DOMAIN,
     NEXT_DIST_DIR: `.next-surface-${surface}`,
     LEGAL_CONTACT_EMAIL: process.env.LEGAL_CONTACT_EMAIL || 'support@tulzo.online',
   },
 });
+
+// One deploy, surface per Host header (the hybrid mode the live `tulzo` project runs in).
+const hostRoutingServer = {
+  command: `npx next dev -p ${HOST_PORT}`,
+  url: `http://localhost:${HOST_PORT}/robots.txt`,
+  reuseExistingServer: !CI,
+  timeout: 180_000,
+  env: {
+    TULZO_ROUTING: 'hybrid',
+    TULZO_SURFACE: '',
+    TULZO_LINKS: 'path',
+    NEXT_PUBLIC_ROOT_DOMAIN: SURFACE_TEST_ROOT_DOMAIN,
+    NEXT_DIST_DIR: '.next-host-routing',
+    LEGAL_CONTACT_EMAIL: process.env.LEGAL_CONTACT_EMAIL || 'support@tulzo.online',
+  },
+};
 
 const desktop = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } };
 // Chromium with a phone viewport and touch; Playwright's iPhone presets need WebKit.
@@ -77,7 +98,7 @@ export default defineConfig({
       name: 'chromium',
       dependencies: ['setup'],
       testMatch: /e2e\/.*\.spec\.ts$/,
-      testIgnore: /\.surface-(ai|hub)\.spec\.ts$/,
+      testIgnore: /\.(surface-(ai|hub)|host-routing)\.spec\.ts$/,
       use: desktop,
     },
     { name: 'light-desktop', dependencies: ['setup'], testMatch: themed, use: { ...desktop, colorScheme: 'light' } },
@@ -109,6 +130,16 @@ export default defineConfig({
       testMatch: /\.surface-hub\.spec\.ts$/,
       use: { ...desktop, baseURL: `http://localhost:${HUB_PORT}` },
     },
+    {
+      // Browsers resolve the tulzo.test hosts to this machine, so pages load as ai.tulzo.test:<port> etc.
+      name: 'host-routing',
+      testMatch: /\.host-routing\.spec\.ts$/,
+      use: {
+        ...desktop,
+        baseURL: `http://localhost:${HOST_PORT}`,
+        launchOptions: { args: ['--host-resolver-rules=MAP tulzo.test 127.0.0.1, MAP *.tulzo.test 127.0.0.1'] },
+      },
+    },
   ],
   webServer: [
     ...(process.env.PLAYWRIGHT_BASE_URL
@@ -124,6 +155,6 @@ export default defineConfig({
           },
         ]),
     // Against an external server (PLAYWRIGHT_BASE_URL, e.g. the gigs runner) the surface servers aren't started.
-    ...(process.env.PLAYWRIGHT_BASE_URL ? [] : [surfaceServer('ai', AI_PORT), surfaceServer('hub', HUB_PORT)]),
+    ...(process.env.PLAYWRIGHT_BASE_URL ? [] : [surfaceServer('ai', AI_PORT), surfaceServer('hub', HUB_PORT), hostRoutingServer]),
   ],
 });
