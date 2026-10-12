@@ -187,11 +187,11 @@ test.describe('hub profile, signed in (customer)', () => {
   });
 
   test.describe('email notifications', () => {
-    test('every notification type has a switch, grouped Gigs / Payments / QA / Account, checked by emailEnabled', async ({ page }) => {
+    test('every notification type has a switch, grouped Gigs / Payments / QA / Account / Marketplace / Admin, checked by emailEnabled', async ({ page }) => {
       await page.goto('/profile');
       const s = sectionByH2(page, 'Email notifications');
       await expect(s.getByRole('switch')).toHaveCount(NOTIFICATION_TYPES.length);
-      await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account']);
+      await expect(s.getByRole('heading', { level: 3 })).toHaveText(['Gigs', 'Payments', 'QA', 'Account', 'Marketplace', 'Admin']);
       const gigs = s.getByRole('group', { name: 'Gigs' });
       await expect(gigs.getByRole('switch', { name: 'New bids on your jobs', exact: true })).toBeChecked();
       await expect(s.getByRole('group', { name: 'QA' }).getByRole('switch', { name: 'QA verdicts', exact: true })).not.toBeChecked();
@@ -216,6 +216,21 @@ test.describe('hub profile, signed in (customer)', () => {
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
       await expect(sw).not.toBeChecked();
       expect(bodies).toEqual([{ preferences: { bid_received: false } }]);
+    });
+
+    test('In-app notifications: one switch per group, on by default; switching Gigs off PUTs { inApp: { gigs: false } }', async ({ page }) => {
+      const bodies: unknown[] = [];
+      await mockPrefs(page, (body) => {
+        bodies.push(body);
+        return { status: 200, body: { preferences: PREFS } };
+      });
+      await page.goto('/profile');
+      const s = sectionByH2(page, 'In-app notifications');
+      await expect(s.getByRole('switch')).toHaveCount(6);
+      const gigs = s.getByRole('switch', { name: 'Gigs', exact: true });
+      await expect(gigs).toBeChecked();
+      await gigs.click();
+      await expect.poll(() => bodies).toEqual([{ inApp: { gigs: false } }]);
     });
 
     test('a 500 shows "Couldn\'t save. Try again." and reverts the switch', async ({ page }) => {

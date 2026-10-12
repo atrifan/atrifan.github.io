@@ -76,8 +76,9 @@ export function AdminActivityView() {
       const body = (await res.json().catch(() => null)) as (AdminActivity & { message?: string }) | null;
       if (!res.ok || !body) throw new Error(body?.message || "We couldn't load the activity. Try again.");
       setData(body);
-      setFrom(body.range.from);
-      setTo(body.range.to);
+      // Fill the inputs with the range used, without overwriting what someone is typing.
+      setFrom((f) => f || body.range.from);
+      setTo((t) => t || body.range.to);
     } catch (err) {
       setError(err instanceof Error ? err.message : "We couldn't load the activity. Try again.");
     } finally {

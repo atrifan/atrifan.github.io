@@ -228,7 +228,7 @@ export function NotificationBell() {
           </button>
         </div>
         {items === null ? (
-          <p className="notif-empty">Loading…</p>
+          open && <p className="notif-empty">Loading…</p>
         ) : items.length === 0 ? (
           <p className="notif-empty">You&apos;re all caught up.</p>
         ) : (
