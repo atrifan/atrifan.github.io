@@ -35,9 +35,9 @@ same instance) are in place, everything is served from the `tulzo` project in **
 `TULZO_SURFACE` and `NEXT_PUBLIC_ROOT_DOMAIN` are unset there, and `vercel.json` `redirects` send
 `ai|marketplace|gigs|chat.tulzo.online/x` to `tulzo.online/<surface>/x` (307) and `/api/*` on those hosts to
 `tulzo.online/api/*`. `jobs.` goes to `/gigs`, and `www.` goes to the apex (308). The subdomains are attached to the
-`tulzo` project, and the four surface projects skip builds (`exit 0` ignore command). To go back to surface mode
+`tulzo` project, and the four surface projects are paused (git disconnected, so pushes do not build them). To go back to surface mode
 after switching keys: set `TULZO_SURFACE=hub` and `NEXT_PUBLIC_ROOT_DOMAIN=tulzo.online` on `tulzo`, move each
-subdomain back to its project, remove the host redirects and the ignore commands
+subdomain back to its project, reconnect git on the four projects (`vercel git connect`), remove the host redirects
 (`tests/unit/vercel-path-mode.test.ts` pins the current rules).
 
 ### Domains
