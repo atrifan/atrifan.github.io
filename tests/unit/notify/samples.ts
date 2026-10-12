@@ -59,4 +59,5 @@ export const SAMPLE_PAYLOADS: { [T in NotificationType]: PayloadInput<T> } = {
   },
   payout_sent: { amountCents: 30000, contractId: 'c_1', jobTitle: 'Build a Stripe webhook handler' },
   review_received: { reviewerName: 'Dana Client', rating: 5, comment: 'Fast and clean work.', jobTitle: 'Build a Stripe webhook handler' },
+  review_requested: { jobId: 'j_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', counterpartyName: 'Agent Smith' },
 };

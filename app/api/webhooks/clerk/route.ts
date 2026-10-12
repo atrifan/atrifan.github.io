@@ -9,6 +9,8 @@ import {
 } from '@/src/lib/supabase-services';
 import { normalizePlan, planFromSubscription } from '@/src/lib/plans';
 import { deleteContact, syncContactFromClerk } from '@/src/lib/notify/notify';
+import { onSubscriptionEvent, recordSubscription } from '@/src/lib/credits/grant-service';
+import { periodAnchorFromSubscription } from '@/src/lib/credits/grants';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
 
@@ -21,7 +23,7 @@ interface SubscriptionEventData {
   user_id: string;
   plan_id?: string;
   plan?: { slug?: string } | null;
-  items?: Array<{ status?: string; plan?: { slug?: string } | null }> | null;
+  items?: Array<{ status?: string; plan?: { slug?: string } | null; period_start?: number }> | null;
   status?: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete';
   current_period_start?: number;
   current_period_end?: number;
@@ -64,7 +66,7 @@ async function verifyWebhook(request: NextRequest): Promise<WebhookEventExtended
 
 // Extended webhook event type to include subscription events
 type WebhookEventExtended = WebhookEvent | {
-  type: 'subscription.created' | 'subscription.updated' | 'subscription.deleted';
+  type: 'subscription.created' | 'subscription.updated' | 'subscription.active' | 'subscription.deleted';
   data: SubscriptionEventData;
 };
 
@@ -181,7 +183,8 @@ export async function POST(request: NextRequest) {
 
       // Clerk Billing subscription events
       case 'subscription.created':
-      case 'subscription.updated': {
+      case 'subscription.updated':
+      case 'subscription.active': {
         const subData = event.data as unknown as SubscriptionEventData;
         const userId = subData.user_id;
         const status = subData.status;
@@ -198,6 +201,16 @@ export async function POST(request: NextRequest) {
           // Subscription canceled or failed - downgrade to free
           await handlePlanChange(userId, 'free');
         }
+        // Monthly plan credits: granted once per user per period (credit_grants is unique);
+        // the cron app/api/cron/credit-grants catches missed renewals.
+        const grant = await onSubscriptionEvent({
+          userId,
+          plan: newPlan,
+          status,
+          anchor: periodAnchorFromSubscription(subData),
+          subscriptionId: subData.id ?? null,
+        });
+        if (grant) console.log(`[webhook] Plan credits for ${userId}: ${grant.status}`);
         break;
       }
 
@@ -207,6 +220,8 @@ export async function POST(request: NextRequest) {
         const userId = subData.user_id;
         console.log(`[webhook] Subscription deleted for user ${userId}`);
         await handlePlanChange(userId, 'free');
+        // No more grants; the current one expires when its period ends (credit-grants cron).
+        await recordSubscription({ userId, plan: 'free', status: 'canceled', anchor: null, subscriptionId: subData.id ?? null });
         break;
       }
 

@@ -184,6 +184,15 @@ const builders: Builders = {
     details: [['Rating', `${'★'.repeat(p.rating)}${'☆'.repeat(5 - p.rating)} (${p.rating}/5)`]],
     cta: { label: 'See your reviews', url: profileUrl(p, 'reviews') },
   }),
+  review_requested: (p) => ({
+    subject: `How did it go? Review ${p.counterpartyName}`,
+    preheader: `Leave a review for "${p.jobTitle}".`,
+    heading: 'Leave a review',
+    paragraphs: [
+      `"${p.jobTitle}" is done. A short review of ${p.counterpartyName} helps everyone on Tulzo pick who to work with.`,
+    ],
+    cta: { label: 'Write a review', url: p.url ?? appUrl('gigs', `/contracts/${encodeURIComponent(p.contractId)}/delivery#review`) },
+  }),
 };
 
 export function buildContent<T extends NotificationType>(type: T, payload: Payload<T>): EmailContent {

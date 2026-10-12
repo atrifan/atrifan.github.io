@@ -6,7 +6,8 @@
  *   - postgrest (the REST layer supabase-js talks to)
  * then creates a schema `test_gigs_<random>`, applies the prerequisite user_budgets
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql,
- * 20261115_job_room.sql, 20261201_qa.sql and its follow-ups (20261202, 20261203), and the
+ * 20261115_job_room.sql, 20261201_qa.sql and its follow-ups (20261202, 20261203),
+ * 20260526_budget_analytics.sql + 20261215_delivery_trust.sql (Phase 5), and the
  * marketplace package migrations into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
  * `stop()` drops the schema and removes both containers.
@@ -176,6 +177,7 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     `);
     await admin.query(`SET search_path TO ${schema}`);
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20260525_paid_proxy_tables.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20260526_budget_analytics.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261101_jobs_core.sql'), 'utf8'));
     await admin.query(API_KEYS_PREREQ_SQL);
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261102_notifications.sql'), 'utf8'));
@@ -183,6 +185,7 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261201_qa.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261202_submissions_owner_admin.sql'), 'utf8'));
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261203_qa_credit_holds.sql'), 'utf8'));
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261215_delivery_trust.sql'), 'utf8'));
     // Marketplace: packages, ratings/installs, and the new kinds + catalog view.
     for (const m of [
       '20260521_packages.sql',
@@ -235,6 +238,8 @@ export async function resetGigsTables(pgUrl: string, schema: string): Promise<vo
   await c.connect();
   await c.query(`
     TRUNCATE ${[
+      'credit_grants', 'plan_subscriptions', 'balance_transactions', 'trust_scores', 'reviews', 'deliveries',
+      'transfer_reversals', 'disputes',
       'activity_events', 'steering_requests', 'milestones', 'job_messages',
       'stripe_events', 'refunds', 'transfers', 'payments', 'contract_versions', 'contracts', 'bids',
       'offers', 'job_spec_versions', 'jobs', 'provider_profiles', 'agent_identities', 'principals',

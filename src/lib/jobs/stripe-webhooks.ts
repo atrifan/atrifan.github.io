@@ -13,6 +13,7 @@ import { loadContract, loadContractVersion, transitionContract, moveContractIfAl
 import { syncAccount } from './stripe-connect';
 import { canTransitionJob } from './job-state';
 import type { ContractRow, PaymentRow, SteeringRequestRow } from './types';
+import { linkChargeback } from '../disputes/dispute-service';
 
 type Outcome = 'processed' | 'ignored';
 
@@ -29,7 +30,13 @@ const CHECKOUT_EVENTS = new Set([
   'checkout.session.async_payment_succeeded',
   'checkout.session.expired',
 ]);
-const OTHER_EVENTS = new Set(['account.updated', 'charge.refunded', 'charge.dispute.created']);
+const OTHER_EVENTS = new Set([
+  'account.updated',
+  'charge.refunded',
+  'charge.dispute.created',
+  'charge.dispute.updated',
+  'charge.dispute.closed',
+]);
 
 /** Does the gigs code own this event? Credit top-up checkouts (no kind=contract) are not ours. */
 export function isJobsEvent(event: Pick<Stripe.Event, 'type' | 'data'>): boolean {
@@ -107,6 +114,9 @@ async function dispatch(event: Stripe.Event): Promise<Outcome> {
       return onChargeRefunded(event.data.object as Stripe.Charge);
     case 'charge.dispute.created':
       return onDisputeCreated(event.data.object as Stripe.Dispute);
+    case 'charge.dispute.updated':
+    case 'charge.dispute.closed':
+      return onDisputeChanged(event.data.object as Stripe.Dispute);
     default:
       return 'ignored';
   }
@@ -288,5 +298,19 @@ async function onDisputeCreated(dispute: Stripe.Dispute): Promise<Outcome> {
   if (contract && (await moveContractIfAllowed(contract, 'disputed'))) {
     await moveJobIfAllowed(contract.job_id, 'disputed');
   }
+  // Link the chargeback to the contract (a dispute row the admin page and trust score see).
+  await linkChargeback(dispute, payment.contract_id);
+  return 'processed';
+}
+
+/** Chargeback status changes (evidence submitted, won, lost): keep the linked dispute current. */
+async function onDisputeChanged(dispute: Stripe.Dispute): Promise<Outcome> {
+  const payment = await paymentByIntent(idOf(dispute.payment_intent as string | Stripe.PaymentIntent | null));
+  if (!payment) return 'ignored';
+  if (dispute.status === 'won' && payment.status === 'disputed') {
+    const { error } = await jobsDb().from('payments').update({ status: 'succeeded' }).eq('id', payment.id);
+    if (error) throw dbError(error, 'restore payment after won chargeback');
+  }
+  await linkChargeback(dispute, payment.contract_id);
   return 'processed';
 }

@@ -118,7 +118,7 @@ describe('routeRequest: non-hub surfaces', () => {
   });
 
   it.each(NON_HUB)('%s: returns 404 for hub-only pages', (s) => {
-    for (const p of ['/pricing', '/profile', '/credits', '/dashboard', '/admin/qa']) {
+    for (const p of ['/pricing', '/profile', '/credits', '/dashboard', '/admin/qa', '/admin/disputes']) {
       expect(route(s, p)).toEqual({ action: 'notFound' });
     }
   });
@@ -183,7 +183,7 @@ describe('routeRequest: non-hub surfaces', () => {
   it('lists an allow-list for every surface, hub as all', () => {
     expect(SURFACE_API_ALLOWLIST.hub).toBe('all');
     expect(SURFACE_API_ALLOWLIST.chat).toContain('/api/plugin/chat');
-    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids']);
+    expect(SURFACE_API_ALLOWLIST.gigs).toEqual(['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust']);
   });
 });
 

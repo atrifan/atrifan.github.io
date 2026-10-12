@@ -49,7 +49,8 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
   ],
   marketplace: ['/api/marketplace', '/api/packages', '/api/admin/downloads'],
   // Stripe Connect onboarding (/api/connect) and the billing webhook stay on the hub.
-  gigs: ['/api/jobs', '/api/offers', '/api/bids'],
+  // /api/contracts: the job room and delivery; /api/trust: badges on the public cards.
+  gigs: ['/api/jobs', '/api/offers', '/api/bids', '/api/contracts', '/api/trust'],
   chat: ['/api/plugin/chat', '/api/plugin/devices', '/api/plugin/presence'],
 };
 
@@ -57,7 +58,7 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
 const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
-const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa'];
+const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa', '/admin/disputes'];
 
 /** Auth pages; on non-hub surfaces they redirect to the hub. */
 const AUTH_PREFIXES = ['/sign-in', '/sign-up'];
