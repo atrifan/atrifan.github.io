@@ -208,6 +208,15 @@ describe('isProtectedPath', () => {
       expect(isProtectedPath(p)).toBe(false);
     }
   });
+
+  it('protects the marketplace publisher and admin pages, not the catalog or package pages', () => {
+    for (const p of ['/marketplace/publish', '/marketplace/admin', '/marketplace/admin/x']) {
+      expect(isProtectedPath(p)).toBe(true);
+    }
+    for (const p of ['/marketplace/fx-github-mcp', '/marketplace/publisher-tools', '/marketplace/administrator']) {
+      expect(isProtectedPath(p)).toBe(false);
+    }
+  });
 });
 
 describe('activeSurface', () => {

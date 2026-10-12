@@ -54,7 +54,7 @@ export const SURFACE_API_ALLOWLIST: Readonly<Record<Surface, 'all' | readonly st
 };
 
 /** Pages that require a signed-in user. */
-const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/profile', '/credits', '/admin'];
+const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/profile', '/credits', '/admin', '/marketplace/publish', '/marketplace/admin'];
 
 /** Hub pages that live on the hub only; 404 elsewhere. */
 const HUB_ONLY_PREFIXES = ['/dashboard', '/pricing', '/profile', '/credits', '/admin/qa'];

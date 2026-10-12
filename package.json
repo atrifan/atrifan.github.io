@@ -20,6 +20,7 @@
     "test:unit": "node --test 'tests/unit/**/*.test.ts' && vitest run",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:e2e:gigs": "tsx scripts/test-e2e-gigs.ts",
+    "test:e2e:marketplace": "tsx scripts/test-e2e-marketplace.ts",
     "test:integration:notify": "playwright test tests/integration/notify.spec.ts",
     "test:int": "vitest run --config vitest.int.config.ts",
     "test:visual": "playwright test tests/visual"

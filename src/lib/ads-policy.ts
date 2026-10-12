@@ -10,7 +10,7 @@ import type { Surface } from './surface-url';
  * the surface prefix in path-prefix mode.
  */
 const BLOCKED_SEGMENTS: Partial<Record<Surface, readonly string[]>> = {
-  marketplace: ['admin'],
+  marketplace: ['admin', 'publish'],
   gigs: ['post', 'room', 'checkout'],
 };
 

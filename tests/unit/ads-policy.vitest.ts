@@ -37,6 +37,8 @@ describe('footerAdAllowed', () => {
     expect(ok('marketplace', '/p/weather')).toBe(true);
     expect(ok('marketplace', '/marketplace/admin')).toBe(false);
     expect(ok('marketplace', '/admin/queue')).toBe(false);
+    expect(ok('marketplace', '/marketplace/publish')).toBe(false);
+    expect(ok('marketplace', '/publish')).toBe(false);
   });
 
   it('allows the gigs listing and detail, not post, checkout or job rooms', () => {

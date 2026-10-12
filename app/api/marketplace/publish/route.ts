@@ -1,31 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { createClient } from '@supabase/supabase-js';
-import { authenticateApiKey, publishPackage, type PublishInput } from '@/src/lib/marketplace-service';
+import {
+  authenticateApiKey,
+  needsArchive,
+  publishPackage,
+  type MarketplaceAuth,
+  type PublishInput,
+} from '@/src/lib/marketplace-service';
+import { validatePublishInput } from '@/src/lib/marketplace/publish-validation';
+import { bytesFilesHash } from '@/src/lib/marketplace/wire-format';
+import { currentMarketplaceUser } from '@/src/lib/marketplace/web-auth';
 
 /**
- * Marketplace publish — API-key-gated (any paid plan).
- *
- * The counterpart to discovery: lets the browser assistant (or any paid user)
- * publish a skill / plugin / MCP to the marketplace. User-published packages
- * land as `visibility: 'pending'` and require admin moderation to go public.
+ * Marketplace publish: a new package or a new version. Every publish lands `pending` and needs
+ * admin moderation to go public.
  *
  *   POST /api/marketplace/publish
- *   Authorization: Bearer <tulzo_api_key>
+ *   Authorization: Bearer <tulzo_api_key>   (the assistant; any paid plan)
+ *   or a signed-in Clerk session              (the publisher page; paid plan or admin)
  *
- *   multipart/form-data: file=<zip>, id, name, description, type, version
- *   OR application/json:  { id, name, description, type:"mcp", version, config_json }
+ *   multipart/form-data: file=<zip>, id, name, description, type, version, tags, category,
+ *                        long_description, config_json (JSON string)
+ *   OR application/json:  { id, name, description, type, version, config_json, tags, category,
+ *                           long_description }   (config kinds: mcp, a2a)
  */
 export async function POST(req: NextRequest) {
-  const authResult = await authenticateApiKey(req.headers.get('authorization'));
-  if (!authResult.ok) {
-    const body =
-      authResult.status === 403
-        ? { valid: false, error: 'plan_required', plan: 'free' }
-        : { error: authResult.error };
-    return NextResponse.json(body, { status: authResult.status });
+  let auth: MarketplaceAuth;
+  let publisherName: string | null = null;
+  const header = req.headers.get('authorization');
+  if (header) {
+    const authResult = await authenticateApiKey(header);
+    if (!authResult.ok) {
+      const body =
+        authResult.status === 403
+          ? { valid: false, error: 'plan_required', plan: 'free' }
+          : { error: authResult.error };
+      return NextResponse.json(body, { status: authResult.status });
+    }
+    auth = authResult.auth;
+  } else {
+    const user = await currentMarketplaceUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user.canPublish) return NextResponse.json({ error: 'plan_required', plan: user.plan }, { status: 403 });
+    auth = { userId: user.userId, plan: user.plan };
+    publisherName = user.displayName;
   }
-  const { auth } = authResult;
 
   const contentType = req.headers.get('content-type') || '';
   let input: PublishInput;
@@ -40,41 +60,44 @@ export async function POST(req: NextRequest) {
         type: body.type,
         version: body.version,
         config_json: body.config_json ?? null,
+        tags: body.tags,
+        category: body.category,
+        long_description: body.long_description,
       };
     } else {
       const form = await req.formData();
-      const id = form.get('id') as string;
-      const name = form.get('name') as string;
-      const type = form.get('type') as string;
-      const description = (form.get('description') as string) || '';
-      const version = (form.get('version') as string) || '1.0.0';
-      const file = form.get('file') as File | null;
-      const configJsonStr = form.get('config_json') as string | null;
-
-      let blobUrl: string | undefined;
-      if (file) {
-        const blob = await put(`packages/${id}/${version}.zip`, file, {
+      const text = (k: string) => (typeof form.get(k) === 'string' ? (form.get(k) as string) : undefined);
+      const file = form.get('file');
+      const configJsonStr = text('config_json');
+      input = {
+        id: text('id') ?? '',
+        name: text('name') ?? '',
+        type: text('type') ?? '',
+        description: text('description'),
+        version: text('version') || '1.0.0',
+        tags: text('tags'),
+        category: text('category'),
+        long_description: text('long_description'),
+        config_json: configJsonStr ? JSON.parse(configJsonStr) : null,
+      };
+      if (file instanceof Blob && file.size > 0 && needsArchive(input.type)) {
+        // Validate before uploading so a bad request never leaves a blob behind.
+        const pre = validatePublishInput({ ...input, blob_url: 'pending-upload' } as unknown as Record<string, unknown>);
+        if (!pre.ok) return NextResponse.json({ error: pre.error }, { status: 400 });
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const blob = await put(`packages/${pre.value.id}/${pre.value.version}.zip`, file, {
           access: 'public',
           contentType: 'application/zip',
         });
-        blobUrl = blob.url;
+        input.blob_url = blob.url;
+        input.files_hash = bytesFilesHash(bytes);
       }
-
-      input = {
-        id,
-        name,
-        type,
-        description,
-        version,
-        blob_url: blobUrl,
-        config_json: configJsonStr ? JSON.parse(configJsonStr) : null,
-      };
     }
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Invalid request body' }, { status: 400 });
   }
 
-  const result = await publishPackage(auth, input);
+  const result = await publishPackage(auth, input, { publisherName });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

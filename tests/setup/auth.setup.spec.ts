@@ -15,18 +15,21 @@ import { E2E_USERS, ensureE2EUsers, hasClerkTestEnv, storageStatePath, type E2ER
  */
 setup.describe.configure({ mode: 'serial' });
 
-setup('clerk users and sessions', async ({ browser }) => {
+setup('clerk users and sessions', async ({ browser, baseURL }) => {
   setup.skip(!hasClerkTestEnv(), 'Clerk development keys not configured');
   await clerkSetup();
   await ensureE2EUsers();
   for (const role of Object.keys(E2E_USERS) as E2ERole[]) {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ baseURL });
     const page = await context.newPage();
-    await page.goto('/');
-    await clerk.signIn({ page, emailAddress: E2E_USERS[role].email });
-    await page.goto('/');
-    await page.waitForFunction(() => !!(window as unknown as { Clerk?: { user?: unknown } }).Clerk?.user);
-    await context.storageState({ path: storageStatePath(role) });
-    await context.close();
+    try {
+      await page.goto('/');
+      await clerk.signIn({ page, emailAddress: E2E_USERS[role].email });
+      await page.goto('/');
+      await page.waitForFunction(() => !!(window as unknown as { Clerk?: { user?: unknown } }).Clerk?.user);
+      await context.storageState({ path: storageStatePath(role) });
+    } finally {
+      await context.close();
+    }
   }
 });
