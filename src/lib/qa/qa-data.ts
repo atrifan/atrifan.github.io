@@ -2,6 +2,7 @@
  * Shared reads/writes for the QA pipeline: rows, party info (name, email, plan),
  * audit events and best-effort notifications. Server-only, service-role client.
  */
+import { clerkClient } from '@clerk/nextjs/server';
 import { jobsDb } from '../jobs/db';
 import { dbError } from '../jobs/errors';
 import { PLAN_KEYS, normalizePlan, type PlanKey } from '../plans';
@@ -170,7 +171,6 @@ export async function audit(
 /** Clerk users by id, 100 per call; ids Clerk doesn't return are left out. */
 async function clerkUsersById(ids: string[]): Promise<AdminSubject[]> {
   if (ids.length === 0) return [];
-  const { clerkClient } = await import('@clerk/nextjs/server');
   const client = await clerkClient();
   const wanted = new Set(ids);
   const out: AdminSubject[] = [];

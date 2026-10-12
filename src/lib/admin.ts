@@ -10,8 +10,10 @@
  *  3. Their Clerk user id is in ADMIN_USER_IDS (comma-separated; also how the gigs e2e runner names its
  *     admin, since the e2e identity header has no Clerk user to look up).
  *
- * The rule itself is pure; Clerk is only reached through the `lookup` of isAdminUserId / isAdmin.
+ * The rule itself is pure; Clerk is only called by isAdmin and the default `lookup` of isAdminUserId.
  */
+
+import { clerkClient, currentUser } from '@clerk/nextjs/server';
 
 const SEED_ADMIN_EMAILS = ['trifan.alex.criss@gmail.com'];
 
@@ -77,7 +79,6 @@ export function isAdminUser(user: AdminSubject | null | undefined): boolean {
 export type AdminLookup = (userId: string) => Promise<AdminSubject | null>;
 
 async function clerkLookup(userId: string): Promise<AdminSubject | null> {
-  const { clerkClient } = await import('@clerk/nextjs/server');
   return (await (await clerkClient()).users.getUser(userId)) as AdminSubject;
 }
 
@@ -103,7 +104,6 @@ export async function isAdminUserId(
 
 /** Is the signed-in Clerk user an admin? */
 export async function isAdmin(): Promise<boolean> {
-  const { currentUser } = await import('@clerk/nextjs/server');
   return isAdminSubject((await currentUser()) as AdminSubject | null);
 }
 
