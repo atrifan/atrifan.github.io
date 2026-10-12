@@ -15,7 +15,8 @@ import { MockBridge, type Handlers, type Params } from './mock-bridge';
  */
 
 export const FROZEN_NOW = new Date('2026-10-12T10:00:00Z');
-export const DEVICE_NAME = 'Studio laptop';
+/** The connected device in the header is the online one on the Devices page. */
+export const DEVICE_NAME = 'Work laptop';
 export const SECRET_VALUE = 'sk-live-SHOULD-NOT-SHOW';
 
 // ---------------------------------------------------------------- pages
@@ -99,7 +100,18 @@ const device = (over: Partial<Device> & Pick<Device, 'id' | 'device_name' | 'api
 
 export const DEVICES: Device[] = [
   device({ id: 'dev_1', device_name: 'Work laptop', api_key_suffix: 'a1b2', status: 'online' }),
-  device({ id: 'dev_2', device_name: 'Home desktop', api_key_suffix: 'c3d4', status: 'offline' }),
+  // Offline: last seen yesterday evening, nothing running and no tokens today.
+  device({
+    id: 'dev_2',
+    device_name: 'Home desktop',
+    api_key_suffix: 'c3d4',
+    status: 'offline',
+    last_seen_at: '2026-10-11T18:00:00Z',
+    last_used_at: '2026-10-11T18:00:00Z',
+    active_tasks_count: 0,
+    tokens_today_input: 0,
+    tokens_today_output: 0,
+  }),
 ];
 
 export const NEVER_CONNECTED_DEVICE = device({
@@ -235,7 +247,7 @@ export const MCP_SERVERS = [
 ];
 
 export const SCHEDULES = [
-  { id: 'sch_1', cron: '0 9 * * 1', prompt: 'Summarise my inbox', enabled: true, last_run: '2026-10-05T09:00:00Z', created: '2026-09-01T08:00:00Z', source: 'plugin' as const, type: 'task' as const },
+  { id: 'sch_1', cron: '0 9 * * 1', prompt: 'Summarise my inbox', enabled: true, last_run: '2026-10-12T09:00:00Z', created: '2026-09-01T08:00:00Z', source: 'plugin' as const, type: 'task' as const },
   { id: 'sch_2', cron: '30 18 * * *', prompt: 'Post the daily digest', enabled: false, last_run: null, created: '2026-09-03T08:00:00Z', source: 'telegram' as const, type: 'notify' as const },
 ];
 
@@ -283,7 +295,8 @@ export const FLEET = {
 
 export const QUEUE = {
   jobs: [
-    { id: 'job_1', kind: 'schedule', status: 'running' as const, prompt: 'Summarise my inbox', scheduleId: 'sch_1', ageMs: 5000 },
+    // Today's 09:00 run of sch_1 is done (last_run); the running job is the chat loop reading the inbox.
+    { id: 'job_1', kind: 'chat', status: 'running' as const, prompt: 'Summarise my inbox', ageMs: 5000 },
     { id: 'job_2', kind: 'chat', status: 'waiting' as const, prompt: 'Draft a reply to Sam', ageMs: 2000 },
   ],
   running: 1,
@@ -379,7 +392,7 @@ export function fakeDevice(options: DeviceOptions = {}): Handlers {
     return found;
   };
   const attribution = (rows: { totalCost: number }[]) => ({
-    capsTotalCost: rows.length ? 1.0 : 0,
+    capsTotalCost: rows.length ? USAGE.totalCost : 0,
     attributedCost: rows.reduce((sum, r) => sum + r.totalCost, 0),
     groupsTotal: rows.length,
     causes: [],

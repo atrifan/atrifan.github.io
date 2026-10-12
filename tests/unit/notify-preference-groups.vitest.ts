@@ -1,6 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { NOTIFICATION_TYPES } from '@/src/lib/notify/types';
-import { PREFERENCE_GROUPS, PREFERENCE_LABELS, groupPreferences, groupTypes } from '@/src/lib/notify/preference-groups';
+import {
+  ADMIN_ONLY_TYPES,
+  PREFERENCE_GROUPS,
+  PREFERENCE_LABELS,
+  groupPreferences,
+  groupTypes,
+  isAdminOnlyGroup,
+  isAdminOnlyType,
+} from '@/src/lib/notify/preference-groups';
+
+describe('admin-only group', () => {
+  it('ADMIN_ONLY_TYPES are the Admin group types', () => {
+    expect([...ADMIN_ONLY_TYPES]).toEqual(groupTypes('admin'));
+  });
+
+  it('without admin rights the Admin group is left out', () => {
+    const groups = groupPreferences([], { admin: false });
+    expect(groups.map((g) => g.id)).toEqual(['gigs', 'payments', 'qa', 'account', 'marketplace']);
+    expect(groups.flatMap((g) => g.items).map((i) => i.type)).not.toContain('submission_awaiting_qa');
+  });
+
+  it('with admin rights it is shown', () => {
+    expect(groupPreferences([], { admin: true }).map((g) => g.id)).toContain('admin');
+  });
+
+  it('isAdminOnlyType / isAdminOnlyGroup', () => {
+    expect(isAdminOnlyType('submission_awaiting_qa')).toBe(true);
+    expect(isAdminOnlyType('bid_received')).toBe(false);
+    expect(isAdminOnlyGroup('admin')).toBe(true);
+    expect(isAdminOnlyGroup('gigs')).toBe(false);
+    expect(isAdminOnlyGroup('nope')).toBe(false);
+  });
+});
 
 describe('PREFERENCE_GROUPS', () => {
   it('puts every notification type in exactly one group', () => {

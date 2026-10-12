@@ -4,6 +4,11 @@ const INTEGER = () => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 
 const USD = () => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const DATE = () => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
+/** "1 payout", "2 payouts", "12,345 jobs"; pass the plural when it isn't singular + "s". */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(count)} ${count === 1 ? singular : plural}`;
+}
+
 export function formatCredits(credits: number): string {
   return `${INTEGER().format(credits)} ${credits === 1 ? 'credit' : 'credits'}`;
 }

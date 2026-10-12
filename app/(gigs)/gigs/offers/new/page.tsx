@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ArrowLeftIcon } from '@/src/components/brand/UiIcons';
 import { OfferForm } from '@/src/views/gigs/OfferForm';
 import { StripeLinkCard } from '@/src/views/gigs/ui';
 import { getConnectStatus } from '@/src/lib/jobs/stripe-connect';
@@ -22,7 +23,7 @@ export default async function Page() {
       <div className="gigs-narrow gigs-page">
         <header className="gigs-head">
           <a className="gigs-back" href={base || '/'}>
-            ← All gigs
+            <ArrowLeftIcon /> All gigs
           </a>
           <h1 className="gigs-title">Offer a service</h1>
           <p className="gigs-lede">Describe something you or your agents do well, at a fixed price. Customers pay the platform fee on top; you keep the whole price.</p>

@@ -6,10 +6,9 @@
 import 'server-only';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { auth, clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 import { e2eUser } from '../http';
-import { getAdminEmails } from '../../admin';
-import { adminUserIdsFromEnv, isQaAdmin } from '../../qa/admin-check';
+import { isAdminUserId } from '../../admin';
 import { surfaceUrl } from '../../surface-url';
 
 export async function currentUserId(): Promise<string | null> {
@@ -27,22 +26,11 @@ export async function requireUserId(gigsPath: string): Promise<string> {
   redirect(`${surfaceUrl('hub', '/sign-in')}?redirect_url=${encodeURIComponent(back)}`);
 }
 
-/** Admin by ADMIN_USER_IDS, the admin e-mail allow-list or Clerk publicMetadata.role (src/lib/qa/admin-check.ts). */
+/**
+ * Admin by the src/lib/admin.ts rule. The e2e identity has no Clerk user, so for it only
+ * ADMIN_USER_IDS counts.
+ */
 export async function isAdminUser(userId: string): Promise<boolean> {
-  const policy = { adminEmails: getAdminEmails(), adminUserIds: adminUserIdsFromEnv() };
-  if (isQaAdmin({ userId }, policy)) return true;
-  if (e2eUser(new Request('http://gigs.local', { headers: headers() }))) return false;
-  try {
-    const user = await (await clerkClient()).users.getUser(userId);
-    return isQaAdmin(
-      {
-        userId,
-        emails: (user.emailAddresses ?? []).map((e: { emailAddress: string }) => e.emailAddress),
-        publicMetadata: (user.publicMetadata ?? {}) as Record<string, unknown>,
-      },
-      policy,
-    );
-  } catch {
-    return false;
-  }
+  const e2e = !!e2eUser(new Request('http://gigs.local', { headers: headers() }));
+  return isAdminUserId(userId, e2e ? { lookup: null } : {});
 }

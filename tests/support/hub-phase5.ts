@@ -31,7 +31,7 @@ export function disputeItem(over: Record<string, unknown> = {}): Record<string, 
     status: 'open',
     default_resolution: null,
     resolution: null,
-    reason: 'The export command is missing from the delivery.',
+    reason: 'Files with a quoted comma lose every field after the comma.',
     created_at: '2026-10-10T09:00:00Z',
     resolved_at: null,
     customer: CUSTOMER,
@@ -68,7 +68,7 @@ export const OPEN_ITEMS = [
 
 export function disputeDetail(item: Record<string, unknown>): Record<string, unknown> {
   return {
-    dispute: { ...item, evidence: 'README has no export section.', refund_cents: null, resolution_note: null },
+    dispute: { ...item, evidence: 'Sample file orders-quoted.csv imports with shifted columns.', refund_cents: null, resolution_note: null },
     contract: {
       id: item.contract_id,
       status: item.contract_status,
@@ -141,7 +141,7 @@ export const REPUTATION = {
       id: 'rv-1',
       contract_id: 'c-1',
       reviewer_role: 'customer',
-      reviewer_name: 'Cara Customer',
+      reviewer_name: 'Dana Customer',
       overall: 5,
       quality: 5,
       communication: 4,
@@ -171,15 +171,15 @@ export const REPUTATION = {
     provider: {
       principal_id: '66666666-6666-4666-8666-666666666666',
       user_id: 'u_c',
-      score: 82,
+      score: 92,
       level: 'established',
-      review_count: 1,
-      average_rating: 5,
+      review_count: 2,
+      average_rating: 4.5,
       counted: 3,
       breakdown: [
         { key: 'qa_first_pass', label: 'QA first-pass rate', value: 0.92, weight: 0.4, evidence: '11 of 12 first attempts validated' },
-        { key: 'rating', label: 'Average rating', value: 0.875, weight: 0.4, evidence: '4.5 from 2 reviews' },
-        { key: 'disputes', label: 'Disputes lost', value: 1, weight: 0.2, evidence: 'none' },
+        { key: 'reviews', label: 'Reviews', value: 0.875, weight: 0.4, evidence: '4.5 from 2 reviews' },
+        { key: 'disputes', label: 'Disputes', value: 1, weight: 0.2, evidence: 'none lost' },
       ],
       computed_at: '2026-10-10T09:00:00Z',
     },
@@ -228,14 +228,19 @@ export const GRANTS_CURRENT = {
 export const GRANTS_PAID_NO_CURRENT = { plan: 'pro', monthly_credits: 1000, current: null, history: [] };
 export const GRANTS_FREE = { plan: null, monthly_credits: 0, current: null, history: [] };
 
+// Internally consistent: the rows add up to the balance (+1,000 −700 +1,500 −300 +1,000 −300 = 2,200), the
+// September grant's unused 300 expire on 15 Oct, and 300 of October's 1,000 are used (700 left).
 export const STATS_WITH_GRANTS = {
-  remainingBalance: 12.34,
-  totalSpent: 2.66,
+  remainingBalance: 22,
+  totalSpent: 10,
   totalDeposited: 15,
   purchaseHistory: [
-    { id: 3, amount: 10, type: 'plan_grant', description: 'Monthly credits (Pro)', createdAt: '2026-10-15T12:00:00Z' },
-    { id: 2, amount: 3, type: 'plan_expiry', description: 'Unused monthly credits expired', createdAt: '2026-10-15T11:59:00Z' },
-    { id: 1, amount: 15, type: 'deposit', description: 'Credit top-up ($15.00)', createdAt: '2026-10-01T10:00:00Z' },
+    { id: 6, amount: 3, type: 'usage', description: 'Chat with Tex', createdAt: '2026-10-16T09:00:00Z' },
+    { id: 5, amount: 10, type: 'plan_grant', description: 'Monthly credits (Pro)', createdAt: '2026-10-15T12:00:00Z' },
+    { id: 4, amount: 3, type: 'plan_expiry', description: 'Unused monthly credits expired', createdAt: '2026-10-15T11:59:00Z' },
+    { id: 3, amount: 15, type: 'deposit', description: 'Credit top-up ($15.00)', createdAt: '2026-10-01T10:00:00Z' },
+    { id: 2, amount: 7, type: 'usage', description: 'Chat with Tex', createdAt: '2026-09-28T09:00:00Z' },
+    { id: 1, amount: 10, type: 'plan_grant', description: 'September credits (Pro)', createdAt: '2026-09-15T12:00:00Z' },
   ],
   modelSummaries: [],
   deviceSummaries: [],
@@ -287,7 +292,13 @@ export const PHASE5_HUB_PAGES: Phase5HubPage[] = [
     path: '/profile',
     name: 'profile-reputation',
     role: 'customer',
-    mock: (page) => mockReputation(page),
+    // A provider with reviews and an established trust score has finished Stripe onboarding.
+    mock: async (page) => {
+      await page.route('**/api/connect/status**', (r) =>
+        json(r, { connected: true, account_id: 'acct_x', connect_status: 'enabled', payouts_enabled: true, charges_enabled: true, details_submitted: true, country: 'DE' }),
+      );
+      await mockReputation(page);
+    },
     ready: '4.5 out of 5 from 2 reviews',
   },
   {

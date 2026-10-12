@@ -40,7 +40,7 @@ before(async () => {
   process.env.GITHUB_API_BASE = github.url;
   route = await import('../../app/api/admin/qa/mcp/route');
   tools = await import('../../src/lib/jobs/mcp/tools/submission');
-  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'QA-Admin@test.local' }], publicMetadata: {} });
+  clerkState.users.set(ADMIN, { emailAddresses: [{ emailAddress: 'QA-Admin@test.local', verification: { status: 'verified' } }], publicMetadata: {} });
   clerkState.users.set(ROLE_ADMIN, { emailAddresses: [{ emailAddress: 'role@test.local' }], publicMetadata: { role: 'admin' } });
   clerkState.users.set(PROVIDER, { emailAddresses: [{ emailAddress: 'prov@test.local' }], publicMetadata: {} });
   clerkState.users.set(CUSTOMER, { emailAddresses: [{ emailAddress: 'cust@test.local' }], publicMetadata: { role: 'customer' } });
@@ -100,6 +100,15 @@ test('a non-admin sees no tools and cannot call any', async () => {
       assert.equal(r.body.result, undefined);
     }
   }
+});
+
+test('an admin email that is not verified does not make an admin', async () => {
+  const UNVERIFIED = 'user_qa_unverified_admin_email';
+  clerkState.users.set(UNVERIFIED, { emailAddresses: [{ emailAddress: 'qa-admin@test.local', verification: { status: 'unverified' } }], publicMetadata: {} });
+  const key = await seedDeviceKey(UNVERIFIED, 'super');
+  const list = await rpc(route.POST, URL, 'tools/list', {}, H(key));
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.body.result.tools, []);
 });
 
 test('admins by email (API key) and by Clerk role (bearer) see the four tools', async () => {

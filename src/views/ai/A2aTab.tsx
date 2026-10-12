@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { pluralize } from '@/src/lib/format';
 import { buildA2aAdd, buildA2aPreview, clientAuthParam, request } from '@/src/lib/bridge-commands';
 import { normalizeA2aAgents } from '@/src/lib/ai-device-data';
 import { useDeviceAction, useDeviceQuery } from './device';
@@ -61,7 +62,7 @@ export function A2aTab() {
                       <>
                         <span>{a.cardUrl}</span>
                         <span>
-                          {a.skills} skill{a.skills === 1 ? '' : 's'}
+                          {pluralize(a.skills, 'skill')}
                         </span>
                         {a.source ? <span>source: {a.source}</span> : null}
                       </>
@@ -140,7 +141,7 @@ export function A2aTab() {
               <strong className={s.noticePart}>{preview.name}</strong>
               {preview.description ? <span className={s.noticePart}>{preview.description}</span> : null}
               <span className={s.noticePart}>
-                {preview.skills} skill{preview.skills === 1 ? '' : 's'}
+                {pluralize(preview.skills, 'skill')}
               </span>
             </Notice>
           ) : null}

@@ -9,7 +9,7 @@ import { SAMPLE_PAYLOADS } from './samples.ts';
 const SECRET = 'unit-secret-0123456789abcdef0123456789';
 
 function setup(overrides: Partial<NotifierDeps> = {}) {
-  let clock = Date.parse('2026-10-11T12:00:00Z');
+  const clock = Date.parse('2026-10-11T12:00:00Z');
   const store = new MemoryNotifyStore(() => clock);
   const transport = new MemoryTransport();
   const scheduled: Promise<unknown>[] = [];
@@ -21,18 +21,10 @@ function setup(overrides: Partial<NotifierDeps> = {}) {
     unsubscribeSecret: SECRET,
     schedule: (p) => void scheduled.push(p),
     sleep: async (ms) => void sleeps.push(ms),
-    now: () => new Date(clock),
-    maxAttempts: 3,
-    sendRetries: 2,
-    sendBackoff: { baseMs: 10, factor: 2, maxMs: 100 },
-    outboxBackoff: { baseMs: 60_000, factor: 5, maxMs: 3_600_000 },
     leaseMs: 120_000,
     ...overrides,
   });
-  const advance = (ms: number) => {
-    clock += ms;
-  };
-  return { store, transport, scheduled, sleeps, notifier, advance };
+  return { store, transport, scheduled, sleeps, notifier };
 }
 
 async function withContact(s: ReturnType<typeof setup>, userId = 'u1') {
@@ -78,7 +70,6 @@ test('an unsubscribed type is recorded as skipped and nothing is sent', async ()
   assert.deepEqual(result, { status: 'skipped', id: s.store.rows[0].id, reason: 'unsubscribed' });
   assert.equal(s.store.rows[0].status, 'skipped');
   assert.equal(s.scheduled.length, 0);
-  await s.notifier.dispatch();
   assert.equal(s.transport.sent.length, 0);
 });
 
@@ -99,7 +90,6 @@ test('the same dedupe key never enqueues twice', async () => {
   assert.equal(s.store.rows.length, 1);
   assert.equal(s.scheduled.length, 1);
   await Promise.all(s.scheduled);
-  await s.notifier.dispatch();
   assert.equal(s.transport.sent.length, 1);
 });
 
@@ -124,59 +114,32 @@ test('an invalid payload throws and stores nothing', async () => {
   assert.equal(s.store.rows.length, 0);
 });
 
-test('transient send failures are retried in-process with backoff', async () => {
+const transient = () => new TransportError('503 unavailable', true, 503);
+
+test('transient send failures are retried inline after 0.5s, 2s and 5s, then sent once', async () => {
   const s = setup();
   await withContact(s);
-  s.transport.failNext(new TransportError('503', true, 503), new TransportError('429', true, 429));
+  s.transport.failNext(transient(), new TransportError('429', true, 429), transient());
   await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
   await Promise.all(s.scheduled);
   assert.equal(s.transport.sent.length, 1);
-  assert.deepEqual(s.sleeps, [10, 20]);
+  assert.deepEqual(s.sleeps, [500, 2000, 5000]);
   assert.equal(s.store.rows[0].status, 'sent');
+  assert.equal(s.store.rows[0].attempts, 1);
 });
 
-test('when in-process retries run out the row is rescheduled, then sent by a later dispatch', async () => {
+test('when every inline attempt fails the row ends failed with last_error, not queued for a poller', async () => {
   const s = setup();
   await withContact(s);
-  s.transport.failNext(...[1, 2, 3].map(() => new TransportError('503', true, 503)));
+  s.transport.failNext(transient(), transient(), transient(), transient(), transient());
   await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
   await Promise.all(s.scheduled);
   const row = s.store.rows[0];
-  assert.equal(row.status, 'queued');
-  assert.equal(row.attempts, 1);
-  assert.match(row.lastError ?? '', /503/);
-
-  // Not due yet: the first outbox backoff is one minute.
-  assert.equal((await s.notifier.dispatch()).claimed, 0);
-  s.advance(60_000);
-  const summary = await s.notifier.dispatch();
-  assert.deepEqual(summary, { claimed: 1, sent: 1, skipped: 0, retry: 0, failed: 0 });
-  assert.equal(row.status, 'sent');
-  assert.equal(row.attempts, 2);
-});
-
-test('outbox backoff grows between dispatch attempts and the row fails after maxAttempts', async () => {
-  const s = setup();
-  await withContact(s);
-  s.transport.failNext(...Array.from({ length: 9 }, () => new TransportError('503', true, 503)));
-  await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
-  await Promise.all(s.scheduled);
-  const row = s.store.rows[0];
-  assert.equal(row.status, 'queued');
-
-  s.advance(60_000);
-  assert.equal((await s.notifier.dispatch()).retry, 1);
-  assert.equal(row.attempts, 2);
-  // Second outbox delay is 5 minutes, so 4 minutes later it is still not due.
-  s.advance(4 * 60_000);
-  assert.equal((await s.notifier.dispatch()).claimed, 0);
-  s.advance(60_000);
-  const last = await s.notifier.dispatch();
-  assert.equal(last.failed, 1);
+  assert.equal(s.transport.sent.length, 0);
+  assert.deepEqual(s.sleeps, [500, 2000, 5000]);
   assert.equal(row.status, 'failed');
-  assert.equal(row.attempts, 3);
-  s.advance(10 * 3_600_000);
-  assert.equal((await s.notifier.dispatch()).claimed, 0);
+  assert.match(row.lastError ?? '', /503 unavailable/);
+  assert.equal(await s.notifier.deliver(row.id), 'not_claimed');
 });
 
 test('a non-retryable provider error fails the row at once without retries', async () => {
@@ -190,38 +153,53 @@ test('a non-retryable provider error fails the row at once without retries', asy
   assert.match(s.store.rows[0].lastError ?? '', /422/);
 });
 
-test('a user who unsubscribes before delivery is skipped at send time', async () => {
-  const s = setup({ schedule: undefined });
+test('every inline retry reuses the row id as the idempotency key', async () => {
+  const s = setup();
   await withContact(s);
-  await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
-  await s.store.setPreferences('u1', { job_posted: false });
-  const summary = await s.notifier.dispatch();
-  assert.equal(summary.skipped, 1);
-  assert.equal(s.store.rows[0].status, 'skipped');
-  assert.equal(s.transport.sent.length, 0);
+  const attempts: (string | undefined)[] = [];
+  const send = s.transport.send.bind(s.transport);
+  s.transport.send = async (m) => {
+    attempts.push(m.idempotencyKey);
+    return send(m);
+  };
+  s.transport.failNext(transient(), transient());
+  const r = await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
+  await Promise.all(s.scheduled);
+  assert.deepEqual(attempts, [r.id, r.id, r.id]);
 });
 
-test('a leased row is not delivered twice by an overlapping dispatch', async () => {
-  const s = setup({ schedule: undefined });
+test('a repeat of the same action while a send is retrying is a duplicate and sends nothing more', async () => {
+  const s = setup();
+  await withContact(s);
+  s.transport.failNext(transient());
+  const first = await s.notifier.enqueue('u1', 'bid_received', SAMPLE_PAYLOADS.bid_received, 'bid:b1');
+  const again = await s.notifier.enqueue('u1', 'bid_received', SAMPLE_PAYLOADS.bid_received, 'bid:b1');
+  await Promise.all(s.scheduled);
+  assert.equal(first.status, 'queued');
+  assert.deepEqual(again, { status: 'duplicate', id: null });
+  assert.equal(s.transport.sent.length, 1);
+});
+
+test('a row is delivered once even if delivery is started twice', async () => {
+  const s = setup();
   await withContact(s);
   const r = await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
   assert.ok(r.id);
-  const [a, b] = await Promise.all([s.notifier.deliver(r.id), s.notifier.dispatch()]);
-  assert.equal(a, 'sent');
-  assert.equal(b.claimed, 0);
+  const [scheduled, extra] = await Promise.all([Promise.all(s.scheduled), s.notifier.deliver(r.id)]);
+  assert.equal(scheduled.length, 1);
+  assert.equal(extra, 'not_claimed');
   assert.equal(s.transport.sent.length, 1);
-  assert.equal(await s.notifier.deliver(r.id), 'not_claimed');
 });
 
-test('dispatch respects the limit', async () => {
+test('without a schedule hook the email still goes out right away', async () => {
   const s = setup({ schedule: undefined });
   await withContact(s);
-  for (let i = 0; i < 5; i++) await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, `job:${i}`);
-  assert.equal((await s.notifier.dispatch(2)).sent, 2);
-  assert.equal((await s.notifier.dispatch(10)).sent, 3);
+  await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
+  await waitFor(() => s.store.rows[0]?.status === 'sent');
+  assert.equal(s.transport.sent.length, 1);
 });
 
-test('a schedule hook that throws does not fail enqueue', async () => {
+test('a schedule hook that throws does not fail enqueue, and the email still goes out', async () => {
   const s = setup({
     schedule: () => {
       throw new Error('no request context');
@@ -230,4 +208,19 @@ test('a schedule hook that throws does not fail enqueue', async () => {
   await withContact(s);
   const r = await s.notifier.enqueue('u1', 'job_posted', SAMPLE_PAYLOADS.job_posted, 'job:1');
   assert.equal(r.status, 'queued');
+  await waitFor(() => s.store.rows[0]?.status === 'sent');
+  assert.equal(s.transport.sent.length, 1);
 });
+
+test('the notifier has no outbox drain any more', () => {
+  const s = setup();
+  assert.equal('dispatch' in s.notifier, false);
+});
+
+async function waitFor(done: () => boolean, ms = 1000): Promise<void> {
+  const until = Date.now() + ms;
+  while (!done()) {
+    if (Date.now() > until) assert.fail('timed out');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}

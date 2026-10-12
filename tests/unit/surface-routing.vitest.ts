@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   activeSurface,
@@ -378,5 +380,33 @@ describe('wwwRedirect', () => {
   it('does nothing without a root domain', () => {
     expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/', rootDomain: '' })).toBeNull();
     expect(wwwRedirect({ host: 'www.tulzo.online', pathAndQuery: '/', rootDomain: undefined })).toBeNull();
+  });
+});
+
+// All five Vercel projects deploy the same vercel.json, so each one runs every cron. Only the hub
+// serves the cron routes; on the other surfaces middleware answers 404 and those copies do nothing.
+describe('vercel.json crons', () => {
+  const vercel = JSON.parse(readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf8')) as { crons: { path: string; schedule: string }[] };
+  const cronPaths = vercel.crons.map((c) => c.path);
+
+  it('are the daily /api/cron/* jobs; email has no cron (it is sent when the action happens)', () => {
+    expect([...cronPaths].sort()).toEqual(['/api/cron/auto-accept', '/api/cron/credit-grants', '/api/cron/trust-decay']);
+    expect(cronPaths.some((p) => p.startsWith('/api/notifications'))).toBe(false);
+  });
+
+  it('run at most once a day (Vercel Hobby rejects anything more frequent)', () => {
+    for (const { schedule } of vercel.crons) {
+      const [minute, hour] = schedule.split(/\s+/);
+      expect(minute, schedule).toMatch(/^\d+$/);
+      expect(hour, schedule).toMatch(/^\d+$/);
+    }
+  });
+
+  it.each(cronPaths)('%s is served on the hub', (p) => {
+    expect(route('hub', p)).toEqual({ action: 'next' });
+  });
+
+  it.each(NON_HUB.flatMap((s) => cronPaths.map((p) => [s, p] as const)))('%s answers 404 for %s', (surface, p) => {
+    expect(route(surface, p)).toEqual({ action: 'notFound' });
   });
 });

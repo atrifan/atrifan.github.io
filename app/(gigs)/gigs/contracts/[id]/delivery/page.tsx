@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowLeftIcon } from '@/src/components/brand/UiIcons';
 import { notFound } from 'next/navigation';
 import { requireUserId } from '@/src/lib/jobs/ui/session';
 import { gigsConfig } from '@/src/lib/jobs/ui/config';
@@ -49,7 +50,7 @@ export default async function Page({ params }: Props) {
   return (
     <div className="page gigs-page gigs-narrow">
       <Link className="gigs-back" href={gigsHref(base, `/contracts/${contract.id}`)}>
-        ← Back to the contract
+        <ArrowLeftIcon /> Back to the contract
       </Link>
       <header className="gigs-head">
         <h1 className="gigs-title">Delivery</h1>

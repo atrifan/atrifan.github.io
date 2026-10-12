@@ -52,7 +52,7 @@ export async function runScheduleCommand(
     }
     if (cmd.kind === "pause") {
       const r = await nativeCall<{ ok: boolean }>("SCHEDULE_PAUSE", { id: cmd.id })
-      return r.ok ? `⏸ Paused schedule \`${cmd.id}\`.` : `Could not pause \`${cmd.id}\` — no such schedule.`
+      return r.ok ? `Paused schedule \`${cmd.id}\`.` : `Could not pause \`${cmd.id}\` — no such schedule.`
     }
     if (cmd.kind === "resume") {
       const r = await nativeCall<{ ok: boolean }>("SCHEDULE_RESUME", { id: cmd.id })
@@ -76,7 +76,7 @@ export function formatSchedulesMarkdown(schedules: ScheduleRow[]): string {
   }
   const lines = [`**Scheduled tasks (${schedules.length}):**`, ""]
   for (const s of schedules) {
-    const status = s.enabled === false ? "⏸ paused" : "▶ active"
+    const status = s.enabled === false ? "paused" : "active"
     const kind = s.type === "notify" ? " · notify" : ""
     const last = s.last_run ? new Date(s.last_run).toLocaleString() : "never"
     lines.push(`- \`${s.id}\` · \`${s.cron}\` · ${status}${kind}`)

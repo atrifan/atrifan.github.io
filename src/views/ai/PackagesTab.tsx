@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { activationChoice, request } from '@/src/lib/bridge-commands';
 import { normalizeInstalled, normalizeSkills, type SkillRow } from '@/src/lib/ai-device-data';
 import { surfaceUrl } from '@/src/lib/surface-url';
+import { pluralize } from '@/src/lib/format';
 import { useDeviceAction, useDeviceQuery } from './device';
 import { Alert, Badge, Button, ConfirmButton, DeviceGate, Modal, Muted, Notice, PageHeading, Row, Rows, Section, SelectField, Switch, TextField, DeviceOnly } from './ui';
 import s from './ai.module.css';
@@ -167,7 +168,7 @@ export function PackagesTab() {
                       <>
                         {p.description ? <span>{p.description}</span> : null}
                         <span>
-                          {p.skillCount} skill{p.skillCount === 1 ? '' : 's'}
+                          {pluralize(p.skillCount, 'skill')}
                         </span>
                       </>
                     }

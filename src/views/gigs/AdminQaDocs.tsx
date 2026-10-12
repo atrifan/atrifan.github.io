@@ -1,4 +1,5 @@
 /** /gigs/docs/admin-qa: the Admin QA MCP, for Tulzo admins only (noindex). */
+import { withGlyphIcons } from '@/src/components/brand/UiIcons';
 import { CodeBlock } from './CodeBlock';
 
 const TOOLS: Array<[string, string]> = [
@@ -31,7 +32,7 @@ export function AdminQaDocs({ mcpUrl }: { mcpUrl: string }) {
           {TOOLS.map(([name, text]) => (
             <div key={name} className="gigs-tool">
               <h3>{name}</h3>
-              <p>{text}</p>
+              <p>{withGlyphIcons(text)}</p>
             </div>
           ))}
         </section>

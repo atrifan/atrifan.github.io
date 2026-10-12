@@ -69,12 +69,16 @@ async function sendAndAwaitDevice(page: Page, request: APIRequestContext, device
   return sessionId;
 }
 
+const TARGET_TOLERANCE_PX = 0.01;
+
 async function expectMinTarget(loc: Locator, label: string): Promise<void> {
   await expect(loc, label).toBeVisible();
   const box = await loc.boundingBox();
   expect(box, `${label} has a box`).not.toBeNull();
-  expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44);
-  expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44);
+  // Layout boxes are fractional (43.99998 for a 44px min-width under the mobile device scale), so
+  // compare with a tolerance far below a visible pixel.
+  expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44 - TARGET_TOLERANCE_PX);
+  expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44 - TARGET_TOLERANCE_PX);
 }
 
 const APPROVAL_FRAME = (allowAlways = false) => ({
@@ -110,6 +114,28 @@ test.describe('chat surface (desktop)', () => {
       await openChat(page, device);
       await expect(heading(page)).toHaveText('New chat');
       await expect(page.getByText(CHAT_DEVICE_NAME).first()).toBeVisible();
+    });
+
+    // A request made while Clerk is still refreshing the 60s session token answers 401. That is a
+    // failed load, not "no devices" and not "no chats": the page tries again.
+    test('a 401 while the session refreshes is retried, not shown as "Connect your assistant"', async ({ page }) => {
+      device = await createChatDevice();
+      const sid = await createChatSession(device, { title: 'Trip plan' });
+      for (const p of ['/api/plugin/devices', '/api/plugin/chat/sessions']) {
+        let first = true;
+        await page.route(
+          (url) => url.pathname === p,
+          (route) => {
+            if (!first) return route.fallback();
+            first = false;
+            return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthorized' }) });
+          },
+        );
+      }
+      await openChat(page, device, sid);
+      await expect(heading(page)).toHaveText('Trip plan', { timeout: 10_000 });
+      await expect(page.getByRole('heading', { name: 'Connect your assistant' })).toHaveCount(0);
+      await expect(composer(page)).toBeVisible();
     });
 
     test('an open chat shows its title as the heading', async ({ page }) => {

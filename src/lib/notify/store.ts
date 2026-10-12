@@ -25,10 +25,8 @@ export interface NotifyStore {
   insertNotification(row: NewNotification): Promise<NotificationRow | null>;
   /** Leases one queued, due row and bumps `attempts`; null if not claimable. */
   claimById(id: string, leaseMs: number): Promise<NotificationRow | null>;
-  /** Leases up to `limit` queued, due rows (oldest first) and bumps `attempts`. */
-  claimDue(limit: number, leaseMs: number): Promise<NotificationRow[]>;
   markSent(id: string, providerMessageId: string | null): Promise<void>;
   markSkipped(id: string, reason: string): Promise<void>;
-  /** `retryAt` null means a terminal failure (status `failed`); otherwise it stays queued until then. */
-  markFailed(id: string, error: string, retryAt: Date | null): Promise<void>;
+  /** Terminal: status `failed` with `last_error`. Nothing retries a failed row. */
+  markFailed(id: string, error: string): Promise<void>;
 }

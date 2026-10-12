@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { withGlyphIcons } from '@/src/components/brand/UiIcons';
 import { request } from '@/src/lib/bridge-commands';
 import { filterLogs, normalizeLogs, type LogLevel } from '@/src/lib/ai-device-data';
 import { useDeviceQuery } from './device';
@@ -88,7 +89,7 @@ export function LogsTab() {
             {bridgeLog.map((l, i) => (
               <li key={`${l.ts}-${i}`} className={s.logLine}>
                 <span className={s.logTime}>{time(l.ts)}</span>
-                <span className={s.logCat}>{l.direction === 'out' ? 'page → extension' : 'extension → page'}</span>
+                <span className={s.logCat}>{withGlyphIcons(l.direction === 'out' ? 'page → extension' : 'extension → page')}</span>
                 <span>{l.message}</span>
               </li>
             ))}

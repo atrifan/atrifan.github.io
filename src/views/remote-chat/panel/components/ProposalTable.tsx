@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { ArrowRightIcon } from "@/src/components/brand/UiIcons"
 import type { ProposalItem } from "../../shared/types"
 
 interface Props {
@@ -57,7 +58,7 @@ export function ProposalTable({ title, items: initial, onRespond, onDismiss }: P
             </div>
             <div className="proposal-values">
               {item.current != null && <span className="proposal-current">{item.current}</span>}
-              <span className="proposal-arrow">→</span>
+              <span className="proposal-arrow"><ArrowRightIcon /></span>
               <span className="proposal-proposed">{item.proposed}</span>
             </div>
             <div className="proposal-reasoning">{item.reasoning}</div>

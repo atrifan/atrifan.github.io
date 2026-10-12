@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type APIResponse, type Browser, type Br
 import AxeBuilder from '@axe-core/playwright';
 import Stripe from 'stripe';
 import { existsSync, readFileSync } from 'node:fs';
-import { FAKE_REPOS, FAKE_TOKENS } from './fake-github';
+import { FAKE_REPOS, FAKE_SHA_OTHER, FAKE_TOKENS } from './fake-github';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 import { quietBell } from '../e2e/surface-helpers';
 
@@ -867,11 +867,17 @@ async function mcpTool(
 export const SUBMITTED_REPO = FAKE_REPOS.private;
 
 /** The provider submits acme/private-repo at its head commit → a submission waiting for QA. */
-export async function sendProject(request: APIRequestContext, provider: string, contractId: string): Promise<{ id: string; attempt: number }> {
+export async function sendProject(
+  request: APIRequestContext,
+  provider: string,
+  contractId: string,
+  commitSha?: string,
+): Promise<{ id: string; attempt: number }> {
   const sc = await mcpTool(request, '/api/jobs/mcp', provider, 'send_project', {
     contract_id: contractId,
     git_repo: FAKE_REPOS.private,
     pat_token: FAKE_TOKENS.good,
+    ...(commitSha ? { commit_sha: commitSha } : {}),
   });
   return sc.submission;
 }
@@ -936,12 +942,13 @@ export async function seedRoomScenario(
     clarification: 'Should empty rows be skipped?',
     clarificationAnswer: 'Yes, empty rows are skipped and counted.',
     revision: 'Please rename the error column to reason.',
-    scopeChange: 'Also accept semicolon separated files.',
+    scopeChange: 'A plain CSV error report is enough; skip the HTML report page.',
     openQuestion: 'Which Postgres version do you target?',
     qaReason: 'Empty files crash the importer.',
   };
   const { contractId } = await seedActiveContract(request, { customer, provider, title: texts.title, plan: texts.plan });
-  const statuses: MilestoneStatus[] = ['done', 'in_progress', 'pending'];
+  // A delivered contract has finished its milestones; otherwise the work is mid-way.
+  const statuses: MilestoneStatus[] = opts.deliver ? ['done', 'done', 'done'] : ['done', 'in_progress', 'pending'];
   for (let i = 0; i < texts.milestones.length; i += 1) {
     await addMilestone(request, provider, contractId, texts.milestones[i], statuses[i]);
   }
@@ -958,18 +965,24 @@ export async function seedRoomScenario(
   await respondSteering(request, provider, contractId, rev.steering.id, { response: 'Done, the column is now called reason.' });
   const scope = await seedEstimatedScopeChange(request, { customer, provider, contractId }, {
     message: texts.scopeChange,
-    specChanges: ['Accept semicolon separated files'],
+    specChanges: ['Error report as a plain CSV file, no HTML page'],
+    // Less work, so a lower price (the refund path).
     deltaCents: -5000,
     // no etaDays: an ETA moves the deadline relative to today, which would change the screenshots daily
-    deliverableChanges: ['Sample semicolon file'],
-    note: 'Semicolon support, and less work than planned elsewhere.',
+    note: 'Less work without the HTML report page.',
   });
   await approveSteering(request, customer, contractId, scope);
   if (opts.openQuestion) {
     await createSteering(request, customer, contractId, { message: texts.openQuestion, requested_kind: 'clarification' });
   }
   if (opts.deliver) {
-    const first = await sendProject(request, provider, contractId);
+    await postProgress(request, provider, contractId, {
+      summary: 'All milestones done, sending for QA',
+      details: 'Parser, row validation and the error report are in.',
+      percent_complete: 100,
+    });
+    // The first attempt is an earlier commit; the fix that QA validates is the head.
+    const first = await sendProject(request, provider, contractId, FAKE_SHA_OTHER);
     await startQaReview(request, first.id);
     await markQa(request, first.id, 'requires_changes', texts.qaReason);
     const second = await sendProject(request, provider, contractId);

@@ -2,15 +2,14 @@
  * The signed-in (Clerk) marketplace user, for the marketplace pages and the web paths of the
  * publish / install / moderation routes. API-key callers use authenticateApiKey instead.
  *
- * Admin = the src/lib/admin.ts allow-list (seed + ADMIN_EMAILS), Clerk publicMetadata.role
- * 'admin', or ADMIN_USER_IDS (same rule as the admin QA tools, src/lib/qa/admin-check.ts).
+ * Admin = the rule in src/lib/admin.ts (verified admin email, Clerk role, or ADMIN_USER_IDS), the
+ * same one every admin check uses.
  * Publishing needs a paid plan, except for admins.
  */
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { getAdminEmails } from '../admin';
+import { isAdminSubject, type AdminEmailAddress } from '../admin';
 import { isFreePlan } from '../../config/billing.config';
 import { planFromClaims, type PlanKey } from '../plans';
-import { adminUserIdsFromEnv, isQaAdmin } from '../qa/admin-check';
 
 export interface MarketplaceWebUser {
   userId: string;
@@ -25,7 +24,7 @@ interface ClerkUserLike {
   firstName?: string | null;
   lastName?: string | null;
   username?: string | null;
-  emailAddresses?: Array<{ emailAddress: string }>;
+  emailAddresses?: AdminEmailAddress[];
   publicMetadata?: Record<string, unknown> | null;
 }
 
@@ -45,9 +44,6 @@ export async function currentMarketplaceUser(): Promise<MarketplaceWebUser | nul
     user = null;
   }
   const plan = planFromClaims(sessionClaims as Record<string, unknown> | null);
-  const isAdmin = isQaAdmin(
-    { userId, emails: user?.emailAddresses?.map((e) => e.emailAddress), publicMetadata: user?.publicMetadata ?? null },
-    { adminEmails: getAdminEmails(), adminUserIds: adminUserIdsFromEnv() },
-  );
+  const isAdmin = isAdminSubject({ ...user, id: userId });
   return { userId, plan, isAdmin, canPublish: isAdmin || !isFreePlan(plan), displayName: displayNameOf(user) };
 }

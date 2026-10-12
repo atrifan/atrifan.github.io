@@ -25,7 +25,7 @@ export const aiState: { generateObject: GenerateObjectFn; calls: Array<Record<st
 
 /** Clerk users and bearer tokens the mocked Clerk SDK knows. */
 export const clerkState: {
-  users: Map<string, { emailAddresses: Array<{ emailAddress: string }>; publicMetadata: Record<string, unknown>; createdAt?: number }>;
+  users: Map<string, { emailAddresses: Array<{ emailAddress: string; verification?: { status: string } | null }>; publicMetadata: Record<string, unknown>; createdAt?: number }>;
   tokens: Map<string, string>;
   /** Clerk Billing subscriptions by user id (billing.getUserBillingSubscription); missing → 404. */
   billing: Map<string, Record<string, unknown>>;
@@ -63,8 +63,8 @@ export function installMocks(): void {
             if (!u) throw new Error('user not found');
             return { id, ...u };
           },
-          getUserList: async ({ limit = 10, offset = 0 }: { limit?: number; offset?: number } = {}) => {
-            const all = [...clerkState.users.entries()].map(([id, u]) => ({ id, ...u }));
+          getUserList: async ({ limit = 10, offset = 0, userId }: { limit?: number; offset?: number; userId?: string[] } = {}) => {
+            const all = [...clerkState.users.entries()].filter(([id]) => !userId || userId.includes(id)).map(([id, u]) => ({ id, ...u }));
             return { data: all.slice(offset, offset + limit), totalCount: all.length };
           },
         },

@@ -134,7 +134,7 @@ export class MockBridge {
       },
       {
         connected: this.connected,
-        deviceName: options.deviceName ?? 'Studio laptop',
+        deviceName: options.deviceName ?? 'Work laptop',
         capabilities: options.capabilities ?? ['commands', 'activate_device'],
       },
     );

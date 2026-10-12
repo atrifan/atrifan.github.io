@@ -7,19 +7,17 @@
  *  - `Authorization: Bearer <token>`: a Clerk session JWT (verifyToken) or a Clerk OAuth
  *    access token (FAPI /oauth/userinfo).
  *  - the gigs e2e identity header (non-production with JOBS_E2E_AUTH_SECRET only).
- * Admin = src/lib/admin.ts allow-list (seed + ADMIN_EMAILS), Clerk publicMetadata.role
- * 'admin', or ADMIN_USER_IDS. For the e2e identity only ADMIN_USER_IDS counts (no Clerk call).
+ * Admin = the rule in src/lib/admin.ts (verified admin email, Clerk role, or ADMIN_USER_IDS).
+ * For the e2e identity only ADMIN_USER_IDS counts (there is no Clerk user to look up).
  *
  * Bearer tokens go through the shared identifyClerkBearer (src/lib/mcp/auth.ts).
  */
 import { createHash } from 'node:crypto';
-import { clerkClient } from '@clerk/nextjs/server';
 import { identifyClerkBearer } from '../mcp/auth';
 import { resolveClerkFrontendApi } from '../clerk-oauth-config';
 import { jobsDb } from '../jobs/db';
 import { e2eUser } from '../jobs/http';
-import { getAdminEmails } from '../admin';
-import { adminUserIdsFromEnv, isQaAdmin } from './admin-check';
+import { isAdminUserId } from '../admin';
 
 export type QaCaller =
   | { authenticated: true; userId: string; isAdmin: boolean; method: 'api_key' | 'bearer' | 'e2e' }
@@ -42,29 +40,15 @@ async function userFromBearer(token: string): Promise<string | null> {
   return identity.ok ? identity.userId : null;
 }
 
+/** Admin by the src/lib/admin.ts rule, looking the user up in Clerk. */
 export async function clerkAdmin(userId: string): Promise<boolean> {
-  const policy = { adminEmails: getAdminEmails(), adminUserIds: adminUserIdsFromEnv() };
-  if (isQaAdmin({ userId }, policy)) return true;
-  try {
-    const user = await (await clerkClient()).users.getUser(userId);
-    return isQaAdmin(
-      {
-        userId,
-        emails: (user.emailAddresses ?? []).map((e: { emailAddress: string }) => e.emailAddress),
-        publicMetadata: (user.publicMetadata ?? {}) as Record<string, unknown>,
-      },
-      policy,
-    );
-  } catch (err) {
-    console.error('[qa] admin lookup failed:', err instanceof Error ? err.message : 'error');
-    return false;
-  }
+  return isAdminUserId(userId);
 }
 
 export async function authenticateQaCaller(request: Request): Promise<QaCaller> {
   const testUser = e2eUser(request);
   if (testUser) {
-    return { authenticated: true, userId: testUser, isAdmin: adminUserIdsFromEnv().includes(testUser), method: 'e2e' };
+    return { authenticated: true, userId: testUser, isAdmin: await isAdminUserId(testUser, { lookup: null }), method: 'e2e' };
   }
   const headerKey = request.headers.get('x-api-key');
   const authHeader = request.headers.get('authorization') || '';

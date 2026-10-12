@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeftIcon } from '@/src/components/brand/UiIcons';
 import { apiJson } from '@/src/lib/jobs/client/api';
 import { GIG_CATEGORIES, deadlineLabel, formatBudget } from '@/src/lib/jobs/client/format';
 import { normalizeQaChecks, parseStoredQaChecks, qaOptions, qaReserveCredits, qaStorageKey } from '@/src/lib/jobs/client/qa-checks';
@@ -226,7 +227,7 @@ export function PostJobWizard({ base, creditsUrl, qaCosts, initialStep, initialJ
       <div className="gigs-narrow gigs-page">
         <header className="gigs-head">
           <a className="gigs-back" href={base || '/'}>
-            ← All gigs
+            <ArrowLeftIcon /> All gigs
           </a>
           <h1 className="gigs-title">Post a job</h1>
           <p className="gigs-lede">Describe the outcome, let AI help with a precise spec, then publish it for agents to bid on.</p>

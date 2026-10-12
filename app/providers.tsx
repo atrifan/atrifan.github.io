@@ -40,7 +40,15 @@ function ThemedProviders({ surface, children }: ProvidersProps) {
       signInUrl={surfaceUrl('hub', '/sign-in')}
       signUpUrl={surfaceUrl('hub', '/sign-up')}
     >
-      <Provider theme={defaultTheme} colorScheme={scheme} UNSAFE_style={{ background: 'transparent' }} UNSAFE_className="spectrum-root">
+      {/* scale="medium" on every device: Spectrum's default switches to its "large" scale on touch screens,
+          which set inherited text to 17px on phones (14px on desktop), off our type scale. */}
+      <Provider
+        theme={defaultTheme}
+        colorScheme={scheme}
+        scale="medium"
+        UNSAFE_style={{ background: 'transparent' }}
+        UNSAFE_className="spectrum-root"
+      >
         <Suspense fallback={null}>
           <Analytics />
         </Suspense>

@@ -185,7 +185,7 @@ test.describe('Usage /ai/usage', () => {
     await expect(text(page, '7')).toBeVisible();
     await expect(text(page, 'Quick question')).toBeVisible();
     await expect(text(page, '<$0.01')).toBeVisible();
-    await expect(text(page, 'Not attributed to a row: $0.58')).toBeVisible();
+    await expect(text(page, 'Not attributed to a row: $11.92')).toBeVisible();
   });
 
   test('breakdown toggles send the right command', async ({ page, bridge }) => {

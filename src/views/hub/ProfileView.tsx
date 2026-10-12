@@ -195,6 +195,8 @@ function ConnectPanel({ connectParam }: { connectParam: ConnectReturn }) {
 
 function NotificationsPanel() {
   const [prefs, setPrefs] = useState<Preference[] | null>(null);
+  // The server says whether the admin-only group applies (src/lib/admin.ts); hidden unless it does.
+  const [admin, setAdmin] = useState(false);
   const [failed, setFailed] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -204,8 +206,11 @@ function NotificationsPanel() {
       try {
         const res = await fetch('/api/notifications/preferences', { cache: 'no-store' });
         if (!res.ok) throw new Error(String(res.status));
-        const body = (await res.json()) as { preferences: Preference[] };
-        if (alive) setPrefs(body.preferences);
+        const body = (await res.json()) as { preferences: Preference[]; admin?: boolean };
+        if (alive) {
+          setAdmin(body.admin === true);
+          setPrefs(body.preferences);
+        }
       } catch {
         if (alive) setFailed(true);
       }
@@ -252,7 +257,7 @@ function NotificationsPanel() {
       {!prefs && !failed && <p className="muted">Loading…</p>}
       {prefs && (
         <ul className="switch-list" role="list">
-          {groupPreferences(prefs).map((group) => {
+          {groupPreferences(prefs, { admin }).map((group) => {
             const id = `inapp-${group.id}`;
             return (
               <li key={group.id} className="switch-row">
@@ -283,7 +288,7 @@ function NotificationsPanel() {
       {failed && <p className="field-error">We couldn&apos;t load your preferences. Refresh to try again.</p>}
       {!prefs && !failed && <p className="muted">Loading…</p>}
       {prefs &&
-        groupPreferences(prefs).map((group) => (
+        groupPreferences(prefs, { admin }).map((group) => (
           <div key={group.id} className="switch-group" role="group" aria-labelledby={`notify-group-${group.id}`}>
             <h3 id={`notify-group-${group.id}`} className="switch-group-title">
               {group.title}

@@ -161,20 +161,121 @@ test('enqueue then deliver sends through the fake transport and marks the row se
   expect(rows[0].sent_at).not.toBeNull();
 });
 
-test('dispatch drains queued rows that were not delivered right away', async () => {
-  const userId = uid('cron');
-  await addContact(userId);
-  const transport = new MemoryTransport();
-  const offline = createNotifier({ store, transport, from: 'Tulzo <n@tulzo.online>', unsubscribeSecret: UNSUB_SECRET });
-  await offline.enqueue(userId, 'job_posted', { jobId: 'j1', jobTitle: 'One' }, `job:1:${userId}`);
-  await offline.enqueue(userId, 'job_posted', { jobId: 'j2', jobTitle: 'Two' }, `job:2:${userId}`);
-  expect(transport.sent).toHaveLength(0);
+// Emails go out on demand: enqueue() (the production wiring) sends inside the request under waitUntil,
+// retrying inline; there is no dispatch route or cron. A stand-in Vercel request context collects what
+// enqueue hands to waitUntil, and fetch is stubbed for Resend, so nothing is sent. The stub is installed
+// once because getNotifier() keeps the transport (and the fetch it captured) for the worker's lifetime.
+const resendCalls: Array<{ to: string[]; subject: string; idempotencyKey: string | null }> = [];
+let resendReplies: Array<{ status: number; body: unknown }> = [];
+const waited: Promise<unknown>[] = [];
+const appCalls: string[] = [];
 
-  const summary = await offline.dispatch(100);
-  const mine = transport.sent.filter((m) => m.to.startsWith(userId));
-  expect(mine.map((m) => m.subject)).toEqual(['Your job is live: One', 'Your job is live: Two']);
-  expect(summary.sent).toBeGreaterThanOrEqual(2);
-  expect((await offline.dispatch(100)).claimed).toBe(0);
+function resendReplyNext(...replies: Array<{ status: number; body: unknown }>) {
+  resendReplies = replies;
+}
+
+async function productionEnqueue(userId: string, dedupeKey: string) {
+  const { enqueue } = await import('../../src/lib/notify/notify');
+  return enqueue(userId, 'bid_received', bid, dedupeKey);
+}
+
+const callsFor = (userId: string) => resendCalls.filter((m) => m.to.includes(`${userId}@example.test`));
+
+test.describe('production enqueue()', () => {
+  const ctxKey = Symbol.for('@vercel/request-context');
+  const g = globalThis as unknown as Record<symbol, unknown>;
+  let previousContext: unknown;
+  let realFetch: typeof fetch;
+  let previousKey: string | undefined;
+
+  test.beforeAll(() => {
+    previousContext = g[ctxKey];
+    g[ctxKey] = { get: () => ({ waitUntil: (p: Promise<unknown>) => void waited.push(p) }) };
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith('https://api.resend.com/')) {
+        const headers = new Headers(init?.headers);
+        resendCalls.push({ ...JSON.parse(String(init?.body)), idempotencyKey: headers.get('idempotency-key') });
+        const reply = resendReplies.shift() ?? { status: 200, body: { id: `re_it_${resendCalls.length}` } };
+        return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } });
+      }
+      if (/^https?:\/\/[^/]*(localhost|tulzo)/.test(url)) appCalls.push(url);
+      return realFetch(input, init);
+    };
+    previousKey = process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = 're_test_integration_fake';
+  });
+
+  test.afterAll(() => {
+    globalThis.fetch = realFetch;
+    g[ctxKey] = previousContext;
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+  });
+
+  test.beforeEach(() => {
+    waited.length = 0;
+    appCalls.length = 0;
+    resendReplies = [];
+  });
+
+  test('an action sends its email right away under waitUntil, with no dispatch call', async () => {
+    const userId = uid('now');
+    await addContact(userId);
+    const result = await productionEnqueue(userId, `now:${userId}`);
+    expect(result.status).toBe('queued');
+    expect(waited).toHaveLength(1);
+    await Promise.all(waited);
+
+    expect(callsFor(userId)).toHaveLength(1);
+    const { rows } = await pool.query(`select status, attempts, provider_message_id from "${SCHEMA}".notifications where id = $1`, [result.id]);
+    expect(rows[0]).toMatchObject({ status: 'sent', attempts: 1 });
+    expect(rows[0].provider_message_id).toMatch(/^re_it_/);
+    expect(appCalls).toEqual([]);
+  });
+
+  test('a transient Resend failure followed by success sends once', async () => {
+    const userId = uid('flaky');
+    await addContact(userId);
+    resendReplyNext({ status: 503, body: { message: 'try again' } }, { status: 200, body: { id: 're_it_flaky' } });
+    const result = await productionEnqueue(userId, `flaky:${userId}`);
+    await Promise.all(waited);
+
+    expect(callsFor(userId)).toHaveLength(2);
+    expect(new Set(callsFor(userId).map((c) => c.idempotencyKey))).toEqual(new Set([result.id]));
+    const { rows } = await pool.query(`select status, last_error, provider_message_id from "${SCHEMA}".notifications where id = $1`, [result.id]);
+    expect(rows[0]).toMatchObject({ status: 'sent', last_error: null, provider_message_id: 're_it_flaky' });
+  });
+
+  test('a permanent Resend failure ends the row failed with last_error, without retries', async () => {
+    const userId = uid('perm');
+    await addContact(userId);
+    resendReplyNext({ status: 422, body: { message: 'invalid from address' } });
+    const result = await productionEnqueue(userId, `perm:${userId}`);
+    await Promise.all(waited);
+
+    expect(callsFor(userId)).toHaveLength(1);
+    const { rows } = await pool.query(`select status, last_error, sent_at from "${SCHEMA}".notifications where id = $1`, [result.id]);
+    expect(rows[0].status).toBe('failed');
+    expect(rows[0].last_error).toMatch(/422.*invalid from address/);
+    expect(rows[0].sent_at).toBeNull();
+  });
+
+  test('the dedupe key prevents a second send when the action repeats while the first is retrying', async () => {
+    const userId = uid('again');
+    await addContact(userId);
+    resendReplyNext({ status: 503, body: { message: 'busy' } });
+    const first = await productionEnqueue(userId, `again:${userId}`);
+    const second = await productionEnqueue(userId, `again:${userId}`);
+    await Promise.all(waited);
+
+    expect(first.status).toBe('queued');
+    expect(second).toMatchObject({ status: 'duplicate', id: null, inApp: { status: 'duplicate' } });
+    expect(callsFor(userId)).toHaveLength(2);
+    const { rows } = await pool.query(`select status from "${SCHEMA}".notifications where user_id = $1`, [userId]);
+    expect(rows).toEqual([{ status: 'sent' }]);
+  });
 });
 
 test('an unsubscribed type is stored as skipped and not sent', async () => {
@@ -185,7 +286,6 @@ test('an unsubscribed type is stored as skipped and not sent', async () => {
   const result = await notifier.enqueue(userId, 'bid_received', bid, `bid:${userId}`);
   expect(result).toMatchObject({ status: 'skipped', reason: 'unsubscribed' });
   await Promise.all(scheduled);
-  await notifier.dispatch(100);
   expect(transport.sent.filter((m) => m.to.startsWith(userId))).toHaveLength(0);
   const { rows } = await pool.query(`select status, last_error from "${SCHEMA}".notifications where user_id = $1`, [userId]);
   expect(rows).toEqual([{ status: 'skipped', last_error: 'unsubscribed' }]);
@@ -205,7 +305,6 @@ test('the dedupe key prevents duplicates, also under concurrent enqueues', async
   expect(results.filter((r) => r.status === 'queued')).toHaveLength(1);
   expect(results.filter((r) => r.status === 'duplicate')).toHaveLength(4);
   await Promise.all(scheduled);
-  await notifier.dispatch(100);
   expect(transport.sent.filter((m) => m.to.startsWith(userId))).toHaveLength(1);
   const { rows } = await pool.query(`select count(*)::int as n from "${SCHEMA}".notifications where dedupe_key = $1`, [`bid:same:${userId}`]);
   expect(rows[0].n).toBe(1);
@@ -254,13 +353,12 @@ test('the unsubscribe token from an email turns the type off through both route 
   expect((await store.getPreferences(userId)).find((p) => p.type === 'job_posted')).toBeUndefined();
 });
 
-test('claims are exclusive: concurrent deliver and dispatch send once', async () => {
+test('claims are exclusive: concurrent deliveries of one row send once', async () => {
   const userId = uid('race');
   await addContact(userId);
-  const transport = new MemoryTransport();
-  const n = createNotifier({ store, transport, from: 'Tulzo <n@tulzo.online>', unsubscribeSecret: UNSUB_SECRET });
+  const { notifier: n, transport, scheduled } = makeNotifier();
   const r = await n.enqueue(userId, 'job_posted', { jobId: 'j', jobTitle: 'Race' }, `race:${userId}`);
   expect(r.id).toBeTruthy();
-  await Promise.all([n.deliver(r.id as string), n.dispatch(100), n.deliver(r.id as string), n.dispatch(100)]);
+  await Promise.all([...scheduled, n.deliver(r.id as string), n.deliver(r.id as string), n.deliver(r.id as string)]);
   expect(transport.sent.filter((m) => m.to.startsWith(userId))).toHaveLength(1);
 });

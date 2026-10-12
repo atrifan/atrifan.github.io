@@ -313,6 +313,8 @@ export function deliveryMasks(page: Page) {
     page.locator('#main code'),
     page.locator('#main time'),
     page.locator('#main td'),
+    // dates that depend on when a row was written ("Validated <date>", auto-accept)
+    page.locator('[data-volatile]'),
     page.getByText(/Auto-accepts on/),
     page.getByText(/You can file a claim until/),
   ];
@@ -349,8 +351,8 @@ export async function seedPageState(
   if (state === 'disputed') {
     await openDispute(request, c.contractId, customer, {
       category: 'incomplete',
-      reason: 'The export command is missing from the delivery.',
-      evidence: 'README has no export section.',
+      reason: 'Files with a quoted comma lose every field after the comma.',
+      evidence: 'Sample file orders-quoted.csv imports with shifted columns.',
     });
   }
   return { viewer: state === 'provider' ? provider : customer, contractId: c.contractId };

@@ -83,9 +83,9 @@ export async function openChatState(page: Page, request: import('@playwright/tes
       action: {
         actionId: 'act-visual',
         actionType: 'DELETE_WORKFLOW',
-        target: 'wf-weekly-report',
-        value: 'Delete workflow wf-weekly-report',
-        reasoning: 'You asked me to remove the old weekly report workflow before creating the new one.',
+        target: 'wf-lisbon-fares-old',
+        value: 'Delete workflow wf-lisbon-fares-old',
+        reasoning: 'You asked me to replace the old Lisbon fare alert with the new cheapest-flight search.',
       },
     });
     await expect(page.getByRole('region', { name: 'Approval needed' })).toBeVisible({ timeout: 15_000 });

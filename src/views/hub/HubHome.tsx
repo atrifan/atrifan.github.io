@@ -2,6 +2,7 @@
 
 import { SignedIn, SignedOut } from '@clerk/nextjs';
 import { TulzoMark } from '@/src/components/brand/TulzoMark';
+import { ArrowRightIcon } from '@/src/components/brand/UiIcons';
 import { SURFACE_ICON } from '@/src/components/brand/SurfaceIcons';
 import { surfaceUrl, type Surface } from '@/src/lib/surface-url';
 import { PLAN_CATALOG } from '@/src/lib/plan-catalog';
@@ -93,7 +94,7 @@ export function HubHome() {
                   <h3>{title}</h3>
                   <p>{desc}</p>
                   <span className="surface-card-more" aria-hidden="true">
-                    {more} →
+                    {more} <ArrowRightIcon title="" />
                   </span>
                 </a>
               </li>

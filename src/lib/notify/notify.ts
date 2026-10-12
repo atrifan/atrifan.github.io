@@ -6,7 +6,7 @@ import { createEnqueue, type ChannelsResult } from './channels.ts';
 import { contactFromClerkUser } from './contacts.ts';
 import { SupabaseInAppStore } from './inapp-supabase-store.ts';
 import type { InAppStore } from './inapp-store.ts';
-import { createNotifier, type DispatchSummary, type Notifier } from './notifier.ts';
+import { createNotifier, type Notifier } from './notifier.ts';
 import { PgNotifyStore } from './pg-store.ts';
 import type { NotifyStore } from './store.ts';
 import { createResendTransport } from './transport.ts';
@@ -91,9 +91,10 @@ function getInAppStoreOrNull(): InAppStore | null {
 const enqueueBoth = createEnqueue({ notifier: getNotifierOrNull, inApp: getInAppStoreOrNull });
 
 /**
- * Notify `userId` of an event on both channels: the in-app feed (the header bell, hub
- * /notifications) and email. The email is queued and sent right away (via waitUntil); the cron
- * at /api/notifications/dispatch picks up anything that didn't go out. Preferences apply per
+ * Notify `userId` of an event on both channels: first the in-app feed (the header bell, hub
+ * /notifications), then email. The email is sent right away, in this request: the send (with inline
+ * retries after 0.5s, 2s and 5s) runs under waitUntil, so the caller's response isn't blocked. There
+ * is no poller: a send that still fails is marked `failed` with `last_error`. Preferences apply per
  * channel (src/lib/notify/preferences.ts).
  *
  * - Throws on programmer errors: unknown type, invalid payload, empty dedupeKey.
@@ -108,11 +109,6 @@ export async function enqueue<T extends NotificationType>(
   dedupeKey: string,
 ): Promise<ChannelsResult> {
   return enqueueBoth(userId, type, payload, dedupeKey);
-}
-
-/** Drain due rows from the outbox (used by the cron route). */
-export async function dispatchQueued(limit = 50): Promise<DispatchSummary> {
-  return getNotifier().dispatch(limit);
 }
 
 function getNotifierOrNull(): Notifier | null {
