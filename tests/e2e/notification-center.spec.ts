@@ -208,7 +208,9 @@ test.describe('bell, signed in', () => {
     const read = page.waitForRequest((r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/notifications/read');
     await dialog.getByRole('link', { name: 'Unread: New bid on CSV importer', exact: true }).click();
     expect((await read).postDataJSON()).toEqual({ ids: ['n1'] });
-    await expect(page).toHaveURL(/\/gigs\/jobs\/j1$/);
+    // A full page load (location.assign): the URL changes when the server answers, so wait as long as a
+    // goto would. Under load the dev server can take more than the 10s expect timeout to compile the page.
+    await page.waitForURL(/\/gigs\/jobs\/j1$/, { waitUntil: 'commit', timeout: 60_000 });
     expect(mock.reads).toEqual([{ ids: ['n1'] }]);
   });
 
