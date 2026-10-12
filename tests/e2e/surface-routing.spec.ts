@@ -38,7 +38,6 @@ test.describe('path-prefix mode routing', () => {
 
   const placeholders = [
     { path: '/ai', heading: 'AI' },
-    { path: '/gigs', heading: 'Gigs' },
   ];
   for (const { path, heading } of placeholders) {
     test(`${path} is a "Coming soon" placeholder with h1 "${heading}"`, async ({ page }) => {
@@ -50,6 +49,13 @@ test.describe('path-prefix mode routing', () => {
       await expect(page).toHaveTitle(/Coming soon/);
     });
   }
+
+  test('/gigs is the gigs home with h1 "Gigs" (no longer a placeholder)', async ({ page }) => {
+    await page.goto('/gigs');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Gigs', { useInnerText: true });
+    await expect(page.getByRole('tablist', { name: 'Listings' })).toBeVisible();
+    await expect(page).not.toHaveTitle(/Coming soon/);
+  });
 
   for (const path of ['/dashboard', '/chat']) {
     test(`signed-out ${path} lands on this app's /sign-in, not a Clerk host`, async ({ request, page }) => {

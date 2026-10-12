@@ -23,10 +23,19 @@ import { startFakeStripe } from '../tests/support/fake-stripe';
 import { startFakeGithub } from '../tests/support/fake-github';
 import { Client } from 'pg';
 
-const SPECS = [
-  'tests/e2e/gigs-api.spec.ts', 'tests/e2e/submission-mcp.spec.ts', 'tests/e2e/admin-qa-mcp.spec.ts',
+const DEFAULT_SPECS = [
+  'tests/e2e/gigs-api.spec.ts',
+  'tests/e2e/submission-mcp.spec.ts',
+  'tests/e2e/admin-qa-mcp.spec.ts',
   'tests/e2e/jobs-mcp.spec.ts',
+  // gigs UI: pages, a11y (axe) and visual baselines, in light/dark x desktop/mobile
+  'tests/e2e/gigs-ui.spec.ts',
+  'tests/a11y/gigs.a11y.spec.ts',
+  'tests/visual/gigs.visual.spec.ts',
 ];
+// GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
+const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+if (SPECS.length === 0) SPECS.push(...DEFAULT_SPECS);
 
 /** Seed the API keys the Jobs MCP spec uses: an active Free-plan key and a revoked one. */
 async function seedApiKeys(pgUrl: string, schema: string): Promise<{ free: string; freeUser: string; revoked: string }> {
@@ -133,6 +142,10 @@ async function main() {
       ['GET', `/api/contracts/${id}/milestones`], ['GET', `/api/contracts/${id}/activity`],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
+    }
+    // The gigs pages too (signed out: public pages render, signed-in ones redirect).
+    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/sitemap.xml']) {
+      await fetch(`${baseUrl}${page}`, { redirect: 'manual' });
     }
 
     const args = process.argv.slice(2);
