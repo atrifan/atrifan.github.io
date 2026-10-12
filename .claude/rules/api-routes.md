@@ -52,3 +52,16 @@ Cron (`Authorization: Bearer $CRON_SECRET`): `cron/auto-accept`, `cron/trust-dec
 Signed in: `profile/reputation`, `credits/grants`. Public: `trust?principal_ids=` (badges).
 Services in `src/lib/{delivery,disputes,reviews,trust,credits}`; pure math in `disputes/amounts.ts`,
 `trust/trust-score.ts`, `credits/grants.ts`, `delivery/auto-accept.ts`.
+
+## Crons (`vercel.json`)
+
+The Vercel account is on **Hobby**, which rejects a deploy with any cron that runs more than once a day.
+So every cron is daily: `notifications/dispatch` at `0 7 * * *`, plus `cron/auto-accept`, `cron/trust-decay`
+and `cron/credit-grants`. Emails don't wait for the cron: `enqueue()` (`src/lib/notify/notify.ts`) sends right
+away through `waitUntil`, and `dispatch` is only the daily fallback for sends that failed or were cut off
+(so retries of a failed send now wait up to a day). On the Pro plan `dispatch` can go back to `*/5 * * * *`.
+
+All five projects deploy the same `vercel.json`, so each runs every cron. Only the hub serves
+`/api/notifications/dispatch` and `/api/cron/*`; on ai/marketplace/gigs/chat they are outside
+`SURFACE_API_ALLOWLIST` and middleware answers 404, so those copies are no-ops.
+`tests/unit/surface-routing.vitest.ts` checks both (daily schedules, hub-only routes) against `vercel.json`.

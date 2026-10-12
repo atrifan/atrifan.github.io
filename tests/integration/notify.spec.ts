@@ -161,6 +161,50 @@ test('enqueue then deliver sends through the fake transport and marks the row se
   expect(rows[0].sent_at).not.toBeNull();
 });
 
+// The dispatch cron runs once a day (Vercel Hobby), so an email must go out from enqueue() itself:
+// the production wiring hands the send to waitUntil. A stand-in Vercel request context collects what
+// is handed over, and fetch is stubbed so Resend is never reached.
+test('the production enqueue() sends right away through waitUntil, with no dispatch call', async () => {
+  const userId = uid('now');
+  await addContact(userId);
+  const ctxKey = Symbol.for('@vercel/request-context');
+  const g = globalThis as unknown as Record<symbol, unknown>;
+  const previousContext = g[ctxKey];
+  const waited: Promise<unknown>[] = [];
+  g[ctxKey] = { get: () => ({ waitUntil: (p: Promise<unknown>) => void waited.push(p) }) };
+  const realFetch = globalThis.fetch;
+  const resend: Array<{ to: string[]; subject: string }> = [];
+  const dispatchCalls: string[] = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes('/api/notifications/dispatch')) dispatchCalls.push(url);
+    if (url.startsWith('https://api.resend.com/')) {
+      resend.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ id: 're_it_now' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return realFetch(input, init);
+  };
+  const previousKey = process.env.RESEND_API_KEY;
+  process.env.RESEND_API_KEY = 're_test_integration_fake';
+  try {
+    const { enqueue } = await import('../../src/lib/notify/notify');
+    const result = await enqueue(userId, 'bid_received', bid, `now:${userId}`);
+    expect(result.status).toBe('queued');
+    expect(waited).toHaveLength(1);
+    await Promise.all(waited);
+
+    expect(resend.filter((m) => m.to.includes(`${userId}@example.test`))).toHaveLength(1);
+    const { rows } = await pool.query(`select status, attempts, provider_message_id from "${SCHEMA}".notifications where id = $1`, [result.id]);
+    expect(rows[0]).toMatchObject({ status: 'sent', attempts: 1, provider_message_id: 're_it_now' });
+    expect(dispatchCalls).toEqual([]);
+  } finally {
+    globalThis.fetch = realFetch;
+    g[ctxKey] = previousContext;
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+  }
+});
+
 test('dispatch drains queued rows that were not delivered right away', async () => {
   const userId = uid('cron');
   await addContact(userId);
