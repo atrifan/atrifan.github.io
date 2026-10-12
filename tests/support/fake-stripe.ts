@@ -17,6 +17,8 @@ export interface FakeStripe {
   url: string;
   requests: RecordedStripeRequest[];
   accounts: Map<string, Record<string, unknown>>;
+  /** Checkout sessions created through the fake, by id (status open | expired | complete). */
+  sessions: Map<string, Record<string, unknown>>;
   /** Make the next N requests to a path prefix fail with a Stripe API error. */
   failNext(pathPrefix: string, count?: number): void;
   close(): Promise<void>;
@@ -47,6 +49,7 @@ export function formToObject(form: Record<string, string>): Record<string, unkno
 export async function startFakeStripe(): Promise<FakeStripe> {
   const requests: RecordedStripeRequest[] = [];
   const accounts = new Map<string, Record<string, unknown>>();
+  const sessions = new Map<string, Record<string, unknown>>();
   const failures: Array<{ prefix: string; remaining: number }> = [];
 
   const server: Server = createServer((req, res) => {
@@ -105,14 +108,29 @@ export async function startFakeStripe(): Promise<FakeStripe> {
         for (const item of Object.values(items)) {
           total += Number(item.price_data?.unit_amount ?? 0) * Number((item as unknown as { quantity?: string }).quantity ?? 1);
         }
-        return send(200, {
+        const session = {
           id, object: 'checkout.session', mode: body.mode, status: 'open', payment_status: 'unpaid',
           amount_total: total, currency: (Object.values(items)[0]?.price_data?.currency as string) ?? 'eur',
           metadata: body.metadata ?? {}, url: `https://checkout.stripe.com/c/pay/${id}`,
-        });
+        };
+        sessions.set(id, session);
+        return send(200, session);
       }
       if ((m = path.match(/^\/v1\/checkout\/sessions\/(cs_[\w]+)\/expire$/)) && method === 'POST') {
+        const known = sessions.get(m[1]);
+        if (known) Object.assign(known, { status: 'expired', url: null });
         return send(200, { id: m[1], object: 'checkout.session', status: 'expired' });
+      }
+      if ((m = path.match(/^\/v1\/checkout\/sessions\/(cs_[\w]+)$/)) && method === 'GET') {
+        // Sessions the fake never created read as expired (e.g. ids invented by a test's webhook).
+        return send(200, sessions.get(m[1]) ?? { id: m[1], object: 'checkout.session', status: 'expired', url: null });
+      }
+      if (method === 'POST' && path === '/v1/refunds') {
+        return send(200, {
+          id: rid('re_test'), object: 'refund', amount: Number(body.amount ?? 0), currency: 'eur',
+          payment_intent: body.payment_intent ?? null, status: 'succeeded', reason: body.reason ?? null,
+          metadata: body.metadata ?? {},
+        });
       }
       return send(404, { error: { type: 'invalid_request_error', message: `fake stripe: no route ${method} ${path}` } });
     });
@@ -124,6 +142,7 @@ export async function startFakeStripe(): Promise<FakeStripe> {
     url: `http://127.0.0.1:${port}`,
     requests,
     accounts,
+    sessions,
     failNext(prefix, count = 1) {
       failures.push({ prefix, remaining: count });
     },

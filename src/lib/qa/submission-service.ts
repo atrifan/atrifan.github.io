@@ -13,7 +13,7 @@ import { jobsDb } from '../jobs/db';
 import { JobsError, dbError, isUniqueViolation, notFound } from '../jobs/errors';
 import { loadContract, loadContractVersion, transitionContract } from '../jobs/contracts-service';
 import { loadJob } from '../jobs/jobs-service';
-import { isWorkPaused } from '../jobs/room-service';
+import { isWorkPaused, recordActivity } from '../jobs/room-service';
 import type { ContractRow } from '../jobs/types';
 import { verifyPatForRepo } from '../jobs/github-pat';
 import { seal } from '../crypto/secret-box';
@@ -181,6 +181,10 @@ export async function sendProject(
       reserved_credits: reserve.customerCredits,
     });
     await notifySubmission(contract, submission);
+    await recordActivity(contract.id, { userId, role: 'provider', agentIdentityId: opts.agentIdentityId ?? null }, 'submission_received', `Work submitted for QA (attempt ${attempt})`, {
+      submission_id: submissionId,
+      attempt,
+    }).catch((err) => console.error('[qa] submission activity not recorded:', err instanceof Error ? err.message : err));
 
     return {
       submission: submissionView(submission),
@@ -241,6 +245,7 @@ export async function qaStatus(userId: string, args: unknown) {
     submissions,
     latest_submission: submissions[submissions.length - 1] ?? null,
     latest_review: last ? reviewSummary(last, attemptOf(last.submission_id)) : null,
+    reviews: reviews.map((r) => reviewSummary(r, attemptOf(r.submission_id))),
     can_resubmit: SUBMITTABLE.has(contract.status),
   };
 }

@@ -6,10 +6,11 @@
  */
 import { jobsDb } from './db';
 import { JobsError, dbError, notFound } from './errors';
-import { isUuid, loadJob, loadSpecVersion } from './jobs-service';
+import { isUuid, loadJob } from './jobs-service';
 import { loadContract } from './contracts-service';
 import { ensureUserPrincipal } from './principals';
-import { pausesWork, remainingCredits } from './steering';
+import { pausesWork, progressEmailCutoff, remainingCredits } from './steering';
+import { notifyUser, excerpt } from './notifications';
 import { parseSeqCursor, parseTimeCursor, type ContractListInput, type MilestoneUpdateInput, type ProgressPostInput } from './room-schemas';
 import type {
   ActivityEventRow,
@@ -102,9 +103,10 @@ export function versionStates(
   });
 }
 
-export function steeringCredits(current: ContractVersionRow | undefined, steering: SteeringRequestRow[]) {
+/** Credits are counted on the contract row, where steering-service claims them atomically. */
+export function steeringCredits(current: ContractVersionRow | undefined, contract: Pick<ContractRow, 'steering_credits_used'>) {
   const allowance = current?.steering_allowance ?? 0;
-  const used = steering.filter((s) => s.status !== 'cancelled').reduce((sum, s) => sum + s.credit_cost, 0);
+  const used = contract.steering_credits_used ?? 0;
   return { allowance, used, remaining: remainingCredits(allowance, used) };
 }
 
@@ -117,10 +119,19 @@ export interface ContractDetail {
   role: PartyRole;
   job: { id: string; title: string; status: string } | null;
   spec: JobSpecVersionRow | null;
+  /** Every spec version the contract's versions point at (for the version-history diffs). */
+  specs: JobSpecVersionRow[];
   current_version: ContractVersionRow | null;
   versions: Array<ContractVersionRow & { state: VersionState }>;
   work_paused: boolean;
   steering_credits: { allowance: number; used: number; remaining: number };
+}
+
+async function listSpecVersions(ids: string[]): Promise<JobSpecVersionRow[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await jobsDb().from('job_spec_versions').select('*').in('id', ids).order('version', { ascending: true });
+  if (error) throw dbError(error, 'list spec versions');
+  return (data ?? []) as JobSpecVersionRow[];
 }
 
 export async function getContractDetail(userId: string, contractId: string): Promise<ContractDetail> {
@@ -131,16 +142,18 @@ export async function getContractDetail(userId: string, contractId: string): Pro
     listSteeringRows(contract.id),
   ]);
   const current = versions.find((v) => v.id === contract.current_version_id);
-  const spec = current ? await loadSpecVersion(current.spec_version_id) : null;
+  const specs = await listSpecVersions([...new Set(versions.map((v) => v.spec_version_id))]);
+  const spec = current ? specs.find((s) => s.id === current.spec_version_id) ?? null : null;
   return {
     contract,
     role,
     job: job ? { id: job.id, title: job.title, status: job.status } : null,
     spec,
+    specs,
     current_version: current ?? null,
     versions: versionStates(versions, contract.current_version_id, steering),
     work_paused: steering.some(pausesWork),
-    steering_credits: steeringCredits(current, steering),
+    steering_credits: steeringCredits(current, contract),
   };
 }
 
@@ -312,7 +325,65 @@ export async function postProgress(
   if (input.percent_complete !== undefined) metadata.percent_complete = input.percent_complete;
   const message = await insertMessage(pc.contract.id, actor, 'progress', body, metadata);
   await recordActivity(pc.contract.id, actor, 'progress_posted', input.summary, { message_id: message.id, ...metadata });
+  await notifyProgress(pc.contract, input.summary, message.id, input.percent_complete);
   return message;
+}
+
+/**
+ * Claim this hour's progress email: a conditional UPDATE of contracts.progress_notified_at
+ * (first ever, or the last one is over an hour old). Each UPDATE is atomic, so of several
+ * concurrent posts exactly one wins.
+ */
+async function claimProgressEmail(contractId: string): Promise<boolean> {
+  const now = new Date();
+  const stamp = { progress_notified_at: now.toISOString() };
+  const first = await jobsDb().from('contracts').update(stamp).eq('id', contractId).is('progress_notified_at', null).select('id');
+  if (first.error) throw dbError(first.error, 'claim progress email');
+  if ((first.data ?? []).length > 0) return true;
+  const later = await jobsDb()
+    .from('contracts')
+    .update(stamp)
+    .eq('id', contractId)
+    .lt('progress_notified_at', progressEmailCutoff(now))
+    .select('id');
+  if (later.error) throw dbError(later.error, 'claim progress email');
+  return (later.data ?? []).length > 0;
+}
+
+/**
+ * Email the customer about a progress post, at most once per contract per hour. The claim is a
+ * single conditional UPDATE, so concurrent posts can't both send.
+ */
+async function notifyProgress(contract: ContractRow, summary: string, messageId: string, percentComplete?: number): Promise<void> {
+  try {
+    if (!(await claimProgressEmail(contract.id))) return; // the customer got one less than an hour ago
+  } catch (err) {
+    console.error('[jobs] progress email not sent:', err instanceof Error ? err.message : err);
+    return;
+  }
+  const job = await loadJob(contract.job_id);
+  await notifyUser(
+    contract.customer_user_id,
+    'progress_update',
+    {
+      jobId: contract.job_id,
+      jobTitle: job?.title ?? 'your contract',
+      contractId: contract.id,
+      summary: excerpt(summary),
+      ...(percentComplete !== undefined ? { percentComplete } : {}),
+    },
+    `progress_update:${messageId}`,
+  );
+}
+
+async function notifyMilestoneDone(contract: ContractRow, m: MilestoneRow): Promise<void> {
+  const job = await loadJob(contract.job_id);
+  await notifyUser(
+    contract.customer_user_id,
+    'milestone_completed',
+    { jobId: contract.job_id, jobTitle: job?.title ?? 'your contract', contractId: contract.id, milestoneTitle: m.title },
+    `milestone_completed:${m.id}`,
+  );
 }
 
 /** Internal: a provider message tied to a steering answer. */
@@ -336,6 +407,13 @@ export async function listMilestonesFor(contractId: string, since: string | null
   const latest = milestones.reduce<string | null>((max, m) => (!max || m.updated_at > max ? m.updated_at : max), since);
   return { milestones, next_cursor: latest ?? new Date(0).toISOString() };
 }
+
+const MILESTONE_WORDS: Record<MilestoneRow['status'], string> = {
+  pending: 'not started',
+  in_progress: 'in progress',
+  done: 'done',
+  blocked: 'blocked',
+};
 
 /** Create (no milestone_id) or update a milestone. Provider only, while the work is not paused. */
 export async function updateMilestone(
@@ -375,7 +453,8 @@ export async function updateMilestone(
       .single();
     if (error) throw dbError(error, 'create milestone');
     const m = data as MilestoneRow;
-    await recordActivity(pc.contract.id, actor, 'milestone_created', `Milestone "${m.title}" added (${m.status})`, { milestone_id: m.id, status: m.status });
+    await recordActivity(pc.contract.id, actor, 'milestone_created', `Milestone "${m.title}" added (${MILESTONE_WORDS[m.status]})`, { milestone_id: m.id, status: m.status });
+    if (m.status === 'done') await notifyMilestoneDone(pc.contract, m);
     return m;
   }
 
@@ -397,7 +476,8 @@ export async function updateMilestone(
   const { data, error } = await db.from('milestones').update(changes).eq('id', prev.id).select('*').single();
   if (error) throw dbError(error, 'update milestone');
   const m = data as MilestoneRow;
-  const summary = prev.status === m.status ? `Milestone "${m.title}" updated` : `Milestone "${m.title}": ${prev.status} → ${m.status}`;
+  const summary = prev.status === m.status ? `Milestone "${m.title}" updated` : `Milestone "${m.title}": ${MILESTONE_WORDS[prev.status]} → ${MILESTONE_WORDS[m.status]}`;
   await recordActivity(pc.contract.id, actor, 'milestone_updated', summary, { milestone_id: m.id, from: prev.status, status: m.status });
+  if (m.status === 'done' && prev.status !== 'done') await notifyMilestoneDone(pc.contract, m);
   return m;
 }

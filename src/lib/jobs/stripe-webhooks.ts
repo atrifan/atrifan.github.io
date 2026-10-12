@@ -12,6 +12,8 @@ import { setBidStatus } from './bids-service';
 import { loadContract, loadContractVersion, transitionContract, moveContractIfAllowed } from './contracts-service';
 import { syncAccount } from './stripe-connect';
 import { canTransitionJob } from './job-state';
+import { recordActivity } from './room-service';
+import { formatEuros } from './client/format';
 import type { ContractRow, PaymentRow, SteeringRequestRow } from './types';
 
 type Outcome = 'processed' | 'ignored';
@@ -98,8 +100,9 @@ async function dispatch(event: Stripe.Event): Promise<Outcome> {
     }
     case 'checkout.session.expired': {
       const session = event.data.object as Stripe.Checkout.Session;
-      // An expired top-up leaves the scope change approved but unpaid (work stays paused).
-      return session.metadata?.kind === 'contract_topup' ? 'ignored' : onContractCheckoutExpired(session);
+      // An expired top-up leaves the scope change approved but unpaid: the work stays paused
+      // until the customer pays through a new Checkout (steering-service regenerateTopup).
+      return session.metadata?.kind === 'contract_topup' ? onTopupExpired(session) : onContractCheckoutExpired(session);
     }
     case 'account.updated':
       return (await syncAccount(event.data.object as Stripe.Account)) ? 'processed' : 'ignored';
@@ -155,6 +158,9 @@ async function onContractCheckoutPaid(session: Stripe.Checkout.Session): Promise
 
   if (contract.status === 'pending_payment') {
     await transitionContract(contract.id, 'pending_payment', 'active');
+    await recordActivity(contract.id, null, 'payment_received', `Payment of ${formatEuros(session.amount_total)} received; work can start`, {
+      checkout_session_id: session.id,
+    });
   } else if (contract.status !== 'active') {
     console.error(`[jobs/webhook] payment for contract ${contract.id} in status ${contract.status}; needs admin review`);
   }
@@ -205,13 +211,29 @@ async function onTopupPaid(session: Stripe.Checkout.Session): Promise<Outcome> {
     { onConflict: 'stripe_checkout_session_id', ignoreDuplicates: true },
   );
   if (payError) throw dbError(payError, 'record top-up payment');
-  const { error: updError } = await db
+  const { data: marked, error: updError } = await db
     .from('steering_requests')
     .update({ topup_status: 'paid' })
     .eq('id', s.id)
-    .eq('topup_status', 'pending');
+    .in('topup_status', ['pending', 'expired'])
+    .select('id');
   if (updError) throw dbError(updError, 'mark top-up paid');
+  if ((marked ?? []).length > 0) {
+    await recordActivity(contract.id, null, 'topup_paid', `Top-up of ${formatEuros(session.amount_total)} paid; work resumes`, { steering_id: s.id });
+  }
   return 'processed';
+}
+
+/** The customer let the top-up Checkout expire: the work stays paused until they get a new one. */
+async function onTopupExpired(session: Stripe.Checkout.Session): Promise<Outcome> {
+  const { data, error } = await jobsDb()
+    .from('steering_requests')
+    .update({ topup_status: 'expired' })
+    .eq('topup_checkout_session_id', session.id)
+    .eq('topup_status', 'pending')
+    .select('id');
+  if (error) throw dbError(error, 'mark top-up expired');
+  return (data ?? []).length > 0 ? 'processed' : 'ignored';
 }
 
 async function onContractCheckoutExpired(session: Stripe.Checkout.Session): Promise<Outcome> {
@@ -270,13 +292,24 @@ async function onChargeRefunded(charge: Stripe.Charge): Promise<Outcome> {
     if (refundError) throw dbError(refundError, 'record refunds');
   }
 
-  if (full) {
+  // A contract counts as refunded only when every payment on it is (a scope change can fully
+  // refund a top-up while the original payment stands).
+  if (full && (await contractFullyRefunded(payment.contract_id))) {
     const contract = await loadContract(payment.contract_id);
     if (contract && (await moveContractIfAllowed(contract, 'refunded'))) {
       await moveJobIfAllowed(contract.job_id, 'cancelled');
     }
   }
   return 'processed';
+}
+
+async function contractFullyRefunded(contractId: string): Promise<boolean> {
+  const { data, error } = await jobsDb().from('payments').select('amount_cents, amount_refunded_cents, status').eq('contract_id', contractId);
+  if (error) throw dbError(error, 'list contract payments');
+  const paid = ((data ?? []) as Array<Pick<PaymentRow, 'amount_cents' | 'amount_refunded_cents' | 'status'>>).filter(
+    (p) => p.status !== 'pending' && p.status !== 'failed',
+  );
+  return paid.length > 0 && paid.every((p) => p.amount_refunded_cents >= p.amount_cents);
 }
 
 async function onDisputeCreated(dispute: Stripe.Dispute): Promise<Outcome> {

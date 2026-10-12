@@ -30,6 +30,11 @@ async function route(name: string): Promise<Mod> {
       steeringReject: () => import('../../app/api/contracts/[id]/steering/[sid]/reject/route'),
       milestones: () => import('../../app/api/contracts/[id]/milestones/route'),
       activity: () => import('../../app/api/contracts/[id]/activity/route'),
+      progress: () => import('../../app/api/contracts/[id]/progress/route'),
+      qa: () => import('../../app/api/contracts/[id]/qa/route'),
+      steeringRespond: () => import('../../app/api/contracts/[id]/steering/[sid]/respond/route'),
+      steeringTopup: () => import('../../app/api/contracts/[id]/steering/[sid]/topup/route'),
+      versionAccept: () => import('../../app/api/contracts/[id]/versions/[vid]/accept/route'),
     };
     routes[name] = (await map[name]()) as Mod;
   }

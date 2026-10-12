@@ -16,7 +16,11 @@ import { startGigsTestDb } from '../tests/support/gigs-test-db';
 async function main() {
   const root = path.resolve(__dirname, '..');
   const dir = path.join(root, 'tests', 'integration');
-  const files = readdirSync(dir).filter((f) => f.endsWith('.test.ts')).map((f) => path.join(dir, f));
+  // `npm run test:integration -- tests/integration/x.test.ts` runs only the files given.
+  const named = process.argv.slice(2).filter((a) => a.endsWith('.test.ts'));
+  const files = named.length
+    ? named.map((f) => path.resolve(root, f))
+    : readdirSync(dir).filter((f) => f.endsWith('.test.ts')).map((f) => path.join(dir, f));
   const db = await startGigsTestDb();
   let code = 1;
   try {
@@ -38,7 +42,7 @@ async function main() {
       '--import', 'tsx',
       '--experimental-test-module-mocks',
       '--test', '--test-concurrency=1',
-      ...process.argv.slice(2),
+      ...process.argv.slice(2).filter((a) => !a.endsWith('.test.ts')),
       ...files,
     ];
     code = await new Promise<number>((resolve) => {
