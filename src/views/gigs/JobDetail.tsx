@@ -67,7 +67,8 @@ export function JobDetail({
     included_steering_credits: b.included_steering_credits,
     status: b.status,
     created_at: b.created_at,
-    trust_score: null,
+    trust_score: data.trust[b.provider_principal_id]?.score ?? null,
+    trust: data.trust[b.provider_principal_id],
     headline: b.provider.headline,
   }));
 
@@ -144,7 +145,7 @@ export function JobDetail({
             <h1 className="gigs-title">{job.title}</h1>
             <p className="gig-card-meta">
               <time dateTime={job.created_at}>{postedAgo(job.created_at, now)}</time>
-              <TrustBadge />
+              <TrustBadge {...data.trust[job.customer_principal_id]} />
             </p>
           </header>
           <dl className="gigs-facts">

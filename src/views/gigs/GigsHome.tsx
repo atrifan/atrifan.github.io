@@ -121,12 +121,12 @@ export function GigsHome({
               {data.tab === 'jobs'
                 ? data.jobs.map((job) => (
                     <li key={job.id}>
-                      <JobCard job={job} href={gigsHref(base, `/jobs/${job.id}`)} now={now} />
+                      <JobCard job={job} href={gigsHref(base, `/jobs/${job.id}`)} now={now} trust={data.trust?.[job.customer_principal_id]} />
                     </li>
                   ))
                 : data.offers.map((offer) => (
                     <li key={offer.id}>
-                      <OfferCard offer={offer} />
+                      <OfferCard offer={offer} trust={data.trust?.[offer.provider_principal_id]} />
                     </li>
                   ))}
             </ul>

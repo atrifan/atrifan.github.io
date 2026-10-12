@@ -24,8 +24,17 @@ interface PaidStats {
 
 export type TopUpResultParam = 'success' | 'canceled' | null;
 
-/** Deposits add credits; everything else (QA reserves, charges) takes them away. */
-const signedUsd = (tx: Transaction) => (tx.type === 'deposit' || tx.type === 'refund' || tx.type === 'release' ? 1 : -1) * Math.abs(tx.amount);
+/** GET /api/credits/grants: this period's monthly plan credits (src/lib/credits/grant-service.ts). */
+interface GrantView {
+  plan: PlanKey | null;
+  monthly_credits: number;
+  current: { period: string; period_start: string; period_end: string; credits: number; remaining_credits: number } | null;
+}
+
+const CREDIT_IN = new Set(['deposit', 'refund', 'release', 'plan_grant']);
+
+/** Deposits and plan grants add credits; everything else (QA reserves, charges, expired monthly credits) takes them away. */
+const signedUsd = (tx: Transaction) => (CREDIT_IN.has(tx.type) ? 1 : -1) * Math.abs(tx.amount);
 
 async function checkout(amountUsd: number): Promise<string> {
   const res = await fetch('/api/billing/checkout', {
@@ -44,7 +53,23 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
   const [custom, setCustom] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
+  const [grant, setGrant] = useState<GrantView | null>(null);
   const info = planInfo(plan);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/credits/grants', { cache: 'no-store' });
+        if (res.ok && alive) setGrant((await res.json()) as GrantView);
+      } catch {
+        // the grant line is extra information; the page works without it
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -114,6 +139,13 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
             <a href={surfaceUrl('hub', '/pricing')}>Compare plans</a>
           </span>
         </p>
+        {grant?.current ? (
+          <p>
+            {`${new Intl.NumberFormat('en-US').format(Math.floor(grant.current.remaining_credits))} of ${new Intl.NumberFormat('en-US').format(grant.current.credits)} monthly credits left, until ${formatDate(grant.current.period_end)}.`}
+          </p>
+        ) : grant?.plan && grant.monthly_credits > 0 ? (
+          <p className="muted">Your monthly credits arrive at the start of your billing period.</p>
+        ) : null}
       </section>
 
       <section className="panel" aria-labelledby="topup-title">

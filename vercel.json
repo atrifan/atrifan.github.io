@@ -7,6 +7,18 @@
     {
       "path": "/api/notifications/dispatch",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/auto-accept",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/trust-decay",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/credit-grants",
+      "schedule": "15 0 * * *"
     }
   ]
 }

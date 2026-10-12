@@ -1,0 +1,177 @@
+/*
+ * Gigs delivery components (src/views/gigs/delivery/*): DeliveryPanel, DisputeForm,
+ * ReviewForm, TrustBadge. Builds on styles/gigs.css; tokens only, so light and dark work.
+ * Mobile-first. Imported by the components themselves.
+ */
+
+.delivery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.delivery-sha {
+  display: inline-block;
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.delivery-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.delivery-actions .btn {
+  flex: 1 1 12rem;
+}
+
+@media (min-width: 600px) {
+  .delivery-actions .btn {
+    flex: 0 0 auto;
+  }
+}
+
+.delivery-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.delivery-report {
+  overflow-wrap: anywhere;
+}
+
+.delivery-report h1,
+.delivery-report h2,
+.delivery-report h3 {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.delivery-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-left: var(--space-5);
+}
+
+.delivery-severity {
+  margin-right: var(--space-2);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.delivery-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.delivery-form textarea,
+.delivery-form select,
+.delivery-form input[type='text'],
+.delivery-form input[type='password'],
+.delivery-form input[type='number'] {
+  width: 100%;
+  min-height: var(--touch-target);
+}
+
+.delivery-form textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+/* ── Star ratings (ReviewForm) ───────────────────────────────────────────── */
+.stars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.stars legend {
+  padding: 0;
+  font-weight: 650;
+}
+
+.stars-options {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.stars-option {
+  position: relative;
+  display: inline-flex;
+}
+
+.stars-option input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.stars-option span[aria-hidden='true'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.stars-option.is-on span[aria-hidden='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.stars-option input:focus-visible + span[aria-hidden='true'] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ── Trust badge ─────────────────────────────────────────────────────────── */
+.trust-badge {
+  color: var(--color-accent);
+  border-color: currentColor;
+}
+
+.trust-badge-rating {
+  color: var(--color-text-muted);
+}

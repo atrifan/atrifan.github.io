@@ -49,17 +49,8 @@ export function Field({
   );
 }
 
-/** The poster's / provider's trust badge. Reviews and trust scores arrive in Phase 5. */
-export function TrustBadge() {
-  return (
-    <span className="gig-badge" title="Reviews and trust scores are coming soon">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
-      </svg>
-      New on Tulzo
-    </span>
-  );
-}
+/** The poster's / provider's trust badge (score, reviews; "New on Tulzo" without data). */
+export { TrustBadge } from './delivery/TrustBadge';
 
 export function StripeBadge() {
   return (

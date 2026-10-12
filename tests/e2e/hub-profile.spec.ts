@@ -224,6 +224,9 @@ test.describe('hub profile, signed in (customer)', () => {
   });
 
   test('Reviews and Trust score sections show their empty states', async ({ page }) => {
+    await page.route(apiPath('/api/profile/reputation'), (route) =>
+      fulfillJson(route, { reviews: [], summary: { count: 0, average: null, as_provider: 0, as_customer: 0 }, trust: { provider: null, agents: [] } }),
+    );
     await page.goto('/profile');
     await expect(sectionByH2(page, 'Reviews about you')).toContainText('No reviews yet');
     await expect(sectionByH2(page, 'Trust score')).toContainText('No trust score yet');

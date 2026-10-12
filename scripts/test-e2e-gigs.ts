@@ -12,7 +12,9 @@
  *   QA_E2E_ADMIN_USER)
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
  * - two seeded API keys for the Jobs MCP spec (an active Free-plan key and a revoked key)
- * Runs tests/e2e/gigs-api.spec.ts and tests/e2e/jobs-mcp.spec.ts.
+ * - a CRON_SECRET for the Phase 5 cron routes; the specs get it plus GITHUB_FAKE_URL and
+ *   STRIPE_FAKE_URL (to add fake GitHub token fixtures, e.g. a push target repo)
+ * Runs the specs in DEFAULT_SPECS.
  * Everything is torn down afterwards.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -32,6 +34,10 @@ const DEFAULT_SPECS = [
   'tests/e2e/gigs-ui.spec.ts',
   'tests/a11y/gigs.a11y.spec.ts',
   'tests/visual/gigs.visual.spec.ts',
+  // Phase 5: delivery, acceptance, disputes, reviews, trust (API + the delivery page)
+  'tests/e2e/gigs-delivery.spec.ts',
+  'tests/a11y/gigs-delivery.a11y.spec.ts',
+  'tests/visual/gigs-delivery.visual.spec.ts',
 ];
 // GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
 const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -97,6 +103,7 @@ async function main() {
   });
   const authSecret = randomBytes(24).toString('hex');
   const webhookSecret = `whsec_e2e_${randomBytes(12).toString('hex')}`;
+  const cronSecret = `cron_e2e_${randomBytes(12).toString('hex')}`;
   let server: ChildProcess | null = null;
   let code = 1;
   try {
@@ -117,6 +124,9 @@ async function main() {
       PAT_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
       PAT_ENCRYPTION_KEY_PREV: '',
       ADMIN_USER_IDS: qaAdmin,
+      CRON_SECRET: cronSecret,
+      JOBS_AUTO_ACCEPT_DAYS: '',
+      JOBS_POST_ACCEPT_CLAIM_DAYS: '',
       ADMIN_EMAILS: '',
       RESEND_API_KEY: '',
       STORAGE_POSTGRES_URL: '',
@@ -140,11 +150,17 @@ async function main() {
       ['GET', `/api/contracts/${id}`], ['GET', `/api/contracts/${id}/messages`], ['GET', `/api/contracts/${id}/steering`],
       ['POST', `/api/contracts/${id}/steering/${id}/approve`], ['POST', `/api/contracts/${id}/steering/${id}/reject`],
       ['GET', `/api/contracts/${id}/milestones`], ['GET', `/api/contracts/${id}/activity`],
+      ['GET', `/api/contracts/${id}/delivery`], ['GET', `/api/contracts/${id}/delivery/download`],
+      ['POST', `/api/contracts/${id}/delivery/push`], ['POST', `/api/contracts/${id}/accept`],
+      ['POST', `/api/contracts/${id}/dispute`], ['GET', `/api/contracts/${id}/reviews`],
+      ['GET', '/api/admin/disputes'], ['GET', `/api/admin/disputes/${id}`], ['POST', `/api/admin/disputes/${id}/resolve`],
+      ['GET', '/api/cron/auto-accept'], ['GET', '/api/cron/trust-decay'], ['GET', '/api/cron/credit-grants'],
+      ['GET', '/api/profile/reputation'], ['GET', `/api/trust?principal_ids=${id}`], ['GET', '/api/credits/grants'],
     ] as const) {
       await fetch(`${baseUrl}${route}`, { method, body: method === 'POST' ? '{}' : undefined });
     }
     // The gigs pages too (signed out: public pages render, signed-in ones redirect).
-    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/sitemap.xml']) {
+    for (const page of ['/gigs', `/gigs/jobs/${id}`, '/gigs/post', '/gigs/offers/new', `/gigs/contracts/${id}`, `/gigs/contracts/${id}/delivery`, '/gigs/docs/mcp', '/gigs/docs/admin-qa', '/sitemap.xml']) {
       await fetch(`${baseUrl}${page}`, { redirect: 'manual' });
     }
 
@@ -156,6 +172,9 @@ async function main() {
       JOBS_E2E_AUTH_SECRET: authSecret,
       STRIPE_WEBHOOK_SECRET: webhookSecret,
       QA_E2E_ADMIN_USER: qaAdmin,
+      CRON_SECRET: cronSecret,
+      GITHUB_FAKE_URL: github.url,
+      STRIPE_FAKE_URL: stripe.url,
       JOBS_MCP_E2E_API_KEY: apiKeys.free,
       JOBS_MCP_E2E_API_KEY_USER: apiKeys.freeUser,
       JOBS_MCP_E2E_REVOKED_KEY: apiKeys.revoked,
