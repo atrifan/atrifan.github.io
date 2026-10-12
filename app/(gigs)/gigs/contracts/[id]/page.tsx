@@ -19,5 +19,6 @@ export default async function Page({ params, searchParams }: Props) {
   const data = await loadContractPage(params.id, userId);
   if (!data) notFound();
   const checkout = searchParams.checkout === 'success' || searchParams.checkout === 'cancelled' ? searchParams.checkout : null;
-  return <ContractView data={data} base={gigsConfig().base} checkout={checkout} />;
+  const { base, windowsNotice } = gigsConfig();
+  return <ContractView data={data} base={base} checkout={checkout} windowsNotice={windowsNotice} />;
 }

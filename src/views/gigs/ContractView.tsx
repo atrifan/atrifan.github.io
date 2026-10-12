@@ -6,15 +6,19 @@ import type { ContractPageData } from '@/src/lib/jobs/ui/loaders';
 import { gigsHref, type GigsBase } from '@/src/lib/jobs/ui/paths';
 import { ContractQaChecks } from './ContractQaChecks';
 import { JobRoom } from './JobRoom';
+import { GigsWindowsNote } from './GigsWindowsNote';
 
 export function ContractView({
   data,
   base,
   checkout,
+  windowsNotice,
 }: {
   data: ContractPageData;
   base: GigsBase;
   checkout: 'success' | 'cancelled' | null;
+  /** gigsConfig().windowsNotice */
+  windowsNotice: string;
 }) {
   const { contract, role, version, job, spec, bid } = data;
   const status = contract.status;
@@ -102,6 +106,7 @@ export function ContractView({
             {version && role === 'provider' ? (
               <p className="gigs-breakdown">{`You receive ${formatEuros(version.price_cents)}. The fee is paid by the customer on top.`}</p>
             ) : null}
+            <GigsWindowsNote text={windowsNotice} />
             <dl className="gigs-facts">
               <div className="gigs-fact">
                 <dt>Deadline</dt>

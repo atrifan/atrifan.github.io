@@ -13,6 +13,9 @@
  * - `next dev` on GIGS_E2E_PORT (default 3100) with the test identity header enabled
  * - two seeded API keys for the Jobs MCP spec (an active Free-plan key and a revoked key)
  * - DELIVERY_SNAPSHOT_FAKE_DIR, a temp dir standing in for private Vercel Blob (delivery snapshots)
+ * - a fake Resend (tests/support/fake-resend.ts) via RESEND_API_BASE for support mail (complaints,
+ *   inbox replies and forwards), a RESEND_WEBHOOK_SECRET and LEGAL_CONTACT_EMAIL; the specs get
+ *   RESEND_FAKE_URL
  * - a CRON_SECRET for the Phase 5 cron routes; the specs get it plus GITHUB_FAKE_URL and
  *   STRIPE_FAKE_URL (to add fake GitHub token fixtures, e.g. a push target repo)
  * Runs the specs in DEFAULT_SPECS.
@@ -26,6 +29,7 @@ import path from 'node:path';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
 import { startFakeGithub } from '../tests/support/fake-github';
+import { startFakeResend } from '../tests/support/fake-resend';
 import { Client } from 'pg';
 import { playwrightCommand } from './playwright-run';
 
@@ -48,6 +52,11 @@ const DEFAULT_SPECS = [
   'tests/visual/gigs-room.visual.spec.ts',
   // notification centre: the in-app feed API over real gigs flows
   'tests/e2e/notifications-api.spec.ts',
+  'tests/e2e/legal-complaints-api.spec.ts',
+  'tests/e2e/support-inbox.spec.ts',
+  'tests/e2e/legal-consent-api.spec.ts',
+  'tests/e2e/gigs-legal-notices.spec.ts',
+  'tests/a11y/support-inbox.a11y.spec.ts',
 ];
 // GIGS_E2E_SPECS=a.spec.ts,b.spec.ts runs a subset (e.g. while iterating on one page).
 const SPECS = (process.env.GIGS_E2E_SPECS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -104,16 +113,19 @@ async function main() {
   const db = await startGigsTestDb();
   const stripe = await startFakeStripe();
   const github = await startFakeGithub();
+  const resend = await startFakeResend();
   const qaAdmin = `e2e_qa_admin_${randomBytes(4).toString('hex')}`;
   const apiKeys = await seedApiKeys(db.pgUrl, db.schema).catch(async (err) => {
     await stripe.close();
     await github.close();
+    await resend.close();
     await db.stop();
     throw err;
   });
   const authSecret = randomBytes(24).toString('hex');
   const webhookSecret = `whsec_e2e_${randomBytes(12).toString('hex')}`;
   const cronSecret = `cron_e2e_${randomBytes(12).toString('hex')}`;
+  const resendWebhookSecret = `whsec_${randomBytes(24).toString('base64')}`;
   // Delivery snapshots go to a throwaway directory instead of Vercel Blob.
   const snapshots = mkdtempSync(path.join(os.tmpdir(), 'tulzo-e2e-snapshots-'));
   let server: ChildProcess | null = null;
@@ -141,7 +153,13 @@ async function main() {
       JOBS_AUTO_ACCEPT_DAYS: '',
       JOBS_POST_ACCEPT_CLAIM_DAYS: '',
       ADMIN_EMAILS: '',
-      RESEND_API_KEY: '',
+      // Support mail (complaints, inbox) goes to the fake Resend; the notify outbox stays off
+      // because its Postgres URLs are blank.
+      RESEND_API_KEY: 're_test_fake_e2e',
+      RESEND_API_BASE: resend.url,
+      RESEND_WEBHOOK_SECRET: resendWebhookSecret,
+      LEGAL_CONTACT_EMAIL: 'support@tulzo.online',
+      SUPPORT_FORWARD_TO: 'forward@tulzo.test',
       STORAGE_POSTGRES_URL: '',
       STORAGE_POSTGRES_URL_NON_POOLING: '',
     };
@@ -193,6 +211,10 @@ async function main() {
       CRON_SECRET: cronSecret,
       GITHUB_FAKE_URL: github.url,
       STRIPE_FAKE_URL: stripe.url,
+      RESEND_FAKE_URL: resend.url,
+      RESEND_WEBHOOK_SECRET: resendWebhookSecret,
+      LEGAL_CONTACT_EMAIL: 'support@tulzo.online',
+      SUPPORT_FORWARD_TO: 'forward@tulzo.test',
       JOBS_MCP_E2E_API_KEY: apiKeys.free,
       JOBS_MCP_E2E_API_KEY_USER: apiKeys.freeUser,
       JOBS_MCP_E2E_REVOKED_KEY: apiKeys.revoked,
@@ -212,6 +234,7 @@ async function main() {
     rmSync(snapshots, { recursive: true, force: true });
     await stripe.close();
     await github.close();
+    await resend.close();
     await db.stop();
   }
   process.exit(code);

@@ -72,4 +72,6 @@ export const SAMPLE_PAYLOADS: { [T in NotificationType]: PayloadInput<T> } = {
   package_approved: { packageId: 'fx-github-mcp', packageName: 'GitHub MCP' },
   package_rejected: { packageId: 'fx-github-mcp', packageName: 'GitHub MCP', reason: 'The README is missing install steps.' },
   submission_awaiting_qa: { jobId: 'job_1', jobTitle: 'Build a Stripe webhook handler', contractId: 'c_1', providerName: 'Atlas Agent' },
+  support_complaint_received: { threadId: 't_1', reference: 'TZ-7K3M-Q9XD', category: 'Payment or refund', fromName: 'Cara Customer' },
+  support_email_received: { threadId: 't_2', reference: 'TZ-8H2N-W4RT', fromAddress: 'cara@example.com', subject: 'Where is my refund?' },
 };

@@ -69,6 +69,8 @@ const renderers: Renderers = {
   package_approved: (p) => ({ title: `${p.packageName} is live in the marketplace`, body: null, surface: 'marketplace', url: `/${enc(p.packageId)}` }),
   package_rejected: (p) => ({ title: `${p.packageName} wasn't approved`, body: p.reason ?? null, surface: 'marketplace', url: '/publish' }),
   submission_awaiting_qa: (p) => ({ title: `Submission awaiting QA: ${p.jobTitle}`, body: `From ${p.providerName}`, surface: 'hub', url: '/admin/qa' }),
+  support_complaint_received: (p) => ({ title: `Complaint ${p.reference}: ${p.category}`, body: `From ${p.fromName}`, surface: 'hub', url: `/admin/inbox?thread=${enc(p.threadId)}` }),
+  support_email_received: (p) => ({ title: `Support email ${p.reference}: ${p.subject}`, body: `From ${p.fromAddress}`, surface: 'hub', url: `/admin/inbox?thread=${enc(p.threadId)}` }),
 };
 
 /** Title, body, surface and link of an event. `count` is the aggregate size (installs). */

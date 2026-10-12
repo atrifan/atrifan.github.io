@@ -272,7 +272,7 @@ async function setupContract(
 
   const accept = await request.post(`/api/bids/${bidId}/accept`, {
     headers: auth(customer),
-    data: {},
+    data: { withdrawal_consent: true },
   });
   expect(accept.status()).toBe(201);
   const acc = await accept.json();

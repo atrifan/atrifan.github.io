@@ -8,7 +8,7 @@
  * migration, 20261101_jobs_core.sql, an api_keys baseline, 20261102_notifications.sql,
  * 20261115_job_room.sql, 20261201_qa.sql and its follow-ups (20261202, 20261203),
  * the job room follow-ups (20261206), scope credits and snapshots (20261216), in-app notifications
- * (20261220), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
+ * (20261220), legal consents + support inbox (20261225), 20260526_budget_analytics.sql + 20261215_delivery_trust.sql
  * (Phase 5), and the
  * marketplace package migrations into it, and serves it through
  * a small proxy at `<url>/rest/v1/*` so the app's normal supabase-js client works unchanged.
@@ -192,6 +192,8 @@ export async function startGigsTestDb(): Promise<GigsTestDb> {
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261216_scope_credit_and_snapshot.sql'), 'utf8'));
     // In-app notifications (the header bell); needs 20261102_notifications.sql above.
     await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261220_inapp_notifications.sql'), 'utf8'));
+    // Withdrawal consents, complaints and the support inbox.
+    await admin.query(readFileSync(path.join(ROOT, 'supabase/migrations/20261225_legal_complaints.sql'), 'utf8'));
     // Marketplace: packages, ratings/installs, and the new kinds + catalog view.
     for (const m of [
       '20260521_packages.sql',
@@ -252,6 +254,7 @@ export async function resetGigsTables(pgUrl: string, schema: string): Promise<vo
       'user_budgets', 'paid_usage_analytics',
       'qa_credit_holds', 'qa_usage_log', 'qa_reviews', 'qa_requests', 'audit_events', 'submissions', 'api_keys',
       'user_contacts', 'notifications', 'notification_preferences', 'user_notifications',
+      'purchase_consents', 'support_messages', 'support_threads',
       'package_installs', 'package_ratings', 'package_versions', 'packages',
     ].map((t) => `${schema}.${t}`).join(', ')} CASCADE
   `);

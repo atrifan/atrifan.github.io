@@ -37,10 +37,11 @@ the apex as the primary domain (no "redirect to www").
 ### Hub pages
 
 `app/(hub)/`: `/` (Organization JSON-LD), `/pricing` (plan table from `src/lib/plan-catalog.ts`, Clerk
-`PricingTable` for signed-in users), `/docs`, `/legal`, and the signed-in `/profile` (Clerk identity, Stripe
+`PricingTable` for signed-in users), `/docs`, `/legal` with `/legal/{terms,payments,disclaimers,acceptable-use,marketplace-publishers,complaints,imprint}`
+(`app/(hub)/legal/[slug]`, text in `src/views/legal/content/`, numbers from `src/lib/legal/facts.ts`), and the signed-in `/profile` (Clerk identity, Stripe
 Connect card, email notification switches), `/profile/account` (Clerk `UserProfile`), `/credits` (balance,
 top-ups via `/api/billing/checkout`, history) and `/admin/qa` (admins; `app/api/admin/qa/*` over
-`src/lib/qa/qa-review-service.ts`). Signed-in and admin pages are `noindex`. Views are in `src/views/hub/`,
+`src/lib/qa/qa-review-service.ts`) and `/admin/inbox` (complaints + support email; `/admin/complaints` redirects to it). Signed-in and admin pages are `noindex`. Views are in `src/views/hub/`,
 styles in `styles/hub.css`.
 
 ### Consent

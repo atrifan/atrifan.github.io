@@ -3,8 +3,11 @@ import { NOTIFICATION_TYPES, type Contact, type NotificationType, type Preferenc
 export type SkipReason = 'no_contact' | 'no_email' | 'email_unverified' | 'unsubscribed';
 export type GateDecision = { send: true } | { send: false; reason: SkipReason };
 
-/** Types whose email is off until the user switches it on (high-volume, the bell covers them). */
-export const EMAIL_OFF_BY_DEFAULT: readonly NotificationType[] = ['package_installed'];
+/**
+ * Types whose email is off until the user switches it on: high-volume ones the bell covers, and the
+ * support ones, whose admins already get the forwarded copy (src/lib/support/support-service.ts).
+ */
+export const EMAIL_OFF_BY_DEFAULT: readonly NotificationType[] = ['package_installed', 'support_complaint_received', 'support_email_received'];
 
 /** Email: every type is on by default except EMAIL_OFF_BY_DEFAULT; a stored choice overrides it. */
 export function resolvePreferences(rows: PreferenceRow[]): Record<NotificationType, boolean> {

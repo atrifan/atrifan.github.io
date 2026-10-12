@@ -42,6 +42,7 @@ const surfaceServer = (surface: 'ai' | 'hub', port: number) => ({
     TULZO_SURFACE: surface,
     NEXT_PUBLIC_ROOT_DOMAIN: SURFACE_TEST_ROOT_DOMAIN,
     NEXT_DIST_DIR: `.next-surface-${surface}`,
+    LEGAL_CONTACT_EMAIL: process.env.LEGAL_CONTACT_EMAIL || 'support@tulzo.online',
   },
 });
 
@@ -118,6 +119,8 @@ export default defineConfig({
             url: baseURL,
             reuseExistingServer: !CI,
             timeout: 180_000,
+            // The legal pages show the contact address only when it is configured.
+            env: { LEGAL_CONTACT_EMAIL: process.env.LEGAL_CONTACT_EMAIL || 'support@tulzo.online' },
           },
         ]),
     // Against an external server (PLAYWRIGHT_BASE_URL, e.g. the gigs runner) the surface servers aren't started.

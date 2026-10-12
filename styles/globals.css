@@ -369,6 +369,16 @@ ol[role='list'] {
   gap: var(--space-1) var(--space-2);
 }
 
+/* Narrow screens: the legal links sit in a tidy two-column grid instead of a ragged wrap. */
+@media (max-width: 599px) {
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-items: center;
+    width: 100%;
+  }
+}
+
 .footer-links a {
   display: inline-flex;
   align-items: center;

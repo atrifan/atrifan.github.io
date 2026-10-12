@@ -2,13 +2,16 @@ import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { isProtectedPath, resolveSurface, routeRequest, wwwRedirect } from '@/src/lib/surface-routing';
 import { surfaceUrl } from '@/src/lib/surface-url';
+import { e2eIdentity } from '@/src/lib/e2e-identity';
 
 /**
  * 1. Surface routing (src/lib/surface-routing.ts) decides next / rewrite /
  *    redirect (308) / 404 from TULZO_SURFACE and the path.
  * 2. Signed-in pages (isProtectedPath: /dashboard, /ai, the hub account pages, …) need a
  *    user. The check runs on the rewritten path. `chat.` `/` (rewritten to /chat) is public:
- *    signed out it is the remote-chat landing, signed in the chat itself.
+ *    signed out it is the remote-chat landing, signed in the chat itself. Outside production,
+ *    the gigs Playwright identity header also passes (src/lib/e2e-identity.ts); the page then
+ *    resolves the user from it.
  *
  * 0. `www.<root>` 308s to the apex: the hub lives at the root domain (tulzo.online).
  *    The www domain only needs to be attached to the hub's Vercel project; Vercel's own
@@ -50,7 +53,7 @@ export default clerkMiddleware(
     }
 
     const effectivePath = decision.action === 'rewrite' ? decision.destination! : pathname;
-    if (isProtectedPath(effectivePath)) {
+    if (isProtectedPath(effectivePath) && !e2eIdentity(req.headers)) {
       await auth.protect();
     }
 

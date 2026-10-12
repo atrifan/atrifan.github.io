@@ -35,6 +35,14 @@ Env: `STORAGE_SUPABASE_URL` / `STORAGE_SUPABASE_SERVICE_ROLE_KEY` (aliased by `N
 
 Helper `increment_install_count(pkg_id)` bumps the denormalized counter.
 
+## Legal and support tables (20261225_legal_complaints.sql)
+
+| Table | Purpose |
+|-------|---------|
+| `purchase_consents` | Right-of-withdrawal waivers: user, purchase (`credits\|subscription\|gig_contract`), terms version, amount, text. |
+| `support_threads` | One conversation: reference `TZ-XXXX-XXXX`, source `complaint\|email`, category, contact, status, notes. |
+| `support_messages` | Messages of a thread: form text, inbound email (HTML sanitised), admin replies; Message-ID for threading. |
+
 ## Access patterns
 
 Use helpers in `src/lib/supabase-services.ts` (`getApiKeyByHash`, `hashApiKey`, `getDevicesWithHeartbeats`,

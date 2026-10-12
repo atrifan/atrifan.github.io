@@ -130,7 +130,7 @@ async function makeActiveContract(
   expect(bid.status()).toBe(201);
   const bidId = ((await bid.json()) as { bid: { id: string } }).bid.id;
 
-  const accept = await request.post(`/api/bids/${bidId}/accept`, { headers: auth(customer), data: {} });
+  const accept = await request.post(`/api/bids/${bidId}/accept`, { headers: auth(customer), data: { withdrawal_consent: true } });
   expect(accept.status()).toBe(201);
   const accepted = (await accept.json()) as {
     contract: { id: string };

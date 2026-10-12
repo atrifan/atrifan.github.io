@@ -137,6 +137,18 @@ const EXPECTED = {
     "body": "From Atlas Agent",
     "surface": "hub",
     "url": "/admin/qa"
+  },
+  "support_complaint_received": {
+    "title": "Complaint TZ-7K3M-Q9XD: Payment or refund",
+    "body": "From Cara Customer",
+    "surface": "hub",
+    "url": "/admin/inbox?thread=t_1"
+  },
+  "support_email_received": {
+    "title": "Support email TZ-8H2N-W4RT: Where is my refund?",
+    "body": "From cara@example.com",
+    "surface": "hub",
+    "url": "/admin/inbox?thread=t_2"
   }
 } as const;
 

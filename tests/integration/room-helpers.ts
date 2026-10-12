@@ -120,7 +120,7 @@ export async function paidContract(
   });
   assert.equal(bid.status, 201, JSON.stringify(bid.body));
   const bidId = bid.body.bid.id as string;
-  const acc = await http('accept', 'POST', `/api/bids/${bidId}/accept`, { user: customer, params: { id: bidId } });
+  const acc = await http('accept', 'POST', `/api/bids/${bidId}/accept`, { user: customer, params: { id: bidId }, body: { withdrawal_consent: true } });
   assert.equal(acc.status, 201, JSON.stringify(acc.body));
   const { contract, version } = acc.body;
   if (opts.pay !== false) {

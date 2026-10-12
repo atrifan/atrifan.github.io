@@ -6,6 +6,7 @@ import { formatCredits, formatDate, formatSignedCredits, formatUsd } from '@/src
 import { planInfo } from '@/src/lib/plan-catalog';
 import { surfaceUrl } from '@/src/lib/surface-url';
 import type { PlanKey } from '@/src/lib/plans';
+import { CONSENT_TEXT } from '@/src/lib/legal/consent';
 
 interface Transaction {
   id: number | string;
@@ -36,11 +37,13 @@ const CREDIT_IN = new Set(['deposit', 'refund', 'release', 'plan_grant']);
 /** Deposits and plan grants add credits; everything else (QA reserves, charges, expired monthly credits) takes them away. */
 const signedUsd = (tx: Transaction) => (CREDIT_IN.has(tx.type) ? 1 : -1) * Math.abs(tx.amount);
 
+const CONSENT_MISSING = 'Tick the box to confirm before you buy.';
+
 async function checkout(amountUsd: number): Promise<string> {
   const res = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount: amountUsd }),
+    body: JSON.stringify({ amount: amountUsd, withdrawal_consent: true }),
   });
   const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!res.ok || !body.url) throw new Error(body.error || 'Checkout could not start. Try again.');
@@ -54,6 +57,7 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
   const [grant, setGrant] = useState<GrantView | null>(null);
+  const [consent, setConsent] = useState(false);
   // The subscription the grant ledger saw wins over a stale session claim.
   const info = planInfo(grant?.plan ?? plan);
 
@@ -90,6 +94,11 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
   }, []);
 
   const buy = async (raw: number) => {
+    if (!consent) {
+      setError(CONSENT_MISSING);
+      document.getElementById('topup-consent')?.focus();
+      return;
+    }
     const v = validateTopUp(raw);
     if (!v.ok) {
       setError(v.error);
@@ -155,6 +164,29 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
           You pay exactly the amount you choose. No processing fee: usage is metered at cost plus 30%, which covers
           payment fees.
         </p>
+        <p>
+          Credits are non-refundable and have no cash value. See{' '}
+          <a href={surfaceUrl('hub', '/legal/payments')}>Payments, credits and refunds</a>.
+        </p>
+        <div className="consent-box">
+          <div className="checkbox-row">
+            <input
+              id="topup-consent"
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => {
+                setConsent(e.target.checked);
+                if (e.target.checked && error === CONSENT_MISSING) setError('');
+              }}
+              aria-describedby="topup-consent-terms"
+            />
+            <label htmlFor="topup-consent">{CONSENT_TEXT.credits}</label>
+          </div>
+          <p id="topup-consent-terms" className="muted field-help">
+            Read about the right of withdrawal in our{' '}
+            <a href={surfaceUrl('hub', '/legal/terms#withdrawal')}>terms</a>.
+          </p>
+        </div>
         <div className="topups">
           {TOP_UP_PRESETS_USD.map((usd) => (
             <button

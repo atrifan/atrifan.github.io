@@ -5,6 +5,7 @@ import { surfaceUrl } from '@/src/lib/surface-url';
 import { CREDIT_MARKUP, PLAN_CATALOG, REFERENCE_MODELS, formatTokenCount, outputTokensForCredits } from '@/src/lib/plan-catalog';
 import { formatCredits, formatUsd } from '@/src/lib/format';
 import { CREDIT_VALUE_USD } from '@/src/lib/credits';
+import { SubscribeConsent } from './SubscribeConsent';
 
 const opus1k = formatTokenCount(outputTokensForCredits(1000, REFERENCE_MODELS.opus));
 const sonnet1k = formatTokenCount(outputTokensForCredits(1000, REFERENCE_MODELS.sonnet));
@@ -38,6 +39,17 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
   {
     q: 'Can I cancel any time?',
     a: 'Yes. Cancel from your account; you keep the plan until the end of the billing period.',
+  },
+  {
+    q: 'Can I get a refund?',
+    a: (
+      <>
+        Credits are non-refundable: that covers top-ups and the monthly credits in a plan. They have no cash value and
+        can&apos;t be transferred. If you cancel a plan, it stops renewing at the end of the period; the current period
+        isn&apos;t refunded. Gigs payments are held until you accept the work, and disputes can end in a partial or full
+        refund. Details: <a href={surfaceUrl('hub', '/legal/payments')}>Payments, credits and refunds</a>.
+      </>
+    ),
   },
   {
     q: 'Is my data safe?',
@@ -93,9 +105,9 @@ export function PricingView() {
           <h2 id="subscribe-title" className="section-title">
             Choose your plan
           </h2>
-          <div className="pricing-table-wrapper">
+          <SubscribeConsent>
             <PricingTable />
-          </div>
+          </SubscribeConsent>
         </SignedIn>
       </section>
 

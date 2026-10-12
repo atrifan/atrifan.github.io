@@ -33,8 +33,9 @@ async function bidOnNewJob(): Promise<{ customer: string; bidId: string }> {
   return { customer, bidId: bid.body.bid.id };
 }
 
-function accept(customer: string, bidId: string, body?: unknown) {
-  return http('accept', 'POST', `/api/bids/${bidId}/accept`, { user: customer, params: { id: bidId }, body });
+/** Accept with the withdrawal consent the route requires (src/lib/legal/consent.ts). */
+function accept(customer: string, bidId: string, body: Record<string, unknown> = {}) {
+  return http('accept', 'POST', `/api/bids/${bidId}/accept`, { user: customer, params: { id: bidId }, body: { withdrawal_consent: true, ...body } });
 }
 
 function lastCheckout(): any {

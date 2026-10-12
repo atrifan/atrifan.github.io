@@ -95,6 +95,12 @@ export async function startFakeStripe(): Promise<FakeStripe> {
       const method = req.method || 'GET';
       const path = url.pathname;
       const idempotencyKey = (req.headers['idempotency-key'] as string | undefined) ?? null;
+      // Test control (not a Stripe route): every recorded request, oldest first.
+      if (method === 'GET' && path === '/__requests') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ requests }));
+        return;
+      }
       requests.push({ method, path, form, idempotencyKey });
 
       const reply = (status: number, body: unknown) => {

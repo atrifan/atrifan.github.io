@@ -1048,7 +1048,7 @@ test.describe.serial('gigs API: full job → bid → contract → payment flow',
   test('provider accepting a bid on a job they do not own → 404 not_found', async ({ request }) => {
     const res = await request.post(`/api/bids/${bidId}/accept`, {
       headers: auth(provider),
-      data: {},
+      data: { withdrawal_consent: true },
     });
     expect(res.status()).toBe(404);
     expect(await res.json()).toMatchObject({ error: 'not_found' });
@@ -1057,7 +1057,7 @@ test.describe.serial('gigs API: full job → bid → contract → payment flow',
   test('customer accepts the bid → 201 contract, version, https checkout_url', async ({ request }) => {
     const res = await request.post(`/api/bids/${bidId}/accept`, {
       headers: auth(customer),
-      data: {},
+      data: { withdrawal_consent: true },
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
@@ -1096,7 +1096,7 @@ test.describe.serial('gigs API: full job → bid → contract → payment flow',
   test('accepting the same bid again → 409', async ({ request }) => {
     const res = await request.post(`/api/bids/${bidId}/accept`, {
       headers: auth(customer),
-      data: {},
+      data: { withdrawal_consent: true },
     });
     expect(res.status()).toBe(409);
     expect(['already_accepted', 'job_not_open']).toContain((await res.json()).error);

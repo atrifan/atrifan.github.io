@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUserId } from '@/src/lib/jobs/ui/session';
 import { gigsConfig } from '@/src/lib/jobs/ui/config';
+import { GigsWindowsNote } from '@/src/views/gigs/GigsWindowsNote';
 import { gigsHref } from '@/src/lib/jobs/ui/paths';
 import { JobsError } from '@/src/lib/jobs/errors';
 import { getDeliveryView } from '@/src/lib/delivery/delivery-service';
@@ -43,7 +44,7 @@ export default async function Page({ params }: Props) {
   ]);
   const t = trust.get(counterpartPrincipal);
   const r = ratings.get(counterpartPrincipal);
-  const base = gigsConfig().base;
+  const { base, windowsNotice } = gigsConfig();
 
   return (
     <div className="page gigs-page gigs-narrow">
@@ -58,6 +59,7 @@ export default async function Page({ params }: Props) {
           <TrustBadge score={t?.score ?? null} level={t?.level} reviewCount={r?.count ?? 0} averageRating={r?.average ?? null} />
         </p>
       </header>
+      <GigsWindowsNote text={windowsNotice} />
       <DeliveryPanel contractId={contract.id} initial={view} counterpartName={counterpartName || undefined} />
     </div>
   );

@@ -30,6 +30,8 @@ export const NOTIFICATION_TYPES = [
   'package_approved',
   'package_rejected',
   'submission_awaiting_qa',
+  'support_complaint_received',
+  'support_email_received',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -98,6 +100,8 @@ export const payloadSchemas = {
   package_rejected: z.object({ packageId: id, packageName: title, reason: summary.optional(), url }),
   /** To admins: a gigs submission is waiting in the QA queue. */
   submission_awaiting_qa: z.object({ ...contract, providerName: personName }),
+  support_complaint_received: z.object({ threadId: id, reference: z.string().min(1).max(20), category: title, fromName: personName, url }),
+  support_email_received: z.object({ threadId: id, reference: z.string().min(1).max(20), fromAddress: z.string().min(1).max(500), subject: title, url }),
 } satisfies Record<NotificationType, z.ZodTypeAny>;
 
 /** Payload a caller passes to `enqueue` (defaults such as `currency` optional). */
@@ -164,4 +168,6 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   package_approved: 'Package approved',
   package_rejected: 'Package not approved',
   submission_awaiting_qa: 'Submissions awaiting QA',
+  support_complaint_received: 'Complaints received',
+  support_email_received: 'Support emails received',
 };
