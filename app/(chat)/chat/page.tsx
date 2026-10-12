@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { RemoteChatPage } from '@/src/views/RemoteChatPage';
+import { ChatApp } from '@/src/views/remote-chat/ChatApp';
 
+// The chat is signed-in only: never indexed, and no ads on chat. (src/lib/ads-policy.ts).
 export const metadata: Metadata = {
-  title: 'Chat - Tulzo',
-  description: 'Chat with a connected device and drive its browser remotely.',
+  title: 'Chat',
+  description: 'Chat with your Tex assistant from any device and watch it work in your browser.',
   robots: { index: false, follow: false },
 };
 
@@ -14,5 +15,5 @@ export default async function Chat() {
   if (!userId) {
     redirect('/sign-in');
   }
-  return <RemoteChatPage />;
+  return <ChatApp />;
 }
