@@ -4,20 +4,20 @@
 // wired to a RelayPort instead of a Chrome runtime Port. It renders a live turn
 // driven by a remote device: streamed text, thinking, steps/actions, render
 // blocks (charts/maps/html/…), plans, forms, proposals, approvals, brain
-// questions, and sub-agents — all over the same PanelToWorker / WorkerToPanel
-// frame contract the device already speaks.
+// questions — over the PanelToWorker / WorkerToPanel frames the device speaks.
 //
 // Differences from the plugin panel:
 //  - transport is a RelayPort (server relay) not a Chrome Port;
+//  - a new chat has no session yet: the first send creates it (onCreateSession);
 //  - drafts persist to localStorage (no chrome.storage.session);
-//  - tab-scoping gates are dropped (a relay session already targets one device
-//    stream — there is no multi-tab panel here);
-//  - device-only affordances with no inbound frame in the relay contract
-//    (screenshot/record, MCP-server management UI) are omitted.
+//  - it only posts frames the device accepts on the remote channel
+//    (REMOTE_INBOUND_FRAME_TYPES in assistant/plugin/src/background/remote-fanout.ts):
+//    links open here on the phone; device-local file/folder links, context clearing,
+//    sub-agent stop and the model picker are left out because the device ignores them
+//    (it runs its own configured model).
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatBubble } from './panel/components/ChatBubble';
-import { ContextIndicator } from './panel/components/ContextIndicator';
 import { RenderBlockView } from './panel/components/RenderBlockView';
 import { PlanView } from './panel/components/PlanView';
 import { InteractiveFormView } from './panel/components/InteractiveFormView';
@@ -26,13 +26,11 @@ import { ActionApprovalCard } from './panel/components/ActionApprovalCard';
 import { ReplayNetworkCard } from './panel/components/ReplayNetworkCard';
 import { BrainQuestionsCard } from './panel/components/BrainQuestionsCard';
 import { SubAgentCard, type SubAgentEntry, type SubAgentGroup } from './panel/components/SubAgentCard';
-import { TokenFooter } from './panel/components/TokenFooter';
 import type {
-  ChatEntry,
   AnyModel,
+  ChatEntry,
   PanelToWorker,
   WorkerToPanel,
-  SessionUsage,
   TaskPlan,
   InteractiveForm,
   ProposalItem,
@@ -42,17 +40,19 @@ import type {
   BrainQuestion,
   InteractionBlock,
 } from './shared/types';
-import { calcCost, isEmptyAssistantBubble, DEFAULT_MODEL } from './shared/types';
-import { applyDelta } from './shared/stream-parse';
+import { isEmptyAssistantBubble, DEFAULT_MODEL } from './shared/types';
 import { nextPausedState, shouldAutoScroll, pausedAfterSend } from './shared/autoscroll';
 import { createRelayPort, type RelayPortLike } from './relay-port';
 import type { RelayMessage } from './frames';
+import { applyStreamFrame, contentText, doneText } from './model/frame-assembly';
+import { groupMessages } from './model/message-groups';
 import { VoiceRobot } from './panel/components/VoiceRobot';
 import { useSpeechSynthesis } from './panel/voice/useSpeechSynthesis';
 import { useVoiceCapture } from './panel/voice/useVoiceCapture';
 import { voiceInit, voiceReduce, type VoiceView, type VoiceEvent } from './shared/voice-state';
 import { speakableText } from './shared/speakable-text';
 import './RemoteChat.css';
+import './ChatApp.css';
 
 // Speak-back (TTS) preference persists per browser; default OFF (matches the plugin).
 const VOICE_SPEAKBACK_KEY = 'remoteChatVoiceSpeakBack';
@@ -65,7 +65,7 @@ function loadSpeakBack(): boolean {
   }
 }
 
-// ── Draft persistence (localStorage, per base sessionId) ─────────────────────
+// ── Draft persistence (localStorage, per session; a new chat drafts under "new") ──
 
 const DRAFTS_STORAGE_KEY = 'remoteChatDrafts';
 
@@ -167,21 +167,48 @@ function fileToText(file: File): Promise<string> {
   });
 }
 
+// ── Icons (currentColor, decorative) ──────────────────────────────────────────
+
+const AttachIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" />
+  </svg>
+);
+const SendIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </svg>
+);
+const StopIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="5" y="5" width="14" height="14" rx="2" />
+  </svg>
+);
+const SpeakerIcon = ({ on }: { on: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" />
+    {on ? <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" /> : <path d="M17 9l5 6M22 9l-5 6" />}
+  </svg>
+);
+
 // ── Interaction Block (history rendering of resolved/expired cards) ───────────
 
 function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlock; resolvedByNext: boolean }) {
   const resolved = resolvedByNext;
   const statusLabel = resolved ? '✓ Resolved' : '⚠ Expired';
   const className = `interaction-block ${resolved ? 'resolved' : 'expired'}`;
+  const header = (title: React.ReactNode, status: string = statusLabel) => (
+    <div className="interaction-block-header">
+      <span className="interaction-block-icon" aria-hidden="true">{resolved ? '✓' : '⚠'}</span>
+      <span className="interaction-block-title">{title}</span>
+      <span className="interaction-block-status">{status}</span>
+    </div>
+  );
 
   if (block.kind === 'plan') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">Plan: {block.plan.title}</span>
-          <span className="interaction-block-status">{statusLabel}</span>
-        </div>
+        {header(<>Plan: {block.plan.title}</>)}
         <ol className="interaction-block-steps">
           {block.plan.steps.map((s) => (
             <li key={s.id}>{s.label}</li>
@@ -190,15 +217,10 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
       </div>
     );
   }
-
   if (block.kind === 'form') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">{block.form.title}</span>
-          <span className="interaction-block-status">{statusLabel}</span>
-        </div>
+        {header(block.form.title)}
         <div className="interaction-block-fields">
           {(block.form.steps ?? []).flatMap((step) =>
             (step.fields ?? []).map((f) => (
@@ -211,15 +233,10 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
       </div>
     );
   }
-
   if (block.kind === 'proposals') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">{block.title ?? 'Proposed changes'}</span>
-          <span className="interaction-block-status">{block.resolved === 'dismissed' ? '✕ Dismissed' : statusLabel}</span>
-        </div>
+        {header(block.title ?? 'Proposed changes', block.resolved === 'dismissed' ? '✕ Dismissed' : statusLabel)}
         <div className="interaction-block-fields">
           {block.items.map((it) => (
             <span key={it.id} className="interaction-block-field">
@@ -230,45 +247,26 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
       </div>
     );
   }
-
   if (block.kind === 'approval') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">
-            Action: {block.action.actionType} → {block.action.target}
-          </span>
-          <span className="interaction-block-status">{statusLabel}</span>
-        </div>
+        {header(<>Action: {block.action.actionType} → {block.action.target}</>)}
         {block.action.reasoning && <div className="interaction-block-reasoning">{block.action.reasoning}</div>}
       </div>
     );
   }
-
   if (block.kind === 'replay-network') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">
-            Replay: {block.payload.method} {block.payload.url}
-          </span>
-          <span className="interaction-block-status">{statusLabel}</span>
-        </div>
+        {header(<>Replay: {block.payload.method} {block.payload.url}</>)}
         {block.payload.reasoning && <div className="interaction-block-reasoning">{block.payload.reasoning}</div>}
       </div>
     );
   }
-
   if (block.kind === 'brain-questions') {
     return (
       <div className={className}>
-        <div className="interaction-block-header">
-          <span className="interaction-block-icon">{resolved ? '✓' : '⚠'}</span>
-          <span className="interaction-block-title">Questions</span>
-          <span className="interaction-block-status">{statusLabel}</span>
-        </div>
+        {header('Questions')}
         <ol className="interaction-block-questions">
           {block.questions.map((q) => (
             <li key={q.id}>{q.question}</li>
@@ -277,57 +275,74 @@ function InteractionBlockView({ block, resolvedByNext }: { block: InteractionBlo
       </div>
     );
   }
-
   return null;
+}
+
+/** A live card that needs the user (approval, form, plan, …): a labelled region. */
+function Card({ label, title, approval, children }: { label: string; title?: string; approval?: boolean; children: React.ReactNode }) {
+  return (
+    <section className={`chat-card${approval ? ' is-approval' : ''}`} aria-label={label}>
+      {title && <p className="chat-card-label">{title}</p>}
+      {children}
+    </section>
+  );
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface RemoteChatProps {
-  sessionId: string;
+  /** The open chat, or null for a new chat that gets its session on the first send. */
+  sessionId: string | null;
+  /** True when the session was just created by this chat's first send (no history to load). */
+  freshSession: boolean;
   deviceName: string;
   deviceOnline: boolean;
-  /** The device's currently-configured model (from its heartbeat), if known. */
+  /** The device's configured model (heartbeat or live bridge), shown for reference. */
   deviceModel?: string | null;
-  onBack: () => void;
-}
-
-// The device may send an assistant message's content either as a rich object
-// ({ text, steps, actions }) or as a plain answer string (STREAM_DONE frames from
-// the agent loop carry `message.content: string`). Accept both.
-function messageText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object' && typeof (content as { text?: unknown }).text === 'string') {
-    return (content as { text: string }).text;
-  }
-  return '';
+  onCreateSession: () => Promise<string | null>;
+  /** A message reached the relay (the chat list may have a new title/order). */
+  onSent?: () => void;
 }
 
 function fromRelayMessage(m: RelayMessage): ChatEntry {
   const c = m.content ?? {};
+  const obj = !Array.isArray(c) && typeof c === 'object' ? (c as { steps?: unknown; actions?: unknown }) : {};
   return {
     id: String(m.id),
     role: m.role,
-    content: messageText(c),
-    steps: !Array.isArray(c) && typeof c === 'object' && Array.isArray((c as { steps?: unknown }).steps) ? ((c as { steps: string[] }).steps) : undefined,
-    actions: !Array.isArray(c) && typeof c === 'object' && Array.isArray((c as { actions?: unknown }).actions) ? ((c as { actions: string[] }).actions) : undefined,
+    content: contentText(c),
+    steps: Array.isArray(obj.steps) ? (obj.steps as string[]) : undefined,
+    actions: Array.isArray(obj.actions) ? (obj.actions as string[]) : undefined,
     streaming: false,
   };
 }
 
+type Decision = 'approve' | 'deny' | 'guide' | 'queue' | 'allow_always';
+const DECISION_LABEL: Record<Decision, string> = {
+  approve: 'Approved',
+  deny: 'Denied',
+  guide: 'Guide me',
+  queue: 'Queued',
+  allow_always: 'Always allow',
+};
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, onBack }: RemoteChatProps) {
+export function RemoteChat({
+  sessionId,
+  freshSession,
+  deviceName,
+  deviceOnline,
+  deviceModel,
+  onCreateSession,
+  onSent,
+}: RemoteChatProps) {
   const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const inputRef = useRef('');
-  // Seed the composer model from the device's actual configured model so it
-  // matches what the device will run; fall back to DEFAULT_MODEL if unknown.
-  const [model, setModel] = useState<AnyModel>((deviceModel as AnyModel) || DEFAULT_MODEL);
-  // The user may switch models in the composer; once they do, stop auto-syncing
-  // from the device so we don't clobber their choice on the next presence poll.
-  const userPickedModel = useRef(false);
-  const [usage, setUsage] = useState<SessionUsage>({ inputTokens: 0, outputTokens: 0, cost: 0 });
+  // The device runs its own configured model; this only labels SEND_MESSAGE frames.
+  const model = (deviceModel || DEFAULT_MODEL) as AnyModel;
+  const [usage, setUsage] = useState({ inputTokens: 0, outputTokens: 0 });
   const [streaming, setStreaming] = useState(false);
   const [waitingForUser, setWaitingForUser] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<TaskPlan | null>(null);
@@ -337,7 +352,6 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const [activeGroups, setActiveGroups] = useState<SubAgentGroup[]>([]);
   const activeGroupsRef = useRef<SubAgentGroup[]>([]);
   const [currentLoopId, setCurrentLoopId] = useState<string | null>(null);
-  const [contextUsage, setContextUsage] = useState<{ used: number; total: number }>({ used: 0, total: 0 });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [expandedPastes, setExpandedPastes] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
@@ -346,56 +360,45 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const [pendingReplay, setPendingReplay] = useState<ReplayNetworkPayload | null>(null);
   const [pendingReplayId, setPendingReplayId] = useState<string | null>(null);
   const [brainQuestions, setBrainQuestions] = useState<{ questionId: string; questions: BrainQuestion[] } | null>(null);
-  const [banner] = useState<string | null>(null);
+  const draftKey = sessionId ?? 'new';
 
   // ── Voice (STT/TTS) ──────────────────────────────────────────────────────────
-  // Ported from the plugin panel. Difference: the plugin ran STT in the active tab
-  // via a content script (a side panel can't getUserMedia) and relayed VOICE_*
-  // messages over the Chrome port; a normal web page runs recognition in-page via
-  // useVoiceCapture, so its callbacks replace those message branches. There's no
-  // DB-backed enableVoice flag here — voice UI shows whenever the browser supports
-  // it. The pure voice-state machine drives both the composer mini-robot and the
-  // big listening orb; verified answers can be read aloud (opt-in, default off).
+  // Ported from the plugin panel. A normal web page runs recognition in-page via
+  // useVoiceCapture (the plugin relayed it from a content script). The pure
+  // voice-state machine drives the composer mini-robot and the listening orb;
+  // verified answers can be read aloud (opt-in, default off).
   const [voiceView, setVoiceView] = useState<VoiceView>(voiceInit);
   const [voiceAmplitude, setVoiceAmplitude] = useState(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [speakBack, setSpeakBack] = useState(false);
   const tts = useSpeechSynthesis();
   const dispatchVoice = useCallback((e: VoiceEvent) => setVoiceView((v) => voiceReduce(v, e)), []);
-  // The relay-port frame handler is a useEffect closure with a narrow dep array, so
-  // it captures the first render's speakBack/tts. Mirror the live values into refs
-  // the handler reads (same pattern as streamingIdRef).
+  // The frame handler is a useEffect closure with a narrow dep array; mirror live values into refs.
   const speakBackRef = useRef(false);
   const ttsRef = useRef(tts);
+  const onSentRef = useRef(onSent);
   speakBackRef.current = speakBack;
   ttsRef.current = tts;
-
-  // Keep the composer model in sync with the device's configured model as the
-  // parent refreshes it (presence poll), until the user explicitly picks one.
-  useEffect(() => {
-    if (userPickedModel.current) return;
-    if (deviceModel && deviceModel !== model) setModel(deviceModel as AnyModel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceModel]);
+  onSentRef.current = onSent;
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const portRef = useRef<RelayPortLike | null>(null);
+  // Frames posted before a new chat has its session; flushed once the port exists.
+  const pendingFramesRef = useRef<PanelToWorker[]>([]);
+  const creatingRef = useRef(false);
   const draftsRef = useRef<Record<string, string>>({});
-  // Latest messages, readable SYNCHRONOUSLY from the frame handler — a setMessages
-  // updater runs on the NEXT render, so reading a var assigned inside it right after
-  // the call yields nothing (which silently skips the STREAM_DONE voice branch).
+  // Latest messages, readable SYNCHRONOUSLY from the frame handler.
   const messagesRef = useRef<ChatEntry[]>(messages);
   messagesRef.current = messages;
+  const freshRef = useRef(freshSession);
+  freshRef.current = freshSession;
 
-  // Watchdog: the relay only enqueues frames for the device — if nothing on the
-  // device consumes them (e.g. the device-side relay client isn't running), the
-  // send lands durably but no reply ever streams back and the bubble would spin
-  // forever. Arm a timer on send; ANY inbound frame clears it; on timeout, fail
-  // the pending turn with a clear "device didn't respond" message instead of a
-  // silent, endless blink.
+  // Watchdog: if nothing on the device consumes the frames, no reply ever streams
+  // back. Arm a timer on send; ANY inbound frame clears it; on timeout, fail the
+  // pending turn with a clear message instead of an endless spinner.
   const NO_RESPONSE_TIMEOUT_MS = 45000;
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearWatchdog = useCallback(() => {
@@ -410,28 +413,30 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       watchdogRef.current = null;
       const id = streamingIdRef.current;
       const errText =
-        "The device didn't respond. It may be offline or not running the assistant — the message is queued and will be delivered when it reconnects.";
-      setMessages((prev) => {
-        if (id && prev.some((m) => m.id === id)) {
-          return prev.map((m) => (m.id === id ? { ...m, content: m.content || errText, streaming: false, error: true } : m));
-        }
-        return prev;
-      });
+        "Your assistant didn't respond. It may be offline or not running; the message is queued and will be delivered when it reconnects.";
+      setMessages((prev) =>
+        id && prev.some((m) => m.id === id)
+          ? prev.map((m) => (m.id === id ? { ...m, content: m.content || errText, streaming: false, error: true } : m))
+          : prev
+      );
       streamingIdRef.current = null;
       setStreaming(false);
       dispatchVoice({ type: 'TURN_DONE', verified: false });
     }, NO_RESPONSE_TIMEOUT_MS);
   }, [clearWatchdog, dispatchVoice]);
 
-  const stashDraft = useCallback((baseId: string, text: string) => {
-    if (text) draftsRef.current[baseId] = text;
-    else delete draftsRef.current[baseId];
+  const stashDraft = useCallback((key: string, text: string) => {
+    if (text) draftsRef.current[key] = text;
+    else delete draftsRef.current[key];
     persistDrafts(draftsRef.current);
   }, []);
 
-  // Drop transcribed voice text into the composer at the cursor. MUST set
-  // inputRef.current (send() reads the ref, not the state) + the textarea value +
-  // resize + stashDraft. No auto-send — the user reviews and hits send.
+  const resize = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+  };
+
+  // Drop transcribed voice text into the composer at the cursor. No auto-send.
   const appendToComposer = useCallback(
     (text: string) => {
       if (!text) return;
@@ -449,18 +454,14 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       setInput(next);
       if (el) {
         el.value = next;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+        resize(el);
         el.focus();
       }
-      stashDraft(sessionId, next);
+      stashDraft(draftKey, next);
     },
-    [stashDraft, sessionId]
+    [stashDraft, draftKey]
   );
 
-  // In-page STT. Callbacks replace the plugin's relayed VOICE_* port messages:
-  // interim → orb transcript; final → append to composer (NOT auto-send) + close;
-  // amplitude → orb glow; error → banner + cancel; ended → finalize.
   const voice = useVoiceCapture({
     onInterim: (text) => dispatchVoice({ type: 'INTERIM', text }),
     onFinal: (text) => {
@@ -478,7 +479,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const toggleMic = useCallback(() => {
     if (!voice.supported) return;
     if (voice.listening) {
-      voice.stop(); // graceful → onFinal + onEnded
+      voice.stop();
       return;
     }
     setVoiceError(null);
@@ -491,12 +492,10 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     dispatchVoice({ type: 'CANCEL_LISTENING' });
   }, [voice, dispatchVoice]);
 
-  // Barge-in: the state machine's one-shot effect cancels any in-flight speech.
   useEffect(() => {
     if (voiceView.effect === 'cancel-speech') tts.cancel();
   }, [voiceView.effect, tts]);
 
-  // Esc dismisses the listening orb.
   useEffect(() => {
     if (voiceView.state !== 'listening') return;
     const onKey = (e: KeyboardEvent) => {
@@ -506,17 +505,17 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     return () => window.removeEventListener('keydown', onKey);
   }, [voiceView.state, cancelMic]);
 
-  // Hydrate persisted drafts on mount.
+  // Hydrate the persisted draft on mount (a new chat keeps its draft when it gets an id).
   useEffect(() => {
     draftsRef.current = loadDrafts();
-    const restored = draftsRef.current[sessionId];
+    const restored = draftsRef.current[sessionId ?? 'new'];
     if (restored && !inputRef.current) {
       inputRef.current = restored;
       setInput(restored);
     }
-  }, [sessionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Hydrate the speak-back (TTS) preference on mount.
   useEffect(() => {
     setSpeakBack(loadSpeakBack());
   }, []);
@@ -530,8 +529,9 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     }
   }, []);
 
-  // Hydrate durable history.
+  // Hydrate durable history (not for a chat this component just created).
   useEffect(() => {
+    if (!sessionId || freshRef.current) return;
     let cancelled = false;
     fetch(`/api/plugin/chat/sessions/${sessionId}/messages`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
@@ -546,75 +546,69 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     };
   }, [sessionId]);
 
-  const post = useCallback((frame: PanelToWorker) => {
-    portRef.current?.postMessage(frame);
+  const afterPost = useCallback((frame: PanelToWorker, ok: boolean) => {
+    if (ok && frame.type === 'SEND_MESSAGE') onSentRef.current?.();
   }, []);
+
+  const post = useCallback(
+    (frame: PanelToWorker) => {
+      const port = portRef.current;
+      if (port) {
+        void port.postMessage(frame).then((ok) => afterPost(frame, ok));
+        return;
+      }
+      // A new chat: queue the frame and create the session once.
+      pendingFramesRef.current.push(frame);
+      if (creatingRef.current) return;
+      creatingRef.current = true;
+      void onCreateSession().then((id) => {
+        if (id) return; // the port effect for the new session flushes the queue
+        creatingRef.current = false;
+        pendingFramesRef.current = [];
+        clearWatchdog();
+        const errText = "Couldn't start the chat. Check your connection and try again.";
+        const sid = streamingIdRef.current;
+        setMessages((prev) => prev.map((m) => (m.id === sid ? { ...m, content: errText, streaming: false, error: true } : m)));
+        streamingIdRef.current = null;
+        setStreaming(false);
+      });
+    },
+    [onCreateSession, afterPost, clearWatchdog]
+  );
 
   // ── Wire the relay port + frame handler ─────────────────────────────────────
   useEffect(() => {
-    const port = createRelayPort(sessionId);
+    if (!sessionId) return;
+    // A chat created by this component's first send has no earlier frames: read from the start
+    // so a reply that lands before the first poll is not skipped.
+    const port = createRelayPort(sessionId, { fromStart: freshRef.current });
     portRef.current = port;
 
     const handler = (msg: WorkerToPanel) => {
-      // Any inbound frame means the device is responding — cancel the no-response
-      // watchdog. STREAM_DONE/STREAM_ERROR also clear it below via their own paths.
+      // Any inbound frame means the device is responding — cancel the no-response watchdog.
       clearWatchdog();
-      if (msg.type === 'THINKING_CHUNK') {
+      if (
+        msg.type === 'THINKING_CHUNK' ||
+        msg.type === 'STREAM_VERIFY' ||
+        msg.type === 'STREAM_CHUNK' ||
+        msg.type === 'STREAM_RESET'
+      ) {
         const id = streamingIdRef.current;
         if (!id) return;
-        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, thinking: (m.thinking ?? '') + msg.delta } : m)));
-      } else if (msg.type === 'STREAM_VERIFY') {
-        const id = streamingIdRef.current;
-        if (!id) return;
-        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, verifyState: msg.state } : m)));
-      } else if (msg.type === 'STREAM_CHUNK') {
-        const id = streamingIdRef.current;
-        if (!id) return;
-        const delta = msg.delta;
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== id) return m;
-            const acc = { content: m.content, actions: [...(m.actions ?? [])], steps: [...(m.steps ?? [])] };
-            applyDelta(acc, delta);
-            return { ...m, content: acc.content, actions: acc.actions, steps: acc.steps };
-          })
-        );
-      } else if (msg.type === 'STREAM_RESET') {
-        const id = streamingIdRef.current;
-        if (!id) return;
-        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: '', thinking: '', actions: [], steps: [] } : m)));
+        setMessages((prev) => prev.map((m) => (m.id === id ? applyStreamFrame(m, msg) : m)));
       } else if (msg.type === 'STREAM_DONE') {
         const id = streamingIdRef.current;
-        // Some agent turns stream no STREAM_CHUNK deltas and deliver the whole answer only
-        // in the terminal frame's `message.content` (a string, or a { text } object). The
-        // canonical STREAM_DONE type doesn't declare `message`, so read it defensively and
-        // fold it into the bubble — otherwise the empty-bubble cleanup below would drop the
-        // answer entirely.
-        const doneMessage = (msg as unknown as { message?: { content?: unknown } }).message;
-        const finalText = doneMessage ? messageText(doneMessage.content) : '';
-        // Read the finishing bubble SYNCHRONOUSLY from the ref (the setMessages updater
-        // below runs later, so a var assigned inside it would still be empty here) — this
-        // is the actual answer we speak / react to.
+        // Some turns stream nothing and deliver the whole answer only in the terminal
+        // frame's `message.content` (remote-chat.ts adds it; the shared type doesn't declare it).
+        const finalText = doneText(msg);
         const finishedRaw = id ? messagesRef.current.find((m) => m.id === id) : undefined;
-        const finished =
-          finishedRaw && !finishedRaw.content && finalText
-            ? { ...finishedRaw, content: finalText }
-            : finishedRaw;
+        const finished = finishedRaw && !finishedRaw.content && finalText ? { ...finishedRaw, content: finalText } : finishedRaw;
         setMessages((prev) => {
-          let next = id
-            ? prev.map((m) =>
-                m.id === id
-                  ? { ...m, streaming: false, content: m.content || finalText }
-                  : m
-              )
-            : prev;
-          next = next.filter((m) => !(m.streaming && isEmptyAssistantBubble(m)));
-          return next;
+          let next = id ? prev.map((m) => (m.id === id ? applyStreamFrame(m, msg) : m)) : prev;
+          if (!id && finalText) next = [...next, { id: uuid(), role: 'assistant', content: finalText }];
+          return next.filter((m) => !(m.streaming && isEmptyAssistantBubble(m)));
         });
-        // Voice: drive the robot mood + optionally read the answer aloud. Happy on a
-        // cleanly-completed answer, sad ONLY when verification explicitly failed
-        // (unverified) — so it never smiles at a known-wrong answer. speakableText
-        // strips render fences/code so TTS reads only the human prose.
+        // Voice: happy on a clean answer, sad only when verification explicitly failed.
         if (finished) {
           const ok = finished.verifyState !== 'unverified';
           dispatchVoice({ type: 'TURN_DONE', verified: ok });
@@ -626,34 +620,22 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         }
         streamingIdRef.current = null;
         setStreaming(false);
+        setWaitingForUser(null);
         setCurrentLoopId(null);
         setActiveSubAgents((prev) => prev.filter((a) => a.status === 'running'));
         if (msg.inputTokens > 0 || msg.outputTokens > 0) {
-          setUsage((u) => ({
-            inputTokens: u.inputTokens + msg.inputTokens,
-            outputTokens: u.outputTokens + msg.outputTokens,
-            cost: u.cost + calcCost(model, msg.inputTokens, msg.outputTokens),
-          }));
+          setUsage((u) => ({ inputTokens: u.inputTokens + msg.inputTokens, outputTokens: u.outputTokens + msg.outputTokens }));
         }
       } else if (msg.type === 'STREAM_ERROR') {
         const id = streamingIdRef.current;
         const errText = msg.error || 'The request failed.';
         setMessages((prev) => {
           if (id && prev.some((m) => m.id === id)) {
-            return prev.map((m) => (m.id === id ? { ...m, content: m.content || errText, streaming: false, error: true } : m));
+            return prev.map((m) => (m.id === id ? applyStreamFrame(m, msg) : m));
           }
           const lastIdx = findLastIndex(prev, (m) => m.role === 'assistant');
           const last = lastIdx >= 0 ? prev[lastIdx] : null;
-          const isBlank =
-            last &&
-            !last.content &&
-            !last.thinking &&
-            !last.actions?.length &&
-            !last.steps?.length &&
-            !last.interactionBlock &&
-            !last.renderBlock &&
-            !last.renderBlocks?.length;
-          if (last && isBlank) {
+          if (last && isEmptyAssistantBubble(last)) {
             const updated = [...prev];
             updated[lastIdx] = { ...last, content: errText, streaming: false, error: true };
             return updated;
@@ -692,28 +674,20 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
                 .map((m) => (m.id === oldId && m.streaming ? { ...m, streaming: false } : m))
             : prev;
           const lastUserIdx = findLastIndex(filtered, (m) => m.role === 'user');
-          if (lastUserIdx >= 0 && filtered[lastUserIdx].content === msg.text) {
-            return [...filtered, assistantEntry];
-          }
-          const userEntry: ChatEntry = { id: uuid(), role: 'user', content: msg.text };
-          return [...filtered, userEntry, assistantEntry];
+          if (lastUserIdx >= 0 && filtered[lastUserIdx].content === msg.text) return [...filtered, assistantEntry];
+          return [...filtered, { id: uuid(), role: 'user', content: msg.text }, assistantEntry];
         });
         streamingIdRef.current = newAssistantId;
       } else if (msg.type === 'BACKGROUND_DONE') {
-        const entry: ChatEntry = {
-          id: uuid(),
-          role: 'assistant',
-          content: `✅ **Background task complete**\n\n${msg.title ?? ''}\n\n${msg.result ?? ''}`,
-        };
-        setMessages((prev) => [...prev, entry]);
+        setMessages((prev) => [
+          ...prev,
+          { id: uuid(), role: 'assistant', content: `✅ **Background task complete**\n\n${msg.title ?? ''}\n\n${msg.result ?? ''}` },
+        ]);
       } else if (msg.type === 'SCHEDULE_RESULT') {
         setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: msg.markdown }]);
       } else if (msg.type === 'PLAN_CREATED') {
         setActivePlan(msg.plan);
-        setMessages((prev) => [
-          ...prev,
-          { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'plan', plan: msg.plan } },
-        ]);
+        setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'plan', plan: msg.plan } }]);
       } else if (msg.type === 'PLAN_STEP_UPDATE') {
         setActivePlan((prev) => {
           if (!prev || prev.id !== msg.planId) return prev;
@@ -728,10 +702,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         setActivePlan((prev) => (!prev || prev.id !== msg.planId ? prev : { ...prev, status: 'done' }));
       } else if (msg.type === 'INTERACTIVE_FORM') {
         setActiveForm(msg.form);
-        setMessages((prev) => [
-          ...prev,
-          { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'form', form: msg.form } },
-        ]);
+        setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'form', form: msg.form } }]);
       } else if (msg.type === 'INTERACTIVE_PROPOSALS') {
         setActiveProposals({ title: msg.title, items: msg.items });
         setMessages((prev) => [
@@ -741,10 +712,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       } else if (msg.type === 'ACTION_APPROVAL_REQUEST') {
         setPendingApproval(msg.action);
         setPendingApprovalId(msg.actionId);
-        setMessages((prev) => [
-          ...prev,
-          { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'approval', action: msg.action } },
-        ]);
+        setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: '', interactionBlock: { kind: 'approval', action: msg.action } }]);
       } else if (msg.type === 'REPLAY_NETWORK_APPROVAL_REQUEST') {
         setPendingReplay(msg.action);
         setPendingReplayId(msg.actionId);
@@ -768,7 +736,6 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         const group = activeGroupsRef.current.find(
           (g) => !g.done && g.loopId === msg.loopId && g.agents.some((a) => a.subagentId === msg.subagentId)
         );
-        const groupId = group?.groupId;
         setActiveSubAgents((prev) => [
           ...prev,
           {
@@ -777,7 +744,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
             name: msg.name,
             status: 'running',
             loopId: msg.loopId,
-            groupId,
+            groupId: group?.groupId,
             model: msg.model,
             prompt: msg.prompt,
             parentAgentId: msg.parentAgentId,
@@ -825,24 +792,27 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         setActiveGroups((prev) => prev.map((g) => (g.groupId === msg.groupId ? { ...g, done: true, results: msg.results } : g)));
       } else if (msg.type === 'ACTION_QUEUED') {
         setMessages((prev) => [...prev, { id: uuid(), role: 'assistant', content: `⏸ Action queued: ${msg.summary}` }]);
-      } else if (msg.type === 'USAGE_UPDATE' && msg.contextUsed && msg.contextTotal) {
-        setContextUsage({ used: msg.contextUsed, total: msg.contextTotal });
-      } else if (msg.type === 'SESSION_USAGE') {
-        if ((!msg.sessionId || msg.sessionId === sessionId) && msg.context_used && msg.context_total) {
-          setContextUsage({ used: msg.context_used, total: msg.context_total });
-        }
       }
     };
 
     port.onMessage.addListener(handler);
+
+    // Flush what a new chat posted before it had a session.
+    const queued = pendingFramesRef.current;
+    pendingFramesRef.current = [];
+    creatingRef.current = false;
+    for (const f of queued) {
+      const frame: PanelToWorker = f.type === 'SEND_MESSAGE' ? { ...f, sessionId } : f;
+      void port.postMessage(frame).then((ok) => afterPost(frame, ok));
+    }
+
     return () => {
       port.onMessage.removeListener(handler);
       port.disconnect();
       portRef.current = null;
       clearWatchdog();
     };
-    // model is read inside STREAM_DONE for cost; re-subscribing on model change is cheap and correct.
-  }, [sessionId, model, clearWatchdog]);
+  }, [sessionId, clearWatchdog, dispatchVoice, afterPost]);
 
   // ── Autoscroll ───────────────────────────────────────────────────────────────
   const autoscrollPaused = useRef(false);
@@ -861,7 +831,21 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       );
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    // When the log shrinks (the on-screen keyboard opens), keep the latest message in view.
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            if (shouldAutoScroll(autoscrollPaused.current)) {
+              programmaticScroll.current = true;
+              el.scrollTop = el.scrollHeight;
+            }
+          })
+        : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -869,36 +853,25 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       programmaticScroll.current = true;
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [messages, activePlan]);
+  }, [messages, activePlan, activeForm, pendingApproval, pendingReplay, brainQuestions, activeProposals]);
 
   // ── Attachment handling ─────────────────────────────────────────────────────
 
   const addImageAttachment = useCallback(async (file: File) => {
     const data = await fileToBase64(file);
-    const attachment: ImageAttachment = {
-      id: uuid(),
-      type: 'image',
-      name: file.name,
-      mediaType: file.type,
-      data,
-      thumbnail: `data:${file.type};base64,${data}`,
-    };
-    setAttachments((prev) => [...prev, attachment]);
+    setAttachments((prev) => [
+      ...prev,
+      { id: uuid(), type: 'image', name: file.name, mediaType: file.type, data, thumbnail: `data:${file.type};base64,${data}` },
+    ]);
   }, []);
 
   const addFileAttachment = useCallback(async (file: File) => {
     const data = await fileToBase64(file);
-    let textContent: string | undefined;
-    if (isTextFile(file.name)) textContent = await fileToText(file);
-    const attachment: FileAttachment = {
-      id: uuid(),
-      type: 'file',
-      name: file.name,
-      mediaType: file.type || 'application/octet-stream',
-      data,
-      textContent,
-    };
-    setAttachments((prev) => [...prev, attachment]);
+    const textContent = isTextFile(file.name) ? await fileToText(file) : undefined;
+    setAttachments((prev) => [
+      ...prev,
+      { id: uuid(), type: 'file', name: file.name, mediaType: file.type || 'application/octet-stream', data, textContent },
+    ]);
   }, []);
 
   const handleFiles = useCallback(
@@ -913,6 +886,15 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const togglePaste = useCallback((id: string) => {
+    setExpandedPastes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
 
   function buildMessageContent(text: string, atts: Attachment[]): string | ContentBlock[] {
@@ -940,11 +922,11 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   const send = useCallback(() => {
     const text = inputRef.current.trim();
     if (!text && attachments.length === 0) return;
-    if (!portRef.current) return;
     autoscrollPaused.current = pausedAfterSend();
     setInput('');
     inputRef.current = '';
-    stashDraft(sessionId, '');
+    stashDraft(draftKey, '');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     const messageContent = buildMessageContent(text, attachments);
     const wire = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent);
@@ -965,6 +947,8 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     ) {
       setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: displayText }]);
       post({ type: 'USER_RESPONSE', text: wire });
+      // The device never sends WAIT_FOR_USER_DONE on the remote channel: the reply ends the wait.
+      setWaitingForUser(null);
       if (activeForm) setActiveForm(null);
       if (activeProposals) {
         setMessages((prev) =>
@@ -984,8 +968,10 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     }
 
     if (streaming) {
+      // The device injects it into the running turn; it doesn't echo it back, so show it here.
       autoscrollPaused.current = false;
-      post({ type: 'SEND_MESSAGE', text: wire, model, sessionId });
+      setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: displayText }]);
+      post({ type: 'SEND_MESSAGE', text: wire, model, sessionId: sessionId ?? undefined });
       armWatchdog();
       return;
     }
@@ -1006,8 +992,8 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       return kept;
     });
     setCurrentLoopId(null);
-    dispatchVoice({ type: 'TURN_START' }); // robot → thinking for this turn
-    post({ type: 'SEND_MESSAGE', text: wire, model, sessionId });
+    dispatchVoice({ type: 'TURN_START' });
+    post({ type: 'SEND_MESSAGE', text: wire, model, sessionId: sessionId ?? undefined });
     armWatchdog();
   }, [
     streaming,
@@ -1022,6 +1008,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     model,
     attachments,
     stashDraft,
+    draftKey,
     sessionId,
     post,
     dispatchVoice,
@@ -1037,13 +1024,10 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       updated[idx] = { ...updated[idx], streaming: false, interrupted: true };
       return updated;
     });
+    clearWatchdog();
     streamingIdRef.current = null;
     setStreaming(false);
-  }
-
-  function clearContext() {
-    post({ type: 'CLEAR_SESSION_CONTEXT', sessionId });
-    setContextUsage({ used: 0, total: 0 });
+    setWaitingForUser(null);
   }
 
   const retryLastTurn = useCallback(() => {
@@ -1060,28 +1044,26 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     streamingIdRef.current = assistantId;
     setStreaming(true);
     setCurrentLoopId(null);
-    post({ type: 'SEND_MESSAGE', text: lastUser.content, model, sessionId });
-  }, [streaming, messages, model, sessionId, post]);
+    post({ type: 'SEND_MESSAGE', text: lastUser.content, model, sessionId: sessionId ?? undefined });
+    armWatchdog();
+  }, [streaming, messages, model, sessionId, post, armWatchdog]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== 'Enter') return;
-    // Alt+Enter inserts a newline (browsers don't do this natively for Alt); Shift+Enter
-    // already does. Either modifier → newline, not send.
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    // Alt+Enter inserts a newline (browsers don't do this natively for Alt); Shift+Enter already does.
     if (e.altKey) {
       e.preventDefault();
       const el = e.currentTarget;
       const start = el.selectionStart ?? el.value.length;
       const end = el.selectionEnd ?? start;
       const next = el.value.slice(0, start) + '\n' + el.value.slice(end);
+      // Write the DOM value and caret now: the next keystroke may land before React re-renders.
+      el.value = next;
+      el.selectionStart = el.selectionEnd = start + 1;
       inputRef.current = next;
       setInput(next);
-      stashDraft(sessionId, next);
-      // Restore caret after the inserted newline once React re-renders the value.
-      requestAnimationFrame(() => {
-        el.selectionStart = el.selectionEnd = start + 1;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-      });
+      stashDraft(draftKey, next);
+      resize(el);
       return;
     }
     if (!e.shiftKey) {
@@ -1094,12 +1076,8 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
     const val = e.target.value;
     inputRef.current = val;
     setInput(val);
-    stashDraft(sessionId, val);
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-    }
+    stashDraft(draftKey, val);
+    resize(e.target);
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -1118,15 +1096,17 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       e.preventDefault();
       const lineCount = text.split('\n').length;
       const sizeStr = text.length >= 1024 ? `${(text.length / 1024).toFixed(1)}KB` : `${text.length} chars`;
-      const attachment: TextPasteAttachment = {
-        id: uuid(),
-        type: 'text_paste',
-        name: `Pasted text (${sizeStr}, ${lineCount} line${lineCount > 1 ? 's' : ''})`,
-        textContent: text,
-        charCount: text.length,
-        lineCount,
-      };
-      setAttachments((prev) => [...prev, attachment]);
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id: uuid(),
+          type: 'text_paste',
+          name: `Pasted text (${sizeStr}, ${lineCount} line${lineCount > 1 ? 's' : ''})`,
+          textContent: text,
+          charCount: text.length,
+          lineCount,
+        },
+      ]);
     }
   }
 
@@ -1200,26 +1180,14 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
   function handleFormSubmit(formId: string, data: FormResponse) {
     const form = activeForm!;
     const formSteps = form.steps ?? [];
-    const lines = formSteps.flatMap((step) =>
-      (step.fields ?? []).map((f) => {
-        const val = data[f.id];
-        return `${f.label}: ${Array.isArray(val) ? val.join(', ') : (val ?? '')}`;
-      })
-    );
+    const line = (f: { id: string; label: string }) => {
+      const val = data[f.id];
+      return `${f.label}: ${Array.isArray(val) ? val.join(', ') : (val ?? '')}`;
+    };
     const userText =
       formSteps.length > 1
-        ? formSteps
-            .map((step) => {
-              const stepLines = (step.fields ?? [])
-                .map((f) => {
-                  const val = data[f.id];
-                  return `${f.label}: ${Array.isArray(val) ? val.join(', ') : (val ?? '')}`;
-                })
-                .join('\n');
-              return `${step.title}:\n${stepLines}`;
-            })
-            .join('\n\n')
-        : lines.join('\n');
+        ? formSteps.map((step) => `${step.title}:\n${(step.fields ?? []).map(line).join('\n')}`).join('\n\n')
+        : formSteps.flatMap((step) => (step.fields ?? []).map(line)).join('\n');
     setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: userText }]);
     post({ type: 'FORM_RESPONSE', formId, data });
     setActiveForm(null);
@@ -1250,39 +1218,79 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
       if (waitingForUser) {
         setMessages((prev) => [...prev, userEntry]);
         post({ type: 'USER_RESPONSE', text: value });
+        setWaitingForUser(null);
       } else if (streaming) {
         setMessages((prev) => [...prev, userEntry]);
-        post({ type: 'SEND_MESSAGE', text: value, model, sessionId });
+        post({ type: 'SEND_MESSAGE', text: value, model, sessionId: sessionId ?? undefined });
       } else {
         const assistantId = uuid();
         setMessages((prev) => [...prev, userEntry, { id: assistantId, role: 'assistant', content: '', streaming: true }]);
         streamingIdRef.current = assistantId;
         setStreaming(true);
-        post({ type: 'SEND_MESSAGE', text: value, model, sessionId });
+        post({ type: 'SEND_MESSAGE', text: value, model, sessionId: sessionId ?? undefined });
+        armWatchdog();
       }
     },
-    [waitingForUser, streaming, model, sessionId, post]
+    [waitingForUser, streaming, model, sessionId, post, armWatchdog]
   );
 
-  const openFile = useCallback((path: string) => post({ type: 'OPEN_FILE', path }), [post]);
-  const openFolder = useCallback((path: string) => post({ type: 'OPEN_FOLDER', path }), [post]);
-  const openLink = useCallback((url: string) => post({ type: 'OPEN_LINK', url }), [post]);
+  // Links open here, on the phone. Paths on the device's disk can't be opened remotely.
+  const openLink = useCallback((url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const decide = (decision: Decision) => {
+    if (!pendingApproval) return;
+    setMessages((prev) => [
+      ...prev,
+      { id: uuid(), role: 'user', content: `Action ${pendingApproval.actionType} on ${pendingApproval.target}: ${DECISION_LABEL[decision]}` },
+    ]);
+    post({ type: 'ACTION_APPROVAL_RESPONSE', actionId: pendingApprovalId ?? pendingApproval.actionId, decision });
+    setPendingApproval(null);
+    setPendingApprovalId(null);
+  };
+
+  const groups = groupMessages(messages);
+  const lastIndex = messages.length - 1;
+  const indexOf = new Map(messages.map((m, i) => [m.id, i]));
+
+  const renderEntry = (m: ChatEntry) => {
+    const idx = indexOf.get(m.id) ?? 0;
+    if (m.renderBlock) {
+      return <RenderBlockView key={m.id} block={m.renderBlock} onProposalsRespond={handleProposalsRespond} onButtonClick={handleButtonClick} />;
+    }
+    if (m.interactionBlock) {
+      if (isInteractionLive(m.interactionBlock)) return null;
+      return (
+        <InteractionBlockView key={m.id} block={m.interactionBlock} resolvedByNext={idx < lastIndex && messages[idx + 1]?.role === 'user'} />
+      );
+    }
+    return (
+      <article key={m.id} className={`chat-message is-${m.role}`} aria-label={m.role === 'user' ? 'You' : 'Assistant'}>
+        <ChatBubble
+          role={m.role}
+          content={m.content}
+          thinking={m.thinking}
+          streaming={m.streaming}
+          error={m.error}
+          interrupted={m.interrupted}
+          actions={m.actions}
+          steps={m.steps}
+          renderBlocks={m.renderBlocks}
+          onButtonClick={handleButtonClick}
+          onRetry={m.error && idx === lastIndex ? retryLastTurn : undefined}
+          onOpenLink={openLink}
+          verifyState={m.role === 'assistant' ? m.verifyState : undefined}
+        />
+      </article>
+    );
+  };
+
+  const busy = streaming || !!waitingForUser;
+  const canSend = !!input.trim() || attachments.length > 0;
 
   return (
-    <div className="rc-root chat-view" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-      <div className="rc-header">
-        <button
-          className="rc-back"
-          onClick={onBack}
-          aria-label="Back to devices"
-          type="button"
-        >
-          ‹
-        </button>
-        <span className="rc-title">{deviceName}</span>
-        <span className={`rc-status ${deviceOnline ? 'online' : 'offline'}`}>{deviceOnline ? 'online' : 'offline'}</span>
-      </div>
-
+    <div className="chat-view" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {voiceView.orbVisible && (
         <div className="voice-orb-overlay" data-testid="voice-orb" onClick={cancelMic}>
           <VoiceRobot face={voiceView.robotFace} size="orb" amplitude={voiceAmplitude} ariaLabel="Listening" />
@@ -1293,167 +1301,109 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
         </div>
       )}
 
-      <div className="message-list rc-messages" ref={listRef} role="log" aria-live="polite" aria-label="Conversation">
+      <div className="message-list chat-log" ref={listRef} role="log" aria-live="polite" aria-label="Conversation">
         {messages.length === 0 && (
-          <div className="rc-empty">Send a message to drive this device&apos;s browser.</div>
+          <div className="chat-empty">
+            <strong>Send a message to your assistant</strong>
+            It runs in the browser on {deviceName} and can browse, fill in forms and look things up for you. It asks
+            before doing anything sensitive.
+          </div>
         )}
-        {messages.map((m, idx) =>
-          m.renderBlock ? (
-            <RenderBlockView
-              key={m.id}
-              block={m.renderBlock}
-              onProposalsRespond={handleProposalsRespond}
-              onOpenFile={openFile}
-              onOpenFolder={openFolder}
-              onButtonClick={handleButtonClick}
-            />
-          ) : m.interactionBlock && !isInteractionLive(m.interactionBlock) ? (
-            <InteractionBlockView
-              key={m.id}
-              block={m.interactionBlock}
-              resolvedByNext={idx < messages.length - 1 && messages[idx + 1]?.role === 'user'}
-            />
-          ) : m.interactionBlock ? null : (
-            <ChatBubble
-              key={m.id}
-              role={m.role}
-              content={m.content}
-              thinking={m.thinking}
-              streaming={m.streaming}
-              error={m.error}
-              interrupted={m.interrupted}
-              actions={m.actions}
-              steps={m.steps}
-              renderBlocks={m.renderBlocks}
-              onButtonClick={handleButtonClick}
-              onRetry={m.error && idx === messages.length - 1 ? retryLastTurn : undefined}
-              onOpenFile={openFile}
-              onOpenFolder={openFolder}
-              onOpenLink={openLink}
-              feedback={undefined}
-              onFeedback={undefined}
-              verifyState={m.role === 'assistant' ? m.verifyState : undefined}
-            />
-          )
-        )}
+        {groups.map((g) => (
+          <div key={g.key} className={`chat-group is-${g.role}`}>
+            {g.items.map(renderEntry)}
+          </div>
+        ))}
 
-        {activePlan && <PlanView plan={activePlan} onApprove={handlePlanApprove} onReject={handlePlanReject} />}
-        {activeForm && <InteractiveFormView form={activeForm} onSubmit={handleFormSubmit} onDismiss={handleFormDismiss} />}
+        {activePlan && (
+          <Card label={activePlan.title || 'Plan'}>
+            <PlanView plan={activePlan} onApprove={handlePlanApprove} onReject={handlePlanReject} />
+          </Card>
+        )}
+        {activeForm && (
+          <Card label={activeForm.title || 'Form'}>
+            <InteractiveFormView form={activeForm} onSubmit={handleFormSubmit} onDismiss={handleFormDismiss} />
+          </Card>
+        )}
         {activeProposals && (
-          <ProposalTable
-            title={activeProposals.title}
-            items={activeProposals.items}
-            onRespond={handleProposalsRespond}
-            onDismiss={handleProposalsDismiss}
-          />
+          <Card label={activeProposals.title ?? 'Proposed changes'}>
+            <ProposalTable
+              title={activeProposals.title}
+              items={activeProposals.items}
+              onRespond={handleProposalsRespond}
+              onDismiss={handleProposalsDismiss}
+            />
+          </Card>
         )}
         {pendingApproval && (
-          <ActionApprovalCard
-            action={pendingApproval}
-            onDecision={(_actionId, decision) => {
-              const label =
-                decision === 'approve'
-                  ? 'Approved'
-                  : decision === 'deny'
-                    ? 'Denied'
-                    : decision === 'guide'
-                      ? 'Guide me'
-                      : decision === 'allow_always'
-                        ? 'Always allow'
-                        : 'Queued';
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: uuid(),
-                  role: 'user',
-                  content: `Action ${pendingApproval.actionType} on ${pendingApproval.target}: ${label}`,
-                },
-              ]);
-              post({ type: 'ACTION_APPROVAL_RESPONSE', actionId: pendingApprovalId ?? _actionId, decision });
-              setPendingApproval(null);
-              setPendingApprovalId(null);
-            }}
-          />
+          <Card label="Approval needed" title="Approval needed" approval>
+            <ActionApprovalCard action={pendingApproval} onDecision={(_id, decision) => decide(decision)} />
+          </Card>
         )}
         {pendingReplay && (
-          <ReplayNetworkCard
-            payload={pendingReplay}
-            onDecision={(_actionId, decision) => {
-              const label = decision === 'approve' ? 'Approved replay' : 'Denied replay';
-              setMessages((prev) => [
-                ...prev,
-                { id: uuid(), role: 'user', content: `${pendingReplay.method} ${pendingReplay.url}: ${label}` },
-              ]);
-              post({
-                type: 'ACTION_APPROVAL_RESPONSE',
-                actionId: pendingReplayId ?? _actionId,
-                decision: decision as 'approve' | 'deny',
-              });
-              setPendingReplay(null);
-              setPendingReplayId(null);
-            }}
-          />
+          <Card label="Approval needed" title="Approval needed" approval>
+            <ReplayNetworkCard
+              payload={pendingReplay}
+              onDecision={(actionId, decision) => {
+                const label = decision === 'approve' ? 'Approved replay' : 'Denied replay';
+                setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: `${pendingReplay.method} ${pendingReplay.url}: ${label}` }]);
+                post({ type: 'ACTION_APPROVAL_RESPONSE', actionId: pendingReplayId ?? actionId, decision });
+                setPendingReplay(null);
+                setPendingReplayId(null);
+              }}
+            />
+          </Card>
         )}
         {brainQuestions && (
-          <BrainQuestionsCard
-            questionId={brainQuestions.questionId}
-            questions={brainQuestions.questions}
-            onSubmit={(questionId, answers) => {
-              const lines = brainQuestions.questions.map((q, i) => `${i + 1}. ${q.question} → ${answers[q.id]}`);
-              setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: lines.join('\n') }]);
-              post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers });
-              setBrainQuestions(null);
-            }}
-            onCancel={(questionId) => {
-              setMessages((prev) => [
-                ...prev,
-                { id: uuid(), role: 'user', content: "(skipped the questions — I'll answer in my own words)" },
-              ]);
-              post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers: { __cancelled: 'true' } });
-              setBrainQuestions(null);
-            }}
-          />
+          <Card label="Questions">
+            <BrainQuestionsCard
+              questionId={brainQuestions.questionId}
+              questions={brainQuestions.questions}
+              onSubmit={(questionId, answers) => {
+                const lines = brainQuestions.questions.map((q, i) => `${i + 1}. ${q.question} → ${answers[q.id]}`);
+                setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: lines.join('\n') }]);
+                post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers });
+                setBrainQuestions(null);
+              }}
+              onCancel={(questionId) => {
+                setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: "(skipped the questions — I'll answer in my own words)" }]);
+                post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers: { __cancelled: 'true' } });
+                setBrainQuestions(null);
+              }}
+            />
+          </Card>
         )}
       </div>
 
-      {currentLoopId && activeSubAgents.filter((a) => a.loopId === currentLoopId).length > 0 && (
+      {currentLoopId && activeSubAgents.some((a) => a.loopId === currentLoopId) && (
         <div className="subagent-sticky">
           <SubAgentCard
             agents={activeSubAgents.filter((a) => a.loopId === currentLoopId)}
             groups={activeGroups.filter((g) => g.loopId === currentLoopId)}
-            onStop={(agentId) => post({ type: 'STOP_SUBAGENT', agentId })}
           />
         </div>
       )}
 
-      <div className={`input-area rc-composer ${dragOver ? 'drag-over' : ''}`}>
+      <div className={`input-area chat-composer${dragOver ? ' drag-over' : ''}`}>
         {waitingForUser && (
-          <div className="wait-for-user-banner">
-            <span className="wfu-label">⏸ The assistant needs your help</span>
+          <div className="wait-for-user-banner" role="status">
+            <span className="wfu-label">Your assistant needs you</span>
             <span className="wfu-message">{waitingForUser}</span>
           </div>
         )}
-
         {!deviceOnline && !waitingForUser && (
-          <div className="rc-banner">Device appears offline — messages will queue until it reconnects.</div>
+          <p className="chat-composer-note">Messages will be delivered when your assistant reconnects.</p>
         )}
-        {banner && <div className="rc-banner">{banner}</div>}
 
         {voiceError && (
           <div className="voice-error" role="alert" data-testid="voice-error">
-            <span className="voice-error-msg">🎤 {voiceError}</span>
-            <button
-              className="voice-error-dismiss"
-              onClick={() => setVoiceError(null)}
-              aria-label="Dismiss microphone error"
-              type="button"
-            >
+            <span className="voice-error-msg">{voiceError}</span>
+            <button className="voice-error-dismiss" onClick={() => setVoiceError(null)} aria-label="Dismiss microphone error" type="button">
               ✕
             </button>
           </div>
         )}
 
-        {/* Speaking pill: visible while TTS reads the answer. ⏹ stops just the speech. */}
         {voiceView.pillVisible && (
           <div className="voice-speaking-pill" role="status" aria-live="polite" data-testid="voice-speaking-pill">
             <span className="dot" />
@@ -1467,7 +1417,7 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
               aria-label="Stop speaking"
               type="button"
             >
-              ⏹ Stop
+              Stop
             </button>
           </div>
         )}
@@ -1477,47 +1427,20 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
             {attachments.map((att) => (
               <div key={att.id} className={`attachment-badge${att.type === 'text_paste' ? ' text-paste-badge' : ''}`}>
                 {att.type === 'image' ? (
-                  <img src={(att as ImageAttachment).thumbnail} alt={att.name} />
+                  <img src={att.thumbnail} alt={att.name} />
                 ) : att.type === 'text_paste' ? (
-                  <span
-                    className="attachment-icon"
-                    onClick={() =>
-                      setExpandedPastes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(att.id)) next.delete(att.id);
-                        else next.add(att.id);
-                        return next;
-                      })
-                    }
-                  >
-                    📋
-                  </span>
+                  <button type="button" className="attachment-name" onClick={() => togglePaste(att.id)} aria-expanded={expandedPastes.has(att.id)}>
+                    {att.name}
+                  </button>
                 ) : (
-                  <span className="attachment-icon">📄</span>
+                  <span className="attachment-name">{att.name.length > 20 ? att.name.slice(0, 18) + '…' : att.name}</span>
                 )}
-                <span
-                  className="attachment-name"
-                  onClick={
-                    att.type === 'text_paste'
-                      ? () =>
-                          setExpandedPastes((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(att.id)) next.delete(att.id);
-                            else next.add(att.id);
-                            return next;
-                          })
-                      : undefined
-                  }
-                  style={att.type === 'text_paste' ? { cursor: 'pointer' } : undefined}
-                >
-                  {att.name.length > 20 ? att.name.slice(0, 18) + '...' : att.name}
-                </span>
-                <span className="remove" onClick={() => removeAttachment(att.id)}>
+                <button type="button" className="remove" onClick={() => removeAttachment(att.id)} aria-label={`Remove ${att.name}`}>
                   ✕
-                </span>
+                </button>
                 {att.type === 'text_paste' && expandedPastes.has(att.id) && (
                   <div className="text-paste-preview">
-                    <pre>{(att as TextPasteAttachment).textContent}</pre>
+                    <pre>{att.textContent}</pre>
                   </div>
                 )}
               </div>
@@ -1525,101 +1448,73 @@ export function RemoteChat({ sessionId, deviceName, deviceOnline, deviceModel, o
           </div>
         )}
 
-        <div className="input-row">
-          <button
-            className="attach-btn"
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach file"
-            aria-label="Attach file"
-            type="button"
-          >
-            +
-          </button>
-          {voice.supported && (
-            <VoiceRobot
-              face={voiceView.robotFace}
-              size="mini"
-              pressed={voiceView.state === 'listening'}
-              ariaLabel={voiceView.state === 'listening' ? 'Stop listening' : 'Start voice input'}
-              onClick={toggleMic}
-            />
-          )}
-          {voice.supported && tts.supported && (
-            <button
-              className="attach-btn"
-              onClick={() => setSpeakBackPersisted(!speakBack)}
-              aria-pressed={speakBack}
-              title={speakBack ? 'Read answers aloud: on (click to mute)' : 'Read answers aloud: off'}
-              aria-label={speakBack ? 'Mute spoken answers' : 'Read answers aloud'}
-              type="button"
-            >
-              {speakBack ? '🔊' : '🔇'}
-            </button>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.html,.css,.yaml,.yml,.xml,.log"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              if (e.target.files) handleFiles(e.target.files);
-              e.target.value = '';
-            }}
+        <div className="chat-composer-box">
+          <textarea
+            ref={textareaRef}
+            className="input-field"
+            placeholder={waitingForUser ? 'Type your reply…' : 'Message your assistant…'}
+            aria-label="Message"
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            rows={1}
+            enterKeyHint="send"
           />
-          <div className="input-wrapper">
-            <textarea
-              ref={textareaRef}
-              className="input-field"
-              placeholder={waitingForUser ? 'Type your reply...' : 'Message...'}
-              aria-label="Message"
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              rows={1}
+          <div className="chat-composer-tools">
+            <button className="chat-icon-btn" onClick={() => fileInputRef.current?.click()} aria-label="Attach file" type="button">
+              <AttachIcon />
+            </button>
+            {voice.supported && (
+              <VoiceRobot
+                face={voiceView.robotFace}
+                size="mini"
+                pressed={voiceView.state === 'listening'}
+                ariaLabel={voiceView.state === 'listening' ? 'Stop listening' : 'Start voice input'}
+                onClick={toggleMic}
+              />
+            )}
+            {voice.supported && tts.supported && (
+              <button
+                className="chat-icon-btn"
+                onClick={() => setSpeakBackPersisted(!speakBack)}
+                aria-pressed={speakBack}
+                aria-label={speakBack ? 'Mute spoken answers' : 'Read answers aloud'}
+                type="button"
+              >
+                <SpeakerIcon on={speakBack} />
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              accept="image/*,.pdf,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.html,.css,.yaml,.yml,.xml,.log"
+              onChange={(e) => {
+                if (e.target.files) handleFiles(e.target.files);
+                e.target.value = '';
+              }}
             />
+            <span className="chat-spacer" />
+            {busy && !canSend ? (
+              <button className="send-btn stop-btn" onClick={stop} aria-label="Stop" type="button">
+                <StopIcon />
+              </button>
+            ) : (
+              <button className="send-btn" onClick={send} disabled={!canSend} aria-label="Send" type="button">
+                <SendIcon />
+              </button>
+            )}
           </div>
-          {streaming || waitingForUser ? (
-            <button className="send-btn stop-btn" onClick={stop} aria-label="Stop" type="button">
-              ■
-            </button>
-          ) : (
-            <button
-              className="send-btn"
-              onClick={send}
-              disabled={!input.trim() && attachments.length === 0}
-              aria-label="Send"
-              type="button"
-            >
-              ↑
-            </button>
-          )}
-          <ContextIndicator used={contextUsage.used} total={contextUsage.total} onClear={clearContext} />
         </div>
-
-        <TokenFooterRow
-          model={model}
-          usage={usage}
-          onModelChange={(m) => {
-            userPickedModel.current = true;
-            setModel(m);
-          }}
-        />
+        {(usage.inputTokens > 0 || usage.outputTokens > 0) && (
+          <p className="chat-usage">
+            {deviceModel ? `${deviceModel} · ` : ''}
+            {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens this chat
+          </p>
+        )}
       </div>
     </div>
   );
-}
-
-// Thin wrapper so the model selector + cumulative usage render below the composer.
-function TokenFooterRow({
-  model,
-  usage,
-  onModelChange,
-}: {
-  model: AnyModel;
-  usage: SessionUsage;
-  onModelChange: (m: AnyModel) => void;
-}) {
-  return <TokenFooter model={model} usage={usage} onModelChange={onModelChange} sessionCost={usage.cost} />;
 }

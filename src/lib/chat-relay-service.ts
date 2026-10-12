@@ -3,8 +3,8 @@
  *
  * Shared logic for the remote-chat relay: a phone / second computer signed into
  * the same account chats with a connected "Horia" device. Tulzo is a transport
- * pipe between the remote page and the device (Supabase Realtime broadcast +
- * these frame rows for reliable delivery) plus a durable store for history.
+ * pipe between the remote page and the device (frame rows both ends pull by
+ * seq) plus a durable store for history.
  *
  * Frames are opaque `PanelToWorker` / `WorkerToPanel` objects (the assistant's
  * message contract) — the relay does not interpret them beyond spotting the
@@ -254,75 +254,13 @@ export async function isSessionDeviceOnline(session: RelaySession): Promise<bool
   return computeDeviceStatus((data as never) ?? null) === 'online';
 }
 
-/** Realtime channel name for a session — both ends subscribe to this. */
-export function channelName(sessionId: string): string {
-  return `chat:${sessionId}`;
-}
-
 /**
- * Per-device Realtime channel. A device can subscribe to this with only its own
- * api_key_id — no session discovery needed — and receive every inbound
- * (to_device) frame across all its sessions. Payloads carry session_id so the
- * device knows where to emit replies. Complements inbox polling.
- */
-export function deviceChannelName(apiKeyId: string): string {
-  return `device:${apiKeyId}`;
-}
-
-/** Best-effort broadcast of a frame to a device's per-device channel. */
-async function broadcastToDevice(
-  apiKeyId: string,
-  sessionId: string,
-  frame: RelayFrame
-): Promise<void> {
-  try {
-    const db = getClient();
-    const channel = db.channel(deviceChannelName(apiKeyId), { config: { broadcast: { ack: false } } });
-    await new Promise<void>((resolve) => {
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') resolve();
-      });
-      setTimeout(resolve, 1500);
-    });
-    await channel.send({ type: 'broadcast', event: 'frame', payload: { session_id: sessionId, frame } });
-    await db.removeChannel(channel);
-  } catch {
-    // Best-effort only.
-  }
-}
-
-/**
- * Best-effort Realtime broadcast of a frame. This is the low-latency path
- * (token streaming); the durable frame row inserted by `enqueueFrame` is the
- * reliable delivery fallback. Broadcast failures are swallowed — never let a
- * transient Realtime hiccup fail the request.
- */
-export async function broadcastFrame(
-  sessionId: string,
-  direction: FrameDirection,
-  frame: RelayFrame
-): Promise<void> {
-  try {
-    const db = getClient();
-    const channel = db.channel(channelName(sessionId), { config: { broadcast: { ack: false } } });
-    await new Promise<void>((resolve) => {
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') resolve();
-      });
-      // Don't hang the request if Realtime never connects.
-      setTimeout(resolve, 1500);
-    });
-    await channel.send({ type: 'broadcast', event: 'frame', payload: { direction, frame } });
-    await db.removeChannel(channel);
-  } catch {
-    // Best-effort only.
-  }
-}
-
-/**
- * Enqueue a frame for reliable delivery (durable row → postgres_changes signal)
- * and also broadcast it for low latency. The row is authoritative; broadcast is
- * an optimization.
+ * Enqueue a frame for delivery: a durable row that the other end pulls by seq
+ * (the device via /poll, the page via /receive). Neither end subscribes to
+ * Supabase Realtime (the page has no Supabase JWT; the assistant relay is
+ * HTTP-only, assistant/plugin/src/background/remote-relay.ts), so there is no
+ * broadcast: it cost up to 1.5s per frame waiting for a channel nobody joined,
+ * and the device sends stream chunks one after another.
  */
 export async function enqueueFrame(
   session: RelaySession,
@@ -336,17 +274,11 @@ export async function enqueueFrame(
     direction,
     frame,
   });
-  await broadcastFrame(session.id, direction, frame);
-  // Also fan a to_device frame onto the per-device channel so a device can
-  // receive it by subscribing with just its api_key_id (no session discovery).
-  if (direction === 'to_device') {
-    await broadcastToDevice(session.api_key_id, session.id, frame);
-  }
 }
 
 /**
  * Pull pending frames for a direction and mark them consumed. Used by the
- * device poll (to_device) fallback when it can't hold a Realtime subscription.
+ * legacy single-session device poll (to_device).
  */
 export async function drainFrames(
   sessionId: string,
@@ -417,8 +349,7 @@ export async function drainDeviceInbox(
  * Pull outbound (to_page) frames for a session past a monotonic seq cursor, for
  * the remote chat PAGE to poll. This is the reliable delivery path that mirrors
  * the device's `/poll` inbox: the page is Clerk-authed (no Supabase JWT), so it
- * cannot receive over Realtime under RLS — it polls here instead. Realtime
- * broadcast/postgres_changes remain a best-effort low-latency optimization.
+ * cannot receive over Realtime under RLS — it polls here instead.
  *
  * Cursor-based (seq > after) rather than a consumed flag: the page may poll from
  * multiple tabs / reconnect, and terminal frames are already persisted to

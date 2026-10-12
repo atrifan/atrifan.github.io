@@ -1,34 +1,36 @@
-/* RemoteChat.css — ported from the Horia browser-extension side panel (App.css).
-   AUTO-TRANSFORMED: global resets (*, html, body, #root) dropped; :root vars re-scoped
-   to .rc-root; every panel selector prefixed with ".rc-root " so styles never leak into
-   Tulzo's control panel. @keyframes left global. Do not hand-edit — regenerate instead. */
+/* RemoteChat.css: styles of the rich chat components ported from the assistant's side panel
+   (bubbles, markdown, code, steps, approval / plan / form / proposal cards, render blocks, voice).
+   Restyled onto Tulzo's design tokens (styles/tokens.css): no literal colours, so it follows the
+   light and dark themes. Rules for panel-only views (settings, MCP servers, secrets, workflows) were
+   dropped. Layout of the chat page itself (drawer, header, composer) is in ChatApp.css. */
 
 .rc-root details summary:focus {
   outline: none;
 }
 
 .rc-root {
-  --bg:         #161616;
-  --surface:    #212121;
-  --border:     #2e2e2e;
-  --accent:     #7c5cbf;
-  /* --accent as TEXT on the dark panel bg is only 3.66:1 (fails WCAG AA 4.5:1). Use this
-     lightened purple for small accent-colored TEXT (action labels, etc.); keep --accent for
-     borders/fills where contrast rules don't apply. Matches the value already used inline for
-     badges/buttons elsewhere in this file. */
-  --accent-text: #b9a3e6;
-  --accent-dim: #5a3f9a;
-  --text:       #e8e8e8;
-  --text-dim:   #888;
-  /* Muted label color that still clears WCAG AA 4.5:1 on --surface/--bg — use this for
-     small secondary labels INSTEAD of stacking a low opacity on --text (which drops
-     contrast below AA). */
-  --text-muted: #9a9a9a;
-  --user-bg:    #1e1840;
-  --error:      #c0392b;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px;
+  --bg:         var(--color-bg);
+  --surface:    var(--color-surface);
+  --border:     var(--color-border);
+  --accent:     var(--color-accent);
+  --accent-text: var(--color-accent);
+  --accent-dim: color-mix(in srgb, var(--color-accent) 72%, var(--color-text));
+  --text:       var(--color-text);
+  --text-dim:   var(--color-text-muted);
+  --text-muted: var(--color-text-muted);
+  --user-bg:    var(--color-accent-soft);
+  --error:      var(--color-danger);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   color: var(--text);
+  --bg-secondary: var(--color-surface-2);
+  --bg-tertiary: var(--color-surface-2);
+  --surface-hover: var(--color-surface-2);
+  --hover-bg: var(--color-surface-2);
+  --text-secondary: var(--color-text-muted);
+  --text-main: var(--color-text);
+  --text-bright: var(--color-text);
+  --mono: var(--font-mono);
 }
 
 /* ── Header ── */
@@ -40,27 +42,6 @@
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
-}
-
-.rc-root .header-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.rc-root .header-title .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.rc-root .header-nav {
-  display: flex;
-  gap: 4px;
 }
 
 .rc-root .nav-btn {
@@ -92,12 +73,12 @@
   transform: translateX(-50%);
   margin-top: 4px;
   padding: 3px 7px;
-  background: #1a1a1a;
-  color: #ddd;
+  background: var(--color-bg);
+  color: var(--color-text);
   font-size: 10px;
   white-space: nowrap;
   border-radius: 4px;
-  border: 1px solid #333;
+  border: 1px solid var(--color-border);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
@@ -113,102 +94,7 @@
   transform: none;
 }
 
-.rc-root .new-chat-btn {
-  font-size: 14px;
-  font-weight: 600;
-  padding: 2px 7px;
-}
-
 /* ── History view ── */
-.rc-root .history-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-.rc-root .history-empty {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 40px 16px;
-  font-size: 12px;
-}
-.rc-root .history-group {
-  margin-bottom: 8px;
-}
-.rc-root .history-group-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  cursor: pointer;
-  border-radius: 5px;
-  user-select: none;
-  transition: background 0.15s;
-}
-.rc-root .history-group-header:hover {
-  background: var(--surface);
-}
-.rc-root .history-group-chevron {
-  font-size: 9px;
-  color: var(--text-dim);
-  width: 10px;
-}
-.rc-root .history-group-name {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rc-root .history-group-count {
-  font-size: 10px;
-  color: var(--text-dim);
-  background: var(--border);
-  border-radius: 8px;
-  padding: 1px 6px;
-  flex-shrink: 0;
-}
-.rc-root .history-item {
-  position: relative;
-  padding: 8px 10px 8px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-.rc-root .history-item:hover {
-  background: var(--surface);
-}
-.rc-root .history-item-title {
-  font-size: 12px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 20px;
-}
-.rc-root .history-item-meta {
-  font-size: 10px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
-.rc-root .history-item-delete {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
-  border-radius: 3px;
-}
-.rc-root .history-item-delete:hover {
-  background: rgba(239,68,68,0.2);
-  color: #ef4444;
-}
 
 /* ── Chat view ── */
 .rc-root .chat-view {
@@ -356,9 +242,9 @@
 }
 
 .rc-root .bubble.error {
-  background: #2a0f0f;
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
   border-color: var(--error);
-  color: #ff7070;
+  color: var(--color-danger);
 }
 
 /* Failed-turn flag + retry affordance */
@@ -374,7 +260,7 @@
 .rc-root .bubble-error-badge {
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-accent-contrast);
   background: var(--error);
   border-radius: 4px;
   padding: 2px 7px;
@@ -392,7 +278,7 @@
 }
 .rc-root .bubble-retry-btn:hover {
   background: var(--error);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 /* User-interrupted turn — a clear red notice regardless of partial bubble content. */
 .rc-root .bubble-interrupted-flag {
@@ -403,7 +289,7 @@
 .rc-root .bubble-interrupted-badge {
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-accent-contrast);
   background: var(--error);
   border-radius: 4px;
   padding: 2px 7px;
@@ -436,8 +322,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: #1a1200;
-  border: 1px solid #b8860b;
+  background: var(--color-bg);
+  border: 1px solid var(--color-warning);
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 8px;
@@ -446,21 +332,15 @@
 .rc-root .wfu-label {
   font-size: 11px;
   font-weight: 600;
-  color: #f0c040;
+  color: var(--color-warning);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
 .rc-root .wfu-message {
   font-size: 12px;
-  color: #e8d080;
+  color: var(--color-warning);
   line-height: 1.4;
-}
-
-.rc-root .input-row {
-  display: flex;
-  gap: 6px;
-  align-items: flex-end;
 }
 
 .rc-root .input-field {
@@ -488,40 +368,11 @@
   color: var(--text-dim);
 }
 
-.rc-root .input-wrapper {
-  position: relative;
-  flex: 1;
-  overflow: hidden;
-}
-
-.rc-root .input-wrapper .input-field {
-  width: 100%;
-}
-
-.rc-root .input-ghost {
-  position: absolute;
-  top: 8px;
-  left: 11px;
-  right: 10px;
-  font-size: 13px;
-  font-family: inherit;
-  line-height: 1.4;
-  color: var(--text-dim);
-  pointer-events: none;
-  white-space: pre;
-  overflow: hidden;
-}
-
-.rc-root .ghost-count {
-  opacity: 0.6;
-  font-size: 11px;
-}
-
 .rc-root .send-btn {
   background: var(--accent);
   border: none;
   border-radius: 7px;
-  color: #fff;
+  color: var(--color-accent-contrast);
   cursor: pointer;
   width: 32px;
   height: 32px;
@@ -541,54 +392,12 @@
   cursor: not-allowed;
 }
 
-.rc-root .context-indicator {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--error);
-}
-
 /* The context indicator lives in the bottom status bar, so the default `top:100%`
    tooltip would render BELOW the panel edge (off-screen / clipped) — that's why only the
    trash showed on hover, never the "X% (Yk/Zk)" tooltip. Open it UPWARD instead, and
    right-anchor it (the indicator sits near the right edge) so it stays in view. */
-.rc-root .context-indicator[data-tooltip]::after {
-  top: auto;
-  bottom: 100%;
-  left: auto;
-  right: 0;
-  transform: none;
-  margin-top: 0;
-  margin-bottom: 6px;
-}
 
 /* Hover/focus reveals a red trash over the gauge; the gauge fades under it. */
-.rc-root .context-clear-icon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--error);
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  pointer-events: none;
-}
-.rc-root .context-indicator:hover .context-gauge,
-.rc-root .context-indicator:focus-visible .context-gauge {
-  opacity: 0.25;
-}
-.rc-root .context-indicator:hover .context-clear-icon,
-.rc-root .context-indicator:focus-visible .context-clear-icon {
-  opacity: 1;
-}
 
 .rc-root .stop-btn {
   background: none;
@@ -603,194 +412,18 @@
 }
 
 .rc-root .stop-btn:hover {
-  background: #2a0f0f;
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
 }
 
 /* ── Token footer ── */
-.rc-root .token-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-}
-
-.rc-root .model-select {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  font-size: 11px;
-  padding: 2px 5px;
-  cursor: pointer;
-  outline: none;
-}
-
-.rc-root .model-select:focus {
-  border-color: var(--accent);
-}
-
-.rc-root .model-select option {
-  background: var(--surface);
-}
-
-.rc-root .token-stats {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.rc-root .token-stat {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.rc-root .token-stat .arrow {
-  font-size: 9px;
-}
 
 /* ── Settings view ── */
-.rc-root .settings-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.rc-root .settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rc-root .settings-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.rc-root .settings-input {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 8px 10px;
-  outline: none;
-  transition: border-color 0.15s;
-  font-family: monospace;
-}
-
-.rc-root .settings-input:focus {
-  border-color: var(--accent);
-}
-
-.rc-root .settings-hint {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.rc-root .settings-btn {
-  background: var(--accent);
-  border: none;
-  border-radius: 7px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 7px 14px;
-  align-self: flex-start;
-  transition: background 0.15s;
-}
-
-.rc-root .settings-btn:hover {
-  background: var(--accent-dim);
-}
-
-.rc-root .settings-btn.danger {
-  background: none;
-  border: 1px solid var(--error);
-  color: var(--error);
-}
-
-.rc-root .settings-btn.danger:hover {
-  background: #2a0f0f;
-}
-
-.rc-root .settings-saved {
-  font-size: 11px;
-  color: #5a9c5a;
-}
 
 /* ── Auth tabs ── */
-.rc-root .auth-tabs {
-  display: flex;
-  gap: 2px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 3px;
-}
-
-.rc-root .auth-tab {
-  flex: 1;
-  background: none;
-  border: none;
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 5px 8px;
-  transition: background 0.15s, color 0.15s;
-  text-align: center;
-}
-
-.rc-root .auth-tab.active {
-  background: var(--surface);
-  color: var(--text);
-}
 
 /* ── Code block (terminal command) ── */
-.rc-root .code-block {
-  background: #0d0d0d;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: #b5e853;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 10px;
-  line-height: 1.5;
-  padding: 8px 10px;
-  word-break: break-all;
-  user-select: all;
-  cursor: text;
-}
 
 /* ── Token status ── */
-.rc-root .token-status {
-  font-size: 11px;
-  padding: 5px 8px;
-  border-radius: 5px;
-}
-
-.rc-root .token-status.valid {
-  background: #0f2a0f;
-  color: #5a9c5a;
-  border: 1px solid #1a4a1a;
-}
-
-.rc-root .token-status.invalid {
-  background: #2a0f0f;
-  color: #c07070;
-  border: 1px solid #4a1a1a;
-}
 
 /* ── Markdown rendering ── */
 .rc-root .bubble.assistant p {
@@ -834,7 +467,7 @@
   padding: 4px 10px;
   color: var(--text-dim);
   font-style: italic;
-  background: rgba(124,92,191,0.06);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
   border-radius: 0 4px 4px 0;
 }
 
@@ -848,17 +481,17 @@
 .rc-root .bubble.assistant em { font-style: italic; }
 
 .rc-root .bubble.assistant a {
-  color: #9b7fd4;
+  color: var(--color-accent);
   text-decoration: none;
 }
 .rc-root .bubble.assistant a:hover { text-decoration: underline; }
 
 /* Inline code */
 .rc-root .inline-code {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 3px;
-  color: #b5e853;
+  color: var(--color-success);
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 11px;
   padding: 1px 4px;
@@ -866,26 +499,25 @@
 
 /* Code blocks */
 .rc-root .bubble.assistant pre {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   margin: 8px 0;
-  overflow-x: hidden;
+  /* Code keeps its lines and scrolls sideways; tokens are never broken mid-word. */
+  overflow-x: auto;
   max-width: 100%;
   padding: 10px 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: pre;
 }
 .rc-root .bubble.assistant pre code {
   background: none;
   border: none;
-  color: #e8e8e8;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 11px;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   line-height: 1.6;
   padding: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: pre;
 }
 .rc-root .bubble.assistant pre::-webkit-scrollbar { height: 4px; }
 .rc-root .bubble.assistant pre::-webkit-scrollbar-thumb {
@@ -944,7 +576,7 @@
   color: var(--text-dim);
 }
 .rc-root .bubble.assistant tr:nth-child(even) td {
-  background: rgba(255,255,255,0.02);
+  background: color-mix(in srgb, var(--color-text) 2%, transparent);
 }
 
 /* Task list checkboxes */
@@ -955,471 +587,35 @@
 
 /* hljs syntax theme overrides for dark bg */
 .rc-root .hljs-keyword,
-.rc-root .hljs-built_in { color: #c678dd; }
-.rc-root .hljs-string   { color: #98c379; }
-.rc-root .hljs-comment  { color: #5c6370; font-style: italic; }
-.rc-root .hljs-number   { color: #d19a66; }
-.rc-root .hljs-function { color: #61afef; }
-.rc-root .hljs-title    { color: #e06c75; }
-.rc-root .hljs-attr     { color: #e06c75; }
-.rc-root .hljs-variable { color: #e5c07b; }
-.rc-root .hljs-type     { color: #e5c07b; }
+.rc-root .hljs-built_in { color: var(--color-accent); }
+.rc-root .hljs-string   { color: var(--color-success); }
+.rc-root .hljs-comment  { color: var(--color-text-muted); font-style: italic; }
+.rc-root .hljs-number   { color: var(--color-warning); }
+.rc-root .hljs-function { color: var(--color-accent); }
+.rc-root .hljs-title    { color: var(--color-danger); }
+.rc-root .hljs-attr     { color: var(--color-danger); }
+.rc-root .hljs-variable { color: var(--color-warning); }
+.rc-root .hljs-type     { color: var(--color-warning); }
 
 /* ── Inline code in settings hints ── */
-.rc-root .settings-code {
-  background: #0d0d0d;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: #b5e853;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 10px;
-  padding: 1px 4px;
-}
 
 /* ── Skill folders ── */
-.rc-root .skill-folders {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
-}
-
-.rc-root .skill-folder-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  min-width: 0;
-}
-
-.rc-root .skill-folder-row.default {
-  border-color: rgba(124,92,191,0.3);
-}
 
 /* ── Loaded skills & plugins (read-only list) ── */
-.rc-root .loaded-skills {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.rc-root .loaded-empty {
-  color: var(--text-dim, #888);
-  font-size: 12px;
-  padding: 6px 8px;
-}
-.rc-root .loaded-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  min-width: 0;
-}
-.rc-root .loaded-row.nested {
-  margin-left: 16px;
-  background: transparent;
-}
 /* Disabled skill/plugin row: dim only the ICON (opacity on text would drop the small
    "Skill/Plugin" tag under WCAG AA contrast — axe flags it). Text stays full-contrast;
    the explicit "disabled" tag + unchecked switch convey state. */
-.rc-root .loaded-row-disabled .loaded-icon {
-  opacity: 0.5;
-}
-.rc-root .loaded-row-disabled .loaded-name {
-  font-style: italic;
-}
-.rc-root .loaded-disabled-tag {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: #d98a8a;
-  border: 1px solid #6b2f2f;
-  border-radius: 3px;
-  padding: 0 4px;
-  margin-left: 4px;
-}
 /* Enable/disable toggle switch (role=switch button). */
-.rc-root .loaded-toggle {
-  flex: 0 0 auto;
-  align-self: center;
-  width: 34px;
-  height: 18px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: #3a3a3a;
-  cursor: pointer;
-  padding: 0;
-  position: relative;
-  transition: background 0.15s;
-}
-.rc-root .loaded-toggle-on {
-  background: #2f6f3f; /* green when ON; passes contrast against the knob */
-}
-.rc-root .loaded-toggle-knob {
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.15s;
-}
-.rc-root .loaded-toggle-on .loaded-toggle-knob {
-  transform: translateX(16px);
-}
-.rc-root .loaded-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* Gear (configure) button on a skill row with a settings_file. */
-.rc-root .loaded-gear {
-  flex: 0 0 auto;
-  align-self: center;
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 15px;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-.rc-root .loaded-gear:hover {
-  color: #e2e8f0;
-  background: rgba(255, 255, 255, 0.06);
-}
-.rc-root .loaded-gear:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* Trash / delete (user-installed skills & plugins only). */
-.rc-root .loaded-trash {
-  flex: 0 0 auto;
-  align-self: center;
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-.rc-root .loaded-trash:hover {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.12);
-}
-.rc-root .loaded-trash:focus-visible,
-.rc-root .loaded-delete-yes:focus-visible,
-.rc-root .loaded-delete-no:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.rc-root .loaded-delete-confirm {
-  flex: 0 0 auto;
-  align-self: center;
-  display: inline-flex;
-  gap: 4px;
-}
-.rc-root .loaded-delete-yes {
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.rc-root .loaded-delete-yes:hover {
-  background: #ef4444;
-}
-.rc-root .loaded-delete-no {
-  background: none;
-  color: #94a3b8;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.rc-root .loaded-delete-no:hover {
-  color: #e2e8f0;
-}
 
 /* Skill-settings YAML editor. */
-.rc-root .skill-settings-editor {
-  margin-top: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-  background: #0f172a;
-}
-.rc-root .skill-settings-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.rc-root .skill-settings-title {
-  font-size: 12px;
-  color: #e2e8f0;
-}
-.rc-root .skill-settings-close {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 13px;
-}
-.rc-root .skill-settings-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  background: #0b1220;
-  border: 1px solid #334155;
-  color: #e2e8f0;
-  border-radius: 6px;
-  padding: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  resize: vertical;
-}
-.rc-root .skill-settings-actions {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.rc-root .skill-settings-save {
-  background: #1d4ed8;
-  color: #fff;
-  border: none;
-  padding: 5px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.rc-root .skill-settings-save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.rc-root .skill-settings-status {
-  font-size: 12px;
-  color: #cbd5e1;
-}
-.rc-root .loaded-plugin-skills {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 2px;
-}
-.rc-root .loaded-icon {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  object-fit: contain;
-}
-.rc-root .loaded-icon-placeholder {
-  background: rgba(124,92,191,0.2);
-}
-.rc-root .loaded-text {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.rc-root .loaded-name-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.rc-root .loaded-name {
-  font-weight: 600;
-  font-size: 13px;
-}
-.rc-root .loaded-kind {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 5px;
-  border-radius: 4px;
-}
 /* Badge colors chosen to clear WCAG AA 4.5:1 against the dark badge backgrounds
    (verified by the axe scan in test/ui/skills.spec.ts). */
-.rc-root .loaded-kind-plugin {
-  background: rgba(124,92,191,0.25);
-  color: #c9b6ef; /* light lavender on the purple-tinted badge → ≥4.5:1 */
-}
-.rc-root .loaded-kind-skill {
-  background: rgba(120,120,120,0.2);
-  color: #c7c7c7; /* light grey → ≥4.5:1 on the dark badge */
-}
-.rc-root .loaded-desc {
-  font-size: 12px;
-  color: var(--text-dim, #999);
-  margin-top: 1px;
-}
 
 /* Missing-secret hint on a loaded skill/plugin row + inline set control. */
-.rc-root .loaded-missing-secrets {
-  margin-top: 5px;
-  padding: 5px 7px;
-  border: 1px solid #b8860b;
-  border-radius: 6px;
-  background: #1a1200;
-}
-.rc-root .loaded-missing-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: #f0c040;
-}
-.rc-root .loaded-missing-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 3px;
-}
-.rc-root .loaded-missing-name {
-  font-family: "SF Mono", monospace;
-  font-size: 10px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  white-space: nowrap;
-}
-.rc-root .loaded-secret-input {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 11px;
-  padding: 3px 6px;
-  outline: none;
-}
-.rc-root .loaded-secret-input:focus {
-  border-color: var(--accent);
-}
-.rc-root .loaded-secret-set {
-  background: #15803d;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-}
-.rc-root .loaded-secret-set:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.rc-root .skill-folder-path {
-  flex: 1;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 11px;
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.rc-root .skill-folder-badge {
-  font-size: 10px;
-  font-weight: 600;
-  /* Lightened accent so the badge text clears WCAG AA 4.5:1 on its tinted bg
-     (--accent #7c5cbf was only 3.2:1). */
-  color: #c3a8f0;
-  background: rgba(124, 92, 191, 0.18);
-  border-radius: 3px;
-  padding: 1px 6px;
-  flex-shrink: 0;
-}
-
-.rc-root .skill-folder-remove {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 0 2px;
-  flex-shrink: 0;
-  transition: color 0.1s;
-}
-
-.rc-root .skill-folder-remove:hover {
-  color: var(--error);
-}
-
-.rc-root .skill-folder-add {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.rc-root .skill-folder-input {
-  flex: 1;
-  font-family: "SF Mono", "Fira Code", monospace !important;
-  font-size: 11px !important;
-}
-
-.rc-root .skill-folder-add-btn {
-  flex-shrink: 0;
-  padding: 6px 10px !important;
-  font-size: 11px !important;
-}
 
 /* ── Bedrock model list ── */
-.rc-root .bedrock-model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.rc-root .bedrock-model-btn {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.rc-root .bedrock-model-btn:hover {
-  border-color: var(--accent);
-}
-
-.rc-root .bedrock-model-btn.active {
-  border-color: var(--accent);
-  background: #1e1840;
-}
-
-.rc-root .bedrock-model-label {
-  font-size: 12px;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.rc-root .bedrock-model-id {
-  font-size: 10px;
-  color: var(--text-dim);
-  font-family: "SF Mono", monospace;
-}
 
 /* ── Thinking block ── */
 .rc-root .thinking-block {
@@ -1491,11 +687,11 @@
 
 .rc-root .thinking-body {
   padding: 8px 11px;
-  background: #130f1f;
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
   border-left: 2px solid var(--accent-dim);
   border-radius: 0 5px 5px 0;
   font-size: 11.5px;
-  color: #9a8fb0; /* lighter than the old #7a6f8f — more readable while still muted */
+  color: var(--color-text);
   line-height: 1.6;
   word-break: break-word;
   max-height: 320px;
@@ -1522,18 +718,18 @@
   margin: 2px 0;
 }
 .rc-root .thinking-body strong {
-  color: #b9a3e6; /* the accent-text tint — bold stands out without shouting */
+  color: var(--color-accent); /* the accent-text tint — bold stands out without shouting */
   font-weight: 600;
 }
 .rc-root .thinking-body code {
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 10.5px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
 }
 .rc-root .thinking-body pre {
-  background: rgba(0, 0, 0, 0.3);
+  background: color-mix(in srgb, var(--color-bg) 30%, transparent);
   padding: 6px 8px;
   border-radius: 4px;
   overflow-x: auto;
@@ -1560,7 +756,7 @@
   gap: 4px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
   border: 1px solid var(--border);
   user-select: none;
   transition: background 0.15s;
@@ -1569,7 +765,7 @@
 }
 
 .rc-root .steps-summary:hover {
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .rc-root .steps-summary::-webkit-details-marker {
@@ -1590,7 +786,7 @@
   max-height: 400px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: rgba(0,0,0,0.15);
+  background: color-mix(in srgb, var(--color-bg) 15%, transparent);
 }
 
 .rc-root .steps-body::-webkit-scrollbar {
@@ -1602,7 +798,7 @@
 }
 
 .rc-root .step-item-details {
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--color-border);
   position: relative;
 }
 
@@ -1624,7 +820,7 @@
 }
 
 .rc-root .step-item-summary:hover {
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 
 .rc-root .step-item-summary::-webkit-details-marker {
@@ -1642,7 +838,7 @@
   font-weight: 600;
   flex-shrink: 0;
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .step-preview {
@@ -1689,7 +885,7 @@
 
 
 .rc-root .step-item-body pre {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 5px;
   margin: 4px 0;
@@ -1701,7 +897,7 @@
 .rc-root .step-item-body pre code {
   background: none;
   border: none;
-  color: #e8e8e8;
+  color: var(--color-text);
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 10px;
   line-height: 1.5;
@@ -1748,7 +944,7 @@
   gap: 4px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
   border: 1px solid var(--border);
   user-select: none;
   transition: background 0.15s;
@@ -1756,7 +952,7 @@
   box-sizing: border-box;
 }
 .rc-root .actions-summary:hover {
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 .rc-root .actions-summary::-webkit-details-marker {
   display: none;
@@ -1774,7 +970,7 @@
   max-height: 300px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: rgba(0,0,0,0.15);
+  background: color-mix(in srgb, var(--color-bg) 15%, transparent);
 }
 .rc-root .action-item {
   margin: 2px 0;
@@ -1794,7 +990,7 @@
   display: none;
 }
 .rc-root .action-item > summary:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .rc-root .action-num {
   display: inline-flex;
@@ -1807,13 +1003,13 @@
   font-weight: 600;
   flex-shrink: 0;
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 .rc-root .action-failed .action-num {
   background: var(--error);
 }
 .rc-root .action-title {
-  color: var(--accent-text); /* WCAG AA on the dark bg (was --accent #7c5cbf → 3.66:1, failed) */
+  color: var(--accent-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1849,23 +1045,6 @@
 }
 
 /* ── Empty state ── */
-.rc-root .empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-dim);
-  font-size: 12px;
-  text-align: center;
-  padding: 20px;
-}
-
-.rc-root .empty-state .logo {
-  font-size: 28px;
-  margin-bottom: 4px;
-}
 
 /* ── ProposalTable ── */
 .rc-root .proposal-table {
@@ -1903,8 +1082,8 @@
 }
 
 .rc-root .proposal-row:last-child { border-bottom: none; }
-.rc-root .proposal-row.approved { background: rgba(90,156,90,0.07); }
-.rc-root .proposal-row.rejected { background: rgba(192,57,43,0.07); }
+.rc-root .proposal-row.approved { background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface)); }
+.rc-root .proposal-row.rejected { background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); }
 
 .rc-root .proposal-label {
   font-size: 12px;
@@ -1933,7 +1112,7 @@
 .rc-root .proposal-arrow { color: var(--text-dim); }
 
 .rc-root .proposal-proposed {
-  color: #7ec882;
+  color: var(--color-success);
   font-weight: 500;
 }
 
@@ -1974,16 +1153,16 @@
 
 .rc-root .proposal-btn.approve:hover,
 .rc-root .proposal-btn.approve.active {
-  background: rgba(90,156,90,0.15);
-  border-color: #5a9c5a;
-  color: #7ec882;
+  background: color-mix(in srgb, var(--color-success) 15%, var(--color-surface));
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .rc-root .proposal-btn.reject:hover,
 .rc-root .proposal-btn.reject.active {
-  background: rgba(192,57,43,0.15);
+  background: color-mix(in srgb, var(--color-danger) 15%, var(--color-surface));
   border-color: var(--error);
-  color: #ff7070;
+  color: var(--color-danger);
 }
 
 .rc-root .proposal-footer {
@@ -2016,7 +1195,7 @@
   background: var(--accent);
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-accent-contrast);
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
@@ -2039,7 +1218,7 @@
 
 .rc-root .proposal-submitted-badge {
   font-size: 12px;
-  color: #7ec882;
+  color: var(--color-success);
 }
 
 /* ── PlanSteps ── */
@@ -2080,12 +1259,12 @@
 }
 
 .rc-root .plan-step.running {
-  background: rgba(124,92,191,0.07);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
   color: var(--text);
 }
 
-.rc-root .plan-step.done { color: #7ec882; }
-.rc-root .plan-step.error { color: #ff7070; }
+.rc-root .plan-step.done { color: var(--color-success); }
+.rc-root .plan-step.error { color: var(--color-danger); }
 
 .rc-root .plan-step-icon {
   flex-shrink: 0;
@@ -2145,7 +1324,7 @@
 }
 
 .rc-root .render-table tr:nth-child(even) td {
-  background: rgba(255,255,255,0.02);
+  background: color-mix(in srgb, var(--color-text) 2%, transparent);
 }
 
 /* ── RenderBlock: downloads ── */
@@ -2184,7 +1363,7 @@
   font-weight: 600;
   color: var(--accent);
   text-transform: uppercase;
-  background: rgba(124,92,191,0.12);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   border-radius: 3px;
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2238,11 +1417,9 @@
 .rc-root .render-gf-type {
   font-size: 10px;
   font-weight: 700;
-  /* Lightened purple (not var(--accent) #7c5cbf, which fails WCAG contrast on the dark
-     translucent badge). #b9a3e6 on the dark panel bg clears the 4.5:1 threshold. */
-  color: #b9a3e6;
+  color: var(--color-accent);
   text-transform: uppercase;
-  background: rgba(124,92,191,0.18);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
   border-radius: 3px;
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2299,8 +1476,8 @@
 
 /* ── RenderBlock: info ── */
 .rc-root .render-info {
-  background: rgba(124,92,191,0.07);
-  border: 1px solid rgba(124,92,191,0.25);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: 8px;
   padding: 10px 12px;
   align-self: stretch;
@@ -2341,10 +1518,10 @@
 }
 
 .rc-root .render-chart-placeholder pre {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 5px;
-  color: #b5e853;
+  color: var(--color-success);
   font-family: "SF Mono", monospace;
   font-size: 10px;
   line-height: 1.5;
@@ -2359,7 +1536,7 @@
   max-width: 500px;
   height: 250px;
   margin: 8px 0;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 12px;
 }
@@ -2372,15 +1549,15 @@
 
 .rc-root .chart-block-error-label {
   font-size: 11px;
-  color: #ff7070;
+  color: var(--color-danger);
   margin-bottom: 6px;
 }
 
 .rc-root .chart-block-fallback {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 5px;
-  color: #b5e853;
+  color: var(--color-success);
   font-family: "SF Mono", monospace;
   font-size: 10px;
   line-height: 1.5;
@@ -2399,7 +1576,7 @@
   margin: 8px 0;
   border-radius: 8px;
   overflow: hidden;
-  background: #e8eef2; /* tile-load placeholder */
+  background: var(--color-accent); /* tile-load placeholder */
 }
 
 /* Inline preview: block pointer events on the map itself so the click reaches the
@@ -2411,21 +1588,17 @@
 .rc-root .map-block .leaflet-container {
   width: 100%;
   height: 100%;
-  background: #e8eef2;
+  background: var(--color-accent);
 }
-
-/* Leaflet's attribution link sits on a near-white control background; the global accent
-   link color (#9b7fd4) only hits 3.19:1 there (WCAG AA needs 4.5:1). Override with a
-   darker purple that clears AA. */
 .rc-root .map-block .leaflet-control-attribution a {
-  color: #5b3fa0;
+  color: var(--color-accent);
 }
 
 /* ── MermaidBlock (inline Mermaid.js diagrams) ── */
 .rc-root .mermaid-block {
   width: 100%;
   margin: 8px 0;
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 12px;
   overflow-x: auto;
@@ -2437,7 +1610,7 @@
 }
 
 .rc-root .mermaid-block-error {
-  color: #cc0000;
+  color: var(--color-danger);
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 12px;
   white-space: pre-wrap;
@@ -2445,10 +1618,10 @@
 }
 
 .rc-root .mermaid-block-fallback {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 5px;
-  color: #b5e853;
+  color: var(--color-success);
   font-family: "SF Mono", monospace;
   font-size: 10px;
   line-height: 1.5;
@@ -2465,181 +1638,10 @@
 }
 
 /* ── MCP Servers view ── */
-.rc-root .mcp-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rc-root .mcp-loading {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 40px 16px;
-  font-size: 12px;
-}
-
-.rc-root .mcp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 4px;
-}
-
-.rc-root .mcp-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rc-root .mcp-reconnect-all-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 4px 10px;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.rc-root .mcp-reconnect-all-btn:hover:not(:disabled) {
-  background: var(--surface);
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.rc-root .mcp-reconnect-all-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rc-root .mcp-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.rc-root .mcp-add-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.rc-root .mcp-add-btn:hover {
-  background: var(--surface);
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.rc-root .mcp-empty {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 60px 16px;
-  font-size: 12px;
-  line-height: 1.6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.rc-root .mcp-empty-add-btn {
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 8px 16px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.rc-root .mcp-empty-add-btn:hover {
-  background: rgba(124, 92, 191, 0.12);
-  color: var(--text);
-}
-
-.rc-root .mcp-empty-hint {
-  font-size: 11px;
-  opacity: 0.7;
-}
-
-.rc-root .mcp-empty-hint code {
-  background: #0d0d0d;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: #b5e853;
-  font-family: "SF Mono", monospace;
-  font-size: 10px;
-  padding: 1px 4px;
-}
-
-.rc-root .mcp-server-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rc-root .mcp-server-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  transition: border-color 0.15s;
-}
-
-.rc-root .mcp-server-card:hover {
-  border-color: rgba(124, 92, 191, 0.4);
-}
-
-.rc-root .mcp-server-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  user-select: none;
-}
-
-.rc-root .mcp-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.rc-root .mcp-status-dot.connected {
-  background: #4ade80;
-  box-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
-}
-
-.rc-root .mcp-status-dot.disconnected {
-  background: #ef4444;
-  box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
-}
 
 /* Connecting: enabled + handshake in flight (e.g. fiscal.ai SSE at startup). Blue,
    gently pulsing so it reads as "working on it", distinct from red (failed) / yellow
    (needs auth). */
-.rc-root .mcp-status-dot.connecting {
-  background: #38bdf8;
-  box-shadow: 0 0 4px rgba(56, 189, 248, 0.5);
-  animation: mcp-dot-pulse 1s ease-in-out infinite;
-}
 @keyframes mcp-dot-pulse {
   0%,
   100% {
@@ -2649,765 +1651,37 @@
     opacity: 0.35;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .rc-root .mcp-status-dot.connecting {
-    animation: none;
-  }
-}
-
-.rc-root .mcp-server-name {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rc-root .mcp-transport-badge {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.rc-root .mcp-transport-badge.stdio {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-}
-
-.rc-root .mcp-transport-badge.http {
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-}
-
-.rc-root .mcp-transport-badge.sse {
-  background: rgba(234, 179, 8, 0.15);
-  color: #fbbf24;
-}
-
-.rc-root .mcp-tool-count {
-  font-size: 10px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
 
 /* Tool count rendered as a button so it's an obvious "show tools" affordance. */
-.rc-root .mcp-tool-count-btn {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 6px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.rc-root .mcp-tool-count-btn:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
 
 /* The whole label area is one big toggle button — a friendly click target. Reset the
    native button chrome and lay its contents out inline like the old row. */
-.rc-root .mcp-server-label {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
-  margin: -2px -4px;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 6px;
-}
-.rc-root .mcp-server-label:hover {
-  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
-}
-.rc-root .mcp-server-label:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.rc-root .mcp-expand-caret {
-  font-size: 9px;
-  color: var(--text-dim);
-  width: 10px;
-  flex-shrink: 0;
-}
-.rc-root .mcp-server-label:hover .mcp-expand-caret {
-  color: var(--text);
-}
 
 /* Enable/disable toggle (role=switch). On = accent, Off = muted; text label keeps it
    readable + accessible (aria-checked drives state for screen readers). */
-.rc-root .mcp-enable-toggle {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  flex-shrink: 0;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-.rc-root .mcp-enable-toggle.on {
-  background: #15803d;
-  color: #fff;
-  border-color: #15803d;
-}
-.rc-root .mcp-enable-toggle.off {
-  background: var(--bg);
-  color: var(--text-dim);
-}
-.rc-root .mcp-enable-toggle.off:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.rc-root .mcp-connect-btn {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  flex-shrink: 0;
-}
-.rc-root .mcp-connect-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-.rc-root .mcp-connect-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.rc-root .mcp-reconnect-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  cursor: pointer;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  flex-shrink: 0;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-
-.rc-root .mcp-reconnect-btn:hover:not(:disabled) {
-  background: var(--border);
-  color: var(--text);
-  border-color: var(--accent);
-}
-
-.rc-root .mcp-reconnect-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.rc-root .mcp-server-details {
-  border-top: 1px solid var(--border);
-  padding: 8px 10px;
-  background: var(--bg);
-}
-
-.rc-root .mcp-detail-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.rc-root .mcp-detail-label {
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.rc-root .mcp-detail-value {
-  font-family: "SF Mono", monospace;
-  font-size: 10px;
-  color: #b5e853;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Connect-failure detail (e.g. server-side 400) — red, wraps so the full reason shows.
-   Uses a lighter red than --error so it clears WCAG AA (4.5:1) on the dark panel bg
-   at this small font size (--error #c0392b is only ~3.3:1 on #161616). */
-.rc-root .mcp-server-error .mcp-error-text {
-  color: #f87171;
-  white-space: normal;
-  overflow: visible;
-}
 
 /* Server icon in the row. Many MCP servers ship a DARK/transparent monochrome logo
    (GitHub octocat, Parallel's "dark symbol") that would vanish on the dark panel — so
    sit it on a light rounded chip with padding. Light logos still read fine on white. */
-.rc-root .mcp-server-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  object-fit: contain;
-  flex-shrink: 0;
-  background: #f5f5f5;
-  padding: 2px;
-  box-sizing: border-box;
-}
 
 /* Read-only header/env chips in the expanded detail. */
-.rc-root .mcp-kv-chip {
-  display: inline-block;
-  font-family: "SF Mono", monospace;
-  font-size: 10px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  margin: 0 4px 2px 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: top;
-}
 
 /* Missing-secret hint + inline set control. */
-.rc-root .mcp-missing-secrets {
-  margin-top: 6px;
-  padding: 6px 8px;
-  border: 1px solid #b8860b;
-  border-radius: 6px;
-  background: #1a1200;
-}
-.rc-root .mcp-missing-secrets-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #f0c040;
-  margin-bottom: 4px;
-}
-.rc-root .mcp-missing-secret-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 3px 0;
-}
-.rc-root .mcp-secret-set-input {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 11px;
-  padding: 4px 6px;
-  outline: none;
-}
-.rc-root .mcp-secret-set-input:focus {
-  border-color: var(--accent);
-}
-.rc-root .mcp-secret-set-btn {
-  background: #15803d;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 10px;
-}
-
-.rc-root .mcp-tools-list {
-  margin-top: 8px;
-}
-
-.rc-root .mcp-tools-header {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
-}
-
-.rc-root .mcp-tool-item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 4px 8px;
-  border-left: 2px solid var(--border);
-  margin-bottom: 2px;
-}
-
-.rc-root .mcp-tool-name {
-  font-size: 11px;
-  font-family: "SF Mono", monospace;
-  color: var(--text);
-}
-
-.rc-root .mcp-tool-desc {
-  font-size: 10px;
-  color: var(--text-dim);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rc-root .mcp-no-tools {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-style: italic;
-  margin-top: 6px;
-}
-
-.rc-root .mcp-add-form {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rc-root .mcp-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rc-root .mcp-form-row label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rc-root .mcp-form-row input,
-.rc-root .mcp-form-row select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 6px 8px;
-  outline: none;
-  transition: border-color 0.15s;
-  font-family: inherit;
-}
-
-.rc-root .mcp-form-row input:focus,
-.rc-root .mcp-form-row select:focus {
-  border-color: var(--accent);
-}
-
-.rc-root .mcp-form-row input::placeholder {
-  color: var(--text-dim);
-}
-
-.rc-root .mcp-form-row select {
-  cursor: pointer;
-}
-
-.rc-root .mcp-form-row select option {
-  background: var(--surface);
-}
-
-.rc-root .mcp-form-error {
-  font-size: 11px;
-  color: var(--error);
-  padding: 2px 0;
-}
-
-.rc-root .mcp-form-hint {
-  font-size: 10px;
-  color: var(--text-dim);
-  line-height: 1.4;
-}
 
 /* URL field + inline "Discover auth" button. */
-.rc-root .mcp-url-row {
-  display: flex;
-  gap: 6px;
-  align-items: stretch;
-}
-.rc-root .mcp-url-row input {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 6px 8px;
-  outline: none;
-  font-family: inherit;
-}
-.rc-root .mcp-url-row input:focus {
-  border-color: var(--accent);
-}
-.rc-root .mcp-discover-btn {
-  white-space: nowrap;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 4px 10px;
-}
-.rc-root .mcp-discover-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.rc-root .mcp-discover-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 /* Info box explaining the $SECRET_ convention in auth fields. */
-.rc-root .mcp-secret-info {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  font-size: 10px;
-  line-height: 1.45;
-  color: var(--text-dim);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-.rc-root .mcp-secret-info code {
-  font-size: 10px;
-  background: var(--surface);
-  border-radius: 3px;
-  padding: 0 3px;
-  color: var(--text);
-}
-.rc-root .mcp-secret-info-icon {
-  color: var(--accent);
-  font-size: 12px;
-  line-height: 1.2;
-}
 
 /* OAuth2 / CLI auth sub-fields grouped + indented under the auth selector. */
-.rc-root .mcp-auth-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-}
 
 /* Editable key/value lists (custom headers, env vars). */
-.rc-root .mcp-kv-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rc-root .mcp-kv-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.rc-root .mcp-kv-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rc-root .mcp-kv-add {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 8px;
-}
-
-.rc-root .mcp-kv-add:hover {
-  border-color: var(--accent);
-}
-
-.rc-root .mcp-kv-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.rc-root .mcp-kv-row .mcp-kv-name,
-.rc-root .mcp-kv-row .mcp-kv-value {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 6px 8px;
-  outline: none;
-  font-family: inherit;
-}
-
-.rc-root .mcp-kv-row .mcp-kv-name:focus,
-.rc-root .mcp-kv-row .mcp-kv-value:focus {
-  border-color: var(--accent);
-}
-
-.rc-root .mcp-kv-remove {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 4px 8px;
-}
-
-.rc-root .mcp-kv-remove:hover {
-  border-color: var(--error);
-  color: var(--error);
-}
-
-.rc-root .mcp-form-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.rc-root .mcp-form-cancel {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 5px 12px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.rc-root .mcp-form-cancel:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
-.rc-root .mcp-form-submit {
-  background: var(--accent);
-  border: none;
-  border-radius: 5px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 5px 12px;
-  transition: background 0.15s;
-}
-
-.rc-root .mcp-form-submit:hover:not(:disabled) {
-  background: var(--accent-dim);
-}
-
-.rc-root .mcp-form-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rc-root .mcp-server-actions {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.rc-root .mcp-remove-btn {
-  background: none;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 5px;
-  color: #ef4444;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 4px 10px;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.rc-root .mcp-remove-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
-}
-
-.rc-root .mcp-confirm-remove {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.rc-root .mcp-confirm-yes {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid #ef4444;
-  border-radius: 5px;
-  color: #ef4444;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 10px;
-  transition: background 0.15s;
-}
-
-.rc-root .mcp-confirm-yes:hover {
-  background: rgba(239, 68, 68, 0.25);
-}
-
-.rc-root .mcp-confirm-no {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 3px 10px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.rc-root .mcp-confirm-no:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
-.rc-root .mcp-status-dot.auth-required {
-  background: #eab308;
-  box-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
-}
-
-.rc-root .mcp-auth-btn {
-  background: rgba(234, 179, 8, 0.15);
-  border: 1px solid rgba(234, 179, 8, 0.4);
-  border-radius: 4px;
-  color: #fbbf24;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 2px 8px;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.rc-root .mcp-auth-btn:hover:not(:disabled) {
-  background: rgba(234, 179, 8, 0.25);
-  border-color: #fbbf24;
-}
-
-.rc-root .mcp-auth-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rc-root .mcp-auth-ok {
-  color: #4ade80;
-  font-family: inherit;
-  font-size: 11px;
-}
-
-.rc-root .mcp-auth-expiry {
-  color: var(--text-dim);
-  font-size: 10px;
-}
-
-.rc-root .mcp-auth-required {
-  color: #fbbf24;
-  font-family: inherit;
-  font-size: 11px;
-}
-
-.rc-root .mcp-auth-none {
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 11px;
-}
-
-.rc-root .mcp-revoke-btn {
-  background: none;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 4px;
-  color: #ef4444;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 1px 6px;
-  margin-left: 8px;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.rc-root .mcp-revoke-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
-}
 
 /* The Auth line holds interactive buttons (Refresh/Revoke), so it must NOT clamp with
    nowrap+ellipsis like a plain detail value (that clipped/overlapped the buttons and made
    them unclickable). Let it wrap and lay children out inline with gaps. */
-.rc-root .mcp-auth-row {
-  align-items: center;
-}
-.rc-root .mcp-auth-value {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-.rc-root .mcp-auth-value .mcp-refresh-btn,
-.rc-root .mcp-auth-value .mcp-revoke-btn {
-  margin-left: 0;
-}
 
 /* Manual token refresh — non-destructive, uses the accent color (not red like Revoke).
    Accent chosen to clear WCAG AA on the dark panel bg at 10px. */
-.rc-root .mcp-refresh-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: #7dd3fc;
-  cursor: pointer;
-  font-size: 10px;
-  padding: 1px 6px;
-  margin-left: 8px;
-  transition: background 0.15s, border-color 0.15s;
-}
-.rc-root .mcp-refresh-btn:hover:not(:disabled) {
-  background: rgba(125, 211, 252, 0.12);
-  border-color: #7dd3fc;
-}
-.rc-root .mcp-refresh-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 /* ── Copy buttons ── */
 .rc-root .code-block-wrapper {
@@ -3418,8 +1692,8 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
+  background: color-mix(in srgb, var(--color-bg) 50%, transparent);
+  color: var(--color-text);
   border: none;
   border-radius: 4px;
   padding: 2px 6px;
@@ -3435,11 +1709,11 @@
 }
 
 .rc-root .copy-btn:hover {
-  background: rgba(0, 0, 0, 0.7);
+  background: color-mix(in srgb, var(--color-bg) 70%, transparent);
 }
 
 .rc-root .copy-btn.copied {
-  background: #22c55e;
+  background: var(--color-success);
   opacity: 1;
 }
 
@@ -3449,7 +1723,7 @@
   right: 4px;
   opacity: 0;
   transition: opacity 0.2s;
-  background: rgba(0, 0, 0, 0.4);
+  background: color-mix(in srgb, var(--color-bg) 40%, transparent);
   font-size: 11px;
   padding: 2px 5px;
 }
@@ -3492,18 +1766,18 @@
 }
 .rc-root .bubble-feedback-btn:hover {
   filter: grayscale(0) opacity(1);
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 .rc-root .bubble-feedback-btn.active {
   filter: grayscale(0) opacity(1);
 }
 .rc-root .bubble-feedback-btn.like.active {
-  background: rgba(120, 200, 120, 0.18);
-  border-color: rgba(120, 200, 120, 0.5);
+  background: color-mix(in srgb, var(--color-success) 18%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
 }
 .rc-root .bubble-feedback-btn.dislike.active {
-  background: rgba(220, 120, 120, 0.18);
-  border-color: rgba(220, 120, 120, 0.5);
+  background: color-mix(in srgb, var(--color-danger) 18%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
 }
 .rc-root .bubble-feedback-btn:focus-visible {
   outline: 2px solid var(--accent);
@@ -3531,11 +1805,6 @@
   font-weight: 500;
 }
 /* Verifying — muted, live. --text-muted keeps AA contrast on the dark bg. */
-.rc-root .bubble-verify.verify-verifying .bubble-verify-badge {
-  color: var(--text-muted, #9aa3b2);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
-}
 .rc-root .verify-spinner {
   display: inline-block;
   animation: verify-pulse 1.1s ease-in-out infinite;
@@ -3550,17 +1819,7 @@
   }
 }
 /* Verified — permanent, calm green (AA on dark). */
-.rc-root .bubble-verify.verify-verified .bubble-verify-badge {
-  color: #7fcf9a;
-  background: rgba(120, 200, 120, 0.12);
-  border-color: rgba(120, 200, 120, 0.3);
-}
 /* Unverified — brief marker (host collapses the answer to a step); calm amber, not alarming. */
-.rc-root .bubble-verify.verify-unverified .bubble-verify-badge {
-  color: #e0b062;
-  background: rgba(220, 170, 90, 0.12);
-  border-color: rgba(220, 170, 90, 0.3);
-}
 /* Honor reduced-motion — freeze the pulse. */
 @media (prefers-reduced-motion: reduce) {
   .rc-root .verify-spinner {
@@ -3581,7 +1840,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #2a2a3a;
+  background: var(--color-surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 2px 8px;
@@ -3596,10 +1855,6 @@
   border-radius: 4px;
 }
 
-.rc-root .attachment-badge .attachment-icon {
-  font-size: 14px;
-}
-
 .rc-root .attachment-badge .attachment-name {
   max-width: 120px;
   overflow: hidden;
@@ -3609,7 +1864,7 @@
 
 .rc-root .attachment-badge .remove {
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 10px;
   margin-left: 2px;
   transition: color 0.15s;
@@ -3621,10 +1876,6 @@
 
 .rc-root .text-paste-badge {
   position: relative;
-}
-
-.rc-root .text-paste-badge .attachment-icon {
-  cursor: pointer;
 }
 
 .rc-root .text-paste-preview {
@@ -3640,7 +1891,7 @@
   padding: 8px;
   margin-bottom: 4px;
   z-index: 100;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .rc-root .text-paste-preview pre {
@@ -3653,34 +1904,12 @@
 }
 
 /* Attach button */
-.rc-root .attach-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text-dim);
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 16px;
-  font-weight: 600;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.rc-root .attach-btn:hover {
-  background: var(--border);
-  color: var(--text);
-  border-color: var(--accent);
-}
 
 /* ── Drop zone ── */
 .rc-root .input-area.drag-over {
-  border: 2px dashed #3b82f6;
-  background: rgba(59, 130, 246, 0.05);
-  border-top: 2px dashed #3b82f6;
+  border: 2px dashed var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  border-top: 2px dashed var(--color-accent);
 }
 
 /* ── Collapsible blocks ── */
@@ -3697,7 +1926,7 @@
   font-weight: 500;
   font-size: 12px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--color-text) 2%, transparent);
   user-select: none;
   list-style: none;
 }
@@ -3736,14 +1965,14 @@
 }
 
 .rc-root .diff-line-add {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  color: var(--color-success);
   padding: 1px 10px;
 }
 
 .rc-root .diff-line-remove {
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
+  color: var(--color-danger);
   padding: 1px 10px;
 }
 
@@ -3785,7 +2014,7 @@
   margin: 8px 0;
   overflow-x: auto;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--color-text) 2%, transparent);
   border-radius: 6px;
 }
 
@@ -3799,49 +2028,7 @@
   color: var(--text);
 }
 
-.rc-root .math-block .katex .mord,
-.rc-root .math-inline .katex .mord {
-  color: var(--text);
-}
-
-.rc-root .math-block .katex .mop,
-.rc-root .math-inline .katex .mop {
-  color: #c678dd;
-}
-
-.rc-root .math-block .katex .mrel,
-.rc-root .math-inline .katex .mrel {
-  color: #61afef;
-}
-
 /* Notifications view */
-.rc-root .notifications-view { padding: 12px; overflow-y: auto; height: calc(100vh - 80px); }
-.rc-root .notifications-view h3 { margin: 12px 0 8px; font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-.rc-root .notif-channel { background: #1e293b; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
-.rc-root .notif-header { display: flex; align-items: center; justify-content: space-between; }
-.rc-root .notif-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
-.rc-root .notif-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
-.rc-root .notif-icon { font-size: 16px; }
-.rc-root .notif-test-btn { font-size: 11px; padding: 2px 8px; background: #334155; border: 1px solid #475569; color: #e2e8f0; border-radius: 4px; cursor: pointer; }
-.rc-root .notif-test-btn:hover { background: #475569; }
-.rc-root .notif-test-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.rc-root .notif-detail { font-size: 11px; color: #94a3b8; margin-top: 6px; padding-left: 24px; }
-.rc-root .notif-fields { margin-top: 8px; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; }
-.rc-root .notif-fields label { font-size: 11px; color: #94a3b8; display: flex; flex-direction: column; gap: 2px; }
-.rc-root .notif-fields input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-.rc-root .notif-help { font-size: 10px; color: #64748b; margin-top: 4px; line-height: 1.4; }
-.rc-root .notif-hint { font-size: 11px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4; }
-.rc-root .notif-rules { display: flex; flex-direction: column; gap: 4px; }
-.rc-root .notif-rule { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 8px; background: #1e293b; border-radius: 4px; font-size: 11px; }
-.rc-root .notif-rule-name { color: #e2e8f0; text-transform: capitalize; flex-shrink: 0; }
-.rc-root .notif-rule-channels { color: #cbd5e1; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
-.rc-root .notif-rule-check { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.rc-root .notif-rule-check input[type="checkbox"] { width: 13px; height: 13px; cursor: pointer; }
-.rc-root .notif-actions { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
-.rc-root .notif-save-btn { background: #1d4ed8; color: white; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.rc-root .notif-save-btn:hover { background: #1e40af; }
-.rc-root .notif-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.rc-root .notif-test-result { font-size: 12px; color: #22c55e; }
 
 /* ── Inline Buttons (from assistant messages) ── */
 .rc-root .buttons-block {
@@ -3854,8 +2041,8 @@
 .rc-root .inline-btn {
   padding: 6px 12px;
   border-radius: 16px;
-  background: #3b82f6;
-  color: white;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
   border: none;
   cursor: pointer;
   font-size: 12px;
@@ -3863,11 +2050,11 @@
 }
 
 .rc-root .inline-btn:hover {
-  background: #2563eb;
+  background: var(--color-accent);
 }
 
 .rc-root .inline-btn:active {
-  background: #1d4ed8;
+  background: var(--color-accent);
 }
 
 /* Followup suggestion chips — lighter than inline-btn (outline, not filled) since
@@ -3882,18 +2069,16 @@
   padding: 5px 11px;
   border-radius: 14px;
   background: none;
-  /* Lighter purple than --accent (#7c5cbf) so text clears WCAG AA (4.5:1) on the dark
-     bubble bg — the raw accent is only ~3.2:1. */
-  border: 1px solid #b9a3e8;
-  color: #b9a3e8;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
   cursor: pointer;
   font-size: 12px;
   text-align: left;
   transition: background 0.15s, color 0.15s;
 }
 .rc-root .followup-chip:hover:not(:disabled) {
-  background: #b9a3e8;
-  color: #161616;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
 }
 .rc-root .followup-chip:disabled {
   opacity: 0.5;
@@ -3928,10 +2113,10 @@
 
 .rc-root .action-approval-card {
   margin: 8px 12px;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border, var(--color-border));
   border-radius: 8px;
   padding: 12px;
-  background: var(--surface, #1e1e1e);
+  background: var(--surface, var(--color-surface));
 }
 
 .rc-root .action-approval-header {
@@ -3948,7 +2133,7 @@
 .rc-root .action-approval-type {
   font-weight: 600;
   font-size: 13px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
 }
 
 .rc-root .action-approval-details {
@@ -3962,19 +2147,19 @@
 }
 
 .rc-root .action-approval-label {
-  color: var(--text-muted, #888);
+  color: var(--text-muted, var(--color-text-muted));
   margin-right: 6px;
 }
 
 .rc-root .action-approval-details code {
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 11px;
 }
 
 .rc-root .action-approval-reasoning {
-  color: var(--text-muted, #888);
+  color: var(--text-muted, var(--color-text-muted));
   font-style: italic;
   margin-top: 6px;
   font-size: 11px;
@@ -4002,38 +2187,38 @@
 
 /* Button backgrounds are darkened to meet WCAG AA 4.5:1 against white text at 12px. */
 .rc-root .action-approval-btn-approve {
-  background: #15803d;
-  color: #fff;
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+  color: var(--color-text);
 }
 
 .rc-root .action-approval-btn-deny {
-  background: #b91c1c; /* red — refuse; white text passes AA at 12px */
-  color: #fff;
+  background: var(--color-danger); /* red — refuse; white text passes AA at 12px */
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .action-approval-btn-guide {
-  background: #1d4ed8;
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .action-approval-btn-queue {
-  background: #4b5563;
-  color: #fff;
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
 
 .rc-root .action-approval-btn-always {
-  background: #0f766e; /* teal — distinct from Approve's green, white text passes contrast */
-  color: #fff;
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)); /* teal — distinct from Approve's green, white text passes contrast */
+  color: var(--color-text);
 }
 
 /* ── Brain Questions Card ────────────────────────────────────────────────── */
 
 .rc-root .brain-questions-card {
   margin: 8px 12px;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border, var(--color-border));
   border-radius: 8px;
   padding: 12px;
-  background: var(--surface, #1e1e1e);
+  background: var(--surface, var(--color-surface));
 }
 
 .rc-root .brain-questions-header {
@@ -4050,7 +2235,7 @@
 .rc-root .brain-questions-title {
   font-weight: 600;
   font-size: 13px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
 }
 
 .rc-root .brain-questions-list {
@@ -4067,22 +2252,22 @@
 
 .rc-root .brain-question-label {
   font-size: 12px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
   font-weight: 500;
 }
 
 .rc-root .brain-question-input {
   padding: 6px 8px;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border, var(--color-border));
   border-radius: 4px;
-  background: var(--bg, #121212);
-  color: var(--text, #eee);
+  background: var(--bg, var(--color-bg));
+  color: var(--text, var(--color-text));
   font-size: 12px;
   outline: none;
 }
 
 .rc-root .brain-question-input:focus {
-  border-color: var(--accent, #3b82f6);
+  border-color: var(--accent, var(--color-accent));
 }
 
 .rc-root .brain-question-options {
@@ -4097,7 +2282,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
   cursor: pointer;
 }
 
@@ -4112,8 +2297,8 @@
   padding: 8px;
   border: none;
   border-radius: 6px;
-  background: var(--accent, #3b82f6);
-  color: #fff;
+  background: var(--accent, var(--color-accent));
+  color: var(--color-accent-contrast);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -4132,9 +2317,9 @@
 /* Secondary "Cancel" action — skip the structured questions, reply freely. */
 .rc-root .brain-questions-btn-cancel {
   flex: 0 0 auto;
-  background: var(--bg-secondary, #2a2a2a);
-  color: var(--text, #eee);
-  border: 1px solid var(--border, #333);
+  background: var(--bg-secondary, var(--color-surface-2));
+  color: var(--text, var(--color-text));
+  border: 1px solid var(--border, var(--color-border));
 }
 
 /* Freestyle "Other" row: the radio sits inline with a text input that IS the option. */
@@ -4151,10 +2336,10 @@
 
 .rc-root .plan-view {
   margin: 8px 12px;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border, var(--color-border));
   border-radius: 8px;
   padding: 12px;
-  background: var(--surface, #1e1e1e);
+  background: var(--surface, var(--color-surface));
 }
 
 .rc-root .plan-view-header {
@@ -4168,7 +2353,7 @@
 .rc-root .plan-view-title {
   font-weight: 600;
   font-size: 13px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
 }
 
 .rc-root .plan-view-status {
@@ -4176,10 +2361,10 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-secondary, #9aa);
+  color: var(--text-secondary, var(--color-text));
   padding: 2px 8px;
   border-radius: 10px;
-  background: var(--bg-secondary, #2a2a2a);
+  background: var(--bg-secondary, var(--color-surface-2));
 }
 
 .rc-root .plan-view-steps {
@@ -4196,7 +2381,7 @@
   align-items: flex-start;
   gap: 8px;
   font-size: 12px;
-  color: var(--text, #eee);
+  color: var(--text, var(--color-text));
   line-height: 1.4;
 }
 
@@ -4204,7 +2389,7 @@
   flex: 0 0 auto;
   width: 16px;
   text-align: center;
-  color: var(--text-secondary, #9aa);
+  color: var(--text-secondary, var(--color-text));
 }
 
 .rc-root .plan-view-step-label {
@@ -4212,26 +2397,26 @@
 }
 
 .rc-root .plan-view-step.step-done .plan-view-step-icon {
-  color: #3fb950;
+  color: var(--color-success);
 }
 .rc-root .plan-view-step.step-failed .plan-view-step-icon {
-  color: #f85149;
+  color: var(--color-danger);
 }
 .rc-root .plan-view-step.step-running .plan-view-step-icon {
-  color: var(--accent, #3b82f6);
+  color: var(--accent, var(--color-accent));
 }
 .rc-root .plan-view-step.step-done .plan-view-step-label {
-  color: var(--text-secondary, #9aa);
+  color: var(--text-secondary, var(--color-text));
   text-decoration: line-through;
 }
 
 .rc-root .plan-view-step-confirm {
-  color: #c9a227;
+  color: var(--color-warning);
   font-weight: 700;
 }
 
 .rc-root .plan-view-step-result {
-  color: var(--text-secondary, #9aa);
+  color: var(--text-secondary, var(--color-text));
   font-style: italic;
 }
 
@@ -4257,14 +2442,14 @@
 }
 
 .rc-root .plan-view-btn-approve {
-  background: var(--accent, #3b82f6);
-  color: #fff;
+  background: var(--accent, var(--color-accent));
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .plan-view-btn-reject {
-  background: var(--bg-secondary, #2a2a2a);
-  color: var(--text, #eee);
-  border: 1px solid var(--border, #333);
+  background: var(--bg-secondary, var(--color-surface-2));
+  color: var(--text, var(--color-text));
+  border: 1px solid var(--border, var(--color-border));
 }
 
 /* ── Interaction Block (resolved/expired cards in history) ─────────────── */
@@ -4285,7 +2470,7 @@
 .rc-root .interaction-block.expired {
   opacity: 0.5;
   background: var(--bg-secondary);
-  border-color: #c9a227;
+  border-color: var(--color-warning);
 }
 
 .rc-root .interaction-block-header {
@@ -4299,11 +2484,11 @@
 }
 
 .rc-root .interaction-block.resolved .interaction-block-icon {
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .rc-root .interaction-block.expired .interaction-block-icon {
-  color: #c9a227;
+  color: var(--color-warning);
 }
 
 .rc-root .interaction-block-title {
@@ -4350,7 +2535,7 @@
 .rc-root .lightbox-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
   z-index: 10000;
   display: flex;
   align-items: center;
@@ -4425,7 +2610,7 @@
 .rc-root .lightbox-download-btn,
 .rc-root .lightbox-copy-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--color-accent-contrast);
   border: none;
   border-radius: 6px;
   padding: 6px 14px;
@@ -4483,7 +2668,7 @@
 .rc-root .lightbox-chart {
   width: 100%;
   height: 100%;
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 16px;
 }
@@ -4491,7 +2676,7 @@
 .rc-root .lightbox-mermaid {
   width: 100%;
   height: 100%;
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 16px;
 }
@@ -4507,7 +2692,7 @@
   height: 100%;
   border-radius: 8px;
   overflow: hidden;
-  background: #e8eef2;
+  background: var(--color-accent);
 }
 
 .rc-root .lightbox-map .map-block {
@@ -4522,10 +2707,10 @@
   max-height: 100%;
   overflow: auto;
   width: 100%;
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 8px;
   padding: 16px;
-  color: #1a1a1a;
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .lightbox-table table {
@@ -4537,18 +2722,18 @@
 .rc-root .lightbox-table th,
 .rc-root .lightbox-table td {
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   text-align: left;
 }
 
 .rc-root .lightbox-table th {
-  background: #f5f5f5;
+  background: var(--color-surface);
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-accent-contrast);
 }
 
 .rc-root .lightbox-table tr:nth-child(even) {
-  background: #fafafa;
+  background: var(--color-surface);
 }
 
 /* Expandable visualization wrapper */
@@ -4563,8 +2748,8 @@
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  color: var(--color-text);
   font-size: 14px;
   width: 24px;
   height: 24px;
@@ -4582,201 +2767,6 @@
 }
 
 /* ── Secrets View ────────────────────────────────────────────────────────── */
-
-.rc-root .secrets-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rc-root .secrets-view .view-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 4px;
-}
-
-.rc-root .secrets-view .view-header h3 {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0;
-}
-
-.rc-root .secrets-view .loading {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 40px 16px;
-  font-size: 12px;
-}
-
-.rc-root .secrets-empty {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 24px 16px;
-  font-size: 12px;
-}
-
-.rc-root .secrets-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rc-root .secrets-row {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-}
-
-.rc-root .secrets-row-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 4px;
-}
-
-.rc-root .secrets-name {
-  font-family: monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.rc-root .secrets-desc {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.rc-root .secrets-row-value {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.rc-root .secrets-value {
-  font-family: monospace;
-  font-size: 11px;
-  color: var(--text-dim);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rc-root .secrets-icon-btn {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: color 0.15s, background 0.15s;
-}
-
-.rc-root .secrets-icon-btn:hover {
-  color: var(--text);
-  background: var(--border);
-}
-
-.rc-root .secrets-icon-btn.secrets-danger {
-  color: var(--error);
-}
-
-.rc-root .secrets-add-form,
-.rc-root .secrets-edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.rc-root .secrets-edit-name {
-  font-family: monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 2px;
-}
-
-.rc-root .secrets-input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 6px 8px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.rc-root .secrets-input:focus {
-  border-color: var(--accent);
-}
-
-.rc-root .secrets-error {
-  font-size: 11px;
-  color: var(--error);
-}
-
-.rc-root .secrets-form-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.rc-root .secrets-btn {
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 5px 12px;
-  transition: background 0.15s;
-}
-
-.rc-root .secrets-btn-add {
-  background: var(--accent);
-  color: #fff;
-}
-
-.rc-root .secrets-btn-add:hover {
-  opacity: 0.9;
-}
-
-.rc-root .secrets-btn-cancel {
-  background: var(--border);
-  color: var(--text);
-}
-
-.rc-root .secrets-btn-cancel:hover {
-  background: var(--text-dim);
-  color: var(--bg);
-}
-
-.rc-root .secrets-hint {
-  font-size: 11px;
-  color: var(--text-dim);
-  padding: 8px 4px;
-  border-top: 1px solid var(--border);
-  margin-top: auto;
-}
-
-.rc-root .secrets-hint code {
-  background: var(--surface);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 10px;
-}
 
 /* ── Variations Tabs ── */
 .rc-root .variations-block {
@@ -4810,11 +2800,11 @@
 }
 .rc-root .variations-tab:hover {
   color: var(--accent);
-  background: rgba(124, 92, 191, 0.08);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 }
 .rc-root .variations-tab.active {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 .rc-root .variations-copy {
   margin-left: auto;
@@ -4925,16 +2915,6 @@
   width: 16px;
   text-align: center;
 }
-.rc-root .subagent-running .subagent-icon {
-  color: var(--accent);
-  animation: spin 1s linear infinite;
-}
-.rc-root .subagent-done .subagent-icon {
-  color: #b5e853;
-}
-.rc-root .subagent-error .subagent-icon {
-  color: var(--error);
-}
 .rc-root .subagent-name {
   font-weight: 500;
   color: var(--text);
@@ -4959,7 +2939,7 @@
   margin-bottom: 0;
 }
 .rc-root .subagent-current-step code {
-  background: rgba(255,255,255,0.08);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 10px;
@@ -5023,9 +3003,7 @@
   display: none;
 }
 .rc-root .subagent-model {
-  /* --accent (#7c5cbf) fails contrast at small size; use the app's brighter accent-text token
-     (falls back to a light lavender) so the model id is AA-legible on the dark panel. */
-  color: var(--accent-text, #c9b6f0);
+  color: var(--accent-text, var(--color-accent));
   font-family: monospace;
 }
 .rc-root .subagent-request-preview {
@@ -5034,7 +3012,7 @@
 .rc-root .subagent-request-full {
   margin-top: 4px;
   padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.15);
+  background: color-mix(in srgb, var(--color-bg) 15%, transparent);
   border-radius: 4px;
   max-height: 160px;
   overflow-y: auto;
@@ -5059,7 +3037,7 @@
 }
 .rc-root .subagent-stop:hover {
   background: var(--error);
-  color: white;
+  color: var(--color-accent-contrast);
 }
 .rc-root .subagent-steps-collapsed,
 .rc-root .subagent-actions-collapsed {
@@ -5078,14 +3056,14 @@
   gap: 4px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
   border: 1px solid var(--border);
   user-select: none;
   transition: background 0.15s;
 }
 .rc-root .subagent-steps-collapsed summary:hover,
 .rc-root .subagent-actions-collapsed summary:hover {
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 .rc-root .subagent-steps-collapsed summary::-webkit-details-marker,
 .rc-root .subagent-actions-collapsed summary::-webkit-details-marker {
@@ -5102,7 +3080,7 @@
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 4px 4px;
-  background: rgba(0,0,0,0.15);
+  background: color-mix(in srgb, var(--color-bg) 15%, transparent);
   max-height: 250px;
   overflow-y: auto;
   padding: 4px 0;
@@ -5129,7 +3107,7 @@
 }
 .rc-root .subagent-step-item > summary:hover,
 .rc-root .subagent-action-item > summary:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .rc-root .subagent-step-num,
 .rc-root .subagent-action-num {
@@ -5145,11 +3123,11 @@
 }
 .rc-root .subagent-step-num {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 .rc-root .subagent-action-num {
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--color-accent-contrast);
 }
 .rc-root .subagent-action-item.failed .subagent-action-num {
   background: var(--error);
@@ -5162,8 +3140,7 @@
   flex: 1;
 }
 .rc-root .subagent-action-title {
-  /* --accent (#7c5cbf) at 10px fails WCAG AA contrast; brighter token + 11px clears 4.5:1. */
-  color: var(--accent-text, #c9b6f0);
+  color: var(--accent-text, var(--color-accent));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5191,7 +3168,7 @@
   margin-bottom: 0;
 }
 .rc-root .subagent-step-full code {
-  background: rgba(255,255,255,0.08);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 10px;
@@ -5205,7 +3182,7 @@
   margin: 2px 0;
 }
 .rc-root .subagent-step-full pre {
-  background: #0d0d0d;
+  background: var(--color-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 6px 8px;
@@ -5217,7 +3194,7 @@
   padding: 4px 8px 4px 30px;
   font-size: 11px;
   font-family: monospace;
-  color: var(--accent-text, #c9b6f0); /* AA-legible accent on the dark panel (was --accent 10px) */
+  color: var(--accent-text, var(--color-accent)); /* AA-legible accent on the dark panel (was --accent 10px) */
   white-space: pre-wrap;
   word-break: break-all;
   border-left: 2px solid var(--accent-dim);
@@ -5240,7 +3217,7 @@
   padding-left: 8px;
 }
 .rc-root .subagent-group-done {
-  border-left-color: #b5e853;
+  border-left-color: var(--color-success);
 }
 .rc-root .subagent-group-header {
   display: flex;
@@ -5255,7 +3232,7 @@
   color: var(--accent);
 }
 .rc-root .subagent-group-done .subagent-group-icon {
-  color: #b5e853;
+  color: var(--color-success);
 }
 .rc-root .subagent-group-progress {
   margin-left: auto;
@@ -5269,7 +3246,7 @@
 .rc-root .subagent-children {
   margin: 2px 0 2px 10px;
   padding-left: 8px;
-  border-left: 2px solid var(--border, #333);
+  border-left: 2px solid var(--border, var(--color-border));
   min-width: 0;
   overflow: hidden;
 }
@@ -5285,11 +3262,11 @@
 .rc-root .msg-item {
   padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(255,255,255,0.03);
-  border-left: 3px solid var(--accent, #7c5cfc);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  border-left: 3px solid var(--accent, var(--color-accent));
 }
 .rc-root .msg-item.msg-me {
-  border-left-color: #b5e853;
+  border-left-color: var(--color-success);
 }
 .rc-root .msg-header {
   display: flex;
@@ -5300,310 +3277,62 @@
 .rc-root .msg-user {
   font-weight: 600;
   font-size: 12px;
-  color: var(--text-bright, #e0e0e0);
+  color: var(--text-bright, var(--color-text));
 }
 .rc-root .msg-me .msg-user {
-  color: #b5e853;
+  color: var(--color-success);
 }
 .rc-root .msg-time {
   font-size: 10px;
-  color: var(--text-dim, #888);
+  color: var(--text-dim, var(--color-text-muted));
 }
 .rc-root .msg-text {
-  color: var(--text-main, #ccc);
+  color: var(--text-main, var(--color-text));
   line-height: 1.4;
   word-break: break-word;
 }
 .rc-root .msg-text code {
-  background: rgba(255,255,255,0.08);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
 }
 .rc-root .msg-text a {
-  color: var(--accent, #7c5cfc);
+  color: var(--accent, var(--color-accent));
   text-decoration: underline;
 }
 .rc-root .msg-mention {
-  background: rgba(124,92,252,0.2);
-  color: var(--accent, #7c5cfc);
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+  color: var(--accent, var(--color-accent));
   padding: 1px 4px;
   border-radius: 3px;
   font-weight: 500;
 }
 
 /* ── Workflows (list + builder) ──────────────────────────────────────────── */
-.rc-root .wf-view {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rc-root .wf-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.rc-root .wf-head h2 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-.rc-root .wf-sub {
-  font-size: 11px;
-  color: var(--text-dim);
-  line-height: 1.5;
-}
 /* Primary action button (New workflow, Save, Run) */
-.rc-root .wf-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 7px;
-  padding: 7px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.05s;
-}
-.rc-root .wf-btn:hover { background: var(--accent-dim); }
-.rc-root .wf-btn:active { transform: translateY(1px); }
-.rc-root .wf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.rc-root .wf-btn.secondary {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.rc-root .wf-btn.secondary:hover { background: var(--border); }
-.rc-root .wf-btn.ghost {
-  background: none;
-  color: var(--text-dim);
-  border: none;
-  padding: 5px 7px;
-}
-.rc-root .wf-btn.ghost:hover { background: var(--border); color: var(--text); }
 
 /* Empty state */
-.rc-root .wf-empty {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 32px 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.rc-root .wf-empty svg { opacity: 0.4; }
-.rc-root .wf-empty p { font-size: 12px; line-height: 1.6; margin: 0; max-width: 240px; }
 
 /* Workflow list card */
-.rc-root .wf-card {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 10px 12px;
-  transition: border-color 0.15s, background 0.15s;
-}
-.rc-root .wf-card:hover { border-color: var(--accent-dim); }
-.rc-root .wf-card-row { display: flex; align-items: center; gap: 6px; }
-.rc-root .wf-card-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-root .wf-card-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
-.rc-root .wf-chip {
-  display: inline-block;
-  font-size: 10px;
-  color: var(--text-dim);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1px 7px;
-  margin-right: 4px;
-}
 
 /* Icon button (run/edit/delete) */
-.rc-root .wf-icon-btn {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 5px;
-  font-size: 13px;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-.rc-root .wf-icon-btn:hover { background: var(--border); color: var(--text); }
-.rc-root .wf-icon-btn.danger:hover { background: rgba(192,57,43,0.18); color: #e7796e; }
-.rc-root .wf-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* Builder surfaces */
-.rc-root .wf-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.rc-root .wf-panel {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 10px;
-}
-.rc-root .wf-buffer {
-  border: 1px dashed var(--accent-dim);
-  background: rgba(124,92,191,0.05);
-  border-radius: 8px;
-  padding: 10px;
-}
-.rc-root .wf-node {
-  border: 1px solid var(--border);
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 7px;
-}
-.rc-root .wf-node.block { border-color: var(--accent-dim); }
-.rc-root .wf-row { display: flex; gap: 6px; align-items: center; }
 
 /* Inputs/textarea inside workflow builder */
-.rc-root .wf-input,
-.rc-root .wf-textarea,
-.rc-root .wf-select {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 5px 7px;
-  font-size: 11px;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-.rc-root .wf-input:focus,
-.rc-root .wf-textarea:focus,
-.rc-root .wf-select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.rc-root .wf-textarea { resize: vertical; min-height: 40px; line-height: 1.4; }
-.rc-root .wf-select { cursor: pointer; }
 
 /* Capture-target chip */
-.rc-root .wf-target {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.rc-root .wf-target:hover { border-color: var(--accent-dim); color: var(--text); }
-.rc-root .wf-target.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
 
 /* Recording indicator pill */
-.rc-root .wf-rec {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: flex-start;
-  padding: 6px 12px;
-  border-radius: 18px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  transition: all 0.15s;
-}
-.rc-root .wf-rec:hover { border-color: var(--accent-dim); }
-.rc-root .wf-rec.on {
-  background: rgba(124,92,191,0.15);
-  border-color: var(--accent);
-  color: var(--text);
-}
-.rc-root .wf-rec .dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--text-dim);
-}
-.rc-root .wf-rec.on .dot {
-  background: #b5e853;
-  box-shadow: 0 0 0 0 rgba(181,232,83,0.6);
-  animation: wf-rec-pulse 1.6s infinite;
-}
 @keyframes wf-rec-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(181,232,83,0.55); }
-  70% { box-shadow: 0 0 0 6px rgba(181,232,83,0); }
-  100% { box-shadow: 0 0 0 0 rgba(181,232,83,0); }
+  0% { box-shadow: 0 0 0 0 var(--color-focus-ring); }
+  70% { box-shadow: 0 0 0 6px var(--color-focus-ring); }
+  100% { box-shadow: 0 0 0 0 var(--color-focus-ring); }
 }
 
 /* Info "?" badge with tooltip */
-.rc-root .wf-info {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  font-size: 9px;
-  font-weight: 700;
-  cursor: help;
-  flex-shrink: 0;
-}
-.rc-root .wf-info:hover { border-color: var(--accent); color: var(--accent); }
 /* wider tooltip for info badges & zones — wraps, supports examples */
-.rc-root .wf-tip { position: relative; }
-.rc-root .wf-tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: 130%;
-  left: 0;
-  width: max-content;
-  max-width: 230px;
-  white-space: pre-wrap;
-  padding: 7px 9px;
-  background: #0e0e0e;
-  color: #d8d8d8;
-  font-size: 10px;
-  line-height: 1.45;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 9999;
-}
-.rc-root .wf-tip:hover::after { opacity: 1; }
-.rc-root .wf-tip.tip-right::after { left: auto; right: 0; }
-
-.rc-root .wf-breadcrumb {
-  font-size: 10px;
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
 
 /* Panel error-boundary fallback — shown instead of a silent black panel when a render
    throws. Legible on the dark bg, with a Reload affordance. */
@@ -5612,7 +3341,7 @@
   padding: 16px;
   border: 1px solid var(--error);
   border-radius: 8px;
-  background: rgba(239, 68, 68, 0.08);
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
   color: var(--text);
   font-size: 13px;
 }
@@ -5623,7 +3352,7 @@
 .rc-root .panel-crash-msg {
   font-family: "SF Mono", monospace;
   font-size: 11px;
-  color: #f87171;
+  color: var(--color-danger);
   white-space: pre-wrap;
   word-break: break-word;
   margin-bottom: 12px;
@@ -5634,7 +3363,7 @@
 }
 .rc-root .panel-crash-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--color-accent-contrast);
   border: none;
   border-radius: 6px;
   padding: 5px 12px;
@@ -5681,7 +3410,7 @@
   color: var(--text);
 }
 .rc-root .interactive-form .form-tab.done {
-  color: #4ade80;
+  color: var(--color-success);
 }
 .rc-root .interactive-form .form-step {
   display: flex;
@@ -5733,15 +3462,15 @@
 .rc-root .interactive-form .form-other-input {
   flex: 1 1 auto;
   padding: 4px 6px;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border, var(--color-border));
   border-radius: 4px;
-  background: var(--bg, #121212);
-  color: var(--text, #eee);
+  background: var(--bg, var(--color-bg));
+  color: var(--text, var(--color-text));
   font-size: 12px;
   outline: none;
 }
 .rc-root .interactive-form .form-other-input:focus {
-  border-color: var(--accent, #3b82f6);
+  border-color: var(--accent, var(--color-accent));
 }
 .rc-root .interactive-form .form-actions {
   display: flex;
@@ -5750,7 +3479,7 @@
 }
 .rc-root .interactive-form .form-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--color-accent-contrast);
   border: none;
   border-radius: 6px;
   padding: 6px 14px;
@@ -5761,390 +3490,6 @@
   background: none;
   border: 1px solid var(--border);
   color: var(--text-dim);
-}
-
-/* ── Safety settings section ── */
-.rc-root .safety-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rc-root .safety-settings h3 {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text);
-}
-.rc-root .safety-group {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-}
-.rc-root .safety-group legend {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0 4px;
-}
-.rc-root .safety-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.rc-root .safety-number {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--text);
-}
-.rc-root .safety-number input {
-  width: 110px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 5px 8px;
-  outline: none;
-  font-family: monospace;
-}
-.rc-root .safety-number input:focus,
-.rc-root .safety-toggle input:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.rc-root .safety-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-}
-.rc-root .safety-help {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin: 0;
-  line-height: 1.4;
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Responsive layout layer (mobile-first) + Tulzo remote-chat wrapper chrome.
-   Appended after the ported panel styles so it wins the cascade.
-   ══════════════════════════════════════════════════════════════════════════ */
-
-.rc-root {
-  position: relative; /* positioning context for the voice listening orb overlay (inset:0) */
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  max-width: 820px;
-  margin: 0 auto;
-  background: var(--bg, #161616);
-  color: var(--text, #e8e8e8);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow: hidden;
-}
-
-/* Scrolling message region grows to fill; composer pins to the bottom. */
-.rc-root .message-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.rc-root .input-area {
-  position: sticky;
-  bottom: 0;
-  flex: 0 0 auto;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-  background: var(--surface, #212121);
-}
-
-/* Wide screens: keep the centered reading column. */
-@media (min-width: 900px) {
-  .rc-root {
-    max-width: 820px;
-  }
-}
-
-/* Phones: go full-bleed. */
-@media (max-width: 600px) {
-  .rc-root {
-    max-width: none;
-  }
-}
-
-/* ── Tulzo wrapper chrome (header / device picker / banners) ── */
-.rc-root .rc-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  border-bottom: 1px solid var(--border, #23232b);
-  background: var(--surface, #101017);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  flex: 0 0 auto;
-}
-
-.rc-root .rc-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--border, #23232b);
-  background: transparent;
-  color: var(--text, #e8e8ea);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.rc-root .rc-back::before {
-  content: '\2039'; /* ‹ single left angle quote as a back chevron */
-  display: block;
-  font-size: 22px;
-  margin-top: -2px;
-}
-
-.rc-root .rc-back:hover {
-  background: var(--border, #23232b);
-  border-color: var(--accent, #6d5cf6);
-}
-
-.rc-root .rc-header .rc-logo {
-  font-size: 18px;
-  color: var(--accent, #8b7cf6);
-}
-
-.rc-root .rc-refresh {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--border, #23232b);
-  background: transparent;
-  color: var(--text, #e8e8ea);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.rc-root .rc-refresh:hover:not(:disabled) {
-  background: var(--border, #23232b);
-  border-color: var(--accent, #6d5cf6);
-}
-
-.rc-root .rc-refresh:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.rc-root .rc-title,
-.rc-root .rc-header .rc-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.rc-root .rc-status,
-.rc-root .rc-header .rc-status {
-  margin-left: auto;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--border, #1c1c26);
-  color: var(--text-muted, #9a9a9a);
-}
-
-.rc-root .rc-status.online,
-.rc-root .rc-header .rc-status.online {
-  color: #4ade80;
-}
-
-.rc-root .rc-status.offline,
-.rc-root .rc-header .rc-status.offline {
-  color: #f87171;
-}
-
-.rc-root .rc-banner {
-  margin: 0 16px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #2a2410;
-  border: 1px solid #4a3f18;
-  color: #f5d98a;
-  font-size: 13px;
-  flex: 0 0 auto;
-}
-
-.rc-root .rc-picker {
-  padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.rc-root .rc-picker h2 {
-  font-size: 16px;
-  margin: 0 0 4px;
-}
-
-.rc-root .rc-device {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border, #23232b);
-  border-radius: 12px;
-  background: var(--surface, #17171f);
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-}
-
-.rc-root .rc-device:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.rc-root .rc-device .rc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #f87171;
-}
-
-.rc-root .rc-device.online .rc-dot {
-  background: #4ade80;
-}
-
-.rc-root .rc-device .rc-dname {
-  font-weight: 600;
-}
-
-.rc-root .rc-device .rc-dmeta {
-  font-size: 12px;
-  color: var(--text-muted, #9a9a9a);
-  margin-left: auto;
-}
-
-.rc-root .rc-empty {
-  color: var(--text-muted, #9a9a9a);
-  font-size: 14px;
-  text-align: center;
-  padding: 32px 16px;
-}
-
-/* Session (chat history) list — the middle view between device picker and chat. */
-.rc-root .rc-newchat {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px dashed var(--border, #23232b);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--text, inherit);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-}
-
-.rc-root .rc-newchat:hover:not(:disabled) {
-  border-color: var(--accent, #6366f1);
-  color: var(--accent, #818cf8);
-}
-
-.rc-root .rc-newchat:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.rc-root .rc-session {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border, #23232b);
-  border-radius: 12px;
-  background: var(--surface, #17171f);
-  overflow: hidden;
-}
-
-.rc-root .rc-session-open {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  min-width: 0;
-}
-
-.rc-root .rc-session-open:hover {
-  background: var(--surface-hover, #1e1e28);
-}
-
-.rc-root .rc-session-title {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rc-root .rc-session-meta {
-  font-size: 12px;
-  color: var(--text-muted, #9a9a9a);
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.rc-root .rc-session-action {
-  flex-shrink: 0;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted, #9a9a9a);
-  font-size: 14px;
-}
-
-.rc-root .rc-session-action:hover {
-  color: var(--text, #e5e5e5);
-}
-
-.rc-root .rc-session-delete:hover {
-  color: #f87171;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -6173,15 +3518,8 @@
 .rc-root .voice-robot .vr-mouth-curve { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; }
 
 /* Mini: sits in the composer next to attach/send. */
-.rc-root .voice-robot.vr-mini { width: 34px; height: 34px; border-radius: 8px; transition: background 0.15s, color 0.15s; }
-.rc-root .voice-robot.vr-mini .vr-svg { width: 26px; height: 26px; }
-.rc-root .voice-robot.vr-mini:hover:not(:disabled) { background: rgba(124,92,191,0.12); }
-.rc-root .voice-robot.vr-mini[aria-pressed="true"] { background: rgba(124,92,191,0.2); }
-.rc-root .voice-robot.vr-mini:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Face tints: happy greenish, sad muted, thinking normal accent. */
-.rc-root .voice-robot.vr-face-happy { color: #7bc96f; }
-.rc-root .voice-robot.vr-face-sad { color: var(--text-dim); }
 
 /* Orb: big centered overlay while listening. The glow ring scales with --vr-amp (voice amplitude). */
 .rc-root .voice-orb-overlay {
@@ -6192,19 +3530,10 @@
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: rgba(0,0,0,0.55);
+  background: color-mix(in srgb, var(--color-bg) 55%, transparent);
   backdrop-filter: blur(2px);
   z-index: 40;
 }
-.rc-root .voice-robot.vr-orb {
-  width: 160px; height: 160px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 45%, rgba(124,92,191,0.28), rgba(124,92,191,0.06) 70%);
-  box-shadow: 0 0 calc(12px + var(--vr-amp) * 44px) calc(2px + var(--vr-amp) * 10px) rgba(124,92,191,0.55);
-  animation: vr-orb-breathe 2.4s ease-in-out infinite;
-  transition: box-shadow 0.08s linear;
-}
-.rc-root .voice-robot.vr-orb .vr-svg { width: 104px; height: 104px; }
 @keyframes vr-orb-breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
@@ -6236,7 +3565,7 @@
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--accent);
-  background: rgba(124,92,191,0.15);
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
   color: var(--text);
 }
 .rc-root .voice-speaking-pill .dot {
@@ -6257,7 +3586,6 @@
 .rc-root .voice-speaking-pill .voice-stop-btn:hover { border-color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
-  .rc-root .voice-robot.vr-orb { animation: none; }
   .rc-root .voice-speaking-pill .dot { animation: none; }
 }
 
@@ -6269,8 +3597,8 @@
   padding: 8px 12px;
   border-radius: 10px;
   font-size: 12px;
-  background: rgba(220,80,80,0.15);
-  border: 1px solid #dc5050;
+  background: color-mix(in srgb, var(--color-danger) 15%, var(--color-surface));
+  border: 1px solid var(--color-danger);
   color: var(--text);
 }
 .rc-root .voice-error-msg { flex: 1; }
@@ -6284,4 +3612,4 @@
   padding: 2px 6px;
   border-radius: 6px;
 }
-.rc-root .voice-error-dismiss:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+.rc-root .voice-error-dismiss:hover { color: var(--text); background: color-mix(in srgb, var(--color-text) 8%, transparent); }

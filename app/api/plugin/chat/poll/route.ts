@@ -8,9 +8,8 @@ import {
 } from '@/src/lib/chat-relay-service';
 
 /**
- * Page → device (pull). Delivery path for a connected device that can't hold a
- * Supabase Realtime subscription: pull pending inbound (to_device) frames and
- * mark them consumed.
+ * Page → device (pull). The delivery path for a connected device: pull pending
+ * inbound (to_device) frames and mark them consumed.
  *
  * Two modes:
  *  - INBOX (recommended): omit session_id. Drains ALL unconsumed to_device

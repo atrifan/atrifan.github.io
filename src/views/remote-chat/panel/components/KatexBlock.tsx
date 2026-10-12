@@ -57,7 +57,7 @@ export function KatexBlock({ math, displayMode = true }: Props) {
   if (!html) {
     return (
       <div className="math-block">
-        <span style={{ color: "#888", fontSize: 11, fontStyle: "italic" }}>Rendering math...</span>
+        <span style={{ color: "var(--color-text-muted)", fontSize: 11, fontStyle: "italic" }}>Rendering math...</span>
       </div>
     )
   }

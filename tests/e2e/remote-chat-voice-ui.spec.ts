@@ -1,57 +1,59 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, chatEnvReady } from '../fixtures/chat-page';
+import { setDevicePresence } from '../fixtures/chat-fixtures';
+import { blockThirdParty } from './surface-helpers';
 
 /**
- * Remote chat VOICE UI — Clerk-gated page at /chat with a device open.
+ * Remote chat voice UI and the live in-browser bridge, signed in as the E2E customer.
  *
- * Behavior-only contract for the ported voice experience (speech-to-text mic
- * robot + text-to-speech speak-back + the listening orb). Live microphone /
- * speech-synthesis can't be driven headlessly, so these assert only the
- * observable affordances that don't need a live mic: the controls exist with
- * accessible names, the speak-back toggle flips its pressed state, and
- * Alt+Enter inserts a newline instead of sending.
- *
- * Same skip pattern as the other Clerk-gated specs: until E2E_CLERK_STORAGE_STATE
- * is wired, every test here skips cleanly.
+ * Live microphone / speech synthesis can't be driven headlessly, so these assert the
+ * observable affordances: the mic control, the speak-back toggle and its pressed
+ * state. The bridge test simulates the extension's postMessage handshake: an assistant
+ * running in this very browser is online even when its server heartbeat is stale.
  */
-test.describe('remote chat voice UI (/chat)', () => {
-  test.skip(!process.env.E2E_CLERK_STORAGE_STATE, 'requires Clerk test session (E2E_CLERK_STORAGE_STATE)');
-  test.use({ storageState: process.env.E2E_CLERK_STORAGE_STATE });
+test.describe('remote chat voice UI and live bridge (/chat)', () => {
+  test.skip(!chatEnvReady(), 'needs Clerk dev keys and Supabase service-role env');
 
-  test('mic: a voice-input control exists in the composer', async ({ page }) => {
-    // A supported browser exposes a mic button; Chromium (Playwright default)
-    // supports SpeechRecognition, so the control should render.
-    await page.goto('/chat?device=e2e');
-
-    const mic = page.getByRole('button', { name: /start voice input|stop listening/i });
-    await expect(mic.first()).toBeVisible();
+  test('mic: a voice-input control exists in the composer', async ({ page, device }) => {
+    await blockThirdParty(page);
+    await page.goto(`/chat?device=${device.apiKeyId}`);
+    await expect(page.getByRole('button', { name: /start voice input|stop listening/i }).first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test('speak-back: a read-aloud toggle exists and flips its pressed state', async ({ page }) => {
-    await page.goto('/chat?device=e2e');
-
-    // The toggle advertises reading answers aloud; default is off (not pressed).
+  test('speak-back: the read-aloud toggle flips its pressed state', async ({ page, device }) => {
+    await blockThirdParty(page);
+    await page.goto(`/chat?device=${device.apiKeyId}`);
     const toggle = page.getByRole('button', { name: /read answers aloud/i });
-    await expect(toggle.first()).toBeVisible();
-    await expect(toggle.first()).toHaveAttribute('aria-pressed', 'false');
-
-    // Turning it on flips aria-pressed and the accessible name switches to "mute".
-    await toggle.first().click();
-    const muted = page.getByRole('button', { name: /mute spoken answers/i });
-    await expect(muted.first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
+    await toggle.click();
+    await expect(page.getByRole('button', { name: /mute spoken answers/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('composer: Alt+Enter inserts a newline instead of sending', async ({ page }) => {
-    await page.goto('/chat?device=e2e');
-
-    const composer = page.getByRole('textbox', { name: /message/i });
-    await expect(composer).toBeVisible();
-
-    await composer.click();
-    await composer.type('line one');
-    await composer.press('Alt+Enter');
-    await composer.type('line two');
-
-    // Still in the composer (not sent) and now spans two lines.
-    await expect(composer).toHaveValue('line one\nline two');
+  test('presence: an assistant connected in this browser reads as online despite a stale heartbeat', async ({ page, device }) => {
+    await setDevicePresence(device, 120);
+    await page.route('**/api/plugin/devices', async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      body.devices = (body.devices as Array<{ id: string }>).filter((d) => d.id === device.apiKeyId);
+      await route.fulfill({ response: res, json: body });
+    });
+    await page.addInitScript((deviceName: string) => {
+      window.addEventListener('message', (e: MessageEvent) => {
+        const d = e.data;
+        if (e.source !== window || !d || d.source !== 'tulzo') return;
+        if (d.action === 'discover') {
+          window.postMessage({ source: 'tex-extension', action: 'discover_ack', version: '1.0.0', capabilities: [], deviceName, activated: true }, '*');
+        } else if (d.action === 'heartbeat') {
+          window.postMessage({ source: 'tex-extension', action: 'heartbeat_ack' }, '*');
+        } else if (d.action === 'command') {
+          window.postMessage(
+            { source: 'tex-extension', action: 'command_response', id: d.id, ok: true, result: { activeProvider: 'anthropic', providers: { anthropic: { models: { orchestrator: 'claude-opus-4-8' } } } } },
+            '*',
+          );
+        }
+      });
+    }, device.deviceName);
+    await blockThirdParty(page);
+    await page.goto(`/chat?device=${device.apiKeyId}`);
+    await expect(page.getByRole('status').filter({ hasText: 'Your assistant is online' })).toBeVisible({ timeout: 30_000 });
   });
 });

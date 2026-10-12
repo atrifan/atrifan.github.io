@@ -5,7 +5,6 @@ const mermaidPromise = import("mermaid").then((m) => {
   // securityLevel:"strict" (sanitize HTML, disable click handlers) — the diagram
   // is model-authored and the model's context includes untrusted scraped content.
   // Pinned explicitly so it can't silently change with a mermaid default update.
-  m.default.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" })
   return m.default
 })
 
@@ -28,6 +27,10 @@ export function MermaidBlock({ diagram }: Props) {
       .then(async (mermaid) => {
         if (cancelled) return
         try {
+          // Follow the page theme (Tulzo sets data-theme on <html>); re-initialised per render
+          // so a diagram drawn after a theme switch matches it.
+          const dark = document.documentElement.dataset.theme === "dark"
+          mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default", securityLevel: "strict" })
           const { svg: rendered } = await mermaid.render(idRef.current, diagram.trim())
           if (!cancelled) {
             setSvg(rendered)

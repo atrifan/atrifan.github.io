@@ -40,6 +40,11 @@ export function ChartBlock({ config }: Props) {
         options?: object
       }
 
+      // Axis labels and grid lines follow the page theme tokens (Chart.js defaults are light-only).
+      const css = getComputedStyle(canvasRef.current)
+      Chart.defaults.color = css.getPropertyValue("--color-text-muted").trim() || Chart.defaults.color
+      Chart.defaults.borderColor = css.getPropertyValue("--color-border").trim() || Chart.defaults.borderColor
+
       chartRef.current = new Chart(canvasRef.current, {
         type: chartConfig.type as any,
         data: chartConfig.data as any,
