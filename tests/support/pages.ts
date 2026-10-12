@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
  * dark-desktop and dark-mobile Playwright projects.
  */
 
-/** Pages checked in every theme and viewport. /chat and /dashboard need auth and land on /sign-in. */
+/** Pages checked in every theme and viewport. /chat, /dashboard and /ai need auth and land on /sign-in. */
 export const PAGES = [
   { path: '/', name: 'home' },
   { path: '/pricing', name: 'pricing' },
@@ -25,7 +25,7 @@ const THIRD_PARTY = /(iubenda|googletagmanager|google-analytics|googlesyndicatio
 export async function openSettled(page: Page, path: string): Promise<void> {
   await page.route(THIRD_PARTY, (route) => route.abort('blockedbyclient'));
   await page.goto(path, { waitUntil: 'load' });
-  if (path === '/chat' || path === '/dashboard') {
+  if (path === '/chat' || path === '/dashboard' || path === '/ai') {
     await page.waitForURL(/\/sign-in/, { timeout: 30_000 });
   }
   await page.locator('#main').waitFor({ state: 'visible' });

@@ -22,30 +22,7 @@ async function scan(page: import('@playwright/test').Page) {
 
 // Public pages (home, pricing, …) are scanned in every theme and viewport by pages.a11y.spec.ts.
 
-test.describe('authenticated dashboard', () => {
-  test.skip(!process.env.E2E_CLERK_STORAGE_STATE, 'requires Clerk test session (E2E_CLERK_STORAGE_STATE)');
-  test.use({ storageState: process.env.E2E_CLERK_STORAGE_STATE });
-
-  test('control panel has no serious accessibility violations', async ({ page }) => {
-    await page.goto('/dashboard');
-    // The tablist is the anchor of the control panel menu.
-    await expect(page.getByRole('tablist', { name: /control panel sections/i })).toBeVisible();
-    const blocking = await scan(page);
-    expect(
-      blocking,
-      blocking.map((v) => `${v.id} (${v.impact}): ${v.help}`).join('\n')
-    ).toEqual([]);
-  });
-
-  test('control panel tabs are keyboard navigable', async ({ page }) => {
-    await page.goto('/dashboard');
-    const tabs = page.getByRole('tab');
-    await tabs.first().focus();
-    await page.keyboard.press('ArrowRight');
-    // After ArrowRight the second tab should be selected.
-    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
-  });
-});
+// The ai. control panel (formerly /dashboard) is scanned in every theme and viewport by ai.a11y.spec.ts.
 
 test.describe('authenticated remote chat', () => {
   test.skip(!process.env.E2E_CLERK_STORAGE_STATE, 'requires Clerk test session (E2E_CLERK_STORAGE_STATE)');

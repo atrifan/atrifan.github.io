@@ -29,7 +29,7 @@ async function resolveRedirects(request: APIRequestContext, path: string): Promi
 test.describe('path-prefix mode routing', () => {
   test.beforeEach(async ({ page }) => blockThirdParty(page));
 
-  for (const path of ['/', '/pricing', '/ai', '/marketplace', '/gigs', '/sign-in']) {
+  for (const path of ['/', '/pricing', '/marketplace', '/gigs', '/sign-in']) {
     test(`GET ${path} returns 200`, async ({ request }) => {
       const res = await request.get(path, { maxRedirects: 0 });
       expect(res.status()).toBe(200);
@@ -37,7 +37,6 @@ test.describe('path-prefix mode routing', () => {
   }
 
   const placeholders = [
-    { path: '/ai', heading: 'AI' },
     { path: '/marketplace', heading: 'Marketplace' },
     { path: '/gigs', heading: 'Gigs' },
   ];
@@ -52,7 +51,8 @@ test.describe('path-prefix mode routing', () => {
     });
   }
 
-  for (const path of ['/dashboard', '/chat']) {
+  // /ai is the signed-in control panel (src/views/ai), no longer a placeholder.
+  for (const path of ['/dashboard', '/chat', '/ai', '/ai/secrets']) {
     test(`signed-out ${path} lands on this app's /sign-in, not a Clerk host`, async ({ request, page }) => {
       const clerkHost = /accounts\.dev$|(^|\.)clerk\./;
       const finalUrl = await resolveRedirects(request, path);

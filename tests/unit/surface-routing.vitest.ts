@@ -157,6 +157,10 @@ describe('routeRequest: non-hub surfaces', () => {
       expect(route('ai', p)).toEqual({ action: 'next' });
     }
     expect(route('ai', '/api/plugin/chat/poll')).toEqual({ action: 'notFound' });
+    // The Budget tab, the catalog and the publisher stats moved to the hub and marketplace.
+    for (const p of ['/api/billing/checkout', '/api/packages', '/api/marketplace/publisher']) {
+      expect(route('ai', p)).toEqual({ action: 'notFound' });
+    }
   });
 
   it('gigs serves the jobs, offers and bids APIs; Connect onboarding stays on the hub', () => {
@@ -195,15 +199,15 @@ describe('routeRequest uses surfaceUrl for cross-surface destinations', () => {
   });
 });
 
-describe('isProtectedPath (existing protection: /dashboard and /chat)', () => {
-  it('protects /dashboard and /chat and everything below them', () => {
-    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat', '/chat/x']) {
+describe('isProtectedPath (/dashboard, /chat and the ai control panel)', () => {
+  it('protects /dashboard, /chat, /ai and everything below them', () => {
+    for (const p of ['/dashboard', '/dashboard/admin/packages', '/chat', '/chat/x', '/ai', '/ai/secrets']) {
       expect(isProtectedPath(p)).toBe(true);
     }
   });
 
   it('leaves public pages and lookalikes alone', () => {
-    for (const p of ['/', '/pricing', '/ai', '/marketplace', '/gigs', '/sign-in', '/chatter', '/dashboards', '/api/chat']) {
+    for (const p of ['/', '/pricing', '/aim', '/marketplace', '/gigs', '/sign-in', '/chatter', '/dashboards', '/api/chat', '/api/ai']) {
       expect(isProtectedPath(p)).toBe(false);
     }
   });
