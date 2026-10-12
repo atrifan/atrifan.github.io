@@ -35,6 +35,8 @@ export interface DeliveryPanelProps {
   counterpartName?: string;
   headingLevel?: 2 | 3;
   onChanged?: () => void;
+  /** Inside the job room: the room already shows the status, role and version history. */
+  embedded?: boolean;
 }
 
 export type DeliveryChip = 'Waiting for QA' | 'Ready for review' | 'Accepted' | 'Disputed' | 'Refunded' | 'Cancelled' | 'Waiting for payment';
@@ -72,7 +74,7 @@ function verdictLabel(verdict: string | null, status: string): string {
 
 const money = (cents: number, currency: string) => formatMoneyCents(cents, currency);
 
-export function DeliveryPanel({ contractId, initial = null, counterpartName, headingLevel = 2, onChanged }: DeliveryPanelProps) {
+export function DeliveryPanel({ contractId, initial = null, counterpartName, headingLevel = 2, onChanged, embedded = false }: DeliveryPanelProps) {
   const [view, setView] = useState<DeliveryView | null>(initial);
   const [loadError, setLoadError] = useState('');
   const [message, setMessage] = useState('');
@@ -163,11 +165,13 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
   };
 
   return (
-    <div className="delivery">
-      <p className="gig-labels">
-        <span className="gig-status">{chip}</span>
-        <span className="gig-label">{customer ? 'You are the customer' : 'You are the provider'}</span>
-      </p>
+    <div className={embedded ? 'delivery delivery-embedded' : 'delivery'}>
+      {embedded ? null : (
+        <p className="gig-labels">
+          <span className="gig-status">{chip}</span>
+          <span className="gig-label">{customer ? 'You are the customer' : 'You are the provider'}</span>
+        </p>
+      )}
       <p role="status" className="gigs-notice gigs-notice-success">
         {message}
       </p>
@@ -203,7 +207,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
           <H id="delivery-commit-title" className="gigs-panel-title">
             Delivered commit
           </H>
-          <p className="delivery-meta">
+          <p className="delivery-meta" data-volatile>
             <code className="delivery-sha" title={delivery.commit_sha}>
               {delivery.commit_sha.slice(0, 12)}
             </code>
@@ -211,7 +215,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
             {delivery.unlocked_at ? <span>{`Validated ${formatDate(delivery.unlocked_at)}`}</span> : null}
           </p>
           {contract.status === 'delivered' && delivery.auto_accept_at && !disputeOpen ? (
-            <p>
+            <p data-volatile>
               {customer ? '' : 'Waiting for the customer to accept. '}
               {`Auto-accepts on ${formatDate(delivery.auto_accept_at)}.`}
             </p>
@@ -238,7 +242,11 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
             </div>
           ) : null}
           {customer && actions.can_download ? (
-            <p className="gigs-hint">The download is the exact commit QA checked. It stays available here after you accept.</p>
+            <p className="gigs-hint">
+              {contract.status === 'delivered'
+                ? 'The download is the exact commit QA checked. It stays available here after you accept.'
+                : 'The download is the exact commit QA checked.'}
+            </p>
           ) : null}
           {customer && actions.can_dispute && actions.dispute_phase === 'post_accept' && actions.claim_window_ends_at ? (
             <p className="gigs-hint">{`You can file a claim until ${formatDate(actions.claim_window_ends_at)}.`}</p>
@@ -374,11 +382,11 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
                   <tr key={h.attempt}>
                     <td>{h.attempt}</td>
                     <td>
-                      <code className="delivery-sha">{h.commit_sha.slice(0, 12)}</code>
+                      <code className="delivery-sha delivery-sha-cell">{h.commit_sha.slice(0, 12)}</code>
                     </td>
                     <td>
                       {verdictLabel(h.verdict, h.status)}
-                      {h.reason ? <span className="gigs-hint">{` ${h.reason}`}</span> : null}
+                      {h.reason ? <span className="gigs-hint">{`: ${h.reason}`}</span> : null}
                     </td>
                   </tr>
                 ))}
@@ -388,7 +396,7 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
         </section>
       ) : null}
 
-      {view.contract_versions.length > 0 ? (
+      {!embedded && view.contract_versions.length > 0 ? (
         <section className="gigs-panel" aria-labelledby="delivery-versions-title">
           <H id="delivery-versions-title" className="gigs-panel-title">
             Contract versions
@@ -455,5 +463,5 @@ export function DeliveryPanel({ contractId, initial = null, counterpartName, hea
  * load whenever the room sees the contract status change (QA validated, accepted, disputed).
  */
 export function RoomDeliveryPanel({ contractId, contractStatus, onChanged }: RoomSlotProps) {
-  return <DeliveryPanel key={contractStatus} contractId={contractId} headingLevel={3} onChanged={onChanged} />;
+  return <DeliveryPanel key={contractStatus} contractId={contractId} headingLevel={3} onChanged={onChanged} embedded />;
 }

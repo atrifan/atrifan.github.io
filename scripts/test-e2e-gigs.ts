@@ -27,6 +27,7 @@ import { startGigsTestDb } from '../tests/support/gigs-test-db';
 import { startFakeStripe } from '../tests/support/fake-stripe';
 import { startFakeGithub } from '../tests/support/fake-github';
 import { Client } from 'pg';
+import { playwrightCommand } from './playwright-run';
 
 const DEFAULT_SPECS = [
   'tests/e2e/gigs-api.spec.ts',
@@ -179,7 +180,7 @@ async function main() {
 
     const args = process.argv.slice(2);
     const specs = args.some((a) => a.endsWith('.spec.ts')) ? [] : SPECS;
-    code = await run(process.execPath, [path.join(root, 'node_modules/@playwright/test/cli.js'), 'test', ...specs, ...args], {
+    const pwEnv: NodeJS.ProcessEnv = {
       ...process.env,
       PLAYWRIGHT_BASE_URL: baseUrl,
       JOBS_E2E_AUTH_SECRET: authSecret,
@@ -195,7 +196,9 @@ async function main() {
       STORAGE_SUPABASE_URL: '',
       NEXT_PUBLIC_STORAGE_SUPABASE_URL: '',
       STORAGE_SUPABASE_SERVICE_ROLE_KEY: '',
-    });
+    };
+    const pw = playwrightCommand(root, [...specs, ...args], pwEnv);
+    code = await run(pw.cmd, pw.args, pwEnv);
   } finally {
     if (server) {
       server.kill('SIGTERM');

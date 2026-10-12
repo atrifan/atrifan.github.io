@@ -90,6 +90,16 @@ describe('planCreditSettlement', () => {
     { creditCents: 0, paidCents: 0, refundedCents: 0, payoutCents: Number.NaN },
   ])('rejects amounts that are not whole non-negative cents: %o', (input) => {
     expect(() => planCreditSettlement(input)).toThrow(ScopeCreditError);
+    expect(() => planCreditSettlement(input)).toThrow('Amounts must be whole, non-negative cents');
+  });
+
+  it('its errors are named ScopeCreditError', () => {
+    try {
+      planCreditSettlement({ creditCents: -1, paidCents: 0, refundedCents: 0, payoutCents: 0 });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).name).toBe('ScopeCreditError');
+    }
   });
 });
 
@@ -121,8 +131,12 @@ describe('allocateSettlement', () => {
   });
 
   it('rejects a settlement larger than what is owed', () => {
-    expect(() => allocateSettlement(owed, { refundCents: 5000, deductCents: 1 })).toThrow(ScopeCreditError);
-    expect(() => allocateSettlement(owed, { refundCents: -1, deductCents: 0 })).toThrow(ScopeCreditError);
+    expect(() => allocateSettlement(owed, { refundCents: 5000, deductCents: 1 })).toThrow('Settled more than is owed');
+    expect(() => allocateSettlement(owed, { refundCents: -1, deductCents: 0 })).toThrow('Amounts must be whole, non-negative cents');
     expect(() => allocateSettlement([{ id: 'x', creditCents: -5 }], { refundCents: 0, deductCents: 0 })).toThrow(ScopeCreditError);
+    // one bad credit among good ones
+    expect(() => allocateSettlement([{ id: 'ok', creditCents: 5 }, { id: 'bad', creditCents: -5 }], { refundCents: 0, deductCents: 0 })).toThrow(
+      'Amounts must be whole, non-negative cents',
+    );
   });
 });

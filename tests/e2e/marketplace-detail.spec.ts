@@ -19,14 +19,14 @@ test.beforeEach(async ({ page }) => {
   if (hasClerkTestEnv()) await setupClerkTestingToken({ page });
 });
 
-test('sitemap.xml lists every public package page and no pending or private one', async ({ request }) => {
+// fx-pending-mcp isn't asserted: marketplace-admin.spec approves it in parallel.
+test('sitemap.xml lists every public package page and no private one', async ({ request }) => {
   const res = await request.get('/sitemap.xml', { maxRedirects: 0 });
   expect(res.status()).toBe(200);
   const paths = [...(await res.text()).matchAll(/<loc>\s*([^<]*?)\s*<\/loc>/g)].map((m) => new URL(m[1]).pathname);
   for (const id of ['fx-github-mcp', 'fx-pdf-skill', 'fx-slack-plugin', 'fx-travel-a2a', 'fx-code-reviewer', 'fx-release-workflow']) {
     expect(paths, id).toContain(`/marketplace/${id}`);
   }
-  expect(paths).not.toContain('/marketplace/fx-pending-mcp');
   expect(paths).not.toContain('/marketplace/fx-hidden-skill');
 });
 

@@ -34,6 +34,32 @@ describe('planFromClerkBilling', () => {
     ).toEqual({ plan: 'super', anchor: new Date(T) });
   });
 
+  it('a better plan listed first still wins; on a tie the first item is kept', () => {
+    expect(
+      planFromClerkBilling({
+        status: 'active',
+        subscriptionItems: [
+          { status: 'active', periodStart: T, plan: { slug: 'super' } },
+          { status: 'active', periodStart: T + 5, plan: { slug: 'pro' } },
+        ],
+      }),
+    ).toEqual({ plan: 'super', anchor: new Date(T) });
+    expect(
+      planFromClerkBilling({
+        status: 'active',
+        subscriptionItems: [
+          { status: 'active', periodStart: T, plan: { slug: 'pro' } },
+          { status: 'active', periodStart: T + 5, plan: { slug: 'pro' } },
+        ],
+      })?.anchor,
+    ).toEqual(new Date(T));
+  });
+
+  it('items that are not active are ignored', () => {
+    expect(planFromClerkBilling({ status: 'active', subscriptionItems: [{ status: 'ended', periodStart: T, plan: { slug: 'pro' } }] })).toBeNull();
+    expect(planFromClerkBilling({ status: 'active', subscriptionItems: [{ periodStart: T, plan: { slug: 'pro' } }] })).toBeNull();
+  });
+
   it.each(['trialing', 'past_due', 'active'])('%s items count', (status) => {
     expect(planFromClerkBilling({ status: 'active', subscriptionItems: [{ status, periodStart: T, plan: { slug: 'plus' } }] })?.plan).toBe('plus');
   });

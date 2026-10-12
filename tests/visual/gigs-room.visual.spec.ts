@@ -10,7 +10,7 @@ import {
   roomScreenshotMasks,
   roomTab,
   seedRoomScenario,
-  signIn,
+  signInWithHeader as signIn,
   type RoomScenario,
   type RoomTabId,
 } from '../support/gigs-ui';

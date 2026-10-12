@@ -15,7 +15,7 @@ import {
   screenshotMasks,
   seedComparison,
   seedContract,
-  signIn,
+  signInWithHeader as signIn,
   uid,
   wizardData,
   wizardTo,
@@ -37,7 +37,8 @@ const listWord = (tag: string) => `zqvl${tag}`;
 const detailWord = (tag: string) => `zqvd${tag}`;
 const WIZARD_TITLE = 'CSV importer for the shop';
 
-async function shot(page: Page, name: string): Promise<void> {
+/** A full-page shot; dialogs and sheets are shot at the viewport, which is what a user sees of a modal. */
+async function shot(page: Page, name: string, opts: { fullPage?: boolean } = {}): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   // Typing scrolls the page and leaves a focus ring; a full-page shot of a scrolled page draws the
   // sticky header mid-page. Start every shot from the top with nothing focused.
@@ -46,7 +47,7 @@ async function shot(page: Page, name: string): Promise<void> {
     window.scrollTo(0, 0);
   });
   await page.waitForTimeout(300);
-  await expect(page).toHaveScreenshot(name, { fullPage: true, mask: screenshotMasks(page) });
+  await expect(page).toHaveScreenshot(name, { fullPage: opts.fullPage ?? true, mask: screenshotMasks(page) });
 }
 
 test.describe('gigs listing', () => {
@@ -86,7 +87,7 @@ test.describe('gigs listing', () => {
     await openGigs(page, `/gigs?q=${listWord(projectTag(testInfo))}`);
     await page.getByRole('button', { name: /^Filters/ }).click();
     await expect(page.getByRole('dialog', { name: 'Filters' })).toBeVisible();
-    await shot(page, 'gigs-filter-sheet.png');
+    await shot(page, 'gigs-filter-sheet.png', { fullPage: false });
   });
 
   test('tablet: filtered jobs list', async ({ page }, testInfo) => {
@@ -192,7 +193,7 @@ test.describe('job detail', () => {
     await page.getByRole('combobox', { name: 'Sort bids by' }).selectOption({ label: 'Lowest price' });
     await page.getByRole('button', { name: 'Accept bid' }).first().click();
     await expect(page.getByRole('dialog', { name: 'Accept this bid' })).toBeVisible();
-    await shot(page, 'gigs-accept-dialog.png');
+    await shot(page, 'gigs-accept-dialog.png', { fullPage: false });
   });
 });
 

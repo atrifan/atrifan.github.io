@@ -1608,3 +1608,23 @@
   font-size: var(--text-sm);
   font-weight: 500;
 }
+
+/* A dialog taller than the screen scrolls inside; its actions stay pinned to the bottom edge. */
+.gigs-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.gigs-dialog[open] > .gigs-dialog-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gigs-dialog .gigs-form-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-5));
+  margin-bottom: calc(-1 * var(--space-5));
+  padding-block: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}

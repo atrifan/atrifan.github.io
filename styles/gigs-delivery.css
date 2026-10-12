@@ -179,3 +179,14 @@
 .delivery .gigs-error:empty {
   display: none;
 }
+
+/* Inside the job room's Delivery tab: section headings sit under the room's "Job room" h2. */
+.delivery-embedded .gigs-panel-title,
+.delivery-embedded .gigs-section-title {
+  font-size: var(--text-md);
+}
+
+/* A short SHA in a table cell stays on one line. */
+.delivery-sha-cell {
+  white-space: nowrap;
+}

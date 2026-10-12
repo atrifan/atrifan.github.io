@@ -20,6 +20,8 @@ for (const { path, name, role, mock, ready, after } of PHASE5_HUB_PAGES) {
       await openSettledSignedIn(page, path);
       await expect(page.getByText(ready).first()).toBeVisible();
       if (after) await after(page);
+      // A click leaves the pointer (and :hover) on whatever row lands under it after the re-render.
+      await page.mouse.move(0, 0);
       await page.evaluate(() => {
         (document.activeElement as HTMLElement | null)?.blur();
         window.scrollTo(0, 0);

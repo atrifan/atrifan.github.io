@@ -185,6 +185,7 @@ ol[role='list'] {
 .menu-button {
   display: none;
   margin-left: auto;
+  color: var(--color-text);
   align-items: center;
   justify-content: center;
   width: var(--touch-target);

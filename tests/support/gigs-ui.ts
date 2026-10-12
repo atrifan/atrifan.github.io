@@ -1,7 +1,9 @@
 import { expect, type APIRequestContext, type APIResponse, type Browser, type BrowserContext, type Locator, type Page, type Response, type TestInfo } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import Stripe from 'stripe';
+import { existsSync, readFileSync } from 'node:fs';
 import { FAKE_REPOS, FAKE_TOKENS } from './fake-github';
+import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
 
 /**
  * Shared helpers for the gigs UI specs (tests/e2e/gigs-ui.spec.ts,
@@ -47,6 +49,20 @@ export function auth(userId: string): Record<string, string> {
 /** Sign a browser context in as `userId` (navigations and the page's own fetches carry the headers). */
 export async function signIn(context: BrowserContext, userId: string): Promise<void> {
   await context.setExtraHTTPHeaders(auth(userId));
+}
+
+/**
+ * signIn, plus the E2E customer's real Clerk session (the `setup` project saves it), so the shell
+ * header renders signed in and the footer ad stays away, as for a real signed-in user. The page's
+ * data still belongs to `userId`: the server prefers the test identity header. Used by the
+ * visual specs; without Clerk test keys it is plain signIn.
+ */
+export async function signInWithHeader(context: BrowserContext, userId: string): Promise<void> {
+  await signIn(context, userId);
+  const file = storageStatePath('customer');
+  if (!hasClerkTestEnv() || !existsSync(file)) return;
+  const state = JSON.parse(readFileSync(file, 'utf8')) as { cookies: Parameters<BrowserContext['addCookies']>[0] };
+  await context.addCookies(state.cookies);
 }
 
 /** A second browser context with the project's viewport/theme, signed in as `userId` (or signed out). */

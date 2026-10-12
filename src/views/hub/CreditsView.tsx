@@ -237,7 +237,7 @@ export function CreditsView({ plan, topup }: { plan: PlanKey; topup: TopUpResult
                         {formatSignedCredits(creditsForUsd(usd))}
                       </td>
                       <td data-label="Amount" className="num">
-                        {formatUsd(Math.abs(usd))}
+                        {`${usd < 0 ? '−' : ''}${formatUsd(Math.abs(usd))}`}
                       </td>
                     </tr>
                   );

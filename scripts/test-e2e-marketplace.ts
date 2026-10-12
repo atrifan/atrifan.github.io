@@ -21,6 +21,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { Client } from 'pg';
 import { startGigsTestDb } from '../tests/support/gigs-test-db';
+import { playwrightCommand } from './playwright-run';
 
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.MARKETPLACE_E2E_PORT || 3200);
@@ -110,7 +111,6 @@ async function main() {
       await fetch(`${baseUrl}${route}`).catch(() => undefined);
     }
 
-    const pw = path.join(root, 'node_modules/@playwright/test/cli.js');
     const pwEnv: NodeJS.ProcessEnv = {
       ...process.env,
       ...dbEnv,
@@ -124,15 +124,13 @@ async function main() {
     const phase = process.env.MARKETPLACE_E2E_PHASE;
 
     if (!phase || phase === 'e2e') {
-      code = await run(process.execPath, [pw, 'test', ...E2E_SPECS, '--project=chromium', ...extra], pwEnv);
+      const pw = playwrightCommand(root, [...E2E_SPECS, '--project=chromium', ...extra], pwEnv);
+      code = await run(pw.cmd, pw.args, pwEnv);
     }
     if (!phase || phase === 'themed') {
       await reseed();
-      const themed = await run(
-        process.execPath,
-        [pw, 'test', ...THEMED_SPECS, ...THEMED_PROJECTS.map((p) => `--project=${p}`), ...extra],
-        pwEnv,
-      );
+      const pw = playwrightCommand(root, [...THEMED_SPECS, ...THEMED_PROJECTS.map((p) => `--project=${p}`), ...extra], pwEnv);
+      const themed = await run(pw.cmd, pw.args, pwEnv);
       code = code || themed;
     }
   } finally {

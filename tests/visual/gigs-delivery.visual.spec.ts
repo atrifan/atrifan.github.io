@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openGigs, projectTag, signIn } from '../support/gigs-ui';
+import { openGigs, projectTag, signInWithHeader as signIn } from '../support/gigs-ui';
 import { PAGE_STATES, PHASE5_ENV_MISSING, deliveryMasks, deliveryUrl, seedPageState } from '../support/gigs-delivery';
 
 /**

@@ -38,6 +38,12 @@ describe('filesHash', () => {
     expect(filesHash(files)).toBe(`sha256:${expected}`);
   });
 
+  it('duplicate paths hash the same in any order', () => {
+    const dup = [file('a', 'one'), file('a', 'two'), file('a', 'one', '100755')];
+    expect(filesHash(dup)).toBe(filesHash([...dup].reverse()));
+    expect(filesHash([dup[1], dup[2], dup[0]])).toBe(filesHash(dup));
+  });
+
   it('an empty tree has a stable hash', () => {
     expect(filesHash([])).toBe(`sha256:${sha('')}`);
   });
@@ -60,6 +66,24 @@ describe('snapshotPath', () => {
     ['upper-case nonce', contract, submission, 'AB'.repeat(32)],
   ])('refuses a bad %s', (_what, c, s, n) => {
     expect(() => snapshotPath(c, s, n)).toThrow(SnapshotPathError);
+  });
+
+  it('anchors the checks: no extra characters before or after', () => {
+    expect(() => snapshotPath(`x${contract}`, submission, nonce)).toThrow(/contract id must be a UUID/);
+    expect(() => snapshotPath(`${contract}x`, submission, nonce)).toThrow(/contract id must be a UUID/);
+    expect(() => snapshotPath(contract, `x${submission}`, nonce)).toThrow(/submission id must be a UUID/);
+    expect(() => snapshotPath(contract, `${submission}x`, nonce)).toThrow(/submission id must be a UUID/);
+    expect(() => snapshotPath(contract, submission, `z${nonce}`)).toThrow(/nonce must be at least 32 random bytes/);
+    expect(() => snapshotPath(contract, submission, `${nonce}z`)).toThrow(/nonce must be at least 32 random bytes/);
+  });
+
+  it('throws a named SnapshotPathError', () => {
+    try {
+      snapshotPath('x', submission, nonce);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).name).toBe('SnapshotPathError');
+    }
   });
 
   it('accepts a longer nonce', () => {

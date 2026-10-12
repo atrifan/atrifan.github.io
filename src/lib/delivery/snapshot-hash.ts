@@ -14,9 +14,11 @@ import type { TarFile } from './tar';
 const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 
 export function filesHash(files: readonly Pick<TarFile, 'path' | 'gitMode' | 'data'>[]): string {
-  const lines = [...files]
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    .map((f) => `${f.gitMode} ${sha256(f.data)} ${f.path}\n`)
+  // Sorted by path, then by the rest of the line, so even duplicate paths hash the same in any order.
+  const lines = files
+    .map((f) => ({ key: `${f.path}\0${f.gitMode}\0${sha256(f.data)}`, line: `${f.gitMode} ${sha256(f.data)} ${f.path}\n` }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map((x) => x.line)
     .join('');
   return `sha256:${sha256(lines)}`;
 }

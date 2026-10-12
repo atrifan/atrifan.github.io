@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AI_TABS, tabFromPathname, tabHref } from '@/src/lib/ai-tabs';
@@ -25,6 +26,20 @@ export function AiShell({ base, showDownloads, children }: { base: string; showD
 function Side() {
   const { base, connected, deviceName } = useControlPanelData();
   const current = tabFromPathname(usePathname() || '/', base);
+  const navRef = useRef<HTMLElement>(null);
+  // On narrow screens the section list is a sideways-scrolling strip: keep the current section in view.
+  useEffect(() => {
+    const link = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!link) return;
+    for (let el = link.parentElement; el && el !== navRef.current?.parentElement; el = el.parentElement) {
+      if (el.scrollWidth > el.clientWidth) {
+        const box = el.getBoundingClientRect();
+        const target = link.getBoundingClientRect();
+        el.scrollLeft += target.left - box.left - (box.width - target.width) / 2;
+        break;
+      }
+    }
+  }, [current?.slug]);
   return (
     <div className={s.side}>
       <span className={s.eyebrow}>AI control panel</span>
@@ -32,7 +47,7 @@ function Side() {
         <span className={`${s.dot} ${connected ? s.dotOn : ''}`} aria-hidden="true" />
         {connected ? `Extension connected${deviceName ? ` · ${deviceName}` : ''}` : 'Extension not connected'}
       </p>
-      <nav aria-label="AI sections" className={s.nav}>
+      <nav ref={navRef} aria-label="AI sections" className={s.nav}>
         <ul>
           {AI_TABS.map((t) => (
             <li key={t.slug || 'overview'}>
