@@ -942,7 +942,7 @@ export async function seedRoomScenario(
     clarification: 'Should empty rows be skipped?',
     clarificationAnswer: 'Yes, empty rows are skipped and counted.',
     revision: 'Please rename the error column to reason.',
-    scopeChange: 'Drop the README section; we document the format ourselves.',
+    scopeChange: 'A plain CSV error report is enough; skip the HTML report page.',
     openQuestion: 'Which Postgres version do you target?',
     qaReason: 'Empty files crash the importer.',
   };
@@ -965,12 +965,11 @@ export async function seedRoomScenario(
   await respondSteering(request, provider, contractId, rev.steering.id, { response: 'Done, the column is now called reason.' });
   const scope = await seedEstimatedScopeChange(request, { customer, provider, contractId }, {
     message: texts.scopeChange,
-    specChanges: ['No README section on the file format'],
+    specChanges: ['Error report as a plain CSV file, no HTML page'],
     // Less work, so a lower price (the refund path).
     deltaCents: -5000,
     // no etaDays: an ETA moves the deadline relative to today, which would change the screenshots daily
-    deliverableChanges: ['README section removed'],
-    note: 'Less work without the README section.',
+    note: 'Less work without the HTML report page.',
   });
   await approveSteering(request, customer, contractId, scope);
   if (opts.openQuestion) {

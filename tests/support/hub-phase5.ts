@@ -240,7 +240,7 @@ export const STATS_WITH_GRANTS = {
     { id: 4, amount: 3, type: 'plan_expiry', description: 'Unused monthly credits expired', createdAt: '2026-10-15T11:59:00Z' },
     { id: 3, amount: 15, type: 'deposit', description: 'Credit top-up ($15.00)', createdAt: '2026-10-01T10:00:00Z' },
     { id: 2, amount: 7, type: 'usage', description: 'Chat with Tex', createdAt: '2026-09-28T09:00:00Z' },
-    { id: 1, amount: 10, type: 'plan_grant', description: 'Monthly credits (Pro)', createdAt: '2026-09-15T12:00:00Z' },
+    { id: 1, amount: 10, type: 'plan_grant', description: 'September credits (Pro)', createdAt: '2026-09-15T12:00:00Z' },
   ],
   modelSummaries: [],
   deviceSummaries: [],
@@ -295,7 +295,7 @@ export const PHASE5_HUB_PAGES: Phase5HubPage[] = [
     // A provider with reviews and an established trust score has finished Stripe onboarding.
     mock: async (page) => {
       await page.route('**/api/connect/status**', (r) =>
-        json(r, { connected: true, account_id: 'acct_x', connect_status: 'active', payouts_enabled: true, charges_enabled: true, details_submitted: true, country: 'DE' }),
+        json(r, { connected: true, account_id: 'acct_x', connect_status: 'enabled', payouts_enabled: true, charges_enabled: true, details_submitted: true, country: 'DE' }),
       );
       await mockReputation(page);
     },

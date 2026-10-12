@@ -146,7 +146,7 @@ export function AdminQaView() {
                     </span>
                   </td>
                   <td data-label="From / To">
-                    {partyName(it.provider)} <ArrowRightIcon /> {partyName(it.customer)}
+                    <span>{partyName(it.provider)} <ArrowRightIcon /> {partyName(it.customer)}</span>
                   </td>
                   <td data-label="Price" className="num">
                     {formatMoneyCents(it.price_cents, it.currency)}
@@ -155,7 +155,7 @@ export function AdminQaView() {
                     {formatMoneyCents(it.commission_cents, it.currency)}
                   </td>
                   <td data-label="Plans">
-                    {it.provider?.plan ?? '—'} <ArrowRightIcon /> {it.customer?.plan ?? '—'}
+                    <span>{it.provider?.plan ?? '—'} <ArrowRightIcon /> {it.customer?.plan ?? '—'}</span>
                   </td>
                   <td data-label="Attempt" className="num">
                     {it.attempt}
