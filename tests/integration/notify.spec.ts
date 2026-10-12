@@ -271,7 +271,7 @@ test.describe('production enqueue()', () => {
     await Promise.all(waited);
 
     expect(first.status).toBe('queued');
-    expect(second).toEqual({ status: 'duplicate', id: null });
+    expect(second).toMatchObject({ status: 'duplicate', id: null, inApp: { status: 'duplicate' } });
     expect(callsFor(userId)).toHaveLength(2);
     const { rows } = await pool.query(`select status from "${SCHEMA}".notifications where user_id = $1`, [userId]);
     expect(rows).toEqual([{ status: 'sent' }]);
