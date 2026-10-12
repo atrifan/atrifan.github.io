@@ -1000,7 +1000,8 @@ test.describe('job room: artifacts, QA and delivery', () => {
       await goTab(page, 'delivery');
       const slot = page.locator('[data-slot="delivery"]');
       await expect(slot).toBeVisible();
-      await expect(slot).toContainText('Ready for review');
+      // The room shows the status above; the panel doesn't repeat it.
+      await expect(slot).not.toContainText('Ready for review');
       await expect(slot.getByRole('heading', { name: 'Delivered commit', level: 3 })).toBeVisible();
       // Only the customer downloads, accepts or disputes.
       await expect(slot.getByRole('link', { name: 'Download .tar.gz' })).toHaveCount(who === p.customer ? 1 : 0);
