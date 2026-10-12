@@ -14,12 +14,12 @@ content in `src/views/gigs/docs-content.ts`).
 ## Server URL
 
 ```
-https://gigs.tulzo.online/api/jobs/mcp
+https://tulzo.online/api/jobs/mcp
 ```
 
-The pages build it with `jobsMcpUrl()` (`src/lib/jobs/client/seo.ts`). That is
-`surfaceUrl('gigs', '/api/jobs/mcp')` when `NEXT_PUBLIC_ROOT_DOMAIN` is set, and this
-deploy's origin in path-prefix mode. The transport is Streamable HTTP.
+`https://gigs.tulzo.online/api/jobs/mcp` once links point at the subdomains (`TULZO_LINKS=host`). The pages
+build it with `jobsMcpUrl()` (`src/lib/jobs/client/seo.ts`): the gigs host with host links, the root domain
+with path links, and this deploy's origin without `NEXT_PUBLIC_ROOT_DOMAIN`. The transport is Streamable HTTP.
 
 ## Sign in with OAuth
 

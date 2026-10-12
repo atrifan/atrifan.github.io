@@ -121,6 +121,9 @@ export async function startFakeResend(port = 0): Promise<FakeResend> {
       return send(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
   });
+  // Specs wait 6s (QUIET_MS) between calls; with Node's 5s default the server closes the idle keep-alive
+  // socket just before the client reuses it, and that call fails with "socket hang up" / ECONNRESET.
+  server.keepAliveTimeout = 30_000;
 
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   const { port: actual } = server.address() as AddressInfo;
