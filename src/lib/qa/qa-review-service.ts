@@ -20,6 +20,8 @@ import { autoAcceptDaysFromEnv } from '../../config/qa.config';
 import { decideQaVerdict, isOpenSubmissionStatus, QaDecisionError, type QaDecision } from './qa-decision';
 import { creditsToUsd, settleReserve } from './qa-credits';
 import { issueReviewKey, revokeReviewKeys } from './review-keys';
+import { openQaRejectionDispute } from '../disputes/dispute-service';
+import { recomputeTrustSafe } from '../trust/trust-service';
 import {
   SUBMISSION_PUBLIC_COLUMNS,
   audit,
@@ -371,6 +373,8 @@ export async function markSubmission(adminUserId: string, args: unknown) {
           resolution_status: effect.resolutionStatus,
           reason: decision.reason,
         });
+        // The dispute the admin confirms on hub /admin/disputes (default: full refund).
+        await openQaRejectionDispute(adminUserId, contract.id, decision.reason);
         break;
       case 'trust_mark':
         await audit(adminUserId, 'trust_qa_failure', 'principal', contract.provider_principal_id, {
@@ -379,6 +383,7 @@ export async function markSubmission(adminUserId: string, args: unknown) {
           submission_id: sub.id,
           review_id: review.id,
         });
+        await recomputeTrustSafe(contract.provider_principal_id);
         break;
       case 'notify': {
         const to = effect.to === 'customer' ? contract.customer_user_id : contract.provider_user_id;

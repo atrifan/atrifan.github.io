@@ -41,7 +41,21 @@ export type JobsErrorCode =
   | 'github_error'
   | 'pat_purged'
   | 'reason_required'
-  | 'config_error';
+  | 'config_error'
+  // delivery, acceptance, disputes, reviews (Phase 5)
+  | 'delivery_locked'
+  | 'repo_not_empty'
+  | 'push_not_allowed'
+  | 'push_failed'
+  | 'archive_too_large'
+  | 'not_acceptable'
+  | 'dispute_open'
+  | 'not_disputable'
+  | 'claim_window_closed'
+  | 'invalid_amount'
+  | 'review_not_allowed'
+  | 'already_reviewed'
+  | 'payout_failed';
 
 export class JobsError extends Error {
   readonly code: JobsErrorCode;

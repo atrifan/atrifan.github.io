@@ -31,3 +31,15 @@ POST, streaming; the assistant's chat endpoint (hub).
 ## Plugin / dashboard (`/api/plugin/`, `/api/keys/`, `/api/dashboard/`)
 `plugin/config`, `plugin/report`, `plugin/query`, `plugin/devices`, `plugin/version`;
 `keys/{generate,list,delete}`; `dashboard/activity`, `dashboard/paid-stats`.
+
+## Gigs delivery, disputes, reviews, trust, plan credits (Phase 5)
+Contract parties (Clerk session; `x-e2e-user` in tests): `contracts/[id]/delivery` (GET view),
+`delivery/download` (GET, customer: the QA'd SHA as .tar.gz, audited), `delivery/push` (POST
+`{repo, token}`: empty private repo + fine-grained write PAT), `contracts/[id]/accept` (POST, customer;
+pays the provider), `contracts/[id]/dispute` (POST `{category, reason, evidence?}`),
+`contracts/[id]/reviews` (GET/POST). Admin (`withQaAdmin`): `admin/disputes` (GET),
+`admin/disputes/[id]` (GET), `admin/disputes/[id]/resolve` (POST `{outcome, refund_cents?, note}`).
+Cron (`Authorization: Bearer $CRON_SECRET`): `cron/auto-accept`, `cron/trust-decay`, `cron/credit-grants`.
+Signed in: `profile/reputation`, `credits/grants`. Public: `trust?principal_ids=` (badges).
+Services in `src/lib/{delivery,disputes,reviews,trust,credits}`; pure math in `disputes/amounts.ts`,
+`trust/trust-score.ts`, `credits/grants.ts`, `delivery/auto-accept.ts`.

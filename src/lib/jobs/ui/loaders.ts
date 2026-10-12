@@ -14,15 +14,19 @@ import { getProviderProfiles } from '../principals';
 import { parseJobListQuery, parseOfferListQuery } from '../schemas';
 import { toJobsApiParams, toOffersApiParams, type ListingState } from '../client/listing-query';
 import type { BidRow, ContractRow, ContractVersionRow, JobRow, JobSpecVersionRow, OfferRow } from '../types';
+import { badgesForPrincipals, type TrustBadgeData } from '../../trust/badges';
 
 export interface OfferCardData extends OfferRow {
   provider_name: string;
   stripe_linked: boolean;
 }
 
+/** Trust badge data by principal id (job posters, providers); absent = new on Tulzo. */
+export type TrustBadges = Record<string, TrustBadgeData>;
+
 export type ListingData =
-  | { tab: 'jobs'; jobs: JobWithBidCount[]; total: number; error?: string }
-  | { tab: 'offers'; offers: OfferCardData[]; total: number; error?: string };
+  | { tab: 'jobs'; jobs: JobWithBidCount[]; total: number; error?: string; trust?: TrustBadges }
+  | { tab: 'offers'; offers: OfferCardData[]; total: number; error?: string; trust?: TrustBadges };
 
 const FALLBACK_PROVIDER = 'Tulzo provider';
 
@@ -49,18 +53,20 @@ export async function loadListing(state: ListingState, viewerId: string | null, 
       const parsed = parseJobListQuery(new URLSearchParams(toJobsApiParams(state, now)));
       if (!parsed.ok) return { tab: 'jobs', jobs: [], total: 0 };
       const { jobs, total } = await listJobs(viewerId ?? '', parsed.value);
-      return { tab: 'jobs', jobs, total };
+      return { tab: 'jobs', jobs, total, trust: await badgesForPrincipals(jobs.map((j) => j.customer_principal_id)) };
     }
     const parsed = parseOfferListQuery(new URLSearchParams(toOffersApiParams(state)));
     if (!parsed.ok) return { tab: 'offers', offers: [], total: 0 };
     const { offers, total } = await listOffers(viewerId ?? '', parsed.value);
-    const [names, profiles] = await Promise.all([
+    const [names, profiles, trust] = await Promise.all([
       principalNames([...new Set(offers.map((o) => o.provider_principal_id))]),
       getProviderProfiles([...new Set(offers.map((o) => o.user_id))]),
+      badgesForPrincipals(offers.map((o) => o.provider_principal_id)),
     ]);
     return {
       tab: 'offers',
       total,
+      trust,
       offers: offers.map((o) => ({
         ...o,
         provider_name: names.get(o.provider_principal_id) ?? FALLBACK_PROVIDER,
@@ -86,6 +92,8 @@ export interface JobPageData {
   bids: BidForComparison[];
   /** Owner only: the contract created by accepting a bid. */
   contractId: string | null;
+  /** Trust badges for the poster and the bidders, by principal id. */
+  trust: TrustBadges;
 }
 
 async function countBids(jobId: string): Promise<number> {
@@ -137,7 +145,8 @@ export async function loadJobPage(jobId: string, viewerId: string | null): Promi
     isOwner ? listBidsForOwner(viewerId!, job.id) : Promise.resolve([] as BidForComparison[]),
     isOwner ? contractForJob(job.id, viewerId!) : Promise.resolve(null),
   ]);
-  return { job, spec, bidCount, isOwner, myBid, bids, contractId };
+  const trust = await badgesForPrincipals([job.customer_principal_id, ...bids.map((b) => b.provider_principal_id)]);
+  return { job, spec, bidCount, isOwner, myBid, bids, contractId, trust };
 }
 
 /** The job and its latest spec for the post wizard, when the viewer owns it. */

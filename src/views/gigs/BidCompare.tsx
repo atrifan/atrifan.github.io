@@ -13,6 +13,7 @@ import { normalizeQaChecks, parseStoredQaChecks, qaOptions, qaReserveCredits, qa
 import type { QaCheck } from '@/src/config/qa.config';
 import { QaChecksFieldset } from './QaChecksFieldset';
 import { TrustBadge } from './ui';
+import type { TrustBadgeData } from '@/src/lib/trust/badges';
 
 export interface CompareBid {
   id: string;
@@ -26,6 +27,8 @@ export interface CompareBid {
   status: string;
   created_at: string;
   trust_score: number | null;
+  /** Badge data for the bidder (score, reviews); absent = new on Tulzo. */
+  trust?: TrustBadgeData;
   headline: string | null;
 }
 
@@ -118,7 +121,7 @@ export function BidCompare({
               <article className="gigs-bid" aria-label={`Bid of ${formatEuros(bid.price_cents)}`}>
                 <div className="gigs-bid-top">
                   <p className="gig-card-price">{formatEuros(bid.price_cents)}</p>
-                  <TrustBadge />
+                  <TrustBadge {...bid.trust} />
                 </div>
                 <p className="gig-card-meta">
                   <span>{`Customer total ${formatEuros(bid.customer_total_cents)}`}</span>

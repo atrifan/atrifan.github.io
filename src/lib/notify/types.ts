@@ -23,6 +23,7 @@ export const NOTIFICATION_TYPES = [
   'dispute_resolved',
   'payout_sent',
   'review_received',
+  'review_requested',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -80,6 +81,7 @@ export const payloadSchemas = {
     jobTitle: title.optional(),
     url,
   }),
+  review_requested: z.object({ ...contract, counterpartyName: personName }),
 } satisfies Record<NotificationType, z.ZodTypeAny>;
 
 /** Payload a caller passes to `enqueue` (defaults such as `currency` optional). */
@@ -137,4 +139,5 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   dispute_resolved: 'Disputes resolved',
   payout_sent: 'Payouts',
   review_received: 'New reviews',
+  review_requested: 'Review reminders',
 };

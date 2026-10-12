@@ -11,12 +11,30 @@ export interface RecordedStripeRequest {
   method: string;
   path: string;
   form: Record<string, string>;
+  /** The Idempotency-Key header, if one was sent. */
+  idempotencyKey: string | null;
+}
+
+/** A payment intent the fake knows (for GET /v1/payment_intents/:id, refunds and source_transaction). */
+export interface FakePaymentIntent {
+  id: string;
+  amount: number;
+  currency: string;
+  chargeId: string;
+  cardFingerprint?: string | null;
+  customerId?: string | null;
+  billingEmail?: string | null;
 }
 
 export interface FakeStripe {
   url: string;
   requests: RecordedStripeRequest[];
   accounts: Map<string, Record<string, unknown>>;
+  paymentIntents: Map<string, FakePaymentIntent>;
+  transfers: Map<string, Record<string, unknown>>;
+  refunds: Map<string, Record<string, unknown>>;
+  /** Register a paid payment intent (and its charge). */
+  addPaymentIntent(pi: FakePaymentIntent): void;
   /** Make the next N requests to a path prefix fail with a Stripe API error. */
   failNext(pathPrefix: string, count?: number): void;
   close(): Promise<void>;
@@ -47,6 +65,21 @@ export function formToObject(form: Record<string, string>): Record<string, unkno
 export async function startFakeStripe(): Promise<FakeStripe> {
   const requests: RecordedStripeRequest[] = [];
   const accounts = new Map<string, Record<string, unknown>>();
+  const paymentIntents = new Map<string, FakePaymentIntent>();
+  const transfers = new Map<string, Record<string, unknown>>();
+  const refunds = new Map<string, Record<string, unknown>>();
+  // Stripe replays the first response for a repeated Idempotency-Key.
+  const idempotent = new Map<string, { status: number; body: unknown }>();
+  // A payment intent the test never registered (e.g. one named in a webhook fixture) is made up
+  // on first use: a paid intent with a large amount and charge `ch_of_<pi>`.
+  const intent = (id: string): FakePaymentIntent => {
+    let pi = paymentIntents.get(id);
+    if (!pi) {
+      pi = { id, amount: 100_000_000, currency: 'eur', chargeId: `ch_of_${id.replace(/^pi_/, '')}` };
+      paymentIntents.set(id, pi);
+    }
+    return pi;
+  };
   const failures: Array<{ prefix: string; remaining: number }> = [];
 
   const server: Server = createServer((req, res) => {
@@ -58,17 +91,24 @@ export async function startFakeStripe(): Promise<FakeStripe> {
       new URLSearchParams(raw).forEach((v, k) => (form[k] = v));
       const method = req.method || 'GET';
       const path = url.pathname;
-      requests.push({ method, path, form });
+      const idempotencyKey = (req.headers['idempotency-key'] as string | undefined) ?? null;
+      requests.push({ method, path, form, idempotencyKey });
 
-      const send = (status: number, body: unknown) => {
+      const reply = (status: number, body: unknown) => {
         res.writeHead(status, { 'content-type': 'application/json', 'request-id': rid('req') });
         res.end(JSON.stringify(body));
       };
+      const send = (status: number, body: unknown) => {
+        if (idempotencyKey && method === 'POST' && status < 500) idempotent.set(`${path}|${idempotencyKey}`, { status, body });
+        reply(status, body);
+      };
+      const replay = idempotencyKey && method === 'POST' ? idempotent.get(`${path}|${idempotencyKey}`) : undefined;
+      if (replay) return reply(replay.status, replay.body);
 
       const failure = failures.find((f) => f.remaining > 0 && path.startsWith(f.prefix));
       if (failure) {
         failure.remaining -= 1;
-        return send(400, { error: { type: 'invalid_request_error', message: 'fake stripe failure' } });
+        return reply(400, { error: { type: 'invalid_request_error', message: 'fake stripe failure' } });
       }
 
       const body = formToObject(form);
@@ -111,6 +151,55 @@ export async function startFakeStripe(): Promise<FakeStripe> {
           metadata: body.metadata ?? {}, url: `https://checkout.stripe.com/c/pay/${id}`,
         });
       }
+      if ((m = path.match(/^\/v1\/payment_intents\/(pi_[\w]+)$/)) && method === 'GET') {
+        const pi = intent(m[1]);
+        const charge = {
+          id: pi.chargeId, object: 'charge', amount: pi.amount, currency: pi.currency, customer: pi.customerId ?? null,
+          billing_details: { email: pi.billingEmail ?? null },
+          payment_method_details: { type: 'card', card: { fingerprint: pi.cardFingerprint ?? null } },
+        };
+        const expanded = [...url.searchParams.entries()].some(([k, v]) => k.startsWith('expand') && v === 'latest_charge');
+        return send(200, {
+          id: pi.id, object: 'payment_intent', amount: pi.amount, currency: pi.currency, status: 'succeeded',
+          customer: pi.customerId ?? null, latest_charge: expanded ? charge : pi.chargeId,
+        });
+      }
+      if (method === 'POST' && path === '/v1/transfers') {
+        const id = rid('tr');
+        const transfer = {
+          id, object: 'transfer', amount: Number(body.amount), currency: body.currency, destination: body.destination,
+          transfer_group: body.transfer_group ?? null, source_transaction: body.source_transaction ?? null,
+          metadata: body.metadata ?? {}, amount_reversed: 0, reversed: false,
+        };
+        transfers.set(id, transfer);
+        return send(200, transfer);
+      }
+      if ((m = path.match(/^\/v1\/transfers\/(tr_[\w]+)\/reversals$/)) && method === 'POST') {
+        const transfer = transfers.get(m[1]);
+        if (!transfer) return send(404, { error: { type: 'invalid_request_error', message: 'No such transfer' } });
+        const amount = body.amount === undefined ? Number(transfer.amount) - Number(transfer.amount_reversed) : Number(body.amount);
+        if (amount > Number(transfer.amount) - Number(transfer.amount_reversed)) {
+          return send(400, { error: { type: 'invalid_request_error', message: 'Reversal exceeds transfer' } });
+        }
+        transfer.amount_reversed = Number(transfer.amount_reversed) + amount;
+        transfer.reversed = transfer.amount_reversed === transfer.amount;
+        return send(200, { id: rid('trr'), object: 'transfer_reversal', amount, transfer: m[1], currency: transfer.currency, metadata: body.metadata ?? {} });
+      }
+      if (method === 'POST' && path === '/v1/refunds') {
+        if (!/^pi_\w+$/.test(String(body.payment_intent))) {
+          return send(404, { error: { type: 'invalid_request_error', message: 'No such payment_intent' } });
+        }
+        const pi = intent(String(body.payment_intent));
+        const already = [...refunds.values()].filter((r) => r.payment_intent === pi.id).reduce((s, r) => s + Number(r.amount), 0);
+        const amount = body.amount === undefined ? pi.amount - already : Number(body.amount);
+        if (amount <= 0 || amount + already > pi.amount) {
+          return send(400, { error: { type: 'invalid_request_error', message: 'Refund exceeds charge' } });
+        }
+        const id = rid('re');
+        const refund = { id, object: 'refund', amount, currency: pi.currency, payment_intent: pi.id, charge: pi.chargeId, status: 'succeeded', reason: body.reason ?? null, metadata: body.metadata ?? {} };
+        refunds.set(id, refund);
+        return send(200, refund);
+      }
       if ((m = path.match(/^\/v1\/checkout\/sessions\/(cs_[\w]+)\/expire$/)) && method === 'POST') {
         return send(200, { id: m[1], object: 'checkout.session', status: 'expired' });
       }
@@ -124,6 +213,12 @@ export async function startFakeStripe(): Promise<FakeStripe> {
     url: `http://127.0.0.1:${port}`,
     requests,
     accounts,
+    paymentIntents,
+    transfers,
+    refunds,
+    addPaymentIntent(pi) {
+      paymentIntents.set(pi.id, pi);
+    },
     failNext(prefix, count = 1) {
       failures.push({ prefix, remaining: count });
     },

@@ -79,6 +79,11 @@ export async function mockHubApis(page: Page): Promise<void> {
       rawDeviceLogs: [],
     }),
   );
+  // Phase 5: no reviews, trust or monthly grant yet (the empty states)
+  await page.route('**/api/profile/reputation', (r) =>
+    json(r, { reviews: [], summary: { count: 0, average: null, as_provider: 0, as_customer: 0 }, trust: { provider: null, agents: [] } }),
+  );
+  await page.route('**/api/credits/grants', (r) => json(r, { plan: null, monthly_credits: 0, current: null, history: [] }));
   await page.route('**/api/admin/qa/queue**', (r) => json(r, { items: [QUEUE_ITEM] }));
   await page.route(`**/api/admin/qa/submissions/${QUEUE_ITEM.submission_id}`, (r) => json(r, DETAIL));
 }

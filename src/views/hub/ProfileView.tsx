@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { connectCard, connectNotice, type ConnectReturn } from '@/src/lib/connect-view';
 import { CONNECT_COUNTRIES } from '@/src/lib/connect-countries';
+import { ProfileReputation } from './ProfileReputation';
 
 interface ConnectStatusView {
   connected: boolean;
@@ -28,14 +29,7 @@ export function ProfileView({ connectParam }: { connectParam: ConnectReturn }) {
       <AccountPanel />
       <ConnectPanel connectParam={connectParam} />
       <NotificationsPanel />
-      <section className="panel" aria-labelledby="reviews-title">
-        <h2 id="reviews-title">Reviews about you</h2>
-        <p className="empty-state">No reviews yet. Reviews from customers and providers you work with on Gigs show up here.</p>
-      </section>
-      <section className="panel" aria-labelledby="trust-title">
-        <h2 id="trust-title">Trust score</h2>
-        <p className="empty-state">No trust score yet. It builds up from finished gigs, QA results and reviews.</p>
-      </section>
+      <ProfileReputation />
     </div>
   );
 }

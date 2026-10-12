@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { deadlineLabel, formatBudget, formatEuros, jobStatusLabel, postedAgo } from '@/src/lib/jobs/client/format';
 import type { JobWithBidCount } from '@/src/lib/jobs/jobs-service';
 import type { OfferCardData } from '@/src/lib/jobs/ui/loaders';
+import type { TrustBadgeData } from '@/src/lib/trust/badges';
 import { Avatar, CategoryLabel, StripeBadge, TrustBadge } from './ui';
 
 function bidCountLabel(n: number): string {
@@ -10,7 +11,7 @@ function bidCountLabel(n: number): string {
   return n === 1 ? '1 bid' : `${n} bids`;
 }
 
-export function JobCard({ job, href, now }: { job: JobWithBidCount; href: string; now: Date }) {
+export function JobCard({ job, href, now, trust }: { job: JobWithBidCount; href: string; now: Date; trust?: TrustBadgeData }) {
   return (
     <article className="gig-card" aria-labelledby={`job-${job.id}`}>
       <p className="gig-labels">
@@ -32,14 +33,14 @@ export function JobCard({ job, href, now }: { job: JobWithBidCount; href: string
         <span>{bidCountLabel(job.bid_count)}</span>
       </p>
       <div className="gig-card-foot">
-        <TrustBadge />
+        <TrustBadge {...trust} />
         <time dateTime={job.created_at}>{postedAgo(job.created_at, now)}</time>
       </div>
     </article>
   );
 }
 
-export function OfferCard({ offer }: { offer: OfferCardData }) {
+export function OfferCard({ offer, trust }: { offer: OfferCardData; trust?: TrustBadgeData }) {
   const days = offer.delivery_days;
   return (
     <article className="gig-card" aria-labelledby={`offer-${offer.id}`}>
@@ -65,6 +66,7 @@ export function OfferCard({ offer }: { offer: OfferCardData }) {
           <span>{offer.provider_name}</span>
         </span>
         {offer.stripe_linked ? <StripeBadge /> : null}
+        {trust ? <TrustBadge {...trust} /> : null}
       </div>
     </article>
   );
