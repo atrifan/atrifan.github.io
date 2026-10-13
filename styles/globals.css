@@ -358,11 +358,13 @@ ol[role='list'] {
 }
 
 .shell-main {
-  flex: 1;
+  /* Grows to push the footer to the viewport bottom on short pages; never shrinks below its content. */
+  flex: 1 0 auto;
   outline: none;
 }
 
 .shell-footer {
+  flex-shrink: 0;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text-muted);
