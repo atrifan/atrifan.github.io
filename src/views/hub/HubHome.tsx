@@ -13,7 +13,7 @@ const SURFACES: { surface: Exclude<Surface, 'hub'>; title: string; desc: string;
     surface: 'ai',
     title: 'AI',
     desc: 'Your assistant, keys and usage. Connect Tex, manage devices and see what each call cost.',
-    more: 'Open AI',
+    more: 'Open Tulzo AI',
   },
   {
     surface: 'marketplace',
@@ -69,7 +69,7 @@ export function HubHome() {
           </SignedOut>
           <SignedIn>
             <a href={surfaceUrl('ai', '/')} className="btn btn-primary">
-              Open AI
+              Open Tulzo AI
             </a>
           </SignedIn>
           <a href={surfaceUrl('hub', '/pricing')} className="btn btn-secondary">

@@ -103,8 +103,9 @@ test.describe('hub landing, signed in (customer)', () => {
     await expect(userButton(page.getByRole('banner'))).toBeVisible({ timeout: 30_000 });
   });
 
-  test('"Open AI" links to /ai and there is no "Get started"', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'Open AI', exact: true }).first()).toHaveAttribute('href', '/ai');
+  test('"Open Tulzo AI" links to /ai and there is no "Get started" or bare "Open AI"', async ({ page }) => {
+    await expect(page.getByRole('link', { name: 'Open Tulzo AI', exact: true }).first()).toHaveAttribute('href', '/ai');
+    await expect(page.getByRole('link', { name: 'Open AI', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Get started', exact: true })).toHaveCount(0);
   });
 
