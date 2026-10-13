@@ -58,8 +58,8 @@ self.addEventListener('push', (event) => {
   let payload = {
     title: 'Tulzo Notification',
     body: 'You have a new notification',
-    icon: '/tulzo-logo.png',
-    badge: '/tulzo-logo.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
   };
 
   try {
@@ -77,8 +77,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body,
-    icon: payload.icon || '/tulzo-logo.png',
-    badge: payload.badge || '/tulzo-logo.png',
+    icon: payload.icon || '/icon-192.png',
+    badge: payload.badge || '/icon-192.png',
     tag: payload.tag || 'tulzo-notification',
     data: payload.data || {},
     actions: payload.actions || [],

@@ -23,7 +23,8 @@
     "test:e2e:marketplace": "tsx scripts/test-e2e-marketplace.ts",
     "test:integration:notify": "playwright test tests/integration/notify.spec.ts",
     "test:int": "vitest run --config vitest.int.config.ts",
-    "test:visual": "playwright test tests/visual"
+    "test:visual": "playwright test tests/visual",
+    "generate:icons": "tsx --tsconfig scripts/tsconfig.icons.json scripts/generate-icons.ts"
   },
   "dependencies": {
     "@adobe/react-spectrum": "^3.36.0",
@@ -60,6 +61,7 @@
     "@axe-core/playwright": "^4.10.1",
     "@clerk/testing": "^2.2.45",
     "@playwright/test": "^1.49.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/katex": "^0.16.8",
     "@types/node": "^20.17.12",
     "@types/pg": "^8.23.1",
