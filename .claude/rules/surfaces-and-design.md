@@ -109,12 +109,13 @@ A new hub-only page: add it to `HUB_ONLY_PREFIXES` so other surfaces 404 it. Pub
 ## Shell
 
 `src/components/shell/AppShell.tsx` wraps every page (from `app/providers.tsx`): skip link → `#main`,
-wordmark, `nav[aria-label=Primary]` (AI · Marketplace · Gigs · Chat via `surfaceUrl`, `aria-current="page"`
-on the active surface), `ThemeToggle`, Sign in or the Clerk `UserButton` (Profile, Credits on the hub, and
+wordmark, `nav[aria-label=Primary]` (AI · Marketplace · Gigs · Chat via `surfaceUrl`, then Admin for admins only,
+`aria-current="page"` on the active surface, or on Admin for `isAdminPath()` pages), `ThemeToggle`, Sign in or the Clerk `UserButton` (Profile, Credits on the hub, and
 Admin for admins), the `<main id="main">`, and the footer. Below 960px nav and tools fold into a "Menu" panel
-(focus trap, Escape closes), which also has an "Admin" link for admins. Admin comes from the `viewerIsAdmin`
-server action (`src/lib/admin-actions.ts`, the `admin.ts` rule, a boolean only); the user button mounts once it
-has answered. It is not a root-layout prop, which would render every page per request. Pages render content only: no `<main>`, header or footer of their own. Touch targets ≥ 44px.
+(focus trap, Escape closes) holding the same nav, Admin included. Admin comes from the `viewerIsAdmin`
+server action (`src/lib/admin-actions.ts`, the `admin.ts` rule, a boolean only); the nav item and the user button
+render nothing until it has answered (no reserved space; Admin is last, so nothing shifts). The shell is a
+full-height column (`main` grows, the footer never shrinks), so short pages keep the footer at the viewport bottom. It is not a root-layout prop, which would render every page per request. Pages render content only: no `<main>`, header or footer of their own. Touch targets ≥ 44px.
 
 ## Tokens and theme
 
@@ -141,8 +142,10 @@ for the chat layout, `RemoteChat.css` (tokens only) for the ported panel compone
 ## Brand
 
 `src/components/brand/TulzoMark.tsx` (the line-art robot) and `SurfaceIcons.tsx` (`AiIcon`, `MarketIcon`,
-`GigsIcon`, `ChatIcon`, `SURFACE_ICON`): `currentColor`, non-scaling stroke, `size` and `title` props
-(decorative without `title`). `app/icon.svg` and `app/opengraph-image.tsx` use the same mark.
+`GigsIcon`, `ChatIcon`, `AdminIcon`, `SURFACE_ICON`): `currentColor`, non-scaling stroke, `size` and `title` props
+(decorative without `title`). `app/opengraph-image.tsx` uses the same mark. `npm run generate:icons`
+(`scripts/generate-icons.ts`) renders the mark into `app/icon.svg`, `app/favicon.ico` (16/32/48),
+`app/apple-icon.png` and the manifest's `public/icon-{192,512,maskable-512}.png`; re-run it after changing the mark.
 
 ## Ads
 

@@ -175,6 +175,18 @@ export function activeSurface({ surface, pathname }: { surface: Surface | null; 
 }
 
 /**
+ * Is `pathname` an admin page, for the primary nav's "Admin" item: hub `/admin[/*]` and marketplace
+ * moderation (`/marketplace/admin[/*]` in path mode, `/admin[/*]` on the marketplace surface).
+ */
+export function isAdminPath({ surface, pathname }: { surface: Surface | null; pathname: string }): boolean {
+  const owner = activeSurface({ surface, pathname });
+  if (owner !== 'hub' && owner !== 'marketplace') return false;
+  const prefix = SURFACE_PREFIX[owner];
+  const local = prefix && underPrefix(pathname, prefix) ? stripPrefix(pathname, prefix) : pathname;
+  return underPrefix(local, '/admin');
+}
+
+/**
  * `www.<root>` → the apex (the hub lives at the root domain). Returns the redirect URL
  * (middleware answers 308), or null for any other host or without a root domain.
  */

@@ -84,10 +84,8 @@ const baseMetadata: Metadata = {
     title: 'Tex by Tulzo - Your Personal AI Assistant',
     description: 'Tex is a sandboxed AI agent with browser automation, domain skills, and multi-channel access. Chrome extension, CLI, or Telegram.',
   },
-  // app/icon.svg is the favicon (Next file convention); the PNG stays for Apple touch icons.
-  icons: {
-    apple: '/tulzo-logo.png',
-  },
+  // Icons are Next file conventions, all generated from TulzoMark (npm run generate:icons):
+  // app/favicon.ico, app/icon.svg and app/apple-icon.png; the manifest lists public/icon-*.png.
   manifest: '/manifest.json',
 };
 

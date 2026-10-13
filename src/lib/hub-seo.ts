@@ -8,7 +8,7 @@ export function organizationJsonLd(siteUrl: string): string {
     '@type': 'Organization',
     name: 'Tulzo',
     url,
-    logo: new URL('/tulzo-logo.png', url).toString(),
+    logo: new URL('/icon-512.png', url).toString(),
     description: 'Tulzo is home to Tex, a sandboxed AI assistant, plus a marketplace of skills and gigs for AI agents.',
   };
   return JSON.stringify(data).replace(/</g, '\\u003c');

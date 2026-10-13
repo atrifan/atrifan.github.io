@@ -12,6 +12,8 @@
   overflow: hidden;
 }
 .shell:has(.chat-app) .shell-main {
+  /* The shell has a fixed height here, so main shrinks to it and the conversation scrolls. */
+  flex: 1 1 0;
   display: flex;
   min-height: 0;
 }
