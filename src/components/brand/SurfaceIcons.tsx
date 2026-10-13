@@ -57,6 +57,18 @@ export function ChatIcon(props: BrandIconProps) {
   );
 }
 
+/** Admin pages (hub /admin, marketplace moderation): the robot with a shield and a check. */
+export function AdminIcon(props: BrandIconProps) {
+  return (
+    <BrandSvg {...props}>
+      <RobotWithProp>
+        <Path d="M74 14 L93 21 V45 C93 63 85 77 74 86 C63 77 55 63 55 45 V21 Z" />
+        <Path d="M65 49 L72 56 L84 41" />
+      </RobotWithProp>
+    </BrandSvg>
+  );
+}
+
 /** Icon per surface, for the nav and surface pages. The hub uses TulzoMark. */
 export const SURFACE_ICON: Readonly<Record<Exclude<Surface, 'hub'>, ComponentType<BrandIconProps>>> = {
   ai: AiIcon,
