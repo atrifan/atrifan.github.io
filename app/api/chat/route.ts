@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
 import { streamText } from 'ai';
 import { createClient } from '@supabase/supabase-js';
-import { createGateway, calculateCost, resolveGenerationCost } from '@/src/lib/ai-gateway';
-import { creditMarkupFromEnv, creditValueUsdFromEnv, reviewMaxOutputTokensFromEnv } from '@/src/config/qa.config';
+import { createGateway, calculateCost, chatBillingMarkup, resolveGenerationCost } from '@/src/lib/ai-gateway';
+import { DEFAULT_CHAT_MODEL } from '@/src/config/gateway-models';
+import { findAllowedModel, modelNotAllowedBody } from '@/src/lib/models/catalog';
+import { creditValueUsdFromEnv, reviewMaxOutputTokensFromEnv } from '@/src/config/qa.config';
 import { chargedCredits, estimateInputTokens, remainingCredits, reviewOutputCap } from '@/src/lib/qa/qa-credits';
 
 export const runtime = 'edge';
@@ -202,7 +204,12 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { messages, model = 'openai/gpt-4o-mini', tools, stream = true } = body;
+  const { messages, model = DEFAULT_CHAT_MODEL, tools, stream = true } = body;
+
+  // Only allowlisted models: they are the ones Tulzo has a price for (src/config/gateway-models.ts).
+  if (!findAllowedModel(model)) {
+    return jsonError(400, modelNotAllowedBody(String(model)));
+  }
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: 'Invalid request body: messages required' }), {
@@ -214,7 +221,7 @@ export async function POST(request: NextRequest) {
   // QA review calls: cap the output and hold the call's worst-case credits first.
   let maxOutputTokens: number | undefined;
   let holdId: string | null = null;
-  const markup = review ? creditMarkupFromEnv() : 1;
+  const markup = chatBillingMarkup({ review: !!review });
   if (review) {
     maxOutputTokens = reviewOutputCap(body.max_tokens, reviewMaxOutputTokensFromEnv());
     const inputTokens = estimateInputTokens(JSON.stringify({ messages, tools: tools ?? null }));
@@ -280,7 +287,7 @@ export async function POST(request: NextRequest) {
           console.error('[chat] QA review usage not metered:', review.submissionId, meterError?.code ?? metered?.error);
         }
       } else if (cost > 0) {
-        const finalCost = await resolveGenerationCost(generationId, cost);
+        const finalCost = (await resolveGenerationCost(generationId, cost)) * markup;
 
         await supabase.rpc('deduct_user_balance', {
           target_user_id: userId,

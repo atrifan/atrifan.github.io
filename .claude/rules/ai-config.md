@@ -6,7 +6,10 @@ alwaysApply: false
 
 # AI Configuration
 
-`src/config/ai-tokens.config.ts` is the single source of truth for models, pricing, and quotas.
+The managed gateway (`/api/chat`, `/api/models`, gigs spec builder and steering) uses
+`src/config/gateway-models.ts`: the only allowlist, with the prices `calculateCost()` bills (see
+`docs/models-api.md`). `src/config/ai-tokens.config.ts` still holds the plan quotas and the older model
+table used by the native `/api/mcp` LLM tool in `src/config/tool-handlers.ts`.
 
 ```ts
 export const AI_MODELS; export const EMBEDDING_MODELS; export const TOKEN_QUOTAS;

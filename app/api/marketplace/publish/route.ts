@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { createClient } from '@supabase/supabase-js';
 import {
   authenticateApiKey,
   needsArchive,
@@ -11,6 +10,7 @@ import {
 import { validatePublishInput } from '@/src/lib/marketplace/publish-validation';
 import { bytesFilesHash } from '@/src/lib/marketplace/wire-format';
 import { currentMarketplaceUser } from '@/src/lib/marketplace/web-auth';
+import { serviceSupabase } from '@/src/lib/service-supabase';
 
 /**
  * Marketplace publish: a new package or a new version. Every publish lands `pending` and needs
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const usageDb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const usageDb = serviceSupabase();
     await usageDb.from('api_usage_log').insert({
       user_id: auth.userId,
       event_type: 'marketplace_publish',

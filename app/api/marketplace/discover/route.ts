@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { authenticateApiKey, discoverPackages } from '@/src/lib/marketplace-service';
+import { serviceSupabase } from '@/src/lib/service-supabase';
 
 /**
  * Marketplace discovery — API-key-gated (paid plan required).
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   // Best-effort usage logging (uses the main app DB where api_usage_log lives).
   try {
-    const usageDb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const usageDb = serviceSupabase();
     await usageDb.from('api_usage_log').insert({
       user_id: authResult.auth.userId,
       event_type: 'marketplace_discover',

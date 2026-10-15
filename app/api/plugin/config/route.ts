@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
+import { serviceSupabase } from '@/src/lib/service-supabase';
+import { authenticatePluginKey } from '@/src/lib/plugin-auth';
+import { MODELS_URL } from '@/src/lib/models/catalog';
 
 /**
  * Returns the user's full config: plan, quotas, guardrails, and any
@@ -19,32 +13,12 @@ function getSupabase() {
  * - Authorization: Bearer <api_key>
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing Authorization header' }, { status: 401 });
-  }
-
-  const apiKey = authHeader.slice(7);
-  const apiKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  const supabase = getSupabase();
-
-  // Validate key and get user
-  const { data: keyRecord, error } = await supabase
-    .from('api_keys')
-    .select('user_id, plan, is_active')
-    .eq('api_key_hash', apiKeyHash)
-    .eq('is_active', true)
-    .single();
-
-  if (error || !keyRecord) {
-    return NextResponse.json({ error: 'Invalid or revoked API key' }, { status: 401 });
-  }
-
-  if (keyRecord.plan === 'free') {
-    return NextResponse.json({ error: 'plan_required' }, { status: 403 });
-  }
-
-  const plan = keyRecord.plan as 'pro' | 'plus';
+  const supabase = serviceSupabase();
+  const auth = await authenticatePluginKey(req, supabase);
+  if (auth instanceof NextResponse) return auth;
+  const keyRecord = { user_id: auth.userId };
+  // Super has the Plus quotas (it had none before: quotas['super'] was undefined).
+  const plan: 'pro' | 'plus' = auth.plan === 'pro' ? 'pro' : 'plus';
 
   // Plan-based quotas
   const quotas = {
@@ -117,8 +91,9 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    plan,
+    plan: auth.plan,
     quotas: quotas[plan],
+    models_url: MODELS_URL,
     guardrails,
     custom_rules: customRules,
     user_id: keyRecord.user_id,

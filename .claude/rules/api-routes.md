@@ -13,8 +13,13 @@ in the foundation cleanup). Which surface serves which route is decided by `SURF
 A route that needs an env var it doesn't have answers 500 `{ error: 'server_misconfigured' }`
 (`src/lib/misconfigured.ts`); never fall back to a hard-coded secret or host.
 
-## Chat (`/api/chat`)
-POST, streaming; the assistant's chat endpoint (hub).
+## Chat (`/api/chat`) and models (`/api/models`)
+`chat`: POST, streaming; the assistant's chat endpoint (hub). `model` must be on the allowlist in
+`src/config/gateway-models.ts` (default `openai/gpt-4o-mini`), otherwise 400 `model_not_allowed` with
+`models_url`. `models`: GET, Bearer API key (same rules as `plugin/config`): the allowlisted models with
+context window, output limit, capabilities (Vercel's listing, cached 1h) and the billed per-1M price.
+See `docs/models-api.md`. Route handlers use `serviceSupabase()` (`src/lib/service-supabase.ts`), never the
+unset `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` names alone.
 
 ## Job room (`/api/contracts/`)
 Contract parties only (404 unknown, 403 not a party); served on gigs and the hub. `GET /` (mine),
