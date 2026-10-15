@@ -257,7 +257,7 @@ test('(d) the classifier call is billed to the requester at metered cost × CRED
   assert.equal(res.status, 201, JSON.stringify(res.body));
   assert.equal(aiState.calls.length, 1);
   assert.equal(res.body.steering.classifier_output.source, 'ai');
-  const metered = calculateCost('openai/gpt-4o-mini', 1_000_000, 100_000);
+  const metered = calculateCost({ inputPer1M: 0.15, outputPer1M: 0.6 }, 1_000_000, 100_000);
   assert.ok(metered > 0.01, `metered ${metered}`);
   const expected = Math.round(metered * 1.3 * 1e4) / 1e4;
   const [budget] = await sql<{ remaining_balance: string }>('SELECT remaining_balance FROM user_budgets WHERE user_id = $1', [p.customer]);

@@ -140,6 +140,8 @@ async function main() {
       NEXT_PUBLIC_STORAGE_SUPABASE_URL: db.supabaseUrl,
       STORAGE_SUPABASE_SERVICE_ROLE_KEY: db.serviceRoleKey,
       STRIPE_SECRET_KEY: 'sk_test_fake_e2e',
+      // Never fetch Vercel's live model listing in tests: a closed port, so the built-in list stands in.
+      AI_GATEWAY_MODELS_URL: 'http://127.0.0.1:9/v1/models',
       STRIPE_API_BASE: stripe.url,
       STRIPE_WEBHOOK_SECRET: webhookSecret,
       STRIPE_CONNECT_WEBHOOK_SECRET: '',

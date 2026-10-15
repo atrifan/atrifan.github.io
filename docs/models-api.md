@@ -1,8 +1,9 @@
 # Models API (`GET /api/models`)
 
-The models the Tulzo managed gateway (`POST /api/chat`) accepts, with each model's context window,
-output limit, capabilities and the price Tulzo bills. The native host can read this list instead of
-shipping its own.
+Every chat model the Vercel AI Gateway offers, as callable through the Tulzo managed gateway
+(`POST /api/chat`), with each model's context window, output limit, capabilities and the price Tulzo
+bills. The gateway is a pass-through: when Vercel adds a model, it appears here and `/api/chat` accepts
+it without a Tulzo change. The native host can read this list instead of shipping its own.
 
 ## Request
 
@@ -34,7 +35,7 @@ from config instead of hard-coding it.
       "name": "GPT-4o mini",
       "context_window": 128000,
       "max_output_tokens": 16384,
-      "pricing": { "input_per_1m": 0.15, "output_per_1m": 0.6, "cached_input_per_1m": 0.075 },
+      "pricing": { "input_per_1m": 0.195, "output_per_1m": 0.78, "cached_input_per_1m": 0.0975 },
       "supports_tools": true,
       "supports_vision": true
     }
@@ -48,28 +49,30 @@ from config instead of hard-coding it.
 | `name` | Display name. |
 | `context_window` | Max input tokens, from Vercel's listing. `null` when Vercel doesn't report it or the listing is unavailable. |
 | `max_output_tokens` | Max output tokens (Vercel's `max_tokens`). `null` like above. |
-| `pricing.input_per_1m` / `output_per_1m` | USD per 1,000,000 tokens that Tulzo bills, after markup. Always numbers. |
+| `pricing.input_per_1m` / `output_per_1m` | USD per 1,000,000 tokens that Tulzo bills: Vercel's price × the markup (1.3 by default). Always numbers. |
 | `pricing.cached_input_per_1m` | USD per 1M cached input tokens. Omitted when there's no cached price. |
 | `supports_tools` | `tools` is in the model's supported parameters. `false` when unknown. |
 | `supports_vision` | The model accepts image input. `false` when unknown. |
 
-The order is fixed by Tulzo's table. The first entry isn't a recommendation; the default model for
-`/api/chat` is `openai/gpt-4o-mini`. The response may be cached by the client for 5 minutes
+Entries are sorted by `id`. The default model for `/api/chat` is `openai/gpt-4o-mini`. The response may be cached by the client for 5 minutes
 (`Cache-Control: private, max-age=300`).
 
 ## Where the data comes from
 
-- **Which models, and their prices:** `src/config/gateway-models.ts`. It's the only list.
-  `/api/chat` refuses any other model, and `calculateCost()` prices only these. Prices are Vercel AI
-  Gateway list prices (USD per 1M) × the billing markup from `chatBillingMarkup()`
-  (`src/lib/ai-gateway.ts`): ×1 for account keys today, × `CREDIT_MARKUP` for QA review keys.
-- **Context window, output limit, capabilities:** Vercel's public listing
-  `https://ai-gateway.vercel.sh/v1/models`, cached for an hour per server instance. If Vercel can't be
-  reached, the last good listing is used. Without one, these fields are `null`/`false`, but the models
-  and prices are still returned.
-- **Long-context tiers:** some models cost more past ~200k input tokens (GPT-5.5, Claude Sonnet 4.5,
-  Gemini 3.1 Pro). The listed price is the base tier. `/api/chat` bills the gateway's reported cost for
-  the generation when it has one.
+- **Which models:** Vercel's public listing `https://ai-gateway.vercel.sh/v1/models`, cached for an hour
+  per server instance. Every entry with `type: "language"`, an input and an output price, and an id that
+  doesn't end in `-batch` (batch variants are for Vercel's batch API, not chat). Embeddings, image, video
+  and other model types aren't listed.
+- **Prices:** Vercel's per-token price × 1,000,000 × `chatBillingMarkup()` (`src/lib/ai-gateway.ts`), which
+  is `CREDIT_MARKUP` (default 1.3) for every key. `/api/chat` bills the gateway's reported cost for the call
+  × the same markup, so the listed price is the billed price.
+- **Context window, output limit, capabilities:** the same listing entry.
+- **When Vercel can't be reached:** the last good listing is used. Without one, a built-in list
+  (`src/config/gateway-models.ts`, 13 common models including the default) stands in, priced the same way,
+  with `context_window`/`max_output_tokens` `null` and the capability flags `false`. `/api/chat` then accepts
+  only those.
+- **Long-context tiers:** some models cost more past ~200k input tokens (e.g. GPT-5.5, Claude Sonnet 4.5,
+  Gemini 3.1 Pro). The listed price is the base tier; the billed amount follows the gateway's reported cost.
 
 ## A model that isn't listed
 
@@ -85,8 +88,9 @@ HTTP 400
 }
 ```
 
-## Changing the list
+## The fallback list
 
 Edit `src/config/gateway-models.ts` with the id and base price from Vercel's listing, and add the same
-model to `tests/fixtures/vercel-models-snapshot.json`. `tests/unit/model-catalog.vitest.ts` fails when an
-allowlisted id isn't in the snapshot or its price differs.
+model to `tests/fixtures/vercel-models-snapshot.json`. `tests/unit/model-catalog.vitest.ts` fails when a
+fallback id isn't a chat model in the snapshot or its price differs. Tests never fetch the live listing:
+the runners set `AI_GATEWAY_MODELS_URL` to a closed local port.

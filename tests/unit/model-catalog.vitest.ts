@@ -6,14 +6,16 @@ import {
   VERCEL_MODELS_URL,
   __resetModelCatalogCache,
   buildCatalog,
+  chatModelPrice,
+  chatModels,
   fetchVercelListing,
-  findAllowedModel,
+  isChatModel,
   modelNotAllowedBody,
   perTokenToPer1M,
+  priceFromListing,
   type VercelModel,
 } from '@/src/lib/models/catalog';
-import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, chatBillingMarkup } from '@/src/lib/ai-gateway';
-
+import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, chatBillingMarkup, costForModel } from '@/src/lib/ai-gateway';
 const snapshot = JSON.parse(readFileSync('tests/fixtures/vercel-models-snapshot.json', 'utf8')) as {
   data: VercelModel[];
 };
@@ -22,8 +24,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('the allowlist is the price table', () => {
-  it('every allowlisted model has a positive input and output price', () => {
+describe("the built-in fallback list (used only when Vercel's listing is unavailable)", () => {
+  it('every fallback model has a positive input and output price', () => {
     expect(GATEWAY_MODELS.length).toBeGreaterThan(0);
     for (const m of GATEWAY_MODELS) {
       expect(m.inputPer1M, m.id).toBeGreaterThan(0);
@@ -38,25 +40,28 @@ describe('the allowlist is the price table', () => {
     for (const id of ids) expect(id).toMatch(/^[a-z0-9-]+\/[a-z0-9.-]+$/);
   });
 
-  it('the default chat model and the gigs defaults are allowlisted', async () => {
+  it('the default chat model and the gigs defaults are in the fallback list', async () => {
+    const ids = GATEWAY_MODELS.map((m) => m.id);
     expect(DEFAULT_CHAT_MODEL).toBe('openai/gpt-4o-mini');
-    expect(findAllowedModel(DEFAULT_CHAT_MODEL)).not.toBeNull();
+    expect(ids).toContain(DEFAULT_CHAT_MODEL);
     // spec-builder builds a Supabase client at import; any URL/key will do, nothing is called.
     vi.stubEnv('STORAGE_SUPABASE_URL', 'http://127.0.0.1:1');
     vi.stubEnv('STORAGE_SUPABASE_SERVICE_ROLE_KEY', 'unit-test');
     const { DEFAULT_SPEC_MODEL } = await import('@/src/lib/jobs/spec-builder');
     const { DEFAULT_STEERING_MODEL } = await import('@/src/lib/jobs/steering');
-    expect(findAllowedModel(DEFAULT_SPEC_MODEL)).not.toBeNull();
-    expect(findAllowedModel(DEFAULT_STEERING_MODEL)).not.toBeNull();
+    expect(ids).toContain(DEFAULT_SPEC_MODEL);
+    expect(ids).toContain(DEFAULT_STEERING_MODEL);
   });
 
-  it('every allowlisted id exists in the Vercel listing snapshot, at the same base price', () => {
+  it('every fallback id is a chat model in the Vercel listing snapshot, at the same base price', () => {
     const byId = new Map(snapshot.data.map((m) => [m.id, m]));
     for (const m of GATEWAY_MODELS) {
       const v = byId.get(m.id);
       expect(v, `${m.id} missing from tests/fixtures/vercel-models-snapshot.json`).toBeDefined();
-      expect(m.inputPer1M, m.id).toBeCloseTo(perTokenToPer1M(v!.pricing!.input)!, 9);
-      expect(m.outputPer1M, m.id).toBeCloseTo(perTokenToPer1M(v!.pricing!.output)!, 9);
+      expect(isChatModel(v!), m.id).toBe(true);
+      const p = priceFromListing(v!)!;
+      expect(m.inputPer1M, m.id).toBeCloseTo(p.inputPer1M, 9);
+      expect(m.outputPer1M, m.id).toBeCloseTo(p.outputPer1M, 9);
     }
   });
 });
@@ -69,41 +74,91 @@ describe('perTokenToPer1M', () => {
     expect(perTokenToPer1M('0.000000025')).toBe(0.025);
   });
 
-  it('returns null for missing, empty or invalid values', () => {
+  it('returns null for missing, empty or invalid values; zero is a real (free) price', () => {
     expect(perTokenToPer1M(undefined)).toBeNull();
     expect(perTokenToPer1M('')).toBeNull();
+    expect(perTokenToPer1M('   ')).toBeNull();
     expect(perTokenToPer1M('abc')).toBeNull();
     expect(perTokenToPer1M('-0.1')).toBeNull();
+    expect(perTokenToPer1M('0')).toBe(0);
+  });
+});
+
+const priced = (id: string, extra: Partial<VercelModel> = {}): VercelModel => ({
+  id,
+  name: `${id} name`,
+  type: 'language',
+  pricing: { input: '0.000001', output: '0.000002' },
+  ...extra,
+});
+
+describe('isChatModel and chatModels: pass-through of Vercel chat models', () => {
+  it('a chat model is a priced language model that is not a -batch variant', () => {
+    expect(isChatModel(priced('vendor/new'))).toBe(true);
+    expect(isChatModel(priced('openai/gpt-5-fast'))).toBe(true);
+    expect(isChatModel(priced('openai/gpt-5-batch'))).toBe(false);
+    expect(isChatModel(priced('openai/text-embedding-3-small', { type: 'embedding' }))).toBe(false);
+    expect(isChatModel(priced('vendor/untyped', { type: undefined }))).toBe(false);
+    expect(isChatModel(priced('vendor/no-input', { pricing: { output: '0.000002' } }))).toBe(false);
+    expect(isChatModel(priced('vendor/no-output', { pricing: { input: '0.000001' } }))).toBe(false);
+    expect(isChatModel(priced('vendor/no-pricing', { pricing: undefined }))).toBe(false);
+    expect(isChatModel(priced('vendor/bad-price', { pricing: { input: 'n/a', output: '0.000002' } }))).toBe(false);
+  });
+
+  it('chatModels keeps chat models only, sorted by id', () => {
+    const ids = chatModels([
+      priced('zeta/z'),
+      priced('alpha/a'),
+      priced('openai/gpt-5-batch'),
+      priced('openai/text-embedding-3-small', { type: 'embedding' }),
+      priced('mid/m'),
+    ]).map((m) => m.id);
+    expect(ids).toEqual(['alpha/a', 'mid/m', 'zeta/z']);
+  });
+
+  it('chatModels of the real snapshot keeps every fallback model', () => {
+    const ids = new Set(chatModels(snapshot.data).map((m) => m.id));
+    for (const m of GATEWAY_MODELS) expect(ids.has(m.id), m.id).toBe(true);
+  });
+});
+
+describe('priceFromListing', () => {
+  it('is the base per-1M price, with the cached-input price when Vercel has one', () => {
+    expect(priceFromListing(priced('a/b', { pricing: { input: '0.00000015', output: '0.0000006', input_cache_read: '0.000000075' } }))).toEqual({
+      inputPer1M: 0.15,
+      outputPer1M: 0.6,
+      cachedInputPer1M: 0.075,
+    });
+    const noCache = priceFromListing(priced('a/b'))!;
+    expect(noCache).toEqual({ inputPer1M: 1, outputPer1M: 2 });
+    expect('cachedInputPer1M' in noCache).toBe(false);
+    expect(priceFromListing(priced('a/b', { pricing: { input: '0.000001' } }))).toBeNull();
   });
 });
 
 describe('buildCatalog', () => {
   const listing: VercelModel[] = [
-    {
-      id: 'openai/gpt-4o-mini',
+    priced('openai/gpt-4o-mini', {
       name: 'GPT-4o mini (Vercel name)',
-      type: 'language',
       context_window: 128000,
       max_tokens: 16384,
       supported_parameters: ['max_tokens', 'tools'],
       modalities: { input: ['text', 'image'], output: ['text'] },
-      pricing: { input: '0.00000015', output: '0.0000006' },
-    },
-    { id: 'mistral/ministral-3b', type: 'language', supported_parameters: [], modalities: { input: ['text'] } },
-    { id: 'vendor/not-allowlisted', type: 'language', context_window: 1, max_tokens: 1 },
-    { id: 'openai/text-embedding-3-small', type: 'embedding' },
+      pricing: { input: '0.00000015', output: '0.0000006', input_cache_read: '0.000000075' },
+    }),
+    priced('vendor/new-model', { supported_parameters: [], modalities: { input: ['text'] } }),
+    priced('openai/gpt-4o-mini-batch'),
+    priced('openai/text-embedding-3-small', { type: 'embedding' }),
   ];
 
-  it('returns only allowlisted models, in allowlist order', () => {
-    const ids = buildCatalog(listing, 1).map((m) => m.id);
-    expect(ids).toEqual(GATEWAY_MODELS.map((m) => m.id));
-    expect(ids).not.toContain('vendor/not-allowlisted');
-    expect(ids).not.toContain('openai/text-embedding-3-small');
+  it('lists every Vercel chat model (sorted), not a fixed allowlist', () => {
+    expect(buildCatalog(listing, 1).map((m) => m.id)).toEqual(['openai/gpt-4o-mini', 'vendor/new-model']);
   });
 
-  it('takes context window, output limit and capabilities from the listing', () => {
+  it('takes name, context window, output limit and capabilities from the listing', () => {
     const mini = buildCatalog(listing, 1).find((m) => m.id === 'openai/gpt-4o-mini')!;
     expect(mini).toMatchObject({
+      name: 'GPT-4o mini (Vercel name)',
       context_window: 128000,
       max_output_tokens: 16384,
       supports_tools: true,
@@ -111,56 +166,61 @@ describe('buildCatalog', () => {
     });
   });
 
-  it('uses null and false when the listing lacks a field or the model', () => {
-    const ministral = buildCatalog(listing, 1).find((m) => m.id === 'mistral/ministral-3b')!;
-    expect(ministral.context_window).toBeNull();
-    expect(ministral.max_output_tokens).toBeNull();
-    expect(ministral.supports_tools).toBe(false);
-    expect(ministral.supports_vision).toBe(false);
-    const absent = buildCatalog([], 1).find((m) => m.id === 'openai/gpt-4o-mini')!;
-    expect(absent.context_window).toBeNull();
-    expect(absent.supports_tools).toBe(false);
+  it('names fall back to the id', () => {
+    expect(buildCatalog([priced('vendor/x', { name: undefined })], 1)[0].name).toBe('vendor/x');
   });
 
-  it('names come from the Tulzo table, not the listing', () => {
-    const mini = buildCatalog(listing, 1).find((m) => m.id === 'openai/gpt-4o-mini')!;
-    expect(mini.name).toBe(findAllowedModel('openai/gpt-4o-mini')!.name);
+  it('uses null and false when the listing lacks a field', () => {
+    const one = (v: Partial<VercelModel>) => buildCatalog([priced('vendor/x', v)], 1)[0];
+    expect(one({}).context_window).toBeNull();
+    expect(one({}).max_output_tokens).toBeNull();
+    expect(one({}).supports_tools).toBe(false);
+    expect(one({}).supports_vision).toBe(false);
+    expect(one({ context_window: 0 }).context_window).toBeNull();
+    expect(one({ context_window: -5 }).context_window).toBeNull();
+    expect(one({ context_window: 1.5 }).context_window).toBeNull();
+    expect(one({ context_window: '128000' as unknown as number }).context_window).toBeNull();
+    expect(one({ context_window: 1 }).context_window).toBe(1);
+    expect(one({ max_tokens: 0 }).max_output_tokens).toBeNull();
+    expect(one({ modalities: { output: ['text'] } }).supports_vision).toBe(false);
+    expect(one({ modalities: { input: ['text'] } }).supports_vision).toBe(false);
+    expect(one({ supported_parameters: ['max_tokens'] }).supports_tools).toBe(false);
   });
 
-  it('prices are the table price times the billing markup, rounded to 6 decimals', () => {
-    const row = findAllowedModel('openai/gpt-4o-mini')!;
-    const plain = buildCatalog(listing, 1).find((m) => m.id === row.id)!;
-    expect(plain.pricing.input_per_1m).toBe(row.inputPer1M);
-    expect(plain.pricing.output_per_1m).toBe(row.outputPer1M);
-    const marked = buildCatalog(listing, 1.3).find((m) => m.id === row.id)!;
-    expect(marked.pricing.input_per_1m).toBe(0.195);
-    expect(marked.pricing.output_per_1m).toBe(0.78);
-    expect(marked.pricing.cached_input_per_1m).toBe(0.0975);
+  it('prices are Vercel price × markup, rounded to 6 decimals', () => {
+    const marked = buildCatalog(listing, 1.3).find((m) => m.id === 'openai/gpt-4o-mini')!;
+    expect(marked.pricing).toEqual({ input_per_1m: 0.195, output_per_1m: 0.78, cached_input_per_1m: 0.0975 });
+    const plain = buildCatalog(listing, 1).find((m) => m.id === 'vendor/new-model')!;
+    expect(plain.pricing).toEqual({ input_per_1m: 1, output_per_1m: 2 });
+    expect('cached_input_per_1m' in plain.pricing).toBe(false);
   });
 
-  it('omits cached_input_per_1m when the table has no cached price', () => {
-    for (const m of buildCatalog([], 1)) {
-      const row = findAllowedModel(m.id)!;
-      if (row.cachedInputPer1M === undefined) expect('cached_input_per_1m' in m.pricing).toBe(false);
+  it('without any Vercel chat model it lists the built-in fallback, priced × markup, metadata null', () => {
+    for (const empty of [[], [priced('openai/x-batch')], [priced('e/emb', { type: 'embedding' })]] as VercelModel[][]) {
+      const out = buildCatalog(empty, 1.3);
+      expect(out.map((m) => m.id)).toEqual(GATEWAY_MODELS.map((m) => m.id));
+      const mini = out.find((m) => m.id === 'openai/gpt-4o-mini')!;
+      expect(mini.pricing.input_per_1m).toBe(0.195);
+      expect(mini.name).toBe('GPT-4o mini');
+      expect(mini.context_window).toBeNull();
+      expect(mini.supports_tools).toBe(false);
     }
+    const kimi = buildCatalog([], 1).find((m) => m.id === 'moonshotai/kimi-k2.5')!;
+    expect('cached_input_per_1m' in kimi.pricing).toBe(false);
   });
 });
 
-describe('calculateCost and refusal', () => {
-  it('prices allowlisted models from the table', () => {
-    const row = findAllowedModel('openai/gpt-4o-mini')!;
-    expect(calculateCost(row.id, 1_000_000, 0)).toBeCloseTo(row.inputPer1M, 12);
-    expect(calculateCost(row.id, 0, 1_000_000)).toBeCloseTo(row.outputPer1M, 12);
+describe('calculateCost, costForModel and the billing markup', () => {
+  it('calculateCost is base USD for a price', () => {
+    expect(calculateCost({ inputPer1M: 0.15, outputPer1M: 0.6 }, 1_000_000, 0)).toBeCloseTo(0.15, 12);
+    expect(calculateCost({ inputPer1M: 0.15, outputPer1M: 0.6 }, 0, 1_000_000)).toBeCloseTo(0.6, 12);
+    expect(calculateCost({ inputPer1M: 2, outputPer1M: 10 }, 500_000, 100_000)).toBeCloseTo(2, 12);
   });
 
-  it('refuses to price a model that is not allowlisted, instead of a default price', () => {
-    expect(() => calculateCost('openai/definitely-not-real', 10, 10)).toThrow(UnknownModelError);
-  });
-
-  it('findAllowedModel is exact', () => {
-    expect(findAllowedModel('openai/definitely-not-real')).toBeNull();
-    expect(findAllowedModel('OPENAI/GPT-4O-MINI')).toBeNull();
-    expect(findAllowedModel('')).toBeNull();
+  it('chatBillingMarkup is CREDIT_MARKUP for every key, default 1.3', () => {
+    expect(chatBillingMarkup()).toBe(1.3);
+    vi.stubEnv('CREDIT_MARKUP', '1.5');
+    expect(chatBillingMarkup()).toBe(1.5);
   });
 
   it('the refusal body names the model and points at /api/models', () => {
@@ -169,63 +229,47 @@ describe('calculateCost and refusal', () => {
     expect(body.error).toContain('openai/definitely-not-real');
     expect(body.error).toContain('/api/models');
   });
+
+  it('UnknownModelError carries the model id and its name', () => {
+    const e = new UnknownModelError('openai/x');
+    expect(e.model).toBe('openai/x');
+    expect(e.name).toBe('UnknownModelError');
+    expect(e.message).toContain('openai/x');
+    expect(e).toBeInstanceOf(Error);
+  });
+});
+
+describe('chatModelPrice and costForModel (async, through the cached listing)', () => {
+  const ok = (data: unknown) => new Response(JSON.stringify({ object: 'list', data }), { status: 200 });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetModelCatalogCache();
+  });
+
+  it('prices any Vercel chat model; refuses -batch, embeddings and unknown ids', async () => {
+    __resetModelCatalogCache();
+    vi.stubGlobal('fetch', vi.fn(async () => ok([priced('vendor/new'), priced('vendor/new-batch'), priced('e/emb', { type: 'embedding' })])));
+    expect(await chatModelPrice('vendor/new')).toEqual({ inputPer1M: 1, outputPer1M: 2 });
+    expect(await chatModelPrice('vendor/new-batch')).toBeNull();
+    expect(await chatModelPrice('e/emb')).toBeNull();
+    expect(await chatModelPrice('openai/gpt-4o-mini')).toBeNull();
+    expect(await chatModelPrice(42 as unknown as string)).toBeNull();
+    expect(await costForModel('vendor/new', 1_000_000, 1_000_000)).toBeCloseTo(3, 12);
+    await expect(costForModel('vendor/new-batch', 1, 1)).rejects.toBeInstanceOf(UnknownModelError);
+  });
+
+  it('falls back to the built-in list when Vercel has no chat models', async () => {
+    __resetModelCatalogCache();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down'); }));
+    expect(await chatModelPrice('openai/gpt-4o-mini')).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 });
+    expect(await chatModelPrice('vendor/new')).toBeNull();
+  });
 });
 
 describe('gateway endpoint', () => {
   it('uses the documented AI Gateway host', () => {
     expect(AI_GATEWAY_BASE_URL).toBe('https://ai-gateway.vercel.sh/v1');
-  });
-});
-
-describe('edge cases the mutation run found unpinned', () => {
-  it('findAllowedModel only accepts strings', () => {
-    expect(findAllowedModel(undefined)).toBeNull();
-    expect(findAllowedModel(42)).toBeNull();
-    expect(findAllowedModel({ id: 'openai/gpt-4o-mini' })).toBeNull();
-  });
-
-  it('perTokenToPer1M: whitespace is missing, zero is a real (free) price', () => {
-    expect(perTokenToPer1M('   ')).toBeNull();
-    expect(perTokenToPer1M('0')).toBe(0);
-  });
-
-  it('context window and output limit must be positive integers', () => {
-    const one = (v: Partial<VercelModel>) =>
-      buildCatalog([{ id: 'openai/gpt-4o-mini', ...v }], 1).find((m) => m.id === 'openai/gpt-4o-mini')!;
-    expect(one({ context_window: 0 }).context_window).toBeNull();
-    expect(one({ context_window: -5 }).context_window).toBeNull();
-    expect(one({ context_window: 1.5 }).context_window).toBeNull();
-    expect(one({ context_window: '128000' as unknown as number }).context_window).toBeNull();
-    expect(one({ context_window: 1 }).context_window).toBe(1);
-    expect(one({ max_tokens: 0 }).max_output_tokens).toBeNull();
-  });
-
-  it('capabilities default to false when only part of the listing entry is present', () => {
-    const one = (v: Partial<VercelModel>) =>
-      buildCatalog([{ id: 'openai/gpt-4o-mini', ...v }], 1).find((m) => m.id === 'openai/gpt-4o-mini')!;
-    expect(one({ modalities: { output: ['text'] } }).supports_vision).toBe(false);
-    expect(one({ modalities: { input: ['text'] } }).supports_vision).toBe(false);
-    expect(one({ supported_parameters: ['max_tokens'] }).supports_tools).toBe(false);
-    expect(one({}).supports_vision).toBe(false);
-    expect(one({}).supports_tools).toBe(false);
-  });
-
-  it('UnknownModelError carries the model id and its name', () => {
-    try {
-      calculateCost('openai/definitely-not-real', 1, 1);
-      expect.unreachable();
-    } catch (e) {
-      expect(e).toBeInstanceOf(UnknownModelError);
-      expect((e as UnknownModelError).model).toBe('openai/definitely-not-real');
-      expect((e as Error).name).toBe('UnknownModelError');
-      expect((e as Error).message).toContain('openai/definitely-not-real');
-    }
-  });
-
-  it('chatBillingMarkup: account keys ×1, QA review keys × CREDIT_MARKUP', () => {
-    vi.stubEnv('CREDIT_MARKUP', '1.3');
-    expect(chatBillingMarkup({ review: false })).toBe(1);
-    expect(chatBillingMarkup({ review: true })).toBe(1.3);
   });
 });
 
@@ -324,5 +368,54 @@ describe('createGateway', () => {
     mod.createGateway();
     expect(createOpenAI).toHaveBeenCalledWith({ baseURL: 'https://ai-gateway.vercel.sh/v1', apiKey: 'gw-test-key' });
     vi.doUnmock('@ai-sdk/openai');
+  });
+});
+
+describe('second mutation round: sorting, fallback shape, generation cost', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetModelCatalogCache();
+  });
+
+  it('chatModels sorts any order strictly by id', () => {
+    const ids = ['m/c', 'm/a', 'z/a', 'a/z', 'm/b', 'a/a', 'm/a2'];
+    const sorted = chatModels(ids.map((id) => priced(id))).map((m) => m.id);
+    expect(sorted).toEqual(['a/a', 'a/z', 'm/a', 'm/a2', 'm/b', 'm/c', 'z/a']);
+    expect(chatModels(['b/b', 'a/a'].map((id) => priced(id))).map((m) => m.id)).toEqual(['a/a', 'b/b']);
+    expect(chatModels(['a/a', 'b/b'].map((id) => priced(id))).map((m) => m.id)).toEqual(['a/a', 'b/b']);
+  });
+
+  it('fallback entries report no vision and no tools', () => {
+    for (const m of buildCatalog([], 1)) {
+      expect(m.supports_vision, m.id).toBe(false);
+      expect(m.supports_tools, m.id).toBe(false);
+      expect(m.max_output_tokens, m.id).toBeNull();
+    }
+  });
+
+  it('fallback chatModelPrice omits cachedInputPer1M for a model without a cached price', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down'); }));
+    const kimi = await chatModelPrice('moonshotai/kimi-k2.5');
+    expect(kimi).toEqual({ inputPer1M: 0.6, outputPer1M: 3 });
+    expect('cachedInputPer1M' in kimi!).toBe(false);
+  });
+
+  it('resolveGenerationCost: the gateway-reported total, else the fallback', async () => {
+    const { resolveGenerationCost } = await import('@/src/lib/ai-gateway');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-k');
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { total_cost: '0.0123' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await resolveGenerationCost('gen_1', 9)).toBe(0.0123);
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe('https://ai-gateway.vercel.sh/v1/generation?id=gen_1');
+    expect(new Headers(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).headers).get('authorization')).toBe('Bearer gw-k');
+    expect(await resolveGenerationCost(null, 9)).toBe(9);
+    expect(await resolveGenerationCost('', 9)).toBe(9);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 404 })));
+    expect(await resolveGenerationCost('gen_2', 9)).toBe(9);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: {} }), { status: 200 })));
+    expect(await resolveGenerationCost('gen_3', 9)).toBe(9);
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down'); }));
+    expect(await resolveGenerationCost('gen_4', 9)).toBe(9);
   });
 });

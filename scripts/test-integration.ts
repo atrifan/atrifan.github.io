@@ -37,6 +37,8 @@ async function main() {
       GIGS_TEST_PG_URL: db.pgUrl,
       GIGS_TEST_SCHEMA: db.schema,
       STRIPE_SECRET_KEY: 'sk_test_fake_integration',
+      // Never fetch Vercel's live model listing in tests: a closed port, so the built-in list stands in.
+      AI_GATEWAY_MODELS_URL: 'http://127.0.0.1:9/v1/models',
       STRIPE_WEBHOOK_SECRET: 'whsec_test_integration',
       AI_GATEWAY_API_KEY: 'fake-gateway-key',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',

@@ -1,15 +1,12 @@
 /**
- * The models the Tulzo managed gateway offers, and what each costs.
+ * The built-in model list: the stand-in when Vercel AI Gateway's listing
+ * (https://ai-gateway.vercel.sh/v1/models) can't be fetched and nothing is cached. Normally the gateway
+ * is a pass-through: /api/models and /api/chat offer every Vercel chat model at Vercel's price × the
+ * markup (src/lib/models/catalog.ts). Prices here are USD per 1M tokens at Vercel's list price, before
+ * markup; models with long-context tiers are listed at their base tier.
  *
- * This table is the single source of truth: /api/chat refuses any model not listed here,
- * calculateCost() prices only these, and /api/models lists exactly these (with context window
- * and capabilities from Vercel's listing). Prices are USD per 1M tokens at Vercel AI Gateway list
- * price, before Tulzo's markup; models with long-context tiers are listed at their base tier (the
- * gateway's own billed cost, when it reports one, is what /api/chat finally charges).
- *
- * Refresh: compare with https://ai-gateway.vercel.sh/v1/models and update
- * tests/fixtures/vercel-models-snapshot.json; tests/unit/model-catalog.vitest.ts fails when an
- * id is missing from the snapshot or its base price differs.
+ * Refresh: compare with Vercel's listing and update tests/fixtures/vercel-models-snapshot.json;
+ * tests/unit/model-catalog.vitest.ts fails when an id is missing from the snapshot or its price differs.
  */
 export interface GatewayModel {
   id: string;

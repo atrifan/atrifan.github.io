@@ -6,9 +6,10 @@ alwaysApply: false
 
 # AI Configuration
 
-The managed gateway (`/api/chat`, `/api/models`, gigs spec builder and steering) uses
-`src/config/gateway-models.ts`: the only allowlist, with the prices `calculateCost()` bills (see
-`docs/models-api.md`). `src/config/ai-tokens.config.ts` still holds the plan quotas and the older model
+The managed gateway (`/api/chat`, `/api/models`, gigs spec builder and steering) is a pass-through to
+Vercel AI Gateway's model listing, priced at Vercel's price × `CREDIT_MARKUP` (`src/lib/models/catalog.ts`,
+`chatModelPrice` / `costForModel`; see `docs/models-api.md`). `src/config/gateway-models.ts` is the fallback
+list when the listing is unreachable. `src/config/ai-tokens.config.ts` still holds the plan quotas and the older model
 table used by the native `/api/mcp` LLM tool in `src/config/tool-handlers.ts`.
 
 ```ts

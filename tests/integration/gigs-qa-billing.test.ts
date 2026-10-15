@@ -146,7 +146,7 @@ test('an expired review key is rejected with 403', async () => {
   assert.equal(streamState.calls.length, 0);
 });
 
-test('normal device keys still bill the key owner exactly as before', async () => {
+test('normal device keys bill the key owner the gateway cost × CREDIT_MARKUP (default 1.3)', async () => {
   const user = 'user_bill_device';
   const key = await seedDeviceKey(user, 'pro');
   await seedBalance(user, 2);
@@ -154,10 +154,11 @@ test('normal device keys still bill the key owner exactly as before', async () =
   const r = await chatWith(key);
   assert.equal(r.status, 200);
   assert.equal(r.body.choices[0].message.content, 'ok');
-  assert.equal(await balance(user), 1.25);
+  // the gateway reports $0.75 for the call; × 1.3 = $0.975
+  assert.equal(await balance(user), 1.025);
   const rows = await sql<any>('SELECT * FROM paid_usage_analytics WHERE user_id = $1', [user]);
   assert.equal(rows.length, 1);
-  assert.equal(Number(rows[0].cost_deducted), 0.75);
+  assert.equal(Number(rows[0].cost_deducted), 0.975);
 
   await seedBalance(user, 0);
   const broke = await chatWith(key);

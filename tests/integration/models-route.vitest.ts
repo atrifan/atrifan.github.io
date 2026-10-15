@@ -3,8 +3,9 @@ import crypto from 'node:crypto';
 import { req } from './vitest-env';
 
 /**
- * Contract: GET /api/models (allowlisted gateway models with prices and Vercel metadata),
- * `models_url` on GET /api/plugin/config, and POST /api/chat refusing non-allowlisted models.
+ * Contract: GET /api/models passes through every priced chat model in Vercel's gateway listing
+ * (marked up by chatBillingMarkup()), with a built-in fallback when the listing is unavailable;
+ * POST /api/chat accepts exactly the listed models; GET /api/plugin/config points at /api/models.
  * No network or database: Supabase is a fake, fetch is stubbed, `ai` is mocked.
  */
 
@@ -109,54 +110,88 @@ function seed() {
   };
 }
 
-const listing = {
-  object: 'list',
-  data: [
-    {
-      id: DEFAULT_MODEL,
-      object: 'model',
-      name: 'GPT-4o mini',
-      type: 'language',
-      context_window: 128000,
-      max_tokens: 16384,
-      supported_parameters: ['temperature', 'tools', 'tool_choice'],
-      modalities: { input: ['text', 'image'], output: ['text'] },
-      pricing: { input: '0.00000015', output: '0.0000006' },
-    },
-    {
-      id: 'vendor/not-allowlisted',
-      object: 'model',
-      name: 'Not allowlisted',
-      type: 'language',
-      context_window: 8000,
-      max_tokens: 1000,
-      supported_parameters: ['tools'],
-      modalities: { input: ['text'], output: ['text'] },
-      pricing: { input: '0.000001', output: '0.000002' },
-    },
-    {
-      id: 'openai/text-embedding-3-small',
-      object: 'model',
-      name: 'Embedding',
-      type: 'embedding',
-      context_window: 8191,
-      pricing: { input: '0.00000002' },
-    },
-  ],
-};
+type ListingEntry = Record<string, unknown>;
+const NEW_MODEL = 'vendor/some-new-model';
+const BATCH_MODEL = 'openai/gpt-4o-mini-batch';
+const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
-type FetchMode = 'ok' | '500' | 'throw';
+// Deliberately unsorted.
+const listingData: ListingEntry[] = [
+  {
+    id: NEW_MODEL,
+    object: 'model',
+    type: 'language',
+    context_window: 64000,
+    max_tokens: 4096,
+    supported_parameters: ['temperature'],
+    modalities: { input: ['text'], output: ['text'] },
+    pricing: { input: '0.000002', output: '0.000008' },
+  },
+  {
+    id: DEFAULT_MODEL,
+    object: 'model',
+    name: 'GPT-4o mini',
+    type: 'language',
+    context_window: 128000,
+    max_tokens: 16384,
+    supported_parameters: ['temperature', 'tools', 'tool_choice'],
+    modalities: { input: ['text', 'image'], output: ['text'] },
+    pricing: { input: '0.00000015', output: '0.0000006', input_cache_read: '0.000000075' },
+  },
+  {
+    id: 'anthropic/claude-test',
+    object: 'model',
+    name: 'Claude Test',
+    type: 'language',
+    max_tokens: 8192,
+    supported_parameters: ['tools'],
+    modalities: { input: ['text'], output: ['text'] },
+    pricing: { input: '0.000003', output: '0.000015' },
+  },
+  {
+    id: BATCH_MODEL,
+    object: 'model',
+    name: 'GPT-4o mini (batch)',
+    type: 'language',
+    context_window: 128000,
+    max_tokens: 16384,
+    pricing: { input: '0.000000075', output: '0.0000003' },
+  },
+  {
+    id: EMBEDDING_MODEL,
+    object: 'model',
+    name: 'Embedding',
+    type: 'embedding',
+    context_window: 8191,
+    pricing: { input: '0.00000002', output: '0.00000002' },
+  },
+  { id: 'vendor/no-price', object: 'model', name: 'No price', type: 'language', context_window: 1000 },
+  {
+    id: 'vendor/output-missing',
+    object: 'model',
+    name: 'Output missing',
+    type: 'language',
+    pricing: { input: '0.000001' },
+  },
+  {
+    id: 'vendor/bad-price',
+    object: 'model',
+    name: 'Bad price',
+    type: 'language',
+    pricing: { input: 'n/a', output: 'n/a' },
+  },
+];
+const EXPECTED_IDS = [DEFAULT_MODEL, NEW_MODEL, 'anthropic/claude-test'].sort();
+
+type FetchMode = 'ok' | '500' | 'throw' | 'no-data';
 let fetchMode: FetchMode = 'ok';
-let listingOverride: typeof listing | null = null;
 const fetchMock = vi.fn(async (input: unknown) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
   if (url.startsWith(LISTING_URL)) {
     if (fetchMode === 'throw') throw new Error('network down');
     if (fetchMode === '500') return new Response('boom', { status: 500 });
-    return new Response(JSON.stringify(listingOverride ?? listing), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
+    const body = fetchMode === 'no-data' ? { object: 'list' } : { object: 'list', data: listingData };
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   }
   return new Response('not found', { status: 404 });
 });
@@ -165,6 +200,9 @@ const urlOf = (call: unknown[]) => {
   return typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request)?.url ?? '';
 };
 const listingCalls = () => fetchMock.mock.calls.filter((c) => urlOf(c).startsWith(LISTING_URL)).length;
+/** Gateway calls other than the model listing (i.e. inference). */
+const inferenceCalls = () =>
+  fetchMock.mock.calls.filter((c) => urlOf(c).includes('ai-gateway') && !urlOf(c).startsWith(LISTING_URL)).length;
 
 type Model = {
   id: string;
@@ -175,35 +213,22 @@ type Model = {
   supports_tools: boolean;
   supports_vision: boolean;
 };
-
-/**
- * Resets the catalog cache. While the module does not exist yet, the /api/models specs fail on
- * their own import; the plugin/config and chat specs still run and fail for their own reasons.
- */
-async function resetCatalog() {
-  let mod: { __resetModelCatalogCache?: () => void };
-  try {
-    mod = await import('@/src/lib/models/catalog');
-  } catch (e) {
-    if (/Failed to (load|resolve)|Cannot find|does not exist/i.test(String(e))) return;
-    throw e;
-  }
-  mod.__resetModelCatalogCache?.();
-}
+type Price = { inputPer1M: number; outputPer1M: number; cachedInputPer1M?: number };
 
 beforeEach(async () => {
   vi.resetModules();
   seed();
   fetchMode = 'ok';
-  listingOverride = null;
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('AI_GATEWAY_API_KEY', 'test-gateway-key');
+  vi.stubEnv('CREDIT_MARKUP', '1.3');
   for (const n of ['STORAGE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL']) vi.stubEnv(n, 'http://supabase.test');
   for (const n of ['STORAGE_SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'STORAGE_SUPABASE_ANON_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY']) {
     vi.stubEnv(n, 'service-role-test');
   }
-  await resetCatalog();
+  const { __resetModelCatalogCache } = await import('@/src/lib/models/catalog');
+  __resetModelCatalogCache();
 });
 
 afterEach(() => {
@@ -216,6 +241,29 @@ async function getModels(headers: Record<string, string> = {}) {
   return GET(req('/api/models', { headers }));
 }
 const bearer = (k: string) => ({ authorization: `Bearer ${k}` });
+const listModels = async (key: string = KEYS.plus) => {
+  const res = await getModels(bearer(key));
+  expect(res.status).toBe(200);
+  return (await res.json()).data as Model[];
+};
+const byId = (models: Model[], id: string) => {
+  const m = models.find((x) => x.id === id);
+  expect(m, `${id} listed`).toBeDefined();
+  return m!;
+};
+const markup = async () => (await import('@/src/lib/ai-gateway')).chatBillingMarkup() as number;
+
+const chat = async (body: Record<string, unknown>) => {
+  const { POST } = await import('@/app/api/chat/route');
+  return POST(
+    req('/api/chat', {
+      method: 'POST',
+      headers: { 'x-api-key': KEYS.plus, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
+};
+const hi = [{ role: 'user', content: 'hi' }];
 
 describe('GET /api/models: auth', () => {
   it('401 with an error string when the Authorization header is missing', async () => {
@@ -225,13 +273,11 @@ describe('GET /api/models: auth', () => {
   });
 
   it('401 for an unknown key', async () => {
-    const res = await getModels(bearer('ak_unknown_key'));
-    expect(res.status).toBe(401);
+    expect((await getModels(bearer('ak_unknown_key'))).status).toBe(401);
   });
 
   it('401 for an inactive key', async () => {
-    const res = await getModels(bearer(KEYS.inactive));
-    expect(res.status).toBe(401);
+    expect((await getModels(bearer(KEYS.inactive))).status).toBe(401);
   });
 
   it('403 plan_required for a free key', async () => {
@@ -242,20 +288,18 @@ describe('GET /api/models: auth', () => {
 
   for (const plan of ['pro', 'plus', 'super'] as const) {
     it(`200 for a ${plan} key`, async () => {
-      const res = await getModels(bearer(KEYS[plan]));
-      expect(res.status).toBe(200);
+      expect((await getModels(bearer(KEYS[plan]))).status).toBe(200);
     });
   }
 });
 
-describe('GET /api/models: body', () => {
+describe('GET /api/models: pass-through of the Vercel listing', () => {
   it('is { object: "list", data: Model[] } with the documented field types', async () => {
     const res = await getModels(bearer(KEYS.plus));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.object).toBe('list');
     expect(Array.isArray(body.data)).toBe(true);
-    expect(body.data.length).toBeGreaterThan(0);
     for (const m of body.data as Model[]) {
       expect(typeof m.id).toBe('string');
       expect(typeof m.name).toBe('string');
@@ -269,103 +313,153 @@ describe('GET /api/models: body', () => {
     }
   });
 
-  it('only lists allowlisted models: no extra listing models, no embeddings', async () => {
-    const body = await (await getModels(bearer(KEYS.plus))).json();
-    const ids = (body.data as Model[]).map((m) => m.id);
-    expect(ids).toContain(DEFAULT_MODEL);
-    expect(ids).not.toContain('vendor/not-allowlisted');
-    expect(ids).not.toContain('openai/text-embedding-3-small');
-    expect(ids).not.toContain('openai/definitely-not-real');
-    expect(new Set(ids).size).toBe(ids.length);
+  it('lists exactly the priced language models, excluding embeddings, -batch and unpriced entries', async () => {
+    const ids = (await listModels()).map((m) => m.id);
+    expect([...ids].sort()).toEqual(EXPECTED_IDS);
+    expect(ids).toContain(NEW_MODEL);
+    expect(ids).not.toContain(BATCH_MODEL);
+    expect(ids).not.toContain(EMBEDDING_MODEL);
+    expect(ids).not.toContain('vendor/no-price');
+    expect(ids).not.toContain('vendor/output-missing');
+    expect(ids).not.toContain('vendor/bad-price');
   });
 
-  it('takes context_window, max_output_tokens, tools and vision from the Vercel listing', async () => {
-    const body = await (await getModels(bearer(KEYS.plus))).json();
-    const m = (body.data as Model[]).find((x) => x.id === DEFAULT_MODEL)!;
-    expect(m.context_window).toBe(128000);
-    expect(m.max_output_tokens).toBe(16384);
-    expect(m.supports_tools).toBe(true);
-    expect(m.supports_vision).toBe(true);
+  it('sorts data by id ascending', async () => {
+    expect((await listModels()).map((m) => m.id)).toEqual(EXPECTED_IDS);
   });
 
-  it('reports false for tools/vision and null context_window when the listing lacks them', async () => {
-    listingOverride = {
-      object: 'list',
-      data: [
-        {
-          id: DEFAULT_MODEL,
-          object: 'model',
-          name: 'GPT-4o mini',
-          type: 'language',
-          max_tokens: 16384,
-          supported_parameters: ['temperature'],
-          modalities: { input: ['text'], output: ['text'] },
-          pricing: { input: '0.00000015', output: '0.0000006' },
-        } as unknown as (typeof listing)['data'][number],
-      ],
-    };
-    const body = await (await getModels(bearer(KEYS.plus))).json();
-    const m = (body.data as Model[]).find((x) => x.id === DEFAULT_MODEL)!;
-    expect(m.context_window).toBeNull();
-    expect(m.supports_tools).toBe(false);
-    expect(m.supports_vision).toBe(false);
+  it('takes name from the listing, falling back to the id', async () => {
+    const models = await listModels();
+    expect(byId(models, DEFAULT_MODEL).name).toBe('GPT-4o mini');
+    expect(byId(models, 'anthropic/claude-test').name).toBe('Claude Test');
+    expect(byId(models, NEW_MODEL).name).toBe(NEW_MODEL);
   });
 
-  it('every entry has positive numeric input and output prices', async () => {
-    const body = await (await getModels(bearer(KEYS.plus))).json();
-    for (const m of body.data as Model[]) {
-      expect(m.pricing.input_per_1m).toBeGreaterThan(0);
-      expect(m.pricing.output_per_1m).toBeGreaterThan(0);
-    }
+  it('takes context_window, max_output_tokens, tools and vision from the listing', async () => {
+    const models = await listModels();
+    const mini = byId(models, DEFAULT_MODEL);
+    expect(mini.context_window).toBe(128000);
+    expect(mini.max_output_tokens).toBe(16384);
+    expect(mini.supports_tools).toBe(true);
+    expect(mini.supports_vision).toBe(true);
+    const fresh = byId(models, NEW_MODEL);
+    expect(fresh.supports_tools).toBe(false);
+    expect(fresh.supports_vision).toBe(false);
+    const claude = byId(models, 'anthropic/claude-test');
+    expect(claude.context_window).toBeNull();
+    expect(claude.supports_tools).toBe(true);
   });
 });
 
-describe('GET /api/models: pricing never depends on Vercel being up', () => {
-  for (const mode of ['500', 'throw'] as const) {
-    it(`listing fetch ${mode === '500' ? 'returns 500' : 'throws'}: still 200, every allowlisted model, priced, null context_window`, async () => {
-      const okBody = await (await getModels(bearer(KEYS.plus))).json();
-      const allowlisted = (okBody.data as Model[]).map((m) => m.id).sort();
+describe('GET /api/models: prices', () => {
+  it('chatBillingMarkup() reads CREDIT_MARKUP', async () => {
+    expect(await markup()).toBeCloseTo(1.3, 9);
+  });
 
-      vi.resetModules();
-      await resetCatalog();
-      fetchMode = mode;
+  it('input/output per 1M = listing price x 1e6 x markup (1.3)', async () => {
+    const models = await listModels();
+    const mini = byId(models, DEFAULT_MODEL);
+    expect(mini.pricing.input_per_1m).toBeCloseTo(0.195, 9);
+    expect(mini.pricing.output_per_1m).toBeCloseTo(0.78, 9);
+    const fresh = byId(models, NEW_MODEL);
+    expect(fresh.pricing.input_per_1m).toBeCloseTo(2.6, 9);
+    expect(fresh.pricing.output_per_1m).toBeCloseTo(10.4, 9);
+  });
 
-      const res = await getModels(bearer(KEYS.plus));
+  it('cached_input_per_1m comes from input_cache_read, omitted when absent', async () => {
+    const models = await listModels();
+    expect(byId(models, DEFAULT_MODEL).pricing.cached_input_per_1m).toBeCloseTo(0.000000075 * 1e6 * 1.3, 9);
+    expect(byId(models, NEW_MODEL).pricing).not.toHaveProperty('cached_input_per_1m');
+  });
+
+  it('the markup applies to every plan: pro, plus and super see the same prices', async () => {
+    const { GET } = await import('@/app/api/models/route');
+    const prices = [];
+    for (const k of [KEYS.pro, KEYS.plus, KEYS.super]) {
+      const res = await GET(req('/api/models', { headers: bearer(k) }));
       expect(res.status).toBe(200);
-      const body = await res.json();
-      const models = body.data as Model[];
-      expect(models.map((m) => m.id).sort()).toEqual(allowlisted);
-      expect(models.map((m) => m.id)).toContain(DEFAULT_MODEL);
-      for (const m of models) {
-        expect(m.context_window).toBeNull();
-        expect(typeof m.pricing.input_per_1m).toBe('number');
-        expect(typeof m.pricing.output_per_1m).toBe('number');
-        expect(m.pricing.input_per_1m).toBeGreaterThan(0);
-        expect(m.pricing.output_per_1m).toBeGreaterThan(0);
+      prices.push(((await res.json()).data as Model[]).map((m) => [m.id, m.pricing]));
+    }
+    expect(prices[1]).toEqual(prices[0]);
+    expect(prices[2]).toEqual(prices[0]);
+    expect(byId(await listModels(KEYS.super), DEFAULT_MODEL).pricing.input_per_1m).toBeCloseTo(0.195, 9);
+  });
+
+  it('shown = billed: pricing equals chatModelPrice(id) x chatBillingMarkup() for every listed id', async () => {
+    const models = await listModels();
+    const { chatModelPrice } = await import('@/src/lib/models/catalog');
+    const m = await markup();
+    expect(models.length).toBe(EXPECTED_IDS.length);
+    for (const model of models) {
+      const price = (await chatModelPrice(model.id)) as Price | null;
+      expect(price, model.id).not.toBeNull();
+      expect(model.pricing.input_per_1m).toBeCloseTo(price!.inputPer1M * m, 9);
+      expect(model.pricing.output_per_1m).toBeCloseTo(price!.outputPer1M * m, 9);
+      if (price!.cachedInputPer1M !== undefined) {
+        expect(model.pricing.cached_input_per_1m).toBeCloseTo(price!.cachedInputPer1M * m, 9);
       }
+    }
+    const mini = (await chatModelPrice(DEFAULT_MODEL)) as Price;
+    expect(mini.inputPer1M).toBeCloseTo(0.15, 9);
+    expect(mini.outputPer1M).toBeCloseTo(0.6, 9);
+  });
+
+  it('chatModelPrice returns null for ids the listing does not offer', async () => {
+    const { chatModelPrice } = await import('@/src/lib/models/catalog');
+    expect(await chatModelPrice('openai/definitely-not-real')).toBeNull();
+    expect(await chatModelPrice(BATCH_MODEL)).toBeNull();
+    expect(await chatModelPrice(EMBEDDING_MODEL)).toBeNull();
+  });
+});
+
+describe('Vercel listing unavailable (nothing cached)', () => {
+  const modes: Array<[FetchMode, string]> = [
+    ['500', 'returns 500'],
+    ['throw', 'throws'],
+    ['no-data', 'has no data array'],
+  ];
+  for (const [mode, label] of modes) {
+    it(`listing ${label}: /api/models is 200 with the fallback list incl. openai/gpt-4o-mini`, async () => {
+      fetchMode = mode;
+      const models = await listModels();
+      const mini = byId(models, DEFAULT_MODEL);
+      expect(mini.context_window).toBeNull();
+      expect(mini.pricing.input_per_1m).toBeGreaterThan(0);
+      expect(mini.pricing.output_per_1m).toBeGreaterThan(0);
+    });
+
+    it(`listing ${label}: fallback prices are chatModelPrice x chatBillingMarkup()`, async () => {
+      fetchMode = mode;
+      const mini = byId(await listModels(), DEFAULT_MODEL);
+      const { chatModelPrice } = await import('@/src/lib/models/catalog');
+      const price = (await chatModelPrice(DEFAULT_MODEL)) as Price | null;
+      expect(price).not.toBeNull();
+      expect(price!.inputPer1M).toBeGreaterThan(0);
+      expect(mini.pricing.input_per_1m).toBeCloseTo(price!.inputPer1M * (await markup()), 9);
+      expect(mini.pricing.output_per_1m).toBeCloseTo(price!.outputPer1M * (await markup()), 9);
+    });
+
+    it(`listing ${label}: /api/chat still accepts openai/gpt-4o-mini`, async () => {
+      fetchMode = mode;
+      const res = await chat({ messages: hi, model: DEFAULT_MODEL, stream: false });
+      expect(res.status).toBe(200);
     });
   }
 });
 
-describe('GET /api/models: caching', () => {
-  it('two GETs in a row fetch the Vercel listing once', async () => {
+describe('listing cache', () => {
+  it('two GET /api/models in a row fetch the listing once', async () => {
     const { GET } = await import('@/app/api/models/route');
     expect((await GET(req('/api/models', { headers: bearer(KEYS.plus) }))).status).toBe(200);
     expect((await GET(req('/api/models', { headers: bearer(KEYS.pro) }))).status).toBe(200);
     expect(listingCalls()).toBe(1);
   });
-});
 
-describe('GET /api/models: price shown = price billed', () => {
-  it('pricing per 1M equals 1e6 x calculateCost for every listed model', async () => {
-    const body = await (await getModels(bearer(KEYS.plus))).json();
-    const { calculateCost } = await import('@/src/lib/ai-gateway');
-    const models = body.data as Model[];
-    expect(models.map((m) => m.id)).toContain(DEFAULT_MODEL);
-    for (const m of models) {
-      expect(m.pricing.input_per_1m).toBeCloseTo(1e6 * calculateCost(m.id, 1, 0), 6);
-      expect(m.pricing.output_per_1m).toBeCloseTo(1e6 * calculateCost(m.id, 0, 1), 6);
-    }
+  it('/api/models then /api/chat with a listed model fetch the listing once in total', async () => {
+    expect((await getModels(bearer(KEYS.plus))).status).toBe(200);
+    const res = await chat({ messages: hi, model: NEW_MODEL, stream: false });
+    expect(res.status).toBe(200);
+    expect(listingCalls()).toBe(1);
   });
 });
 
@@ -382,46 +476,52 @@ describe('GET /api/plugin/config', () => {
     const res = await GET(req('/api/plugin/config', { headers: bearer(KEYS.super) }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.quotas).toBeDefined();
     expect(typeof body.quotas).toBe('object');
     expect(body.quotas).not.toBeNull();
   });
 });
 
-describe('POST /api/chat: model allowlist', () => {
-  const chat = async (body: Record<string, unknown>) => {
-    const { POST } = await import('@/app/api/chat/route');
-    return POST(
-      req('/api/chat', {
-        method: 'POST',
-        headers: { 'x-api-key': KEYS.plus, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    );
-  };
-  const gatewayCalls = () => fetchMock.mock.calls.filter((c) => urlOf(c).includes('ai-gateway')).length;
+describe('POST /api/chat: models follow the listing', () => {
+  for (const [id, label] of [
+    ['openai/definitely-not-real', 'an id Vercel does not list'],
+    [BATCH_MODEL, 'a -batch id that is in the listing'],
+    [EMBEDDING_MODEL, 'an embedding id that is in the listing'],
+  ] as const) {
+    it(`400 model_not_allowed for ${label}, without inference`, async () => {
+      const res = await chat({ messages: hi, model: id });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.error).toBe('string');
+      expect(body.error).toContain(id);
+      expect(body.error).toContain('/api/models');
+      expect(body.code).toBe('model_not_allowed');
+      expect(body.model).toBe(id);
+      expect(body.models_url).toBe('/api/models');
+      expect(inferenceCalls()).toBe(0);
+    });
+  }
 
-  it('400 model_not_allowed for a non-allowlisted model, without calling the gateway', async () => {
-    const res = await chat({ messages: [{ role: 'user', content: 'hi' }], model: 'openai/definitely-not-real' });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(typeof body.error).toBe('string');
-    expect(body.error).toContain('openai/definitely-not-real');
-    expect(body.error).toContain('/api/models');
-    expect(body.code).toBe('model_not_allowed');
-    expect(body.model).toBe('openai/definitely-not-real');
-    expect(body.models_url).toBe('/api/models');
-    expect(gatewayCalls()).toBe(0);
-  });
-
-  it('accepts the allowlisted default model (200)', async () => {
-    const res = await chat({ messages: [{ role: 'user', content: 'hi' }], model: DEFAULT_MODEL, stream: false });
+  it('accepts a listed model that is not in the old built-in list (200)', async () => {
+    const res = await chat({ messages: hi, model: NEW_MODEL, stream: false });
     expect(res.status).toBe(200);
   });
 
-  it('defaults an omitted model to an allowed one and is not refused', async () => {
-    const res = await chat({ messages: [{ role: 'user', content: 'hi' }], stream: false });
-    expect(res.status).not.toBe(400);
+  it('accepts openai/gpt-4o-mini (200)', async () => {
+    const res = await chat({ messages: hi, model: DEFAULT_MODEL, stream: false });
     expect(res.status).toBe(200);
+  });
+
+  it('an omitted model defaults to openai/gpt-4o-mini', async () => {
+    const res = await chat({ messages: hi, stream: false });
+    expect(res.status).toBe(200);
+    const ai = await import('ai');
+    const calls = [
+      ...(ai.streamText as unknown as { mock: { calls: unknown[][] } }).mock.calls,
+      ...(ai.generateText as unknown as { mock: { calls: unknown[][] } }).mock.calls,
+    ];
+    expect(calls.length).toBeGreaterThan(0);
+    const model = (calls.at(-1)![0] as { model?: unknown }).model;
+    const modelId = typeof model === 'string' ? model : (model as { modelId?: string } | undefined)?.modelId;
+    expect(modelId).toBe(DEFAULT_MODEL);
   });
 });

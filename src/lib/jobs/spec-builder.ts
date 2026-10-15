@@ -4,7 +4,7 @@
  * `deduct_user_balance` and logged to `paid_usage_analytics`.
  */
 import { generateObject } from 'ai';
-import { createGateway, calculateCost, resolveGenerationCost } from '@/src/lib/ai-gateway';
+import { createGateway, chatBillingMarkup, costForModel, resolveGenerationCost } from '@/src/lib/ai-gateway';
 import { jobsDb } from './db';
 import { JobsError, dbError } from './errors';
 import { getOwnedJob, saveSpecDraft } from './jobs-service';
@@ -47,9 +47,10 @@ async function assertBalance(userId: string): Promise<void> {
 }
 
 async function chargeUsage(userId: string, model: string, inputTokens: number, outputTokens: number, generationId: string | null) {
-  const estimate = calculateCost(model, inputTokens, outputTokens);
+  const estimate = await costForModel(model, inputTokens, outputTokens);
   if (estimate <= 0) return;
-  const cost = await resolveGenerationCost(generationId, estimate);
+  // Billed like /api/chat: the gateway's cost × the same markup.
+  const cost = (await resolveGenerationCost(generationId, estimate)) * chatBillingMarkup();
   const db = jobsDb();
   const { error } = await db.rpc('deduct_user_balance', { target_user_id: userId, amount: cost });
   if (error) console.error('[jobs] deduct_user_balance failed:', error.message);

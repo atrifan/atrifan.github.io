@@ -178,13 +178,13 @@ test('AI spec draft uses generateObject, is billed from the balance like /api/ch
   assert.equal(aiState.calls.length, 1);
   assert.ok(String(aiState.calls[0].prompt).includes('Keep it small'));
 
-  // openai/gpt-4o-mini: 1M in * $0.15 + 1M out * $0.60 = $0.75
+  // openai/gpt-4o-mini: 1M in * $0.15 + 1M out * $0.60 = $0.75, × CREDIT_MARKUP 1.3 = $0.975
   const [budget] = await sql<{ remaining_balance: string }>(`SELECT remaining_balance FROM user_budgets WHERE user_id = $1`, [CUSTOMER]);
-  assert.equal(Number(budget.remaining_balance), 0.25);
+  assert.equal(Number(budget.remaining_balance), 0.025);
   const usage = await sql<{ cost_deducted: string; model_name: string; tokens_used: string }>(
     `SELECT cost_deducted, model_name, tokens_used FROM paid_usage_analytics WHERE user_id = $1`, [CUSTOMER]);
   assert.equal(usage.length, 1);
-  assert.equal(Number(usage[0].cost_deducted), 0.75);
+  assert.equal(Number(usage[0].cost_deducted), 0.975);
   assert.equal(Number(usage[0].tokens_used), 2_000_000);
 
   aiState.generateObject = async () => {

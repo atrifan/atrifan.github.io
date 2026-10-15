@@ -25,7 +25,7 @@ import { computeCommission } from './commission';
 import { buildTopupCheckoutParams } from './checkout-params';
 import { getStripe, stripeFailure } from './stripe';
 import { notifyUser, excerpt } from './notifications';
-import { calculateCost, resolveGenerationCost } from '../ai-gateway';
+import { costForModel, resolveGenerationCost } from '../ai-gateway';
 import { creditMarkupFromEnv } from '../../config/qa.config';
 import { estimateInputTokens } from '../qa/qa-credits';
 import {
@@ -225,7 +225,7 @@ async function readBalance(userId: string): Promise<number> {
 }
 
 async function chargeClassifier(userId: string, model: string, usage: ClassifierUsage, markup: number): Promise<number> {
-  const estimate = calculateCost(model, usage.inputTokens, usage.outputTokens);
+  const estimate = await costForModel(model, usage.inputTokens, usage.outputTokens);
   if (estimate <= 0) return 0;
   const cost = await resolveGenerationCost(usage.generationId, estimate);
   const charge = classifierChargeUsd(cost, markup);
@@ -258,7 +258,7 @@ async function classifyBilled(
   const model = steeringModel();
   const markup = creditMarkupFromEnv();
   const estimate = classifierChargeUsd(
-    calculateCost(model, estimateInputTokens(buildClassifierPrompt(ctx)), CLASSIFIER_OUTPUT_TOKENS_ESTIMATE),
+    await costForModel(model, estimateInputTokens(buildClassifierPrompt(ctx)), CLASSIFIER_OUTPUT_TOKENS_ESTIMATE),
     markup,
   );
   const balance = await readBalance(userId);

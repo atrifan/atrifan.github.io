@@ -3,7 +3,7 @@ import { streamText } from 'ai';
 import { createClient } from '@supabase/supabase-js';
 import { createGateway, calculateCost, chatBillingMarkup, resolveGenerationCost } from '@/src/lib/ai-gateway';
 import { DEFAULT_CHAT_MODEL } from '@/src/config/gateway-models';
-import { findAllowedModel, modelNotAllowedBody } from '@/src/lib/models/catalog';
+import { chatModelPrice, modelNotAllowedBody } from '@/src/lib/models/catalog';
 import { creditValueUsdFromEnv, reviewMaxOutputTokensFromEnv } from '@/src/config/qa.config';
 import { chargedCredits, estimateInputTokens, remainingCredits, reviewOutputCap } from '@/src/lib/qa/qa-credits';
 
@@ -206,8 +206,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { messages, model = DEFAULT_CHAT_MODEL, tools, stream = true } = body;
 
-  // Only allowlisted models: they are the ones Tulzo has a price for (src/config/gateway-models.ts).
-  if (!findAllowedModel(model)) {
+  // Only models the gateway offers and Tulzo can price (Vercel's chat models; see /api/models).
+  const price = await chatModelPrice(model);
+  if (!price) {
     return jsonError(400, modelNotAllowedBody(String(model)));
   }
 
@@ -221,11 +222,11 @@ export async function POST(request: NextRequest) {
   // QA review calls: cap the output and hold the call's worst-case credits first.
   let maxOutputTokens: number | undefined;
   let holdId: string | null = null;
-  const markup = chatBillingMarkup({ review: !!review });
+  const markup = chatBillingMarkup();
   if (review) {
     maxOutputTokens = reviewOutputCap(body.max_tokens, reviewMaxOutputTokensFromEnv());
     const inputTokens = estimateInputTokens(JSON.stringify({ messages, tools: tools ?? null }));
-    const estimate = chargedCredits(calculateCost(model, inputTokens, maxOutputTokens), markup, creditValueUsdFromEnv());
+    const estimate = chargedCredits(calculateCost(price, inputTokens, maxOutputTokens), markup, creditValueUsdFromEnv());
     const held = await holdReviewCredits(supabase, apiKeyId, estimate, review.submissionId);
     if (held instanceof Response) return held;
     holdId = held;
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
       const inputTokens = usage?.inputTokens || 0;
       const outputTokens = usage?.outputTokens || 0;
       const totalTokens = inputTokens + outputTokens;
-      const cost = calculateCost(model, inputTokens, outputTokens);
+      const cost = calculateCost(price, inputTokens, outputTokens);
 
       const generationId = response?.headers?.['x-vercel-ai-generation-id'] || null;
 

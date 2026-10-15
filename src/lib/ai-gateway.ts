@@ -3,7 +3,7 @@
  * Edge-safe (fetch only).
  */
 import { createOpenAI } from '@ai-sdk/openai';
-import { findAllowedModel } from './models/catalog.ts';
+import { chatModelPrice, type ModelPrice } from './models/catalog.ts';
 import { creditMarkupFromEnv } from '../config/qa.config.ts';
 
 // The documented AI Gateway host. The old gateway.ai.vercel.com closed the TLS handshake without a
@@ -18,33 +18,38 @@ export function createGateway() {
   });
 }
 
-/** A model that isn't on the Tulzo allowlist (src/config/gateway-models.ts) has no price. */
+/** A model the Tulzo gateway doesn't offer (not a Vercel chat model) has no price. */
 export class UnknownModelError extends Error {
   readonly model: string;
   constructor(model: string) {
-    super(`Model "${model}" is not on the Tulzo gateway allowlist`);
+    super(`Model "${model}" is not offered by the Tulzo gateway`);
     this.name = 'UnknownModelError';
     this.model = model;
   }
 }
 
-/**
- * Local cost estimate in USD at the allowlist's base price (no markup). Throws UnknownModelError
- * for a model that isn't allowlisted, so nothing is billed at a made-up price.
- */
-export function calculateCost(modelId: string, inputTokens: number, outputTokens: number): number {
-  const row = findAllowedModel(modelId);
-  if (!row) throw new UnknownModelError(modelId);
-  return (inputTokens / 1_000_000) * row.inputPer1M + (outputTokens / 1_000_000) * row.outputPer1M;
+/** Cost in USD at a model's base (pre-markup) price. */
+export function calculateCost(price: ModelPrice, inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1_000_000) * price.inputPer1M + (outputTokens / 1_000_000) * price.outputPer1M;
 }
 
 /**
- * The multiplier /api/chat applies to a call's cost before billing it. Account keys are billed at
- * the gateway's cost (×1); QA review keys at × CREDIT_MARKUP. /api/models lists account prices
- * with the same function, so the listed price is the billed price.
+ * Base cost in USD for a model, priced from the cached Vercel listing (chatModelPrice). Throws
+ * UnknownModelError for a model the gateway doesn't offer, so nothing is billed at a made-up price.
  */
-export function chatBillingMarkup({ review }: { review: boolean }): number {
-  return review ? creditMarkupFromEnv() : 1;
+export async function costForModel(modelId: string, inputTokens: number, outputTokens: number): Promise<number> {
+  const price = await chatModelPrice(modelId);
+  if (!price) throw new UnknownModelError(modelId);
+  return calculateCost(price, inputTokens, outputTokens);
+}
+
+/**
+ * The multiplier /api/chat applies to a call's cost before billing it: CREDIT_MARKUP (default 1.3),
+ * for account keys and QA review keys alike. /api/models lists prices with the same function, so the
+ * listed price is the billed price.
+ */
+export function chatBillingMarkup(): number {
+  return creditMarkupFromEnv();
 }
 
 /**

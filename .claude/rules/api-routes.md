@@ -14,10 +14,12 @@ A route that needs an env var it doesn't have answers 500 `{ error: 'server_misc
 (`src/lib/misconfigured.ts`); never fall back to a hard-coded secret or host.
 
 ## Chat (`/api/chat`) and models (`/api/models`)
-`chat`: POST, streaming; the assistant's chat endpoint (hub). `model` must be on the allowlist in
-`src/config/gateway-models.ts` (default `openai/gpt-4o-mini`), otherwise 400 `model_not_allowed` with
-`models_url`. `models`: GET, Bearer API key (same rules as `plugin/config`): the allowlisted models with
-context window, output limit, capabilities (Vercel's listing, cached 1h) and the billed per-1M price.
+`chat`: POST, streaming; the assistant's chat endpoint (hub). A pass-through to Vercel AI Gateway: `model`
+must be a Vercel chat model (priced language model, not `-batch`; default `openai/gpt-4o-mini`), otherwise
+400 `model_not_allowed` with `models_url`. Billed at the gateway's cost × `chatBillingMarkup()`
+(`CREDIT_MARKUP`, default 1.3). `models`: GET, Bearer API key (same rules as `plugin/config`): every
+Vercel chat model with context window, output limit, capabilities and the billed per-1M price (Vercel's
+listing cached 1h; the built-in list in `src/config/gateway-models.ts` when it's unreachable).
 See `docs/models-api.md`. Route handlers use `serviceSupabase()` (`src/lib/service-supabase.ts`), never the
 unset `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` names alone.
 
