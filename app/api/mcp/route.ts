@@ -854,7 +854,7 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
   <style>${WIDGET_STYLES}</style>
 </head>
 <body>
-  <div class="card" id="widget-container">${loadingContent}<div class="footer">tulzo.vercel.app</div></div>
+  <div class="card" id="widget-container">${loadingContent}<div class="footer">tulzo.online</div></div>
   <script>
     // Embedded data for Claude (fallback)
     const embeddedData = ${JSON.stringify({ tool: toolName, data })};
@@ -894,7 +894,7 @@ function generateInlineWidgetHtml(toolName: string, data: Record<string, unknown
 
       const data = wd.data;
       let html = renderWidgetContent(widgetType, data);
-      container.innerHTML = html + '<div class="footer">tulzo.vercel.app</div>';
+      container.innerHTML = html + '<div class="footer">tulzo.online</div>';
     }
 
     function renderWidgetContent(type, data) {
@@ -1808,7 +1808,7 @@ export async function POST(request: NextRequest, routeContext?: McpRouteContext)
           id: (body as MCPRequest).id || null,
           error: {
             code: -32003,
-            message: 'MCP access is not allowed for free users. Upgrade at tulzo.vercel.app/pricing',
+            message: 'MCP access is not allowed for free users. Upgrade at tulzo.online/pricing',
           }
         }, { status: 403 });
       }

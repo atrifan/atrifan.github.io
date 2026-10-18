@@ -182,6 +182,28 @@
       ],
       "destination": "https://tulzo.online/:path*",
       "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "tulzo.vercel.app"
+        }
+      ],
+      "destination": "https://tulzo.online/",
+      "permanent": true
+    },
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "tulzo.vercel.app"
+        }
+      ],
+      "destination": "https://tulzo.online/:path",
+      "permanent": true
     }
   ]
 }

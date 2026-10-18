@@ -31,7 +31,7 @@ async function validateApiKey(key: string, serverName: string = 'default'): Prom
     if (supabaseKey) {
       if (!supabaseKey.is_active) {
         if (supabaseKey.plan === 'free') {
-          return { user: null, error: 'Your subscription has expired. Re-subscribe at tulzo.vercel.app/pricing to reactivate your API key.' };
+          return { user: null, error: 'Your subscription has expired. Re-subscribe at tulzo.online/pricing to reactivate your API key.' };
         }
         return { user: null, error: 'API key has been revoked. Please generate a new one from your dashboard.' };
       }
@@ -172,7 +172,7 @@ export async function POST(
       id: null,
       error: {
         code: -32001,
-        message: error || 'Invalid API key. Generate a new key from your dashboard at tulzo.vercel.app/dashboard'
+        message: error || 'Invalid API key. Generate a new key from your dashboard at tulzo.online/ai'
       }
     }, { status: 401 });
   }
@@ -184,7 +184,7 @@ export async function POST(
       id: null,
       error: {
         code: -32003,
-        message: 'MCP access is not allowed for free users. Upgrade at tulzo.vercel.app/pricing'
+        message: 'MCP access is not allowed for free users. Upgrade at tulzo.online/pricing'
       }
     }, { status: 403 });
   }
@@ -211,7 +211,7 @@ export async function GET(
     return NextResponse.json({
       name: 'Tulzo MCP Server',
       version: '1.0.0',
-      description: 'API key required. Get your key at tulzo.vercel.app/dashboard',
+      description: 'API key required. Get your key at tulzo.online/ai',
       endpoint: '/api/mcp/{your_api_key}',
     });
   }
@@ -221,14 +221,14 @@ export async function GET(
   if (!user) {
     return NextResponse.json({
       error: 'Invalid API key',
-      message: error || 'Generate a new key from your dashboard at tulzo.vercel.app/dashboard',
+      message: error || 'Generate a new key from your dashboard at tulzo.online/ai',
     }, { status: 401 });
   }
 
   if (!user.isSubscribed) {
     return NextResponse.json({
       error: 'MCP access not allowed',
-      message: 'MCP access is not allowed for free users. Upgrade at tulzo.vercel.app/pricing',
+      message: 'MCP access is not allowed for free users. Upgrade at tulzo.online/pricing',
       currentPlan: user.plan,
     }, { status: 403 });
   }

@@ -38,10 +38,10 @@ test('crons stay daily and there is no email dispatch cron', () => {
   assert.ok(crons.every((c) => /^\d+ \d+ \* \* \*$/.test(c.schedule)));
 });
 
-test('host redirects exist only for the four surface subdomains, jobs and www', () => {
+test('host redirects exist only for the four surface subdomains, jobs, www and the old vercel.app alias', () => {
   const hosts = new Set((config.redirects ?? []).flatMap((r) => (r.has ?? []).filter((h) => h.type === 'host').map((h) => h.value)));
-  assert.deepEqual([...hosts].sort(), ['ai', 'chat', 'gigs', 'jobs', 'marketplace', 'www'].map((s) => `${s}.tulzo.online`));
-  assert.equal((config.redirects ?? []).length, 15);
+  assert.deepEqual([...hosts].sort(), [...['ai', 'chat', 'gigs', 'jobs', 'marketplace'].map((s) => `${s}.tulzo.online`), 'tulzo.vercel.app', 'www.tulzo.online']);
+  assert.equal((config.redirects ?? []).length, 17);
 });
 
 // The switch-over to real subdomains (once Clerk is on production keys) is documented in the surfaces rule.
@@ -53,4 +53,23 @@ test('the surfaces rule documents the hybrid deployment and the switch-over', ()
   }
   assert.ok(!section.includes('TULZO_SURFACE=hub'), 'no per-project TULZO_SURFACE');
   assert.ok(!/tulzo-(ai|marketplace|gigs|chat)\b|five Vercel projects|four surface projects/.test(rule), 'no per-surface Vercel projects');
+});
+
+// Clerk's development instance keeps one session per host, so a visitor signed in on tulzo.online looked
+// signed out on tulzo.vercel.app until they clicked "Sign in" (measured on the live site, 2026-10-18).
+// Pages on the old vercel.app alias go to the apex; its /api stays, because devices still call it there.
+test('tulzo.vercel.app pages go to the apex (308), its /api is not redirected', () => {
+  const rules = forHost('tulzo.vercel.app');
+  assert.deepEqual(
+    rules.map((r) => [r.source, r.destination, r.permanent]),
+    [
+      ['/', 'https://tulzo.online/', true],
+      ['/:path((?!api/).*)', 'https://tulzo.online/:path', true],
+    ],
+  );
+});
+
+test('no user-facing text sends people to tulzo.vercel.app', () => {
+  const files = ['app/api/mcp/route.ts', 'app/api/mcp/[key]/route.ts'];
+  for (const f of files) assert.ok(!readFileSync(f, 'utf8').includes('tulzo.vercel.app'), f);
 });
