@@ -6,6 +6,7 @@ import { DEFAULT_CHAT_MODEL } from '@/src/config/gateway-models';
 import { chatModelPrice, modelNotAllowedBody } from '@/src/lib/models/catalog';
 import { creditValueUsdFromEnv, reviewMaxOutputTokensFromEnv } from '@/src/config/qa.config';
 import { chargedCredits, estimateInputTokens, remainingCredits, reviewOutputCap } from '@/src/lib/qa/qa-credits';
+import { sseErrorBody, toOpenAiSse } from '@/src/lib/chat-openai-sse';
 
 export const runtime = 'edge';
 
@@ -333,54 +334,17 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
-      let toolCallIndex = 0;
-      let finishReason = 'stop';
-      let usageData: { prompt_tokens: number; completion_tokens: number } | null = null;
-
       try {
-        for await (const part of result.fullStream) {
-          if (part.type === 'text-delta') {
-            const chunk = {
-              choices: [{ index: 0, delta: { content: part.text }, finish_reason: null }],
-            };
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-          } else if (part.type === 'tool-call') {
-            finishReason = 'tool_calls';
-            const chunk = {
-              choices: [{
-                index: 0,
-                delta: {
-                  tool_calls: [{
-                    index: toolCallIndex,
-                    id: part.toolCallId,
-                    type: 'function',
-                    function: { name: part.toolName, arguments: JSON.stringify(part.input) },
-                  }],
-                },
-                finish_reason: null,
-              }],
-            };
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-            toolCallIndex++;
-          } else if (part.type === 'finish') {
-            usageData = {
-              prompt_tokens: part.totalUsage?.inputTokens || 0,
-              completion_tokens: part.totalUsage?.outputTokens || 0,
-            };
+        for await (const frame of toOpenAiSse(result.fullStream)) {
+          if (frame.startsWith('data: {"error"')) {
+            console.error('[chat] upstream error for model', model, frame.slice(6, 300));
+            await releaseHold();
           }
+          controller.enqueue(encoder.encode(frame));
         }
-
-        // Send finish chunk
-        const finishChunk = {
-          choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
-          ...(usageData ? { usage: usageData } : {}),
-        };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(finishChunk)}\n\n`));
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err: any) {
         await releaseHold();
-        const errorChunk = { error: { message: err?.message || 'Stream error' } };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: sseErrorBody(err) })}\n\n`));
       } finally {
         controller.close();
       }
