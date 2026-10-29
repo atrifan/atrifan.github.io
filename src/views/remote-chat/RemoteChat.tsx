@@ -298,6 +298,7 @@ interface RemoteChatProps {
   /** True when the session was just created by this chat's first send (no history to load). */
   freshSession: boolean;
   deviceName: string;
+  deviceId: string;
   deviceOnline: boolean;
   /** The device's configured model (heartbeat or live bridge), shown for reference. */
   deviceModel?: string | null;
@@ -334,6 +335,7 @@ export function RemoteChat({
   sessionId,
   freshSession,
   deviceName,
+  deviceId,
   deviceOnline,
   deviceModel,
   onCreateSession,
@@ -362,7 +364,10 @@ export function RemoteChat({
   const [pendingReplay, setPendingReplay] = useState<ReplayNetworkPayload | null>(null);
   const [pendingReplayId, setPendingReplayId] = useState<string | null>(null);
   const [brainQuestions, setBrainQuestions] = useState<{ questionId: string; questions: BrainQuestion[] } | null>(null);
-  const draftKey = sessionId ?? 'new';
+  const draftKey = `${deviceId}:${sessionId ?? 'new'}`;
+  const offlineTransient = !deviceOnline && !!(streaming || waitingForUser || activeForm || activeProposals || activePlan?.status === 'pending' || pendingApproval || pendingReplay || brainQuestions);
+  const onlineRef = useRef(deviceOnline);
+  onlineRef.current = deviceOnline;
 
   // ── Voice (STT/TTS) ──────────────────────────────────────────────────────────
   // Ported from the plugin panel. A normal web page runs recognition in-page via
@@ -510,7 +515,7 @@ export function RemoteChat({
   // Hydrate the persisted draft on mount (a new chat keeps its draft when it gets an id).
   useEffect(() => {
     draftsRef.current = loadDrafts();
-    const restored = draftsRef.current[sessionId ?? 'new'];
+    const restored = draftsRef.current[draftKey];
     if (restored && !inputRef.current) {
       inputRef.current = restored;
       setInput(restored);
@@ -535,14 +540,16 @@ export function RemoteChat({
   useEffect(() => {
     if (!sessionId || freshRef.current) return;
     let cancelled = false;
+    const controller = new AbortController();
     // A failed load (e.g. a 401 while the session token refreshes) is retried; it is never shown as an
     // empty chat.
-    void getJsonRetrying<{ messages?: RelayMessage[] }>(`/api/plugin/chat/sessions/${sessionId}/messages`).then((body) => {
+    void getJsonRetrying<{ messages?: RelayMessage[] }>(`/api/plugin/chat/sessions/${sessionId}/messages`, { signal: controller.signal }).then((body) => {
       if (cancelled || !body) return;
       setMessages((body.messages ?? []).map(fromRelayMessage));
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [sessionId]);
 
@@ -552,6 +559,7 @@ export function RemoteChat({
 
   const post = useCallback(
     (frame: PanelToWorker) => {
+      if (!onlineRef.current && (frame.type !== 'SEND_MESSAGE' || offlineTransient)) return;
       const port = portRef.current;
       if (port) {
         void port.postMessage(frame).then((ok) => afterPost(frame, ok));
@@ -573,7 +581,7 @@ export function RemoteChat({
         setStreaming(false);
       });
     },
-    [onCreateSession, afterPost, clearWatchdog]
+    [onCreateSession, afterPost, clearWatchdog, offlineTransient]
   );
 
   // ── Wire the relay port + frame handler ─────────────────────────────────────
@@ -920,6 +928,7 @@ export function RemoteChat({
   // ── Send ───────────────────────────────────────────────────────────────────
 
   const send = useCallback(() => {
+    if (offlineTransient) return;
     const text = inputRef.current.trim();
     if (!text && attachments.length === 0) return;
     autoscrollPaused.current = pausedAfterSend();
@@ -996,6 +1005,7 @@ export function RemoteChat({
     post({ type: 'SEND_MESSAGE', text: wire, model, sessionId: sessionId ?? undefined });
     armWatchdog();
   }, [
+    offlineTransient,
     streaming,
     armWatchdog,
     waitingForUser,
@@ -1015,6 +1025,7 @@ export function RemoteChat({
   ]);
 
   function stop() {
+    if (!deviceOnline) return;
     post({ type: 'STOP_STREAM' });
     const streamId = streamingIdRef.current;
     setMessages((prev) => {
@@ -1129,6 +1140,7 @@ export function RemoteChat({
   }
 
   function handleProposalsRespond(approved: string[], rejected: string[]) {
+    if (!deviceOnline) return;
     const items = activeProposals?.items ?? [];
     const nameOf = (id: string) => items.find((it) => it.id === id)?.label ?? id;
     const summary =
@@ -1150,6 +1162,7 @@ export function RemoteChat({
   }
 
   function handleProposalsDismiss() {
+    if (!deviceOnline) return;
     setMessages((prev) =>
       prev
         .map((m) =>
@@ -1164,6 +1177,7 @@ export function RemoteChat({
   }
 
   function handlePlanApprove() {
+    if (!deviceOnline) return;
     if (!activePlan) return;
     setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: `Plan "${activePlan.title}": Approved` }]);
     post({ type: 'PLAN_RESPONSE', planId: activePlan.id, approved: true });
@@ -1171,6 +1185,7 @@ export function RemoteChat({
   }
 
   function handlePlanReject() {
+    if (!deviceOnline) return;
     if (!activePlan) return;
     setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: `Plan "${activePlan.title}": Rejected` }]);
     post({ type: 'PLAN_RESPONSE', planId: activePlan.id, approved: false });
@@ -1178,6 +1193,7 @@ export function RemoteChat({
   }
 
   function handleFormSubmit(formId: string, data: FormResponse) {
+    if (!deviceOnline) return;
     const form = activeForm!;
     const formSteps = form.steps ?? [];
     const line = (f: { id: string; label: string }) => {
@@ -1194,6 +1210,7 @@ export function RemoteChat({
   }
 
   function handleFormDismiss() {
+    if (!deviceOnline) return;
     const form = activeForm;
     if (form) {
       post({ type: 'FORM_RESPONSE', formId: form.id, data: { __dismissed: 'true' } });
@@ -1214,6 +1231,7 @@ export function RemoteChat({
 
   const handleButtonClick = useCallback(
     (value: string) => {
+      if (offlineTransient) return;
       const userEntry: ChatEntry = { id: uuid(), role: 'user', content: value };
       if (waitingForUser) {
         setMessages((prev) => [...prev, userEntry]);
@@ -1231,7 +1249,7 @@ export function RemoteChat({
         armWatchdog();
       }
     },
-    [waitingForUser, streaming, model, sessionId, post, armWatchdog]
+    [waitingForUser, streaming, model, sessionId, post, armWatchdog, offlineTransient]
   );
 
   // Links open here, on the phone. Paths on the device's disk can't be opened remotely.
@@ -1240,6 +1258,7 @@ export function RemoteChat({
   }, []);
 
   const decide = (decision: Decision) => {
+    if (!deviceOnline) return;
     if (!pendingApproval) return;
     setMessages((prev) => [
       ...prev,
@@ -1345,6 +1364,7 @@ export function RemoteChat({
             <ReplayNetworkCard
               payload={pendingReplay}
               onDecision={(actionId, decision) => {
+                if (!deviceOnline) return;
                 const label = decision === 'approve' ? 'Approved replay' : 'Denied replay';
                 setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: `${pendingReplay.method} ${pendingReplay.url}: ${label}` }]);
                 post({ type: 'ACTION_APPROVAL_RESPONSE', actionId: pendingReplayId ?? actionId, decision });
@@ -1360,12 +1380,14 @@ export function RemoteChat({
               questionId={brainQuestions.questionId}
               questions={brainQuestions.questions}
               onSubmit={(questionId, answers) => {
+                if (!deviceOnline) return;
                 const lines = brainQuestions.questions.map((q, i) => `${i + 1}. ${q.question} → ${answers[q.id]}`);
                 setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: lines.join('\n') }]);
                 post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers });
                 setBrainQuestions(null);
               }}
               onCancel={(questionId) => {
+                if (!deviceOnline) return;
                 setMessages((prev) => [...prev, { id: uuid(), role: 'user', content: "(skipped the questions — I'll answer in my own words)" }]);
                 post({ type: 'BRAIN_QUESTIONS_RESPONSE', questionId, answers: { __cancelled: 'true' } });
                 setBrainQuestions(null);
@@ -1391,7 +1413,8 @@ export function RemoteChat({
             <span className="wfu-message">{waitingForUser}</span>
           </div>
         )}
-        {!deviceOnline && !waitingForUser && (
+        {offlineTransient && <p className="chat-composer-note" role="status">Assistant offline. Steering, stop and pending responses are unavailable until it reconnects.</p>}
+        {!deviceOnline && !offlineTransient && (
           <p className="chat-composer-note">Messages will be delivered when your assistant reconnects.</p>
         )}
 
@@ -1498,11 +1521,11 @@ export function RemoteChat({
             />
             <span className="chat-spacer" />
             {busy && !canSend ? (
-              <button className="send-btn stop-btn" onClick={stop} aria-label="Stop" type="button">
+              <button className="send-btn stop-btn" onClick={stop} disabled={!deviceOnline} aria-label="Stop" type="button">
                 <StopIcon />
               </button>
             ) : (
-              <button className="send-btn" onClick={send} disabled={!canSend} aria-label="Send" type="button">
+              <button className="send-btn" onClick={send} disabled={!canSend || offlineTransient} aria-label="Send" type="button">
                 <SendIcon />
               </button>
             )}

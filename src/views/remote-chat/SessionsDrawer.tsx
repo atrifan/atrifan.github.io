@@ -8,6 +8,8 @@ import type { RelaySession } from './frames';
 import type { ChatDevice } from './ChatApp';
 import { relativeTime } from './model/presence';
 import { sessionTitle } from './model/message-groups';
+import { historyGroup, lastActivity, liveTime, surfaceLabel } from './model/session-list';
+import { INTEGRATION_UNAVAILABLE } from './session-contract';
 
 interface Props {
   devices: ChatDevice[];
@@ -25,6 +27,14 @@ interface Props {
   modal: boolean;
   open: boolean;
   onClose: () => void;
+  tab: 'active' | 'history';
+  onTab: (tab: 'active' | 'history') => void;
+  nextCursor: string | null;
+  incomplete: boolean;
+  unavailable: boolean;
+  onMore: () => void;
+  listError: string | null;
+  onRetry: () => void;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -144,6 +154,7 @@ function SessionRow({
       <button
         type="button"
         className="chat-session-open"
+        aria-label={title}
         aria-current={active ? 'page' : undefined}
         aria-describedby={updated ? metaId : undefined}
         onClick={onOpen}
@@ -156,7 +167,14 @@ function SessionRow({
           </span>
         )}
       </button>
-      <button
+      <div className="chat-row-details">
+        <span className="chat-session-badge">{session.native ? surfaceLabel(session.native.surface) : 'Web chat'}</span>
+        {session.native && <span className="chat-session-badge">{({ running: 'Running', waiting: 'Waiting on you', idle: 'Idle', unknown: 'Status unavailable' })[session.native.state]}</span>}
+        {session.snippet && <span className="chat-session-snippet">{session.snippet}</span>}
+        {session.domain && <span className="chat-session-badge">{session.domain}</span>}
+        {Number.isFinite(lastActivity(session)) && <time dateTime={new Date(lastActivity(session)).toISOString()}>{new Date(lastActivity(session)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>}
+      </div>
+      {!session.native && <button
         ref={renameRef}
         type="button"
         className="chat-icon-btn"
@@ -167,10 +185,10 @@ function SessionRow({
         }}
       >
         <PencilIcon />
-      </button>
-      <button type="button" className="chat-icon-btn is-danger" aria-label={`Delete chat ${title}`} onClick={() => setMode('confirm')}>
+      </button>}
+      {!session.native && <button type="button" className="chat-icon-btn is-danger" aria-label={`Delete chat ${title}`} onClick={() => setMode('confirm')}>
         <TrashIcon />
-      </button>
+      </button>}
     </li>
   );
 }
@@ -237,13 +255,44 @@ export function SessionsDrawer(props: Props) {
         <PlusIcon />
         New chat
       </button>
+      <div className="chat-tabs" role="tablist" aria-label="Conversations" onKeyDown={(event) => {
+        let next: 'active' | 'history';
+        if (event.key === 'Home') next = 'active';
+        else if (event.key === 'End') next = 'history';
+        else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') next = props.tab === 'active' ? 'history' : 'active';
+        else return;
+        event.preventDefault();
+        props.onTab(next);
+        document.getElementById(`chat-tab-${next}`)?.focus();
+      }}>
+        {(['active', 'history'] as const).map((tab) => <button key={tab} type="button" role="tab" id={`chat-tab-${tab}`} aria-controls="chat-list-panel" aria-selected={props.tab === tab} tabIndex={props.tab === tab ? 0 : -1} onClick={() => props.onTab(tab)}>{tab === 'active' ? `Active (${sessions.filter((s) => s.native?.state === 'running' || s.native?.state === 'waiting').length})` : 'History'}</button>)}
+      </div>
+      <div role="tabpanel" id="chat-list-panel" aria-labelledby={`chat-tab-${props.tab}`}>
+      {props.listError && <p role="alert">{props.listError} <button type="button" className="btn btn-secondary" onClick={props.onRetry}>Retry chats</button></p>}
+      {props.unavailable && <p className="chat-drawer-note">{INTEGRATION_UNAVAILABLE}</p>}
+      {props.incomplete && <p className="chat-drawer-note">Conversation catalog is incomplete. Some chats are unavailable.</p>}
       {loading && sessions.length === 0 ? (
         <p className="chat-drawer-note">Loading chats…</p>
+      ) : props.listError && sessions.length === 0 ? null : props.tab === 'active' ? (
+        <ul role="list" className="chat-sessions chat-active-sessions">
+          {sessions.filter((s) => s.native?.state === 'running' || s.native?.state === 'waiting').map((s) => <li key={s.id} className="chat-active-row">
+            <span className="chat-session-title">{sessionTitle(s)}</span>
+            <span className="chat-session-badge">{surfaceLabel(s.native?.surface)}</span>
+            <span className="chat-live-label"><span className="chat-presence-dot" aria-hidden="true" />{s.native?.state === 'waiting' ? 'Needs you' : 'Streaming'}</span>
+            {liveTime(s.native?.startedAt, now) && <span>Started {liveTime(s.native?.startedAt, now)}</span>}
+            {liveTime(s.native?.lastChunkAt, now) && <span>Last output {liveTime(s.native?.lastChunkAt, now)}</span>}
+            {s.id === activeId && <span>This chat</span>}
+            <button type="button" className="btn btn-secondary" onClick={() => props.onOpen(s.id)}>{s.id === activeId ? 'Open' : 'Attach'}</button>
+          </li>)}
+          {!sessions.some((s) => s.native?.state === 'running' || s.native?.state === 'waiting') && <li className="chat-drawer-note">Nothing is running right now.</li>}
+        </ul>
       ) : sessions.length === 0 ? (
         <p className="chat-drawer-note">No chats yet. Your conversations with this assistant appear here.</p>
       ) : (
-        <ul role="list" className="chat-sessions">
-          {sessions.map((s) => (
+        <>{(['Today', 'Yesterday', 'This week', 'Older'] as const).map((group) => {
+          const rows = sessions.filter((s) => historyGroup(s, now) === group);
+          return rows.length > 0 && <section key={group} className="chat-history-group" aria-label={group}><h3>{group}</h3><ul role="list" className="chat-sessions">
+          {rows.map((s) => (
             <SessionRow
               key={s.id}
               session={s}
@@ -254,8 +303,11 @@ export function SessionsDrawer(props: Props) {
               onDelete={() => props.onDelete(s.id)}
             />
           ))}
-        </ul>
+        </ul></section>;
+        })}</>
       )}
+      {props.nextCursor && <button type="button" className="btn btn-secondary" disabled={loading} onClick={props.onMore}>Load more chats</button>}
+      </div>
     </>
   );
 

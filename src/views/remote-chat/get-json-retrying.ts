@@ -10,16 +10,24 @@ export async function getJsonRetrying<T>(
     attempts = 4,
     delayMs = 750,
     fetchImpl = fetch,
-    sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-  }: { attempts?: number; delayMs?: number; fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+    signal,
+    sleep = (ms: number) => new Promise<void>((resolve) => {
+      const finish = () => { clearTimeout(timer); signal?.removeEventListener('abort', finish); resolve(); };
+      const timer = setTimeout(finish, ms);
+      signal?.addEventListener('abort', finish, { once: true });
+      if (signal?.aborted) finish();
+    }),
+  }: { attempts?: number; delayMs?: number; fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void>; signal?: AbortSignal } = {},
 ): Promise<T | null> {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (signal?.aborted) return null;
     try {
-      const res = await fetchImpl(url, { cache: 'no-store' });
+      const res = await fetchImpl(url, { cache: 'no-store', ...(signal ? { signal } : {}) });
       if (res.ok) return (await res.json()) as T;
     } catch {
       /* network error: try again */
     }
+    if (signal?.aborted) return null;
     if (attempt < attempts) await sleep(delayMs * attempt);
   }
   return null;

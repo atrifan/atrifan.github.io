@@ -26,4 +26,8 @@ export interface RelaySession {
   title: string | null;
   created_at: string;
   updated_at: string;
+  native?: import('./session-contract').NativeMetadata;
+  lastActivity?: number;
+  snippet?: string;
+  domain?: string;
 }

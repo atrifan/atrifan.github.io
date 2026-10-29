@@ -1,0 +1,35 @@
+/* Optional catalog consumer; uses the existing chat/theme vocabulary. */
+.rc-root .chat-tabs { display: flex; gap: var(--space-1); }
+.rc-root .chat-tabs [role='tab'] {
+  flex: 1; min-height: var(--touch-target); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); cursor: pointer;
+}
+.rc-root .chat-tabs [aria-selected='true'] { background: var(--color-accent-soft); border-color: var(--color-accent); font-weight: 650; }
+.rc-root [role='tabpanel'] { min-width: 0; }
+.rc-root .chat-history-group h3 { margin: var(--space-4) var(--space-2) var(--space-1); font-size: var(--text-xs); color: var(--color-text-muted); }
+.rc-root .chat-history-group .chat-session { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+.rc-root .chat-history-group .chat-session-open { grid-column: 1; grid-row: 1; }
+.rc-root .chat-history-group .chat-icon-btn { grid-row: 1; }
+.rc-root .chat-history-group .chat-session.is-confirming,
+.rc-root .chat-history-group .chat-session.is-editing { grid-template-columns: minmax(0, 1fr); }
+.rc-root .chat-row-details { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); padding: 0 var(--space-3) var(--space-2); color: var(--color-text-muted); font-size: var(--text-xs); min-width: 0; overflow-wrap: anywhere; }
+.rc-root .chat-session-snippet { width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rc-root .chat-session-badge { border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 1px var(--space-2); background: var(--color-surface-2); font-size: var(--text-xs); color: var(--color-text); }
+.rc-root .chat-active-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--text-sm); min-width: 0; }
+.rc-root .chat-active-row > * { max-width: 100%; }
+.rc-root .chat-live-label { display: flex; align-items: center; gap: var(--space-2); }
+.rc-root .chat-live-label .chat-presence-dot { background: var(--color-success); }
+.rc-root .native-session-chat .chat-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.rc-root .native-session-chat .chat-banner p { margin: 0; width: 100%; }
+.rc-root .native-pending-body { padding: var(--space-4); }
+.rc-root .native-session-chat .btn:disabled,
+.rc-root .native-session-chat .action-approval-btn:disabled {
+  background: var(--color-surface-2); color: var(--color-text-muted); border-color: var(--color-border);
+  cursor: default; opacity: 0.55; filter: none;
+}
+.rc-root .native-session-chat .chat-message { overflow-wrap: anywhere; }
+.rc-root .native-session-chat .bubble pre { overflow-x: auto; }
+.rc-root .native-session-chat .chat-card button,
+.rc-root .native-session-chat .chat-banner button { min-height: var(--touch-target); }
+.rc-root .chat-tabs button:focus-visible,
+.rc-root .native-session-chat button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
