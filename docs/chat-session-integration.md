@@ -1,3 +1,5 @@
+> **Superseded.** Chat now runs as a live relay (wire `2.0.0-relay.1`): mobile to Tulzo to the connected PC, with nothing stored in Tulzo. The `/sessions`, `/send`, `/receive`, `/poll` and `/emit` routes return `410 upgrade_required`; the browser uses `/api/plugin/chat/v2/viewer/{stream,requests}`. The text below describes the old database relay and is kept for history.
+
 # Chat session discovery and attachment: frontend consumer
 
 ## Delivery status

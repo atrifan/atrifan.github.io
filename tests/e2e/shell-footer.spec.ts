@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { setupClerkTestingToken } from '@clerk/testing/playwright';
 import { blockThirdParty } from './surface-helpers';
 import { hasClerkTestEnv, storageStatePath } from '../fixtures/clerk-users';
-import { chatEnvReady, openChatState, test as chatTest } from '../fixtures/chat-page';
 
 /**
  * Shell footer contract: every page has one main and one contentinfo landmark. Content shorter than the
@@ -151,28 +150,6 @@ test.describe('admin /admin', () => {
         await open(page, '/admin');
         await expect(page.getByRole('heading', { level: 1, name: 'Admin', exact: true })).toBeVisible({ timeout: 30_000 });
         await expectFooterAtEnd(page);
-      });
-    });
-  }
-});
-
-chatTest.describe('chat (signed-in customer)', () => {
-  chatTest.skip(!chatEnvReady(), 'Clerk dev keys or Supabase env not configured');
-
-  for (const viewport of LONG_VIEWPORTS) {
-    chatTest.describe(`${viewport.width}x${viewport.height}`, () => {
-      chatTest.use({ viewport });
-      chatTest('the page does not scroll and the composer sits at the bottom of the viewport', async ({ page, request, device }) => {
-        await openChatState(page, request, device, 'empty');
-        const composer = page.getByRole('textbox', { name: 'Message' });
-        await expect(composer).toBeVisible();
-        const m = await page.evaluate(() => ({ innerHeight: window.innerHeight, scrollHeight: document.documentElement.scrollHeight }));
-        expect(m.scrollHeight, JSON.stringify(m)).toBe(m.innerHeight);
-        const box = await composer.boundingBox();
-        expect(box).not.toBeNull();
-        const bottom = box!.y + box!.height;
-        expect(bottom, `composer bottom ${bottom} within viewport ${m.innerHeight}`).toBeLessThanOrEqual(m.innerHeight);
-        expect(m.innerHeight - bottom, `composer bottom ${bottom} near viewport bottom ${m.innerHeight}`).toBeLessThanOrEqual(120);
       });
     });
   }

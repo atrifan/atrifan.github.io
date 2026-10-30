@@ -1,0 +1,12 @@
+import { route } from '@/src/lib/chat-v2/routes';
+import { methodNotAllowed } from '@/src/lib/chat-v2/http';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+export const POST = route('viewerStream');
+export const GET = methodNotAllowed;
+export const HEAD = GET;
+export const PUT = GET;
+export const PATCH = GET;
+export const DELETE = GET;
+export const OPTIONS = GET;

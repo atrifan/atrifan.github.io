@@ -5,7 +5,7 @@
  * All functions use the server-side Supabase client with service role access.
  */
 
-import { supabase } from './supabase';
+import { supabase, createSupabaseClient } from './supabase';
 import { createClient as createUntypedClient } from '@supabase/supabase-js';
 import type {
   ApiKeyRow,
@@ -72,14 +72,13 @@ export async function getApiKeyByUserAndServer(
  * Get API key by hash (for validation)
  */
 export async function getApiKeyByHash(apiKeyHash: string): Promise<ApiKeyRow | null> {
-  const { data, error } = await supabase
+  const { data, error } = await createSupabaseClient({ noStore: true })
     .from('api_keys')
     .select('*')
     .eq('api_key_hash', apiKeyHash)
     .single();
 
   if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching API key by hash:', error);
     throw error;
   }
 
@@ -90,7 +89,7 @@ export async function getApiKeyByHash(apiKeyHash: string): Promise<ApiKeyRow | n
  * Get all API keys for a user
  */
 export async function getApiKeysByUser(userId: string): Promise<ApiKeyRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await createSupabaseClient({ noStore: true })
     .from('api_keys')
     .select('*')
     .eq('user_id', userId)
@@ -98,7 +97,6 @@ export async function getApiKeysByUser(userId: string): Promise<ApiKeyRow[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching API keys:', error);
     throw error;
   }
 
@@ -247,14 +245,13 @@ export async function getApiKeyByUserServerDevice(
 }
 
 export async function getApiKeyById(id: string): Promise<ApiKeyRow | null> {
-  const { data, error } = await supabase
+  const { data, error } = await createSupabaseClient({ noStore: true })
     .from('api_keys')
     .select('*')
     .eq('id', id)
     .single();
 
   if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching API key by id:', error);
     throw error;
   }
   return data;
@@ -1347,4 +1344,3 @@ export async function trackRAGUsage(
     console.error('Error tracking RAG usage:', err);
   }
 }
-

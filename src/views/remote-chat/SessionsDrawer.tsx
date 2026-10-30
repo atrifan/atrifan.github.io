@@ -273,7 +273,7 @@ export function SessionsDrawer(props: Props) {
       {props.incomplete && <p className="chat-drawer-note">Conversation catalog is incomplete. Some chats are unavailable.</p>}
       {loading && sessions.length === 0 ? (
         <p className="chat-drawer-note">Loading chats…</p>
-      ) : props.listError && sessions.length === 0 ? null : props.tab === 'active' ? (
+      ) : (props.listError || props.unavailable) && sessions.length === 0 ? null : props.tab === 'active' ? (
         <ul role="list" className="chat-sessions chat-active-sessions">
           {sessions.filter((s) => s.native?.state === 'running' || s.native?.state === 'waiting').map((s) => <li key={s.id} className="chat-active-row">
             <span className="chat-session-title">{sessionTitle(s)}</span>

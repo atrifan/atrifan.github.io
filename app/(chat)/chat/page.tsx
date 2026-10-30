@@ -10,11 +10,12 @@ const DESCRIPTION = 'Chat with your Tex assistant from any device and watch it w
 // No ads on chat. either way (src/lib/ads-policy.ts).
 export async function generateMetadata(): Promise<Metadata> {
   const { userId } = await auth();
-  if (userId) return { title: 'Chat', description: DESCRIPTION, robots: { index: false, follow: false } };
+  if (userId) return { title: 'Chat', description: DESCRIPTION, referrer: 'no-referrer', robots: { index: false, follow: false } };
   const canonical = absoluteSurfaceUrl('chat', '/');
   return {
     title: 'Remote chat',
     description: DESCRIPTION,
+    referrer: 'no-referrer',
     alternates: { canonical },
     openGraph: { title: 'Remote chat | Tulzo', description: DESCRIPTION, url: canonical },
   };
