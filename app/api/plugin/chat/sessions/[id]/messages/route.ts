@@ -1,6 +1,6 @@
-import { legacyCutover } from '@/src/lib/chat-legacy-cutover';
+import { legacyCutoverWithId } from '@/src/lib/chat-legacy-cutover';
 
-export const GET = legacyCutover('either');
+export const GET = legacyCutoverWithId('either');
 export const POST = GET;
 export const PUT = GET;
 export const PATCH = GET;

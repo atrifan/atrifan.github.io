@@ -20,9 +20,9 @@ type Scheme = 'viewer' | 'device' | 'either';
 
 /** Legacy routes never inspect their body, URL parameters, or historical rows. */
 export function legacyCutover(scheme: Scheme) {
-  return async (request?: Request, _context?: { params: Promise<{ id: string }> }): Promise<Response> => {
+  return async (request: Request): Promise<Response> => {
     try {
-      const authorization = request?.headers.get('authorization') ?? null;
+      const authorization = request.headers.get('authorization') ?? null;
       const device = scheme === 'device' || (scheme === 'either' && authorization !== null);
       if (device) {
         const match = authorization?.match(/^Bearer ([^\s]+)$/i);
@@ -50,4 +50,10 @@ export function legacyCutover(scheme: Scheme) {
       return reply(503, 'broker_unavailable');
     }
   };
+}
+
+/** Same cutover for routes with an [id] segment; Next checks the second argument's shape. */
+export function legacyCutoverWithId(scheme: Scheme) {
+  const handler = legacyCutover(scheme);
+  return (request: Request, _context: { params: Promise<{ id: string }> }): Promise<Response> => handler(request);
 }
