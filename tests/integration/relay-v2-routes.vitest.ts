@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
 
-const state = vi.hoisted(() => ({ port: 0, active: true, keyOwner: 'owner', sessionStatus: 'active', plan: 'pro', failKey: false, idCalls: 0, failIdAfter: 0, hold: null as null | (() => Promise<void>) }));
+const state = vi.hoisted(() => ({ port: 0, active: true, keyOwner: 'owner', sessionStatus: 'active', plan: 'pro', failKey: false, hashCalls: 0, idCalls: 0, failIdAfter: 0, hold: null as null | (() => Promise<void>) }));
 vi.mock('ws', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ws')>();
   class LocalSocket extends actual.default {
@@ -17,7 +17,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 vi.mock('@/src/lib/supabase-services', () => ({
   hashApiKey: (value: string) => value,
-  getApiKeyByHash: async (hash: string) => { if (state.failKey) throw new Error('do-not-log-provider-detail'); return hash === 'synthetic-key' ? { id, user_id: state.keyOwner, is_active: state.active, revoked_at: null, plan: state.plan } : null; },
+  getApiKeyByHash: async (hash: string) => { state.hashCalls++; if (state.failKey) throw new Error('do-not-log-provider-detail'); return hash === 'synthetic-key' ? { id, user_id: state.keyOwner, is_active: state.active, revoked_at: null, plan: state.plan } : null; },
   getApiKeyById: async (value: string) => { state.idCalls++; if (state.hold) await state.hold(); if (state.failKey || (state.failIdAfter && state.idCalls >= state.failIdAfter)) throw new Error('do-not-log-provider-detail'); return value === id ? { id, user_id: state.keyOwner, is_active: state.active, revoked_at: null, plan: state.plan } : null; },
 }));
 import { POST as viewerStream } from '@/app/api/plugin/chat/v2/viewer/stream/route';
@@ -42,7 +42,7 @@ let received: Array<Record<string, unknown>>;
 let streams: ReadableStreamDefaultReader<Uint8Array>[];
 
 beforeEach(async () => {
-  state.active = true; state.keyOwner = 'owner'; state.sessionStatus = 'active'; state.plan = 'pro'; state.failKey = false; state.hold = null; state.idCalls = 0; state.failIdAfter = 0;
+  state.active = true; state.keyOwner = 'owner'; state.sessionStatus = 'active'; state.plan = 'pro'; state.failKey = false; state.hold = null; state.hashCalls = 0; state.idCalls = 0; state.failIdAfter = 0;
   process.env.NEXT_PUBLIC_APP_URL = 'https://app.tulzo.test';
   process.env.STORAGE_SUPABASE_URL = 'https://supabase.invalid.test';
   process.env.CHAT_REALTIME_ANON_KEY = jwt({ role: 'anon' });
@@ -181,6 +181,17 @@ describe('actual routes through a synthetic local WebSocket broker', () => {
     await closed;
     expect(received.filter((item) => item.event === 'phx_join')).toHaveLength(1);
     expect(received.filter((item) => item.event === 'broadcast')).toHaveLength(0);
+  });
+
+  it('does not repeat device auth during device-stream startup before READY', async () => {
+    state.failKey = false;
+    state.hashCalls = 0;
+    const response = await deviceStream(request('/device/stream', { protocol: 2, connectionId: connection }, true));
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    streams.push(reader);
+    expect((await next(reader)).event).toBe('ready');
+    expect(state.hashCalls).toBe(1);
   });
 
   it('accepts a broker ACK with no device subscriber without implying PC presence', async () => {

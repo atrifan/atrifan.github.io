@@ -9,6 +9,7 @@ type Kind = 'viewerStream' | 'viewerRequests' | 'deviceStream' | 'deviceFrames';
 const MAX_LEASE = 5000;
 const date = (time: number) => new Date(time).toISOString();
 const validateUuid = (value: unknown) => { const result = uuid.safeParse(value); if (!result.success) return invalid(); return result.data; };
+type CheckStart = { wall: number; monotonic: number };
 
 async function deadline<T>(signal: AbortSignal, work: Promise<T>): Promise<T> {
   if (signal.aborted) throw new RelayError(504, 'timeout');
@@ -22,9 +23,14 @@ async function deadline<T>(signal: AbortSignal, work: Promise<T>): Promise<T> {
 }
 function live(signal: AbortSignal): void { if (signal.aborted) throw new RelayError(504, 'timeout'); }
 
+function leaseFromCheckStart(start: CheckStart, expiresAt: number): { until: number; monotonicUntil: number } {
+  const duration = Math.min(MAX_LEASE, expiresAt - start.wall);
+  if (duration <= 0 || performance.now() - start.monotonic >= duration || Date.now() >= expiresAt) throw new RelayError(409, 'stream_expired');
+  return { until: start.wall + duration, monotonicUntil: start.monotonic + duration };
+}
+
 async function freshCheck(viewer: Viewer | null, principal: Principal, request: Request, expiresAt: number, signal: AbortSignal): Promise<{ until: number; monotonicUntil: number }> {
-  const start = performance.now();
-  const wall = Date.now();
+  const start = { monotonic: performance.now(), wall: Date.now() };
   if (viewer) {
     await deadline(signal, currentSession(viewer.userId, viewer.sessionId));
     await deadline(signal, ownedDevice(viewer.userId, principal.deviceId));
@@ -32,9 +38,7 @@ async function freshCheck(viewer: Viewer | null, principal: Principal, request: 
     const now = await deadline(signal, deviceAuth(request));
     if (now.userId !== principal.userId || now.deviceId !== principal.deviceId) unauthorized();
   }
-  const duration = Math.min(MAX_LEASE, expiresAt - wall);
-  if (duration <= 0 || performance.now() - start >= duration || Date.now() >= expiresAt) throw new RelayError(409, 'stream_expired');
-  return { until: wall + duration, monotonicUntil: start + duration };
+  return leaseFromCheckStart(start, expiresAt);
 }
 
 function matchesViewer(claim: ViewerClaims, viewer: Viewer): void {
@@ -44,7 +48,15 @@ function matchesViewer(claim: ViewerClaims, viewer: Viewer): void {
 const requestEnvelope = z.object({ protocol: z.literal(2), ownerUserId: z.string(), deviceId: uuid, clientId: uuid, viewerStreamId: uuid, viewerToken: z.string(), viewerExpiresAt: z.string(), authorizedUntil: z.string(), request: z.unknown() }).strict();
 const frameEnvelope = z.object({ protocol: z.literal(2), deviceId: uuid, viewerStreamId: uuid, connectionId: uuid, part: z.unknown() }).strict();
 
-async function stream(request: Request, viewer: Viewer | null, principal: Principal, clientId: string, connectionId: string | null, signal: AbortSignal): Promise<Response> {
+async function stream(
+  request: Request,
+  viewer: Viewer | null,
+  principal: Principal,
+  clientId: string,
+  connectionId: string | null,
+  signal: AbortSignal,
+  startupCheck?: CheckStart,
+): Promise<Response> {
   if (request.headers.get('last-event-id')) throw new RelayError(409, 'resync_required');
   const secret = tokenSecret();
   const config = brokerConfig();
@@ -164,7 +176,10 @@ async function stream(request: Request, viewer: Viewer | null, principal: Princi
   live(signal);
   const iat = Math.floor(Date.now() / 1000);
   expiresAt = (iat + 45) * 1000;
-  const initialLease = await freshCheck(viewer, principal, request, expiresAt, signal);
+  // Device streams are already authenticated before body parse in handle(); reuse that successful
+  // check for the initial lease so READY is not delayed by a duplicate key lookup. The periodic 2s
+  // refresh below still revalidates the current key on every lease extension.
+  const initialLease = startupCheck ? leaseFromCheckStart(startupCheck, expiresAt) : await freshCheck(viewer, principal, request, expiresAt, signal);
   setLease(initialLease);
   live(signal);
   if (closed) throw new RelayError(503, 'broker_unavailable');
@@ -201,6 +216,7 @@ async function stream(request: Request, viewer: Viewer | null, principal: Princi
 
 async function handle(kind: Kind, request: Request, signal: AbortSignal): Promise<Response> {
   const viewer = kind.startsWith('viewer') ? await deadline(signal, viewerAuth()) : null;
+  const startupCheck = viewer ? null : { wall: Date.now(), monotonic: performance.now() };
   const principal = viewer ? null : await deadline(signal, deviceAuth(request));
   if (viewer) checkOrigin(request);
   live(signal);
@@ -216,7 +232,7 @@ async function handle(kind: Kind, request: Request, signal: AbortSignal): Promis
   if (kind === 'deviceStream') {
     const body = bodyObject(raw, ['protocol', 'connectionId']);
     const connection = validateUuid(body.connectionId);
-    return stream(request, null, principal!, connection, connection, signal);
+    return stream(request, null, principal!, connection, connection, signal, startupCheck!);
   }
   const secret = tokenSecret();
   if (kind === 'viewerRequests') {
