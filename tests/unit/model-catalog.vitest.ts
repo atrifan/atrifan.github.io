@@ -9,13 +9,17 @@ import {
   chatModelPrice,
   chatModels,
   fetchVercelListing,
+  imageGenerationModelPrice,
+  imageGenerationModels,
+  imagePriceFromListing,
+  isImageGenerationModel,
   isChatModel,
   modelNotAllowedBody,
   perTokenToPer1M,
   priceFromListing,
   type VercelModel,
 } from '@/src/lib/models/catalog';
-import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, chatBillingMarkup, costForModel } from '@/src/lib/ai-gateway';
+import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, calculateImageCost, chatBillingMarkup, costForModel, imageCostForModel } from '@/src/lib/ai-gateway';
 const snapshot = JSON.parse(readFileSync('tests/fixtures/vercel-models-snapshot.json', 'utf8')) as {
   data: VercelModel[];
 };
@@ -136,6 +140,43 @@ describe('priceFromListing', () => {
   });
 });
 
+describe('image generation models and pricing', () => {
+  const image = (id: string, extra: Partial<VercelModel> = {}): VercelModel => ({
+    id,
+    name: `${id} name`,
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { image: '0.02' },
+    ...extra,
+  });
+
+  it('recognizes image-generation models separately from chat models', () => {
+    expect(isImageGenerationModel(image('spacexai/grok-imagine-image'))).toBe(true);
+    expect(isImageGenerationModel(priced('openai/gpt-4o-mini', { modalities: { input: ['text'], output: ['text'] } }))).toBe(false);
+    expect(isChatModel(image('spacexai/grok-imagine-image'))).toBe(false);
+  });
+
+  it('imageGenerationModels keeps image-generation models only, sorted by id', () => {
+    const ids = imageGenerationModels([
+      image('zeta/z'),
+      priced('alpha/a'),
+      image('alpha/a-image'),
+      priced('mid/m', { modalities: { input: ['text'], output: ['image'] } }),
+    ]).map((m) => m.id);
+    expect(ids).toEqual(['alpha/a-image', 'zeta/z']);
+  });
+
+  it('extracts per-image pricing or token-like pricing from the listing', () => {
+    expect(imagePriceFromListing(image('spacexai/grok-imagine-image'))).toEqual({ image: 0.02 });
+    expect(imagePriceFromListing(image('openai/gpt-image-2', { pricing: { input: '0.000005', output: '0.00003', input_cache_read: '0.00000125' } }))).toEqual({
+      inputPer1M: 5,
+      outputPer1M: 30,
+      cachedInputPer1M: 1.25,
+    });
+    expect(imagePriceFromListing(image('bfl/flux-2-pro', { pricing: {} }))).toEqual({});
+  });
+});
+
 describe('buildCatalog', () => {
   const listing: VercelModel[] = [
     priced('openai/gpt-4o-mini', {
@@ -237,6 +278,12 @@ describe('calculateCost, costForModel and the billing markup', () => {
     expect(e.message).toContain('openai/x');
     expect(e).toBeInstanceOf(Error);
   });
+
+  it('calculateImageCost uses the image price when present, else a token-like fallback', () => {
+    expect(calculateImageCost({ image: 0.02 }, 1)).toBeCloseTo(0.02, 12);
+    expect(calculateImageCost({ image: 0.02 }, 2)).toBeCloseTo(0.04, 12);
+    expect(calculateImageCost({ outputPer1M: 30 }, 1)).toBeCloseTo(0.00003, 12);
+  });
 });
 
 describe('chatModelPrice and costForModel (async, through the cached listing)', () => {
@@ -264,6 +311,23 @@ describe('chatModelPrice and costForModel (async, through the cached listing)', 
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down'); }));
     expect(await chatModelPrice('openai/gpt-4o-mini')).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 });
     expect(await chatModelPrice('vendor/new')).toBeNull();
+  });
+
+  it('prices image-generation models separately from chat models', async () => {
+    __resetModelCatalogCache();
+    vi.stubGlobal('fetch', vi.fn(async () => ok([
+      priced('vendor/new'),
+      {
+        id: 'spacexai/grok-imagine-image',
+        type: 'image',
+        modalities: { input: ['text'], output: ['image'] },
+        pricing: { image: '0.02' },
+      },
+    ])));
+    expect(await imageGenerationModelPrice('spacexai/grok-imagine-image')).toEqual({ image: 0.02 });
+    expect(await imageGenerationModelPrice('vendor/new')).toBeNull();
+    expect(await imageCostForModel('spacexai/grok-imagine-image', 2)).toBeCloseTo(0.04, 12);
+    await expect(imageCostForModel('vendor/new', 1)).rejects.toBeInstanceOf(UnknownModelError);
   });
 });
 

@@ -22,7 +22,13 @@ export interface VercelModel {
   max_tokens?: number | null;
   supported_parameters?: string[];
   modalities?: { input?: string[]; output?: string[] };
-  pricing?: { input?: string; output?: string; input_cache_read?: string };
+  pricing?: {
+    input?: string;
+    output?: string;
+    input_cache_read?: string;
+    image?: string;
+    image_dimension_quality_pricing?: Array<{ size: string; cost: string }>;
+  };
 }
 
 export interface CatalogModel {
@@ -38,6 +44,13 @@ export interface CatalogModel {
 export interface ModelPrice {
   inputPer1M: number;
   outputPer1M: number;
+  cachedInputPer1M?: number;
+}
+
+export interface ImagePrice {
+  image?: number;
+  inputPer1M?: number;
+  outputPer1M?: number;
   cachedInputPer1M?: number;
 }
 
@@ -63,14 +76,45 @@ export function priceFromListing(v: VercelModel): ModelPrice | null {
   return cached === null ? { inputPer1M, outputPer1M } : { inputPer1M, outputPer1M, cachedInputPer1M: cached };
 }
 
+/** Base pricing for image-generation models; some models are priced per image, others with token-like fields. */
+export function imagePriceFromListing(v: VercelModel): ImagePrice | null {
+  const image = typeof v.pricing?.image === 'string' && v.pricing.image.trim() !== '' ? Number(v.pricing.image) : null;
+  const inputPer1M = perTokenToPer1M(v.pricing?.input);
+  const outputPer1M = perTokenToPer1M(v.pricing?.output);
+  const cachedInputPer1M = perTokenToPer1M(v.pricing?.input_cache_read);
+  if (image !== null && Number.isFinite(image) && image >= 0) {
+    return cachedInputPer1M === null
+      ? { image }
+      : { image, cachedInputPer1M };
+  }
+  if (inputPer1M !== null || outputPer1M !== null) {
+    const price: ImagePrice = {};
+    if (inputPer1M !== null) price.inputPer1M = inputPer1M;
+    if (outputPer1M !== null) price.outputPer1M = outputPer1M;
+    if (cachedInputPer1M !== null) price.cachedInputPer1M = cachedInputPer1M;
+    return price;
+  }
+  return v.type === 'image' ? {} : null;
+}
+
 /** A model /api/chat can call: a priced language model, not a -batch variant (those are for the batch API). */
 export function isChatModel(v: VercelModel): boolean {
   return v.type === 'language' && !v.id.endsWith('-batch') && priceFromListing(v) !== null;
 }
 
+/** An image-generation model the dedicated images route may call. */
+export function isImageGenerationModel(v: VercelModel): boolean {
+  return v.type === 'image';
+}
+
 /** The chat models of a listing, sorted by id. */
 export function chatModels(listing: readonly VercelModel[]): VercelModel[] {
   return listing.filter(isChatModel).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** The image-generation models of a listing, sorted by id. */
+export function imageGenerationModels(listing: readonly VercelModel[]): VercelModel[] {
+  return listing.filter(isImageGenerationModel).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 function positiveIntOrNull(n: unknown): number | null {
@@ -158,6 +202,14 @@ export async function chatModelPrice(id: string): Promise<ModelPrice | null> {
   }
   const v = models.find((m) => m.id === id);
   return v ? priceFromListing(v) : null;
+}
+
+/** The base pricing of a model /api/images/generations may call. null for any other model. */
+export async function imageGenerationModelPrice(id: string): Promise<ImagePrice | null> {
+  if (typeof id !== 'string') return null;
+  const models = imageGenerationModels(await fetchVercelListing());
+  const v = models.find((m) => m.id === id);
+  return v ? imagePriceFromListing(v) : null;
 }
 
 /** The /api/chat 400 body for a model that isn't on the allowlist. */

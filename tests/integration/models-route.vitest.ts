@@ -5,12 +5,17 @@ import { req } from './vitest-env';
 /**
  * Contract: GET /api/models passes through every priced chat model in Vercel's gateway listing
  * (marked up by chatBillingMarkup()), with a built-in fallback when the listing is unavailable;
- * POST /api/chat accepts exactly the listed models; GET /api/plugin/config points at /api/models.
+ * POST /api/chat accepts exactly the listed chat models; POST /api/images/generations accepts
+ * image-generation models without widening /api/models; GET /api/plugin/config points at /api/models.
  * No network or database: Supabase is a fake, fetch is stubbed, `ai` is mocked.
  */
 
 type Row = Record<string, unknown>;
-const state = vi.hoisted(() => ({ tables: {} as Record<string, Record<string, unknown>[]> }));
+const state = vi.hoisted(() => ({
+  tables: {} as Record<string, Record<string, unknown>[]>,
+  rpcCalls: [] as Array<{ fn: string; args: unknown }>,
+  insertCalls: [] as Array<{ table: string; values: unknown }>,
+}));
 
 vi.mock('@supabase/supabase-js', () => {
   const resolved = { data: null, error: null };
@@ -32,7 +37,12 @@ vi.mock('@supabase/supabase-js', () => {
       return b;
     };
     for (const m of ['gt', 'gte', 'lt', 'lte']) b[m] = chain;
-    for (const m of ['insert', 'update', 'upsert', 'delete']) {
+    b.insert = (values: unknown) => {
+      writing = true;
+      state.insertCalls.push({ table, values });
+      return b;
+    };
+    for (const m of ['update', 'upsert', 'delete']) {
       b[m] = () => {
         writing = true;
         return b;
@@ -49,7 +59,10 @@ vi.mock('@supabase/supabase-js', () => {
   }
   const client = {
     from: (table: string) => builder(table),
-    rpc: async () => resolved,
+    rpc: async (fn: string, args?: unknown) => {
+      state.rpcCalls.push({ fn, args });
+      return resolved;
+    },
     auth: { getUser: async () => ({ data: { user: null }, error: null }) },
     storage: { from: () => ({ upload: async () => resolved, getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }), send: async () => 'ok', subscribe: () => ({}) }),
@@ -82,7 +95,10 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 const LISTING_URL = 'https://ai-gateway.vercel.sh/v1/models';
+const IMAGE_URL = 'https://ai-gateway.vercel.sh/v1/images/generations';
+const GENERATION_URL = 'https://ai-gateway.vercel.sh/v1/generation?id=';
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
+const IMAGE_MODEL = 'spacexai/grok-imagine-image';
 
 const sha = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const KEYS = {
@@ -165,6 +181,14 @@ const listingData: ListingEntry[] = [
     context_window: 8191,
     pricing: { input: '0.00000002', output: '0.00000002' },
   },
+  {
+    id: IMAGE_MODEL,
+    object: 'model',
+    name: 'Grok Imagine Image',
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { image: '0.02' },
+  },
   { id: 'vendor/no-price', object: 'model', name: 'No price', type: 'language', context_window: 1000 },
   {
     id: 'vendor/output-missing',
@@ -185,13 +209,32 @@ const EXPECTED_IDS = [DEFAULT_MODEL, NEW_MODEL, 'anthropic/claude-test'].sort();
 
 type FetchMode = 'ok' | '500' | 'throw' | 'no-data';
 let fetchMode: FetchMode = 'ok';
-const fetchMock = vi.fn(async (input: unknown) => {
+const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
   if (url.startsWith(LISTING_URL)) {
     if (fetchMode === 'throw') throw new Error('network down');
     if (fetchMode === '500') return new Response('boom', { status: 500 });
     const body = fetchMode === 'no-data' ? { object: 'list' } : { object: 'list', data: listingData };
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  if (url === IMAGE_URL) {
+    const body = JSON.parse(String(init?.body ?? '{}')) as { response_format?: string };
+    const data = body.response_format === 'url'
+      ? [{ url: 'https://cdn.example.test/generated.png' }]
+      : [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB' }];
+    return new Response(JSON.stringify({ created: 1_730_000_000, data }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-vercel-ai-generation-id': 'img_gen_1',
+      },
+    });
+  }
+  if (url.startsWith(GENERATION_URL)) {
+    return new Response(JSON.stringify({ data: { total_cost: '0.02' } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
   }
   return new Response('not found', { status: 404 });
 });
@@ -203,6 +246,7 @@ const listingCalls = () => fetchMock.mock.calls.filter((c) => urlOf(c).startsWit
 /** Gateway calls other than the model listing (i.e. inference). */
 const inferenceCalls = () =>
   fetchMock.mock.calls.filter((c) => urlOf(c).includes('ai-gateway') && !urlOf(c).startsWith(LISTING_URL)).length;
+const imageCalls = () => fetchMock.mock.calls.filter((c) => urlOf(c) === IMAGE_URL);
 
 type Model = {
   id: string;
@@ -218,6 +262,8 @@ type Price = { inputPer1M: number; outputPer1M: number; cachedInputPer1M?: numbe
 beforeEach(async () => {
   vi.resetModules();
   seed();
+  state.rpcCalls = [];
+  state.insertCalls = [];
   fetchMode = 'ok';
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -253,12 +299,22 @@ const byId = (models: Model[], id: string) => {
 };
 const markup = async () => (await import('@/src/lib/ai-gateway')).chatBillingMarkup() as number;
 
-const chat = async (body: Record<string, unknown>) => {
+const chat = async (body: Record<string, unknown>, headers: Record<string, string> = { 'x-api-key': KEYS.plus, 'content-type': 'application/json' }) => {
   const { POST } = await import('@/app/api/chat/route');
   return POST(
     req('/api/chat', {
       method: 'POST',
-      headers: { 'x-api-key': KEYS.plus, 'content-type': 'application/json' },
+      headers,
+      body: JSON.stringify(body),
+    }),
+  );
+};
+const images = async (body: Record<string, unknown>, headers: Record<string, string> = { 'x-api-key': KEYS.plus, 'content-type': 'application/json' }) => {
+  const { POST } = await import('@/app/api/images/generations/route');
+  return POST(
+    req('/api/images/generations', {
+      method: 'POST',
+      headers,
       body: JSON.stringify(body),
     }),
   );
@@ -523,5 +579,113 @@ describe('POST /api/chat: models follow the listing', () => {
     const model = (calls.at(-1)![0] as { model?: unknown }).model;
     const modelId = typeof model === 'string' ? model : (model as { modelId?: string } | undefined)?.modelId;
     expect(modelId).toBe(DEFAULT_MODEL);
+  });
+});
+
+describe('POST /api/images/generations', () => {
+  it('401 with an error string when x-api-key is missing', async () => {
+    const res = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow' }, { 'content-type': 'application/json' });
+    expect(res.status).toBe(401);
+    expect(typeof (await res.json()).error).toBe('string');
+    expect(imageCalls()).toHaveLength(0);
+  });
+
+  it('matches /api/chat for an inactive key and for insufficient balance before any upstream image call', async () => {
+    const inactiveImage = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow' }, { 'x-api-key': KEYS.inactive, 'content-type': 'application/json' });
+    const inactiveChat = await chat({ messages: hi, model: DEFAULT_MODEL, stream: false }, { 'x-api-key': KEYS.inactive, 'content-type': 'application/json' });
+    expect(inactiveImage.status).toBe(inactiveChat.status);
+    expect(await inactiveImage.json()).toEqual(await inactiveChat.json());
+    expect(imageCalls()).toHaveLength(0);
+
+    state.tables.user_budgets = state.tables.user_budgets.map((row) => row.user_id === 'u-plus'
+      ? { ...row, remaining_balance: 0 }
+      : row);
+    const brokeImage = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow' });
+    const brokeChat = await chat({ messages: hi, model: DEFAULT_MODEL, stream: false });
+    expect(brokeImage.status).toBe(brokeChat.status);
+    expect(await brokeImage.json()).toEqual(await brokeChat.json());
+    expect(imageCalls()).toHaveLength(0);
+  });
+
+  it('accepts an image-generation model while GET /api/models stays chat-only, and returns OpenAI Images JSON', async () => {
+    const listed = (await listModels()).map((m) => m.id);
+    expect(listed).not.toContain(IMAGE_MODEL);
+
+    const res = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow', response_format: 'b64_json' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.created).toBe(1_730_000_000);
+    expect(body).not.toHaveProperty('choices');
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(typeof body.data[0].b64_json).toBe('string');
+  });
+
+  it('forwards the OpenAI-style request body, including optional image params', async () => {
+    const providerOptions = { openai: { style: 'vivid' } };
+    const res = await images({
+      model: IMAGE_MODEL,
+      prompt: 'studio photo of a ceramic mug',
+      n: 2,
+      size: '1024x1024',
+      response_format: 'b64_json',
+      quality: 'high',
+      background: 'transparent',
+      moderation: 'low',
+      output_format: 'png',
+      output_compression: 60,
+      providerOptions,
+    });
+    expect(res.status).toBe(200);
+    expect(imageCalls()).toHaveLength(1);
+    const init = imageCalls()[0]?.[1] as RequestInit;
+    const forwarded = JSON.parse(String(init.body));
+    expect(forwarded).toEqual({
+      model: IMAGE_MODEL,
+      prompt: 'studio photo of a ceramic mug',
+      n: 2,
+      size: '1024x1024',
+      response_format: 'b64_json',
+      quality: 'high',
+      background: 'transparent',
+      moderation: 'low',
+      output_format: 'png',
+      output_compression: 60,
+      providerOptions,
+    });
+  });
+
+  it('400 when stream=true because image generations are non-streaming JSON only', async () => {
+    const res = await images({ model: IMAGE_MODEL, prompt: 'a lighthouse at dusk', stream: true });
+    expect(res.status).toBe(400);
+    expect(typeof (await res.json()).error).toBe('string');
+    expect(imageCalls()).toHaveLength(0);
+  });
+
+  it('400 model_not_allowed for a chat-only model, without an upstream image call', async () => {
+    const res = await images({ model: DEFAULT_MODEL, prompt: 'a lighthouse at dusk' });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe('model_not_allowed');
+    expect(body.model).toBe(DEFAULT_MODEL);
+    expect(typeof body.error).toBe('string');
+    expect(imageCalls()).toHaveLength(0);
+  });
+
+  it('bills a successful image generation call like /api/chat does', async () => {
+    const res = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow' });
+    expect(res.status).toBe(200);
+    expect(state.rpcCalls).toContainEqual({ fn: 'deduct_user_balance', args: { target_user_id: 'u-plus', amount: 0.026 } });
+    expect(state.insertCalls).toContainEqual({
+      table: 'paid_usage_analytics',
+      values: {
+        user_id: 'u-plus',
+        device_session_id: 'k-plus',
+        api_key_id: 'k-plus',
+        provider: 'spacexai',
+        model_name: IMAGE_MODEL,
+        tokens_used: 0,
+        cost_deducted: 0.026,
+      },
+    });
   });
 });
