@@ -102,8 +102,13 @@ const CHAT_COMPLETIONS_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions';
 const GENERATION_URL = 'https://ai-gateway.vercel.sh/v1/generation?id=';
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const IMAGE_MODEL = 'spacexai/grok-imagine-image';
-const LANGUAGE_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
-const EDIT_MODEL = 'openai/gpt-image-2';
+const GENERATION_ONLY_IMAGE_MODEL = 'recraft/recraft-v4.1-flash';
+const SECOND_EDIT_IMAGE_MODEL = 'bfl/flux-kontext-pro';
+const THIRD_EDIT_IMAGE_MODEL = 'microsoft/mai-image-2.6-flash';
+const LANGUAGE_IMAGE_MODEL = 'quiverai/arrow-2';
+const BLOCKED_LANGUAGE_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
+const EDIT_MODEL = 'openai/gpt-image-1-mini';
+const BLOCKED_EDIT_MODEL = 'openai/gpt-image-2';
 
 const sha = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const KEYS = {
@@ -192,23 +197,63 @@ const listingData: ListingEntry[] = [
     name: 'Grok Imagine Image',
     type: 'image',
     modalities: { input: ['text'], output: ['image'] },
-    pricing: { image: '0.02' },
+      pricing: { image: '0.02' },
+  },
+  {
+    id: GENERATION_ONLY_IMAGE_MODEL,
+    object: 'model',
+    name: 'Recraft V4.1 Flash',
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { image: '0.007' },
+  },
+  {
+    id: SECOND_EDIT_IMAGE_MODEL,
+    object: 'model',
+    name: 'FLUX.1 Kontext Pro',
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { image: '0.04' },
+  },
+  {
+    id: THIRD_EDIT_IMAGE_MODEL,
+    object: 'model',
+    name: 'MAI-Image-2.6-Flash',
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { input: '0.00000175', output: '0.000019' },
   },
   {
     id: EDIT_MODEL,
     object: 'model',
-    name: 'GPT Image 2',
+    name: 'GPT Image 1 Mini',
     type: 'image',
-    modalities: { input: ['text', 'image'], output: ['image'] },
-    pricing: { image: '0.02' },
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { input: '0.000002', output: '0.000008', input_cache_read: '0.0000002' },
   },
   {
     id: LANGUAGE_IMAGE_MODEL,
+    object: 'model',
+    name: 'Arrow 2',
+    type: 'language',
+    modalities: { input: ['text', 'image'], output: ['text', 'image'] },
+    pricing: { input: '0.000004', output: '0.00002', input_cache_read: '0.0000004' },
+  },
+  {
+    id: BLOCKED_LANGUAGE_IMAGE_MODEL,
     object: 'model',
     name: 'Gemini 3.1 Flash Image Preview',
     type: 'language',
     modalities: { input: ['text', 'image'], output: ['text', 'image'] },
     pricing: { input: '0.0000004', output: '0.0000012', input_cache_read: '0.0000001' },
+  },
+  {
+    id: BLOCKED_EDIT_MODEL,
+    object: 'model',
+    name: 'GPT Image 2',
+    type: 'image',
+    modalities: { input: ['text'], output: ['image'] },
+    pricing: { input: '0.000005', output: '0.00003', input_cache_read: '0.00000125' },
   },
   { id: 'vendor/no-price', object: 'model', name: 'No price', type: 'language', context_window: 1000 },
   {
@@ -226,10 +271,19 @@ const listingData: ListingEntry[] = [
     pricing: { input: 'n/a', output: 'n/a' },
   },
 ];
-const EXPECTED_IDS = [DEFAULT_MODEL, LANGUAGE_IMAGE_MODEL, NEW_MODEL, 'anthropic/claude-test'].sort();
+const EXPECTED_IDS = [
+  DEFAULT_MODEL,
+  LANGUAGE_IMAGE_MODEL,
+  BLOCKED_LANGUAGE_IMAGE_MODEL,
+  NEW_MODEL,
+  'anthropic/claude-test',
+].sort();
 
 type FetchMode = 'ok' | '500' | 'throw' | 'no-data';
 let fetchMode: FetchMode = 'ok';
+let imageGenerationFailure: { status: number; body: Record<string, unknown> } | null = null;
+let imageEditFailure: { status: number; body: Record<string, unknown> } | null = null;
+let imageChatFailure: { status: number; body: Record<string, unknown> } | null = null;
 const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
   if (url.startsWith(LISTING_URL)) {
@@ -239,6 +293,12 @@ const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   }
   if (url === IMAGE_URL) {
+    if (imageGenerationFailure) {
+      return new Response(JSON.stringify(imageGenerationFailure.body), {
+        status: imageGenerationFailure.status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     const body = JSON.parse(String(init?.body ?? '{}')) as { response_format?: string };
     const data = body.response_format === 'url'
       ? [{ url: 'https://cdn.example.test/generated.png' }]
@@ -252,6 +312,12 @@ const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
     });
   }
   if (url === IMAGE_EDITS_URL) {
+    if (imageEditFailure) {
+      return new Response(JSON.stringify(imageEditFailure.body), {
+        status: imageEditFailure.status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     const body = JSON.parse(String(init?.body ?? '{}')) as { response_format?: string };
     const data = body.response_format === 'url'
       ? [{ url: 'https://cdn.example.test/edited.png' }]
@@ -265,6 +331,12 @@ const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
     });
   }
   if (url === CHAT_COMPLETIONS_URL) {
+    if (imageChatFailure) {
+      return new Response(JSON.stringify(imageChatFailure.body), {
+        status: imageChatFailure.status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({
       created: 1_730_000_100,
       choices: [{
@@ -351,6 +423,9 @@ beforeEach(async () => {
   state.rpcCalls = [];
   state.insertCalls = [];
   fetchMode = 'ok';
+  imageGenerationFailure = null;
+  imageEditFailure = null;
+  imageChatFailure = null;
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('AI_GATEWAY_API_KEY', 'test-gateway-key');
@@ -420,6 +495,24 @@ const listImageModels = async (headers: Record<string, string>) => {
   return GET(req('/api/models/images', { headers }));
 };
 const hi = [{ role: 'user', content: 'hi' }];
+const RESTRICTED_MODEL_ERROR = {
+  error: {
+    message: 'Free tier users do not have access to this model. Upgrade to paid credits at https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dtop-up for unrestricted access.',
+    type: 'no_providers_available',
+    param: {
+      statusCode: 403,
+      name: 'RestrictedModelsError',
+      message: 'Free tier users do not have access to this model. Upgrade to paid credits at https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dtop-up for unrestricted access.',
+    },
+  },
+  providerMetadata: {
+    gateway: {
+      routing: {
+        originalModelId: EDIT_MODEL,
+      },
+    },
+  },
+};
 
 describe('GET /api/models: auth', () => {
   it('401 with an error string when the Authorization header is missing', async () => {
@@ -683,29 +776,21 @@ describe('GET /api/models/images', () => {
 
     const body = await res.json();
     expect(body.object).toBe('list');
-    expect(body.data.map((m: ImageModel) => m.id)).toEqual([LANGUAGE_IMAGE_MODEL, EDIT_MODEL, IMAGE_MODEL]);
-    expect(body.data[0]).toMatchObject({
-      type: 'language',
-      id: LANGUAGE_IMAGE_MODEL,
-      name: 'Gemini 3.1 Flash Image Preview',
-      pricing: {
-        input_per_1m: 0.52,
-        output_per_1m: 1.56,
-        cached_input_per_1m: 0.13,
-      },
-      input_modalities: ['text', 'image'],
-      output_modalities: ['text', 'image'],
-      response_formats: ['b64_json', 'url'],
-      supports_stream: false,
-      supports_edits: false,
-      edits: null,
-    });
-    expect(body.data[1]).toMatchObject({
+    expect(body.data.map((m: ImageModel) => m.id)).toEqual([
+      SECOND_EDIT_IMAGE_MODEL,
+      THIRD_EDIT_IMAGE_MODEL,
+      EDIT_MODEL,
+      LANGUAGE_IMAGE_MODEL,
+      GENERATION_ONLY_IMAGE_MODEL,
+      IMAGE_MODEL,
+    ]);
+    const models = body.data as ImageModel[];
+    expect(models.find((m) => m.id === SECOND_EDIT_IMAGE_MODEL)).toMatchObject({
       type: 'image',
-      id: EDIT_MODEL,
-      name: 'GPT Image 2',
-      pricing: { image_per_image: 0.026 },
-      input_modalities: ['text', 'image'],
+      id: SECOND_EDIT_IMAGE_MODEL,
+      name: 'FLUX.1 Kontext Pro',
+      pricing: { image_per_image: 0.052 },
+      input_modalities: ['text'],
       output_modalities: ['image'],
       response_formats: ['b64_json', 'url'],
       supports_stream: false,
@@ -718,7 +803,78 @@ describe('GET /api/models/images', () => {
         multipart: false,
       },
     });
-    expect(body.data[2]).toMatchObject({
+    expect(models.find((m) => m.id === THIRD_EDIT_IMAGE_MODEL)).toMatchObject({
+      type: 'image',
+      id: THIRD_EDIT_IMAGE_MODEL,
+      name: 'MAI-Image-2.6-Flash',
+      pricing: {
+        input_per_1m: 2.275,
+        output_per_1m: 24.7,
+      },
+      input_modalities: ['text'],
+      output_modalities: ['image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: true,
+      edits: {
+        content_types: ['application/json'],
+        image_sources: ['https', 'data'],
+        file_id: false,
+        mask: false,
+        multipart: false,
+      },
+    });
+    expect(models.find((m) => m.id === EDIT_MODEL)).toMatchObject({
+      type: 'image',
+      id: EDIT_MODEL,
+      name: 'GPT Image 1 Mini',
+      pricing: {
+        input_per_1m: 2.6,
+        output_per_1m: 10.4,
+        cached_input_per_1m: 0.26,
+      },
+      input_modalities: ['text'],
+      output_modalities: ['image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: true,
+      edits: {
+        content_types: ['application/json'],
+        image_sources: ['https', 'data'],
+        file_id: false,
+        mask: false,
+        multipart: false,
+      },
+    });
+    expect(models.find((m) => m.id === LANGUAGE_IMAGE_MODEL)).toMatchObject({
+      type: 'language',
+      id: LANGUAGE_IMAGE_MODEL,
+      name: 'Arrow 2',
+      pricing: {
+        input_per_1m: 5.2,
+        output_per_1m: 26,
+        cached_input_per_1m: 0.52,
+      },
+      input_modalities: ['text', 'image'],
+      output_modalities: ['text', 'image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: false,
+      edits: null,
+    });
+    expect(models.find((m) => m.id === GENERATION_ONLY_IMAGE_MODEL)).toMatchObject({
+      type: 'image',
+      id: GENERATION_ONLY_IMAGE_MODEL,
+      name: 'Recraft V4.1 Flash',
+      pricing: { image_per_image: 0.0091 },
+      input_modalities: ['text'],
+      output_modalities: ['image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: false,
+      edits: null,
+    });
+    expect(models.find((m) => m.id === IMAGE_MODEL)).toMatchObject({
       type: 'image',
       id: IMAGE_MODEL,
       name: 'Grok Imagine Image',
@@ -727,13 +883,20 @@ describe('GET /api/models/images', () => {
       output_modalities: ['image'],
       response_formats: ['b64_json', 'url'],
       supports_stream: false,
-      supports_edits: false,
-      edits: null,
+      supports_edits: true,
+      edits: {
+        content_types: ['application/json'],
+        image_sources: ['https', 'data'],
+        file_id: false,
+        mask: false,
+        multipart: false,
+      },
     });
 
     const chatIds = (await listModels()).map((m) => m.id);
     expect(chatIds).not.toContain(IMAGE_MODEL);
     expect(chatIds).not.toContain(EDIT_MODEL);
+    expect(chatIds).not.toContain(GENERATION_ONLY_IMAGE_MODEL);
     expect(chatIds).toContain(LANGUAGE_IMAGE_MODEL);
   });
 
@@ -741,16 +904,26 @@ describe('GET /api/models/images', () => {
     const res = await listImageModels(bearer(KEYS.plus));
     expect(res.status).toBe(200);
     const body = await res.json();
-    const gemini = (body.data as ImageModel[]).find((m) => m.id === LANGUAGE_IMAGE_MODEL)!;
+    const arrow = (body.data as ImageModel[]).find((m) => m.id === LANGUAGE_IMAGE_MODEL)!;
     const edit = (body.data as ImageModel[]).find((m) => m.id === EDIT_MODEL)!;
+    const recraft = (body.data as ImageModel[]).find((m) => m.id === GENERATION_ONLY_IMAGE_MODEL)!;
     const grok = (body.data as ImageModel[]).find((m) => m.id === IMAGE_MODEL)!;
-    expect(gemini.pricing).toEqual({
-      input_per_1m: 0.52,
-      output_per_1m: 1.56,
-      cached_input_per_1m: 0.13,
+    expect(arrow.pricing).toEqual({
+      input_per_1m: 5.2,
+      output_per_1m: 26,
+      cached_input_per_1m: 0.52,
     });
-    expect(edit.pricing).toEqual({ image_per_image: 0.026 });
+    expect(edit.pricing).toEqual({ input_per_1m: 2.6, output_per_1m: 10.4, cached_input_per_1m: 0.26 });
+    expect(recraft.pricing).toEqual({ image_per_image: 0.0091 });
     expect(grok.pricing).toEqual({ image_per_image: 0.026 });
+  });
+
+  it('omits blocked-but-public Gemini and GPT Image 2 entries from the Tulzo image catalog', async () => {
+    const res = await listImageModels(bearer(KEYS.plus));
+    expect(res.status).toBe(200);
+    const ids = (await res.json()).data.map((m: ImageModel) => m.id);
+    expect(ids).not.toContain(BLOCKED_LANGUAGE_IMAGE_MODEL);
+    expect(ids).not.toContain(BLOCKED_EDIT_MODEL);
   });
 });
 
@@ -868,6 +1041,71 @@ describe('POST /api/images/generations', () => {
     });
   });
 
+  it('returns the exact upstream JSON/status when the image endpoint is restricted for this gateway key', async () => {
+    imageGenerationFailure = {
+      status: 403,
+      body: {
+        ...RESTRICTED_MODEL_ERROR,
+        providerMetadata: { gateway: { routing: { originalModelId: GENERATION_ONLY_IMAGE_MODEL } } },
+      },
+    };
+
+    const res = await images({ model: GENERATION_ONLY_IMAGE_MODEL, prompt: 'a red fox in snow' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      ...RESTRICTED_MODEL_ERROR,
+      providerMetadata: { gateway: { routing: { originalModelId: GENERATION_ONLY_IMAGE_MODEL } } },
+    });
+  });
+
+  it('returns the exact upstream JSON/status when the chat-completions image path is restricted for this gateway key', async () => {
+    imageChatFailure = {
+      status: 403,
+      body: {
+        ...RESTRICTED_MODEL_ERROR,
+        providerMetadata: { gateway: { routing: { originalModelId: LANGUAGE_IMAGE_MODEL } } },
+      },
+    };
+
+    const res = await images({ model: LANGUAGE_IMAGE_MODEL, prompt: 'a watercolor fox in snow' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      ...RESTRICTED_MODEL_ERROR,
+      providerMetadata: { gateway: { routing: { originalModelId: LANGUAGE_IMAGE_MODEL } } },
+    });
+  });
+
+  it('normalizes inline SVG from a language-image chat completion into image data', async () => {
+    const baseFetch = fetchMock.getMockImplementation()!;
+    fetchMock
+      .mockImplementationOnce((input: unknown, init?: RequestInit) => baseFetch(input, init))
+      .mockImplementationOnce(async () => new Response(JSON.stringify({
+      created: 1_730_000_222,
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: '```svg\n<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#00f"/></svg>\n```',
+        },
+        finish_reason: 'stop',
+      }],
+    }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-vercel-ai-generation-id': 'chat_img_gen_1',
+      },
+    }));
+
+    const res = await images({ model: LANGUAGE_IMAGE_MODEL, prompt: 'draw a blue square' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.created).toBe(1_730_000_222);
+    expect(body.data).toHaveLength(1);
+    expect(typeof body.data[0].url).toBe('string');
+    expect(body.data[0].url).toMatch(/^data:image\/svg\+xml;base64,/);
+  });
+
   it('forwards the OpenAI-style request body, including optional image params', async () => {
     const providerOptions = { openai: { style: 'vivid' } };
     const res = await images({
@@ -935,6 +1173,19 @@ describe('POST /api/images/generations', () => {
     expect(imageChatCalls()).toHaveLength(0);
   });
 
+  it('400 model_not_allowed for blocked public image models that Tulzo does not expose on this free-tier key', async () => {
+    for (const model of [BLOCKED_LANGUAGE_IMAGE_MODEL, BLOCKED_EDIT_MODEL, 'openai/definitely-not-real']) {
+      const res = await images({ model, prompt: 'a lighthouse at dusk' });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.code).toBe('model_not_allowed');
+      expect(body.model).toBe(model);
+      expect(body.models_url).toBe('/api/models/images');
+    }
+    expect(imageCalls()).toHaveLength(0);
+    expect(imageChatCalls()).toHaveLength(0);
+  });
+
   it('bills a successful image generation call like /api/chat does', async () => {
     const res = await images({ model: IMAGE_MODEL, prompt: 'a red fox in snow' });
     expect(res.status).toBe(200);
@@ -968,7 +1219,7 @@ describe('POST /api/images/generations', () => {
         user_id: 'u-plus',
         device_session_id: 'k-plus',
         api_key_id: 'k-plus',
-        provider: 'google',
+        provider: 'quiverai',
         model_name: LANGUAGE_IMAGE_MODEL,
         tokens_used: 0,
         cost_deducted: 0.000002,
@@ -1023,6 +1274,27 @@ describe('POST /api/images/edits', () => {
     });
   });
 
+  it('returns the exact upstream JSON/status when image edits are restricted for this gateway key', async () => {
+    imageEditFailure = {
+      status: 403,
+      body: {
+        ...RESTRICTED_MODEL_ERROR,
+        providerMetadata: { gateway: { routing: { originalModelId: EDIT_MODEL } } },
+      },
+    };
+
+    const res = await edits({
+      model: EDIT_MODEL,
+      prompt: 'Turn this into pixel art',
+      images: [{ image_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB' }],
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      ...RESTRICTED_MODEL_ERROR,
+      providerMetadata: { gateway: { routing: { originalModelId: EDIT_MODEL } } },
+    });
+  });
+
   it('rejects missing model, prompt, or source images before any upstream edit call', async () => {
     const missingPrompt = await edits({ model: EDIT_MODEL, images: [{ image_url: 'https://cdn.example.test/source.png' }] });
     expect(missingPrompt.status).toBe(400);
@@ -1061,7 +1333,7 @@ describe('POST /api/images/edits', () => {
   });
 
   it('rejects non-allowlisted or non-edit models with model_not_allowed pointing at /api/models/images', async () => {
-    for (const model of [DEFAULT_MODEL, IMAGE_MODEL, LANGUAGE_IMAGE_MODEL, 'openai/definitely-not-real']) {
+    for (const model of [DEFAULT_MODEL, LANGUAGE_IMAGE_MODEL, GENERATION_ONLY_IMAGE_MODEL, BLOCKED_EDIT_MODEL, BLOCKED_LANGUAGE_IMAGE_MODEL, 'openai/definitely-not-real']) {
       const res = await edits({ model, prompt: 'x', images: [{ image_url: 'https://cdn.example.test/source.png' }] });
       expect(res.status).toBe(400);
       const body = await res.json();

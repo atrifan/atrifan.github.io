@@ -28,6 +28,42 @@ export class UnknownModelError extends Error {
   }
 }
 
+/** A non-OK response from the AI Gateway, preserving its JSON body for route handlers. */
+export class GatewayRequestError extends Error {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.name = 'GatewayRequestError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function gatewayRequestError(action: string, res: Response): Promise<GatewayRequestError> {
+  const raw = await res.text();
+
+  try {
+    const parsed = raw ? JSON.parse(raw) as unknown : null;
+    if (isRecord(parsed)) {
+      return new GatewayRequestError(`${action} failed: ${res.status}`, res.status, parsed);
+    }
+  } catch {
+    // Fall through to the JSON wrapper below.
+  }
+
+  return new GatewayRequestError(`${action} failed: ${res.status}`, res.status, {
+    error: `${action} failed`,
+    upstream_status: res.status,
+    details: raw || res.statusText || 'AI Gateway returned a non-JSON error response.',
+  });
+}
+
 /** Cost in USD at a model's base (pre-markup) price. */
 export function calculateCost(price: ModelPrice, inputTokens: number, outputTokens: number): number {
   return (inputTokens / 1_000_000) * price.inputPer1M + (outputTokens / 1_000_000) * price.outputPer1M;
@@ -125,6 +161,29 @@ function dataUriBase64(url: unknown): string | null {
   return match?.[1] ?? null;
 }
 
+function base64EncodeUtf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function extractSvgFromChatContent(content: unknown): string | null {
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.map((part) => {
+          if (typeof part === 'string') return part;
+          if (!part || typeof part !== 'object') return '';
+          const textPart = (part as { text?: unknown }).text;
+          return typeof textPart === 'string' ? textPart : '';
+        }).join('\n')
+      : null;
+  if (!text) return null;
+  const match = text.match(/<svg[\s\S]*?<\/svg>/i);
+  return match?.[0] ?? null;
+}
+
 function normalizeChatImageData(images: unknown): Array<{ b64_json?: string; url?: string }> {
   if (!Array.isArray(images)) return [];
   const normalized: Array<{ b64_json?: string; url?: string }> = [];
@@ -158,6 +217,16 @@ function normalizeChatImageData(images: unknown): Array<{ b64_json?: string; url
   return normalized;
 }
 
+function normalizeChatImageMessage(message: { images?: unknown; content?: unknown } | undefined): Array<{ b64_json?: string; url?: string }> {
+  const directImages = normalizeChatImageData(message?.images);
+  if (directImages.length > 0) return directImages;
+
+  const svg = extractSvgFromChatContent(message?.content);
+  if (!svg) return [];
+
+  return [{ url: `data:image/svg+xml;base64,${base64EncodeUtf8(svg)}` }];
+}
+
 /** OpenAI-compatible image generation through the AI Gateway images endpoint. */
 export async function generateImage(body: ImageGenerationBody, userId: string, sessionId: string): Promise<ImageGenerationResponse> {
   const res = await fetch(`${AI_GATEWAY_BASE_URL}/images/generations`, {
@@ -171,7 +240,7 @@ export async function generateImage(body: ImageGenerationBody, userId: string, s
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`Image generation failed: ${res.status}`);
+    throw await gatewayRequestError('Image generation', res);
   }
   const json = await res.json() as { created?: unknown; data?: unknown };
   return {
@@ -194,7 +263,7 @@ export async function editImage(body: ImageEditBody, userId: string, sessionId: 
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`Image edit failed: ${res.status}`);
+    throw await gatewayRequestError('Image edit', res);
   }
   const json = await res.json() as { created?: unknown; data?: unknown };
   return {
@@ -229,7 +298,7 @@ export async function generateImageViaChatCompletions(
     }),
   });
   if (!res.ok) {
-    throw new Error(`Image generation failed: ${res.status}`);
+    throw await gatewayRequestError('Image generation', res);
   }
 
   const json = await res.json() as {
@@ -239,7 +308,7 @@ export async function generateImageViaChatCompletions(
   const message = Array.isArray(json.choices) ? json.choices[0]?.message : undefined;
   return {
     created: typeof json.created === 'number' ? json.created : Date.now(),
-    data: normalizeChatImageData(message?.images),
+    data: normalizeChatImageMessage(message),
     generationId: res.headers.get('x-vercel-ai-generation-id'),
   };
 }

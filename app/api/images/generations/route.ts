@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import {
+  GatewayRequestError,
   generateImage,
   generateImageViaChatCompletions,
   imageCostForModel,
@@ -61,33 +62,39 @@ export async function POST(request: NextRequest) {
     return json(400, modelNotAllowedBodyFor(model, IMAGE_MODELS_URL));
   }
 
-  const result = offeredModel.type === 'language'
-    ? await generateImageViaChatCompletions({
-        model,
-        prompt,
-        ...(typeof n === 'number' ? { n } : {}),
-        ...(typeof size === 'string' ? { size } : {}),
-        ...(response_format === 'b64_json' || response_format === 'url' ? { response_format } : {}),
-        ...(providerOptions && typeof providerOptions === 'object' ? { providerOptions: providerOptions as Record<string, unknown> } : {}),
-      }, userId, sessionId)
-    : await generateImage({
-        model,
-        prompt,
-        ...(typeof n === 'number' ? { n } : {}),
-        ...(typeof size === 'string' ? { size } : {}),
-        ...(response_format === 'b64_json' || response_format === 'url' ? { response_format } : {}),
-        ...(typeof quality === 'string' ? { quality } : {}),
-        ...(typeof background === 'string' ? { background } : {}),
-        ...(typeof moderation === 'string' ? { moderation } : {}),
-        ...(typeof output_format === 'string' ? { output_format } : {}),
-        ...(typeof output_compression === 'number' ? { output_compression } : {}),
-        ...(providerOptions && typeof providerOptions === 'object' ? { providerOptions: providerOptions as Record<string, unknown> } : {}),
-      }, userId, sessionId);
+  try {
+    const result = offeredModel.type === 'language'
+      ? await generateImageViaChatCompletions({
+          model,
+          prompt,
+          ...(typeof n === 'number' ? { n } : {}),
+          ...(typeof size === 'string' ? { size } : {}),
+          ...(response_format === 'b64_json' || response_format === 'url' ? { response_format } : {}),
+          ...(providerOptions && typeof providerOptions === 'object' ? { providerOptions: providerOptions as Record<string, unknown> } : {}),
+        }, userId, sessionId)
+      : await generateImage({
+          model,
+          prompt,
+          ...(typeof n === 'number' ? { n } : {}),
+          ...(typeof size === 'string' ? { size } : {}),
+          ...(response_format === 'b64_json' || response_format === 'url' ? { response_format } : {}),
+          ...(typeof quality === 'string' ? { quality } : {}),
+          ...(typeof background === 'string' ? { background } : {}),
+          ...(typeof moderation === 'string' ? { moderation } : {}),
+          ...(typeof output_format === 'string' ? { output_format } : {}),
+          ...(typeof output_compression === 'number' ? { output_compression } : {}),
+          ...(providerOptions && typeof providerOptions === 'object' ? { providerOptions: providerOptions as Record<string, unknown> } : {}),
+        }, userId, sessionId);
 
-  const estimated = await imageCostForModel(model, typeof n === 'number' ? n : 1).catch(() => 0);
-  await billImageRouteRequest({ supabase, userId, sessionId, apiKeyId, model, estimatedCost: estimated, generationId: result.generationId });
+    const estimated = await imageCostForModel(model, typeof n === 'number' ? n : 1).catch(() => 0);
+    await billImageRouteRequest({ supabase, userId, sessionId, apiKeyId, model, estimatedCost: estimated, generationId: result.generationId });
 
-  return new Response(JSON.stringify({ created: result.created, data: result.data }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+    return new Response(JSON.stringify({ created: result.created, data: result.data }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    if (error instanceof GatewayRequestError) return json(error.status, error.body);
+    console.error('[images/generations] failed:', error instanceof Error ? error.message : String(error));
+    return json(500, { error: 'image_generation_failed' });
+  }
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { GATEWAY_MODELS, DEFAULT_CHAT_MODEL } from '@/src/config/gateway-models';
 import {
+  TULZO_IMAGE_MODEL_REGISTRY,
   IMAGE_MODELS_URL,
   MODELS_URL,
   TULZO_IMAGE_EDIT_MODEL_REGISTRY,
@@ -19,6 +20,7 @@ import {
   imageGenerationModels,
   imagePriceFromListing,
   isImageGenerationModel,
+  isTulzoImageGenerationModel,
   isTulzoImageEditModel,
   isChatModel,
   modelNotAllowedBody,
@@ -179,36 +181,53 @@ describe('image generation models and pricing', () => {
     const ids = imageGenerationModels([
       image('zeta/z'),
       priced('alpha/a'),
-      image('openai/gpt-image-2'),
+      image('openai/gpt-image-1-mini'),
       image('alpha/a-image'),
-      languageImage('mid/m-image'),
+      languageImage('quiverai/arrow-2'),
       priced('mid/m', { modalities: { input: ['text'], output: ['image'] } }),
+      image('spacexai/grok-imagine-image'),
     ]).map((m) => m.id);
-    expect(ids).toEqual(['alpha/a-image', 'mid/m', 'mid/m-image', 'openai/gpt-image-2', 'zeta/z']);
+    expect(ids).toEqual(['openai/gpt-image-1-mini', 'quiverai/arrow-2', 'spacexai/grok-imagine-image']);
   });
 
-  it('uses an explicit Tulzo allowlist for edit-capable models', () => {
-    expect(Object.keys(TULZO_IMAGE_EDIT_MODEL_REGISTRY)).toEqual(['openai/gpt-image-2']);
-    expect(isTulzoImageEditModel('openai/gpt-image-2')).toBe(true);
-    expect(isTulzoImageEditModel('spacexai/grok-imagine-image')).toBe(false);
-    expect(imageEditSupportForModel('openai/gpt-image-2')).toEqual({
+  it('uses exact Tulzo registries for image generation and edit-capable models', () => {
+    expect(Object.keys(TULZO_IMAGE_MODEL_REGISTRY)).toEqual([
+      'bfl/flux-kontext-pro',
+      'microsoft/mai-image-2.6-flash',
+      'openai/gpt-image-1-mini',
+      'quiverai/arrow-2',
+      'recraft/recraft-v4.1-flash',
+      'spacexai/grok-imagine-image',
+    ]);
+    expect(Object.keys(TULZO_IMAGE_EDIT_MODEL_REGISTRY)).toEqual([
+      'bfl/flux-kontext-pro',
+      'microsoft/mai-image-2.6-flash',
+      'openai/gpt-image-1-mini',
+      'spacexai/grok-imagine-image',
+    ]);
+    expect(isTulzoImageGenerationModel('quiverai/arrow-2')).toBe(true);
+    expect(isTulzoImageGenerationModel('google/gemini-3.1-flash-image-preview')).toBe(false);
+    expect(isTulzoImageEditModel('openai/gpt-image-1-mini')).toBe(true);
+    expect(isTulzoImageEditModel('quiverai/arrow-2')).toBe(false);
+    expect(imageEditSupportForModel('openai/gpt-image-1-mini')).toEqual({
       content_types: ['application/json'],
       image_sources: ['https', 'data'],
       file_id: false,
       mask: false,
       multipart: false,
     });
-    expect(imageEditSupportForModel('spacexai/grok-imagine-image')).toBeNull();
+    expect(imageEditSupportForModel('quiverai/arrow-2')).toBeNull();
   });
 
   it('imageEditModels keeps only allowlisted image-edit models from the listing', () => {
     const ids = imageEditModels([
       image('spacexai/grok-imagine-image'),
-      image('openai/gpt-image-2'),
-      languageImage('google/gemini-image-preview'),
+      image('openai/gpt-image-1-mini'),
+      image('bfl/flux-kontext-pro'),
+      languageImage('quiverai/arrow-2'),
       priced('openai/gpt-4o-mini'),
     ]).map((m) => m.id);
-    expect(ids).toEqual(['openai/gpt-image-2']);
+    expect(ids).toEqual(['bfl/flux-kontext-pro', 'openai/gpt-image-1-mini', 'spacexai/grok-imagine-image']);
   });
 
   it('extracts per-image pricing or token-like pricing from the listing', () => {
@@ -228,27 +247,16 @@ describe('image generation models and pricing', () => {
 
   it('buildImageCatalog keeps upstream type truthful and applies Tulzo markup from the listing', () => {
     expect(buildImageCatalog([
-      image('openai/gpt-image-2'),
-      languageImage('google/gemini-image-preview'),
+      image('openai/gpt-image-1-mini', { pricing: { input: '0.000005', output: '0.000008', input_cache_read: '0.0000005' } }),
+      languageImage('quiverai/arrow-2'),
+      image('recraft/recraft-v4.1-flash', { pricing: { image: '0.007' } }),
       image('spacexai/grok-imagine-image'),
     ], 1.3)).toEqual([
       {
-        type: 'language',
-        id: 'google/gemini-image-preview',
-        name: 'google/gemini-image-preview name',
-        pricing: { input_per_1m: 1.3, output_per_1m: 2.6, cached_input_per_1m: 0.65 },
-        input_modalities: ['text', 'image'],
-        output_modalities: ['text', 'image'],
-        response_formats: ['b64_json', 'url'],
-        supports_stream: false,
-        supports_edits: false,
-        edits: null,
-      },
-      {
         type: 'image',
-        id: 'openai/gpt-image-2',
-        name: 'openai/gpt-image-2 name',
-        pricing: { image_per_image: 0.026 },
+        id: 'openai/gpt-image-1-mini',
+        name: 'openai/gpt-image-1-mini name',
+        pricing: { input_per_1m: 6.5, output_per_1m: 10.4, cached_input_per_1m: 0.65 },
         input_modalities: ['text'],
         output_modalities: ['image'],
         response_formats: ['b64_json', 'url'],
@@ -263,6 +271,30 @@ describe('image generation models and pricing', () => {
         },
       },
       {
+        type: 'language',
+        id: 'quiverai/arrow-2',
+        name: 'quiverai/arrow-2 name',
+        pricing: { input_per_1m: 1.3, output_per_1m: 2.6, cached_input_per_1m: 0.65 },
+        input_modalities: ['text', 'image'],
+        output_modalities: ['text', 'image'],
+        response_formats: ['b64_json', 'url'],
+        supports_stream: false,
+        supports_edits: false,
+        edits: null,
+      },
+      {
+        type: 'image',
+        id: 'recraft/recraft-v4.1-flash',
+        name: 'recraft/recraft-v4.1-flash name',
+        pricing: { image_per_image: 0.0091 },
+        input_modalities: ['text'],
+        output_modalities: ['image'],
+        response_formats: ['b64_json', 'url'],
+        supports_stream: false,
+        supports_edits: false,
+        edits: null,
+      },
+      {
         type: 'image',
         id: 'spacexai/grok-imagine-image',
         name: 'spacexai/grok-imagine-image name',
@@ -271,8 +303,14 @@ describe('image generation models and pricing', () => {
         output_modalities: ['image'],
         response_formats: ['b64_json', 'url'],
         supports_stream: false,
-        supports_edits: false,
-        edits: null,
+        supports_edits: true,
+        edits: {
+          content_types: ['application/json'],
+          image_sources: ['https', 'data'],
+          file_id: false,
+          mask: false,
+          multipart: false,
+        },
       },
     ]);
   });
@@ -425,13 +463,13 @@ describe('chatModelPrice and costForModel (async, through the cached listing)', 
     vi.stubGlobal('fetch', vi.fn(async () => ok([
       priced('vendor/new'),
       {
-        id: 'openai/gpt-image-2',
+        id: 'openai/gpt-image-1-mini',
         type: 'image',
-        modalities: { input: ['text', 'image'], output: ['image'] },
-        pricing: { image: '0.02' },
+        modalities: { input: ['text'], output: ['image'] },
+        pricing: { input: '0.000002', output: '0.000008', input_cache_read: '0.0000002' },
       },
       {
-        id: 'google/gemini-image-preview',
+        id: 'quiverai/arrow-2',
         type: 'language',
         modalities: { input: ['text', 'image'], output: ['text', 'image'] },
         pricing: { input: '0.000001', output: '0.000002', input_cache_read: '0.0000005' },
@@ -442,15 +480,22 @@ describe('chatModelPrice and costForModel (async, through the cached listing)', 
         modalities: { input: ['text'], output: ['image'] },
         pricing: { image: '0.02' },
       },
+      {
+        id: 'recraft/recraft-v4.1-flash',
+        type: 'image',
+        modalities: { input: ['text'], output: ['image'] },
+        pricing: { image: '0.007' },
+      },
     ])));
     expect(await imageGenerationModelPrice('spacexai/grok-imagine-image')).toEqual({ image: 0.02 });
-    expect(await imageGenerationModelPrice('google/gemini-image-preview')).toEqual({ inputPer1M: 1, outputPer1M: 2, cachedInputPer1M: 0.5 });
-    expect(await imageEditModelPrice('openai/gpt-image-2')).toEqual({ image: 0.02 });
+    expect(await imageGenerationModelPrice('quiverai/arrow-2')).toEqual({ inputPer1M: 1, outputPer1M: 2, cachedInputPer1M: 0.5 });
+    expect(await imageGenerationModelPrice('recraft/recraft-v4.1-flash')).toEqual({ image: 0.007 });
+    expect(await imageEditModelPrice('openai/gpt-image-1-mini')).toEqual({ inputPer1M: 2, outputPer1M: 8, cachedInputPer1M: 0.2 });
     expect(await imageGenerationModelPrice('vendor/new')).toBeNull();
-    expect(await imageEditModelPrice('google/gemini-image-preview')).toBeNull();
+    expect(await imageEditModelPrice('quiverai/arrow-2')).toBeNull();
     expect(await imageCostForModel('spacexai/grok-imagine-image', 2)).toBeCloseTo(0.04, 12);
-    expect(await imageCostForModel('google/gemini-image-preview', 2)).toBeCloseTo(0.000004, 12);
-    expect(await imageEditCostForModel('openai/gpt-image-2', 2)).toBeCloseTo(0.04, 12);
+    expect(await imageCostForModel('quiverai/arrow-2', 2)).toBeCloseTo(0.000004, 12);
+    expect(await imageEditCostForModel('openai/gpt-image-1-mini', 2)).toBeCloseTo(0.000016, 12);
     await expect(imageCostForModel('vendor/new', 1)).rejects.toBeInstanceOf(UnknownModelError);
     await expect(imageEditCostForModel('vendor/new', 1)).rejects.toBeInstanceOf(UnknownModelError);
   });

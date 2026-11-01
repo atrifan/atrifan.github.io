@@ -1,9 +1,9 @@
 /**
  * The model catalog behind GET /api/models, GET /api/models/images and /api/chat: a pass-through
  * of Vercel AI Gateway's public listing. Every priced language model (except -batch variants) is
- * offered for chat, and every image-capable model Tulzo proxies is offered for the image catalog,
- * with Vercel's price × Tulzo's markup. When the listing can't be fetched and nothing is cached,
- * the built-in list in src/config/gateway-models.ts stands in for chat.
+ * offered for chat, while the image catalog is an explicit exact-id subset of image-capable models
+ * Tulzo currently proxies, with Vercel's price × Tulzo's markup. When the listing can't be fetched
+ * and nothing is cached, the built-in list in src/config/gateway-models.ts stands in for chat.
  * Edge-safe (fetch only).
  */
 import { GATEWAY_MODELS, type GatewayModel } from '../../config/gateway-models.ts';
@@ -83,6 +83,18 @@ export interface ImagePrice {
   cachedInputPer1M?: number;
 }
 
+interface TulzoImageModelRegistryEntry {
+  edits: ImageEditSupport | null;
+}
+
+const JSON_ONLY_IMAGE_EDIT_SUPPORT = {
+  content_types: ['application/json'],
+  image_sources: ['https', 'data'],
+  file_id: false,
+  mask: false,
+  multipart: false,
+} satisfies ImageEditSupport;
+
 /** Round to 6 decimals: per-1M prices without binary float noise (0.15, not 0.15000000000000002). */
 function round6(n: number): number {
   return Math.round(n * 1e6) / 1e6;
@@ -133,26 +145,38 @@ export function isImageGenerationModel(v: VercelModel): boolean {
     && imagePriceFromListing(v) !== null;
 }
 
+/** Exact image model ids Tulzo currently proxies on the shared image surface. */
+export const TULZO_IMAGE_MODEL_REGISTRY = {
+  'bfl/flux-kontext-pro': { edits: JSON_ONLY_IMAGE_EDIT_SUPPORT },
+  'microsoft/mai-image-2.6-flash': { edits: JSON_ONLY_IMAGE_EDIT_SUPPORT },
+  'openai/gpt-image-1-mini': { edits: JSON_ONLY_IMAGE_EDIT_SUPPORT },
+  'quiverai/arrow-2': { edits: null },
+  'recraft/recraft-v4.1-flash': { edits: null },
+  'spacexai/grok-imagine-image': { edits: JSON_ONLY_IMAGE_EDIT_SUPPORT },
+} satisfies Record<string, TulzoImageModelRegistryEntry>;
+
+/** Exact image model ids Tulzo currently proxies on POST /api/images/edits. */
+export const TULZO_IMAGE_EDIT_MODEL_REGISTRY: Record<string, ImageEditSupport> = Object.fromEntries(
+  Object.entries(TULZO_IMAGE_MODEL_REGISTRY)
+    .flatMap(([id, support]) => support.edits ? [[id, support.edits]] : []),
+);
+
+/** True only for exact ids Tulzo is willing to proxy on its image routes. */
+export function isTulzoImageGenerationModel(id: string): boolean {
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(TULZO_IMAGE_MODEL_REGISTRY, id);
+}
+
 /** The chat models of a listing, sorted by id. */
 export function chatModels(listing: readonly VercelModel[]): VercelModel[] {
   return listing.filter(isChatModel).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** The image-generation models of a listing, sorted by id. */
+/** The exact image-generation models Tulzo proxies from a listing, sorted by id. */
 export function imageGenerationModels(listing: readonly VercelModel[]): VercelModel[] {
-  return listing.filter(isImageGenerationModel).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return listing
+    .filter((v) => isImageGenerationModel(v) && isTulzoImageGenerationModel(v.id))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
-
-/** Explicit Tulzo allowlist for POST /api/images/edits. */
-export const TULZO_IMAGE_EDIT_MODEL_REGISTRY = {
-  'openai/gpt-image-2': {
-    content_types: ['application/json'],
-    image_sources: ['https', 'data'],
-    file_id: false,
-    mask: false,
-    multipart: false,
-  },
-} satisfies Record<string, ImageEditSupport>;
 
 /** True only for exact ids Tulzo is willing to proxy on POST /api/images/edits. */
 export function isTulzoImageEditModel(id: string): boolean {

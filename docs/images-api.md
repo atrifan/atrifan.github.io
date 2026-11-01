@@ -43,12 +43,12 @@ Auth works like `GET /api/plugin/config` and `GET /api/models`:
   "data": [
     {
       "type": "language",
-      "id": "google/gemini-3.1-flash-image-preview",
-      "name": "Gemini 3.1 Flash Image Preview",
+      "id": "quiverai/arrow-2",
+      "name": "Arrow 2",
       "pricing": {
-        "input_per_1m": 0.52,
-        "output_per_1m": 1.56,
-        "cached_input_per_1m": 0.13
+        "input_per_1m": 5.2,
+        "output_per_1m": 26,
+        "cached_input_per_1m": 0.52
       },
       "input_modalities": ["text", "image"],
       "output_modalities": ["text", "image"],
@@ -59,10 +59,14 @@ Auth works like `GET /api/plugin/config` and `GET /api/models`:
     },
     {
       "type": "image",
-      "id": "openai/gpt-image-2",
-      "name": "GPT Image 2",
-      "pricing": { "image_per_image": 0.026 },
-      "input_modalities": ["text", "image"],
+      "id": "openai/gpt-image-1-mini",
+      "name": "GPT Image 1 Mini",
+      "pricing": {
+        "input_per_1m": 2.6,
+        "output_per_1m": 10.4,
+        "cached_input_per_1m": 0.26
+      },
+      "input_modalities": ["text"],
       "output_modalities": ["image"],
       "response_formats": ["b64_json", "url"],
       "supports_stream": false,
@@ -96,8 +100,9 @@ Auth works like `GET /api/plugin/config` and `GET /api/models`:
 Notes:
 
 - discovery pricing is always listing-derived: Vercel's model listing plus Tulzo's markup
-- Tulzo does **not** infer edit support loosely from `type` or `input_modalities`
-- edit support is an explicit Tulzo allowlist
+- Tulzo does **not** infer image-route support loosely from `type` or `input_modalities`
+- generation and edit support are explicit exact-id Tulzo allowlists
+- image model discovery may intentionally omit public AI Gateway image models that are not usable on Tulzo's current gateway key
 
 Entries are sorted by `id`. The response may be cached by the client for 5 minutes (`Cache-Control: private, max-age=300`).
 
@@ -165,6 +170,8 @@ Each item in `data` contains either:
 
 For language models with image output, Tulzo calls the upstream chat-completions API and normalizes the result back to `{ created, data }`. When the upstream returns data URIs or base64-like image payloads, Tulzo prefers `b64_json`.
 
+For some language-image models, the upstream may return inline SVG in `message.content` instead of `message.images`. Tulzo normalizes that into a `data:image/svg+xml;base64,...` URL item in `data`.
+
 The generation response does **not** include pricing fields.
 
 ## `POST /api/images/edits`
@@ -199,7 +206,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "openai/gpt-image-2",
+  "model": "openai/gpt-image-1-mini",
   "prompt": "Add a watercolor effect to this image",
   "images": [
     { "image_url": "https://example.com/source.png" }
@@ -212,7 +219,7 @@ Data URL example:
 
 ```json
 {
-  "model": "openai/gpt-image-2",
+  "model": "openai/gpt-image-1-mini",
   "prompt": "Turn this into pixel art",
   "images": [
     { "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..." }
@@ -264,6 +271,7 @@ Common responses:
 | `mask` provided | edits | 400 | `mask is not supported...` |
 | non-JSON content type | edits | 415 | `Unsupported media type...` |
 | model not in `GET /api/models/images` for that route | generations, edits | 400 | `model_not_allowed` body |
+| upstream image provider denies the model on Tulzo's current gateway key | generations, edits | exact upstream status | exact upstream JSON body |
 
 `model_not_allowed` points at `/api/models/images`, not `/api/models`.
 
