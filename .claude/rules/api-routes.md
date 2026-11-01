@@ -13,15 +13,18 @@ in the foundation cleanup). Which surface serves which route is decided by `SURF
 A route that needs an env var it doesn't have answers 500 `{ error: 'server_misconfigured' }`
 (`src/lib/misconfigured.ts`); never fall back to a hard-coded secret or host.
 
-## Chat (`/api/chat`) and models (`/api/models`)
+## Chat (`/api/chat`) and model discovery (`/api/models`, `/api/models/images`)
 `chat`: POST, streaming; the assistant's chat endpoint (hub). A pass-through to Vercel AI Gateway: `model`
 must be a Vercel chat model (priced language model, not `-batch`; default `openai/gpt-4o-mini`), otherwise
 400 `model_not_allowed` with `models_url`. Billed at the gateway's cost × `chatBillingMarkup()`
 (`CREDIT_MARKUP`, default 1.3). `models`: GET, Bearer API key (same rules as `plugin/config`): every
-Vercel chat model with context window, output limit, capabilities and the billed per-1M price (Vercel's
-listing cached 1h; the built-in list in `src/config/gateway-models.ts` when it's unreachable).
-See `docs/models-api.md`. Route handlers use `serviceSupabase()` (`src/lib/service-supabase.ts`), never the
-unset `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` names alone.
+Vercel chat model with `type: "language"`, context window, output limit, capabilities and the billed
+per-1M price (Vercel's listing cached 1h; the built-in list in `src/config/gateway-models.ts` when it's
+unreachable). `models/images`: GET, Bearer API key: every image-generation model Tulzo currently exposes
+through `POST /api/images/generations`, with `type: "image"`, billed pricing, supported response formats,
+and `supports_stream: false`. See `docs/models-api.md` and `docs/images-api.md`. Route handlers use
+`serviceSupabase()` (`src/lib/service-supabase.ts`), never the unset `NEXT_PUBLIC_SUPABASE_URL` /
+`SUPABASE_SERVICE_ROLE_KEY` names alone.
 
 ## Job room (`/api/contracts/`)
 Contract parties only (404 unknown, 403 not a party); served on gigs and the hub. `GET /` (mine),

@@ -110,7 +110,7 @@ After login, native-host calls Tulzo endpoints using the API key for ongoing ope
 │                                                                           │
 │  STARTUP:                                                                │
 │  ① GET /api/oauth/plugin/verify      → is key valid? plan?              │
-│  ② GET /api/plugin/config            → quotas, guardrails, custom rules │
+│  ② GET /api/plugin/config            → quotas, guardrails, discovery URLs, custom rules │
 │                                                                           │
 │  DURING OPERATION:                                                       │
 │  ③ POST /api/plugin/query            → RAG lookup (knowledge, rules)    │
@@ -119,7 +119,7 @@ After login, native-host calls Tulzo endpoints using the API key for ongoing ope
 │                                                                           │
 │  PERIODIC (hourly):                                                      │
 │  ④ GET /api/oauth/plugin/verify      → re-check plan still valid        │
-│  ⑤ GET /api/plugin/config            → refresh guardrails if changed    │
+│  ⑤ GET /api/plugin/config            → refresh guardrails/discovery URLs │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,6 +128,8 @@ After login, native-host calls Tulzo endpoints using the API key for ongoing ope
 ```json
 {
   "plan": "pro",
+  "models_url": "/api/models",
+  "image_models_url": "/api/models/images",
   "quotas": {
     "requests_per_hour": 100,
     "concurrent_sessions": 5,
@@ -151,6 +153,9 @@ After login, native-host calls Tulzo endpoints using the API key for ongoing ope
   ]
 }
 ```
+
+The native-host should read `models_url` and `image_models_url` from this response instead of hard-coding
+the chat and image discovery endpoints.
 
 ### RAG Query (`/api/plugin/query`)
 
@@ -218,11 +223,14 @@ interface TulzoCredentials {
 }
 
 interface TulzoConfig {
-  plan: "pro" | "plus"
+  plan: "pro" | "plus" | "super"
+  models_url: string
+  image_models_url: string
   quotas: {
     requests_per_hour: number
     concurrent_sessions: number
     scheduled_tasks: number
+    skill_storage_mb: number
     max_page_actions_per_task: number
   }
   guardrails: {
@@ -231,8 +239,12 @@ interface TulzoConfig {
     max_retries_per_step: number
     timeout_per_action_ms: number
     allow_file_download: boolean
+    allow_screenshot_capture: boolean
+    allow_form_submission: boolean
+    allow_login_automation: boolean
   }
   custom_rules: string[]
+  user_id: string
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────
@@ -276,6 +288,8 @@ export function getPlan(): string | null
 // fetchConfig()
 // GET ${TULZO_URL}/api/plugin/config
 // Headers: { Authorization: "Bearer ${api_key}" }
+// Read plan, quotas, guardrails, custom_rules, user_id,
+// plus models_url (chat catalog) and image_models_url (image catalog)
 // Cache locally for 1 hour
 
 // queryRAG(query, ragName?)
@@ -328,7 +342,7 @@ async function boot() {
     }
   }
 
-  // Fetch config (quotas, guardrails)
+  // Fetch config (quotas, guardrails, model discovery URLs)
   const config = await fetchConfig()
   process.stderr.write(`[native-host] Plan: ${config.plan}, ${config.quotas.requests_per_hour} req/hr\n`)
 
@@ -514,7 +528,10 @@ $ node bin/cli.js start
 |----------|------|---------|
 | `GET /api/oauth/plugin/authorize` | Clerk session | Login flow — opens in browser, redirects API key to localhost callback |
 | `GET /api/oauth/plugin/verify` | Bearer API key | Validate key, return plan + limits |
-| `GET /api/plugin/config` | Bearer API key | Full config: quotas, guardrails, custom rules from RAG |
+| `GET /api/plugin/config` | Bearer API key | Full config: quotas, guardrails, custom rules from RAG, and discovery URLs for chat/image catalogs |
+| `GET /api/models` | Bearer API key | Chat model catalog for `POST /api/chat` (`type: "language"`, Tulzo-priced fields) |
+| `GET /api/models/images` | Bearer API key | Image model catalog for `POST /api/images/generations` (`type: "image"`, Tulzo-priced fields) |
+| `POST /api/images/generations` | `x-api-key` | Image generation route for the ids listed by `GET /api/models/images` |
 | `POST /api/plugin/query` | Bearer API key | Query user's vector store (RAG) for knowledge/rules |
 | `GET /api/usage/stats` | Clerk session | Dashboard usage stats (for control panel UI) |
 

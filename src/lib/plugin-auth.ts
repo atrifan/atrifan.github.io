@@ -9,8 +9,9 @@ export interface PluginKey {
 }
 
 /**
- * Bearer API-key auth for the native host's routes (/api/plugin/config, /api/models): an active
- * key by SHA-256 hash; 401 when missing, unknown or revoked; 403 plan_required on the free plan.
+ * Bearer API-key auth for the native host's discovery/config routes (/api/plugin/config,
+ * /api/models, /api/models/images): an active key by SHA-256 hash; 401 when missing, unknown or
+ * revoked; 403 plan_required on the free plan.
  */
 export async function authenticatePluginKey(req: NextRequest, supabase: SupabaseClient): Promise<PluginKey | NextResponse> {
   const authHeader = req.headers.get('authorization');

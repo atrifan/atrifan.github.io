@@ -6,11 +6,13 @@ alwaysApply: false
 
 # AI Configuration
 
-The managed gateway (`/api/chat`, `/api/models`, gigs spec builder and steering) is a pass-through to
-Vercel AI Gateway's model listing, priced at Vercel's price × `CREDIT_MARKUP` (`src/lib/models/catalog.ts`,
-`chatModelPrice` / `costForModel`; see `docs/models-api.md`). `src/config/gateway-models.ts` is the fallback
-list when the listing is unreachable. `src/config/ai-tokens.config.ts` still holds the plan quotas and the older model
-table used by the native `/api/mcp` LLM tool in `src/config/tool-handlers.ts`.
+The managed gateway (`/api/chat`, `/api/models`, `/api/models/images`, gigs spec builder and steering)
+is a pass-through to Vercel AI Gateway's model listing, priced at Vercel's price × `CREDIT_MARKUP`
+(`src/lib/models/catalog.ts`, `chatModelPrice` / `imageGenerationModelPrice`, `costForModel` /
+`imageCostForModel`; see `docs/models-api.md` and `docs/images-api.md`). `src/config/gateway-models.ts`
+is the fallback list when the listing is unreachable for chat. `src/config/ai-tokens.config.ts` still
+holds the plan quotas and the older model table used by the native `/api/mcp` LLM tool in
+`src/config/tool-handlers.ts`.
 
 ```ts
 export const AI_MODELS; export const EMBEDDING_MODELS; export const TOKEN_QUOTAS;

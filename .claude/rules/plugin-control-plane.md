@@ -13,8 +13,9 @@ Tulzo API key; the control panel observes and manages devices, usage, and instal
 
 `GET /api/oauth/plugin/authorize?callback_port=&state=` → Clerk sign-in → redirect to
 `http://localhost:<port>/callback?api_key=&plan=&user_id=&state=`. The assistant then calls
-`GET /api/oauth/plugin/verify` (Bearer) and `GET /api/plugin/config` (plan, quotas, guardrails) on
-startup and periodically. `POST /api/plugin/report` sinks device heartbeats.
+`GET /api/oauth/plugin/verify` (Bearer) and `GET /api/plugin/config` (plan, quotas, guardrails,
+chat/image discovery URLs) on startup and periodically. `POST /api/plugin/report` sinks device
+heartbeats.
 
 ## API keys
 
