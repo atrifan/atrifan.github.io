@@ -3,7 +3,8 @@ import { GatewayRequestError, editImage, imageEditCostForModel } from '@/src/lib
 import { IMAGE_MODELS_URL, imageEditModelPrice, modelNotAllowedBodyFor } from '@/src/lib/models/catalog';
 import { authenticateImageRouteRequest, billImageRouteRequest, json } from '@/src/lib/image-route';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 type JsonEditImage = { image_url?: unknown; file_id?: unknown };
 

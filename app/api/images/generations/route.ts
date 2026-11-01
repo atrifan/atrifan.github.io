@@ -13,7 +13,8 @@ import {
 } from '@/src/lib/models/catalog';
 import { authenticateImageRouteRequest, billImageRouteRequest, json } from '@/src/lib/image-route';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateImageRouteRequest(request);
