@@ -1,9 +1,10 @@
 # Models API (`GET /api/models`)
 
-Every chat model the Vercel AI Gateway offers, as callable through the Tulzo managed gateway
-(`POST /api/chat`), with each model's context window, output limit, capabilities and the price Tulzo
-bills. The gateway is a pass-through: when Vercel adds a model, it appears here and `/api/chat` accepts
-it without a Tulzo change. The native host can read this list instead of shipping its own.
+Every **chat** model the Vercel AI Gateway offers, as callable through the Tulzo managed gateway
+(`POST /api/chat`), with each model's context window, output limit, capabilities, `type`, and the price Tulzo
+bills. The gateway is a pass-through: when Vercel adds a chat model, it appears here and `/api/chat`
+accepts it without a Tulzo change. The native host can read this list instead of shipping its own.
+Image-generation discovery is separate; see `docs/images-api.md`.
 
 ## Request
 
@@ -21,8 +22,14 @@ Auth works like `GET /api/plugin/config`:
 | Free plan | 403 | `{ "error": "plan_required" }` |
 | Pro, Plus, Super | 200 | the list below |
 
-`GET /api/plugin/config` returns `"models_url": "/api/models"`, so the host can discover the path
-from config instead of hard-coding it.
+## Discovery
+
+`GET /api/plugin/config` returns:
+
+- `models_url: "/api/models"`
+- `image_models_url: "/api/models/images"`
+
+`models_url` is the **chat model catalog only**. `/api/models` does not list image-only models.
 
 ## Response
 
@@ -31,6 +38,7 @@ from config instead of hard-coding it.
   "object": "list",
   "data": [
     {
+      "type": "language",
       "id": "openai/gpt-4o-mini",
       "name": "GPT-4o mini",
       "context_window": 128000,
@@ -45,6 +53,7 @@ from config instead of hard-coding it.
 
 | Field | Meaning |
 |---|---|
+| `type` | Always `"language"` on this route. |
 | `id` | The value to send as `model` to `POST /api/chat`. Exact, case-sensitive. |
 | `name` | Display name. |
 | `context_window` | Max input tokens, from Vercel's listing. `null` when Vercel doesn't report it or the listing is unavailable. |
@@ -87,6 +96,18 @@ HTTP 400
   "models_url": "/api/models"
 }
 ```
+
+## Related endpoint: Images API
+
+Image-generation discovery and execution are separate from chat:
+
+- discovery: `GET /api/models/images`
+- execution: `POST /api/images/generations`
+- edits: `POST /api/images/edits`
+
+See `docs/images-api.md` for that contract.
+
+Some language models may appear in both catalogs: `/api/models` because they are chat models, and `/api/models/images` because they can also produce images. Their upstream `type` remains `"language"` on both routes.
 
 ## The fallback list
 

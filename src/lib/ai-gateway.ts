@@ -3,7 +3,7 @@
  * Edge-safe (fetch only).
  */
 import { createOpenAI } from '@ai-sdk/openai';
-import { chatModelPrice, imageGenerationModelPrice, type ImagePrice, type ModelPrice } from './models/catalog.ts';
+import { chatModelPrice, imageEditModelPrice, imageGenerationModelPrice, type ImagePrice, type ModelPrice } from './models/catalog.ts';
 import { creditMarkupFromEnv } from '../config/qa.config.ts';
 
 // The documented AI Gateway host. The old gateway.ai.vercel.com closed the TLS handshake without a
@@ -59,6 +59,13 @@ export async function imageCostForModel(modelId: string, count: number): Promise
   return calculateImageCost(price, count);
 }
 
+/** Base cost in USD for one image-edit call. Throws UnknownModelError for a model Tulzo won't proxy. */
+export async function imageEditCostForModel(modelId: string, count: number): Promise<number> {
+  const price = await imageEditModelPrice(modelId);
+  if (!price) throw new UnknownModelError(modelId);
+  return calculateImageCost(price, count);
+}
+
 /**
  * The multiplier /api/chat applies to a call's cost before billing it: CREDIT_MARKUP (default 1.3),
  * for account keys and QA review keys alike. /api/models lists prices with the same function, so the
@@ -88,6 +95,69 @@ export interface ImageGenerationResponse {
   generationId: string | null;
 }
 
+export interface ImageEditBody {
+  model: string;
+  prompt: string;
+  images: Array<{ image_url: string }>;
+  n?: number;
+  size?: string;
+  response_format?: 'b64_json' | 'url';
+  quality?: string;
+  background?: string;
+  moderation?: string;
+  output_format?: string;
+  output_compression?: number;
+  providerOptions?: Record<string, unknown>;
+}
+
+export interface ImageCapableChatGenerationBody {
+  model: string;
+  prompt: string;
+  n?: number;
+  size?: string;
+  response_format?: 'b64_json' | 'url';
+  providerOptions?: Record<string, unknown>;
+}
+
+function dataUriBase64(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const match = /^data:[^;]+;base64,(.+)$/i.exec(url);
+  return match?.[1] ?? null;
+}
+
+function normalizeChatImageData(images: unknown): Array<{ b64_json?: string; url?: string }> {
+  if (!Array.isArray(images)) return [];
+  const normalized: Array<{ b64_json?: string; url?: string }> = [];
+  for (const image of images) {
+    const entry = image as {
+      b64_json?: unknown;
+      base64?: unknown;
+      image_base64?: unknown;
+      image_url?: { url?: unknown };
+    } | null | undefined;
+    const inlineBase64 = typeof entry?.b64_json === 'string'
+      ? entry.b64_json
+      : typeof entry?.base64 === 'string'
+        ? entry.base64
+        : typeof entry?.image_base64 === 'string'
+          ? entry.image_base64
+          : null;
+    if (inlineBase64 && inlineBase64.length > 0) {
+      normalized.push({ b64_json: inlineBase64 });
+      continue;
+    }
+    const url = entry?.image_url?.url;
+    if (typeof url !== 'string' || url.length === 0) continue;
+    const b64 = dataUriBase64(url);
+    if (b64) {
+      normalized.push({ b64_json: b64 });
+    } else {
+      normalized.push({ url });
+    }
+  }
+  return normalized;
+}
+
 /** OpenAI-compatible image generation through the AI Gateway images endpoint. */
 export async function generateImage(body: ImageGenerationBody, userId: string, sessionId: string): Promise<ImageGenerationResponse> {
   const res = await fetch(`${AI_GATEWAY_BASE_URL}/images/generations`, {
@@ -107,6 +177,69 @@ export async function generateImage(body: ImageGenerationBody, userId: string, s
   return {
     created: typeof json.created === 'number' ? json.created : Date.now(),
     data: Array.isArray(json.data) ? json.data as Array<{ b64_json?: string; url?: string }> : [],
+    generationId: res.headers.get('x-vercel-ai-generation-id'),
+  };
+}
+
+/** OpenAI-compatible image edits through the AI Gateway images endpoint. */
+export async function editImage(body: ImageEditBody, userId: string, sessionId: string): Promise<ImageGenerationResponse> {
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/images/edits`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY!}`,
+      'Content-Type': 'application/json',
+      'x-vercel-ai-user-id': userId,
+      'x-vercel-ai-tag': sessionId,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Image edit failed: ${res.status}`);
+  }
+  const json = await res.json() as { created?: unknown; data?: unknown };
+  return {
+    created: typeof json.created === 'number' ? json.created : Date.now(),
+    data: Array.isArray(json.data) ? json.data as Array<{ b64_json?: string; url?: string }> : [],
+    generationId: res.headers.get('x-vercel-ai-generation-id'),
+  };
+}
+
+/** Image generation through chat completions for language models with image output. */
+export async function generateImageViaChatCompletions(
+  body: ImageCapableChatGenerationBody,
+  userId: string,
+  sessionId: string,
+): Promise<ImageGenerationResponse> {
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY!}`,
+      'Content-Type': 'application/json',
+      'x-vercel-ai-user-id': userId,
+      'x-vercel-ai-tag': sessionId,
+    },
+    body: JSON.stringify({
+      model: body.model,
+      messages: [{ role: 'user', content: body.prompt }],
+      modalities: ['text', 'image'],
+      stream: false,
+      ...(typeof body.n === 'number' ? { n: body.n } : {}),
+      ...(typeof body.size === 'string' ? { size: body.size } : {}),
+      ...(body.providerOptions && typeof body.providerOptions === 'object' ? { providerOptions: body.providerOptions } : {}),
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Image generation failed: ${res.status}`);
+  }
+
+  const json = await res.json() as {
+    created?: unknown;
+    choices?: Array<{ message?: { images?: unknown } }>;
+  };
+  const message = Array.isArray(json.choices) ? json.choices[0]?.message : undefined;
+  return {
+    created: typeof json.created === 'number' ? json.created : Date.now(),
+    data: normalizeChatImageData(message?.images),
     generationId: res.headers.get('x-vercel-ai-generation-id'),
   };
 }

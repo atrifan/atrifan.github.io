@@ -2,24 +2,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { GATEWAY_MODELS, DEFAULT_CHAT_MODEL } from '@/src/config/gateway-models';
 import {
+  IMAGE_MODELS_URL,
   MODELS_URL,
+  TULZO_IMAGE_EDIT_MODEL_REGISTRY,
   VERCEL_MODELS_URL,
   __resetModelCatalogCache,
   buildCatalog,
+  buildImageCatalog,
   chatModelPrice,
   chatModels,
   fetchVercelListing,
+  imageEditModelPrice,
+  imageEditModels,
+  imageEditSupportForModel,
   imageGenerationModelPrice,
   imageGenerationModels,
   imagePriceFromListing,
   isImageGenerationModel,
+  isTulzoImageEditModel,
   isChatModel,
   modelNotAllowedBody,
+  modelNotAllowedBodyFor,
   perTokenToPer1M,
   priceFromListing,
   type VercelModel,
 } from '@/src/lib/models/catalog';
-import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, calculateImageCost, chatBillingMarkup, costForModel, imageCostForModel } from '@/src/lib/ai-gateway';
+import { AI_GATEWAY_BASE_URL, UnknownModelError, calculateCost, calculateImageCost, chatBillingMarkup, costForModel, imageCostForModel, imageEditCostForModel } from '@/src/lib/ai-gateway';
 const snapshot = JSON.parse(readFileSync('tests/fixtures/vercel-models-snapshot.json', 'utf8')) as {
   data: VercelModel[];
 };
@@ -141,6 +149,15 @@ describe('priceFromListing', () => {
 });
 
 describe('image generation models and pricing', () => {
+  const languageImage = (id: string, extra: Partial<VercelModel> = {}): VercelModel => ({
+    id,
+    name: `${id} name`,
+    type: 'language',
+    modalities: { input: ['text', 'image'], output: ['text', 'image'] },
+    pricing: { input: '0.000001', output: '0.000002', input_cache_read: '0.0000005' },
+    ...extra,
+  });
+
   const image = (id: string, extra: Partial<VercelModel> = {}): VercelModel => ({
     id,
     name: `${id} name`,
@@ -152,7 +169,9 @@ describe('image generation models and pricing', () => {
 
   it('recognizes image-generation models separately from chat models', () => {
     expect(isImageGenerationModel(image('spacexai/grok-imagine-image'))).toBe(true);
+    expect(isImageGenerationModel(languageImage('google/gemini-image-preview'))).toBe(true);
     expect(isImageGenerationModel(priced('openai/gpt-4o-mini', { modalities: { input: ['text'], output: ['text'] } }))).toBe(false);
+    expect(isChatModel(languageImage('google/gemini-image-preview'))).toBe(true);
     expect(isChatModel(image('spacexai/grok-imagine-image'))).toBe(false);
   });
 
@@ -160,10 +179,36 @@ describe('image generation models and pricing', () => {
     const ids = imageGenerationModels([
       image('zeta/z'),
       priced('alpha/a'),
+      image('openai/gpt-image-2'),
       image('alpha/a-image'),
+      languageImage('mid/m-image'),
       priced('mid/m', { modalities: { input: ['text'], output: ['image'] } }),
     ]).map((m) => m.id);
-    expect(ids).toEqual(['alpha/a-image', 'zeta/z']);
+    expect(ids).toEqual(['alpha/a-image', 'mid/m', 'mid/m-image', 'openai/gpt-image-2', 'zeta/z']);
+  });
+
+  it('uses an explicit Tulzo allowlist for edit-capable models', () => {
+    expect(Object.keys(TULZO_IMAGE_EDIT_MODEL_REGISTRY)).toEqual(['openai/gpt-image-2']);
+    expect(isTulzoImageEditModel('openai/gpt-image-2')).toBe(true);
+    expect(isTulzoImageEditModel('spacexai/grok-imagine-image')).toBe(false);
+    expect(imageEditSupportForModel('openai/gpt-image-2')).toEqual({
+      content_types: ['application/json'],
+      image_sources: ['https', 'data'],
+      file_id: false,
+      mask: false,
+      multipart: false,
+    });
+    expect(imageEditSupportForModel('spacexai/grok-imagine-image')).toBeNull();
+  });
+
+  it('imageEditModels keeps only allowlisted image-edit models from the listing', () => {
+    const ids = imageEditModels([
+      image('spacexai/grok-imagine-image'),
+      image('openai/gpt-image-2'),
+      languageImage('google/gemini-image-preview'),
+      priced('openai/gpt-4o-mini'),
+    ]).map((m) => m.id);
+    expect(ids).toEqual(['openai/gpt-image-2']);
   });
 
   it('extracts per-image pricing or token-like pricing from the listing', () => {
@@ -173,7 +218,63 @@ describe('image generation models and pricing', () => {
       outputPer1M: 30,
       cachedInputPer1M: 1.25,
     });
-    expect(imagePriceFromListing(image('bfl/flux-2-pro', { pricing: {} }))).toEqual({});
+    expect(imagePriceFromListing(languageImage('google/gemini-image-preview'))).toEqual({
+      inputPer1M: 1,
+      outputPer1M: 2,
+      cachedInputPer1M: 0.5,
+    });
+    expect(imagePriceFromListing(image('bfl/flux-2-pro', { pricing: {} }))).toBeNull();
+  });
+
+  it('buildImageCatalog keeps upstream type truthful and applies Tulzo markup from the listing', () => {
+    expect(buildImageCatalog([
+      image('openai/gpt-image-2'),
+      languageImage('google/gemini-image-preview'),
+      image('spacexai/grok-imagine-image'),
+    ], 1.3)).toEqual([
+      {
+        type: 'language',
+        id: 'google/gemini-image-preview',
+        name: 'google/gemini-image-preview name',
+        pricing: { input_per_1m: 1.3, output_per_1m: 2.6, cached_input_per_1m: 0.65 },
+        input_modalities: ['text', 'image'],
+        output_modalities: ['text', 'image'],
+        response_formats: ['b64_json', 'url'],
+        supports_stream: false,
+        supports_edits: false,
+        edits: null,
+      },
+      {
+        type: 'image',
+        id: 'openai/gpt-image-2',
+        name: 'openai/gpt-image-2 name',
+        pricing: { image_per_image: 0.026 },
+        input_modalities: ['text'],
+        output_modalities: ['image'],
+        response_formats: ['b64_json', 'url'],
+        supports_stream: false,
+        supports_edits: true,
+        edits: {
+          content_types: ['application/json'],
+          image_sources: ['https', 'data'],
+          file_id: false,
+          mask: false,
+          multipart: false,
+        },
+      },
+      {
+        type: 'image',
+        id: 'spacexai/grok-imagine-image',
+        name: 'spacexai/grok-imagine-image name',
+        pricing: { image_per_image: 0.026 },
+        input_modalities: ['text'],
+        output_modalities: ['image'],
+        response_formats: ['b64_json', 'url'],
+        supports_stream: false,
+        supports_edits: false,
+        edits: null,
+      },
+    ]);
   });
 });
 
@@ -271,6 +372,12 @@ describe('calculateCost, costForModel and the billing markup', () => {
     expect(body.error).toContain('/api/models');
   });
 
+  it('the route-specific refusal body can point at /api/models/images', () => {
+    const body = modelNotAllowedBodyFor('openai/gpt-4o-mini', '/api/models/images');
+    expect(body).toMatchObject({ code: 'model_not_allowed', model: 'openai/gpt-4o-mini', models_url: '/api/models/images' });
+    expect(body.error).toContain('/api/models/images');
+  });
+
   it('UnknownModelError carries the model id and its name', () => {
     const e = new UnknownModelError('openai/x');
     expect(e.model).toBe('openai/x');
@@ -313,10 +420,22 @@ describe('chatModelPrice and costForModel (async, through the cached listing)', 
     expect(await chatModelPrice('vendor/new')).toBeNull();
   });
 
-  it('prices image-generation models separately from chat models', async () => {
+  it('prices image-generation models, including language models with image output, separately from chat models', async () => {
     __resetModelCatalogCache();
     vi.stubGlobal('fetch', vi.fn(async () => ok([
       priced('vendor/new'),
+      {
+        id: 'openai/gpt-image-2',
+        type: 'image',
+        modalities: { input: ['text', 'image'], output: ['image'] },
+        pricing: { image: '0.02' },
+      },
+      {
+        id: 'google/gemini-image-preview',
+        type: 'language',
+        modalities: { input: ['text', 'image'], output: ['text', 'image'] },
+        pricing: { input: '0.000001', output: '0.000002', input_cache_read: '0.0000005' },
+      },
       {
         id: 'spacexai/grok-imagine-image',
         type: 'image',
@@ -325,9 +444,15 @@ describe('chatModelPrice and costForModel (async, through the cached listing)', 
       },
     ])));
     expect(await imageGenerationModelPrice('spacexai/grok-imagine-image')).toEqual({ image: 0.02 });
+    expect(await imageGenerationModelPrice('google/gemini-image-preview')).toEqual({ inputPer1M: 1, outputPer1M: 2, cachedInputPer1M: 0.5 });
+    expect(await imageEditModelPrice('openai/gpt-image-2')).toEqual({ image: 0.02 });
     expect(await imageGenerationModelPrice('vendor/new')).toBeNull();
+    expect(await imageEditModelPrice('google/gemini-image-preview')).toBeNull();
     expect(await imageCostForModel('spacexai/grok-imagine-image', 2)).toBeCloseTo(0.04, 12);
+    expect(await imageCostForModel('google/gemini-image-preview', 2)).toBeCloseTo(0.000004, 12);
+    expect(await imageEditCostForModel('openai/gpt-image-2', 2)).toBeCloseTo(0.04, 12);
     await expect(imageCostForModel('vendor/new', 1)).rejects.toBeInstanceOf(UnknownModelError);
+    await expect(imageEditCostForModel('vendor/new', 1)).rejects.toBeInstanceOf(UnknownModelError);
   });
 });
 
@@ -354,6 +479,7 @@ describe('fetchVercelListing', () => {
     expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe('https://ai-gateway.vercel.sh/v1/models');
     expect(VERCEL_MODELS_URL).toBe('https://ai-gateway.vercel.sh/v1/models');
     expect(MODELS_URL).toBe('/api/models');
+    expect(IMAGE_MODELS_URL).toBe('/api/models/images');
     expect(data.map((m) => m.id)).toEqual(['openai/gpt-4o-mini']);
   });
 

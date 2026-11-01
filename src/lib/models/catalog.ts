@@ -1,8 +1,9 @@
 /**
- * The model catalog behind GET /api/models and /api/chat: a pass-through of Vercel AI Gateway's
- * public listing. Every priced language model (except -batch variants) is offered, with Vercel's
- * price × Tulzo's markup, so what is listed is what /api/chat bills. When the listing can't be
- * fetched and nothing is cached, the built-in list in src/config/gateway-models.ts stands in.
+ * The model catalog behind GET /api/models, GET /api/models/images and /api/chat: a pass-through
+ * of Vercel AI Gateway's public listing. Every priced language model (except -batch variants) is
+ * offered for chat, and every image-capable model Tulzo proxies is offered for the image catalog,
+ * with Vercel's price × Tulzo's markup. When the listing can't be fetched and nothing is cached,
+ * the built-in list in src/config/gateway-models.ts stands in for chat.
  * Edge-safe (fetch only).
  */
 import { GATEWAY_MODELS, type GatewayModel } from '../../config/gateway-models.ts';
@@ -11,6 +12,7 @@ export const VERCEL_MODELS_URL = 'https://ai-gateway.vercel.sh/v1/models';
 // Tests point AI_GATEWAY_MODELS_URL at a closed local port (the built-in list then stands in),
 // the same way STRIPE_API_BASE and GITHUB_API_BASE point at fakes. Unset in every deploy.
 export const MODELS_URL = '/api/models';
+export const IMAGE_MODELS_URL = '/api/models/images';
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 /** The fields Tulzo reads from one entry of Vercel's /v1/models listing. */
@@ -32,6 +34,7 @@ export interface VercelModel {
 }
 
 export interface CatalogModel {
+  type: 'language';
   id: string;
   name: string;
   context_window: number | null;
@@ -39,6 +42,32 @@ export interface CatalogModel {
   pricing: { input_per_1m: number; output_per_1m: number; cached_input_per_1m?: number };
   supports_tools: boolean;
   supports_vision: boolean;
+}
+
+export interface ImageCatalogModel {
+  type: 'image' | 'language';
+  id: string;
+  name: string;
+  pricing: {
+    image_per_image?: number;
+    input_per_1m?: number;
+    output_per_1m?: number;
+    cached_input_per_1m?: number;
+  };
+  input_modalities: string[];
+  output_modalities: string[];
+  response_formats: Array<'b64_json' | 'url'>;
+  supports_stream: false;
+  supports_edits: boolean;
+  edits: ImageEditSupport | null;
+}
+
+export interface ImageEditSupport {
+  content_types: Array<'application/json'>;
+  image_sources: Array<'https' | 'data'>;
+  file_id: false;
+  mask: false;
+  multipart: false;
 }
 
 export interface ModelPrice {
@@ -82,19 +111,12 @@ export function imagePriceFromListing(v: VercelModel): ImagePrice | null {
   const inputPer1M = perTokenToPer1M(v.pricing?.input);
   const outputPer1M = perTokenToPer1M(v.pricing?.output);
   const cachedInputPer1M = perTokenToPer1M(v.pricing?.input_cache_read);
-  if (image !== null && Number.isFinite(image) && image >= 0) {
-    return cachedInputPer1M === null
-      ? { image }
-      : { image, cachedInputPer1M };
-  }
-  if (inputPer1M !== null || outputPer1M !== null) {
-    const price: ImagePrice = {};
-    if (inputPer1M !== null) price.inputPer1M = inputPer1M;
-    if (outputPer1M !== null) price.outputPer1M = outputPer1M;
-    if (cachedInputPer1M !== null) price.cachedInputPer1M = cachedInputPer1M;
-    return price;
-  }
-  return v.type === 'image' ? {} : null;
+  const price: ImagePrice = {};
+  if (image !== null && Number.isFinite(image) && image >= 0) price.image = image;
+  if (inputPer1M !== null) price.inputPer1M = inputPer1M;
+  if (outputPer1M !== null) price.outputPer1M = outputPer1M;
+  if (cachedInputPer1M !== null) price.cachedInputPer1M = cachedInputPer1M;
+  return price.image !== undefined || price.inputPer1M !== undefined || price.outputPer1M !== undefined ? price : null;
 }
 
 /** A model /api/chat can call: a priced language model, not a -batch variant (those are for the batch API). */
@@ -104,7 +126,11 @@ export function isChatModel(v: VercelModel): boolean {
 
 /** An image-generation model the dedicated images route may call. */
 export function isImageGenerationModel(v: VercelModel): boolean {
-  return v.type === 'image';
+  if (v.type === 'image') return imagePriceFromListing(v) !== null;
+  return v.type === 'language'
+    && !v.id.endsWith('-batch')
+    && (v.modalities?.output?.includes('image') ?? false)
+    && imagePriceFromListing(v) !== null;
 }
 
 /** The chat models of a listing, sorted by id. */
@@ -115,6 +141,40 @@ export function chatModels(listing: readonly VercelModel[]): VercelModel[] {
 /** The image-generation models of a listing, sorted by id. */
 export function imageGenerationModels(listing: readonly VercelModel[]): VercelModel[] {
   return listing.filter(isImageGenerationModel).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** Explicit Tulzo allowlist for POST /api/images/edits. */
+export const TULZO_IMAGE_EDIT_MODEL_REGISTRY = {
+  'openai/gpt-image-2': {
+    content_types: ['application/json'],
+    image_sources: ['https', 'data'],
+    file_id: false,
+    mask: false,
+    multipart: false,
+  },
+} satisfies Record<string, ImageEditSupport>;
+
+/** True only for exact ids Tulzo is willing to proxy on POST /api/images/edits. */
+export function isTulzoImageEditModel(id: string): boolean {
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(TULZO_IMAGE_EDIT_MODEL_REGISTRY, id);
+}
+
+/** The image-edit models of a listing, sorted by id. */
+export function imageEditModels(listing: readonly VercelModel[]): VercelModel[] {
+  return imageGenerationModels(listing).filter((m) => isTulzoImageEditModel(m.id));
+}
+
+/** Route-specific edit metadata for a model, or null when Tulzo does not proxy edits for it. */
+export function imageEditSupportForModel(id: string): ImageEditSupport | null {
+  if (!isTulzoImageEditModel(id)) return null;
+  const support = TULZO_IMAGE_EDIT_MODEL_REGISTRY[id as keyof typeof TULZO_IMAGE_EDIT_MODEL_REGISTRY];
+  return {
+    content_types: [...support.content_types],
+    image_sources: [...support.image_sources],
+    file_id: support.file_id,
+    mask: support.mask,
+    multipart: support.multipart,
+  };
 }
 
 function positiveIntOrNull(n: unknown): number | null {
@@ -130,8 +190,18 @@ function priced(price: ModelPrice, markup: number): CatalogModel['pricing'] {
   return pricing;
 }
 
+function pricedImage(price: ImagePrice, markup: number): ImageCatalogModel['pricing'] {
+  const pricing: ImageCatalogModel['pricing'] = {};
+  if (price.image !== undefined) pricing.image_per_image = round6(price.image * markup);
+  if (price.inputPer1M !== undefined) pricing.input_per_1m = round6(price.inputPer1M * markup);
+  if (price.outputPer1M !== undefined) pricing.output_per_1m = round6(price.outputPer1M * markup);
+  if (price.cachedInputPer1M !== undefined) pricing.cached_input_per_1m = round6(price.cachedInputPer1M * markup);
+  return pricing;
+}
+
 function fallbackEntry(row: GatewayModel, markup: number): CatalogModel {
   return {
+    type: 'language',
     id: row.id,
     name: row.name,
     context_window: null,
@@ -150,6 +220,7 @@ export function buildCatalog(listing: readonly VercelModel[], markup: number): C
   const models = chatModels(listing);
   if (models.length === 0) return GATEWAY_MODELS.map((row) => fallbackEntry(row, markup));
   return models.map((v) => ({
+    type: 'language' as const,
     id: v.id,
     name: v.name || v.id,
     context_window: positiveIntOrNull(v.context_window),
@@ -158,6 +229,25 @@ export function buildCatalog(listing: readonly VercelModel[], markup: number): C
     supports_tools: v.supported_parameters?.includes('tools') ?? false,
     supports_vision: v.modalities?.input?.includes('image') ?? false,
   }));
+}
+
+/** Every model /api/images/generations may call, with truthful upstream type and explicit edit metadata. */
+export function buildImageCatalog(listing: readonly VercelModel[], markup: number): ImageCatalogModel[] {
+  return imageGenerationModels(listing).map((v) => {
+    const edits = imageEditSupportForModel(v.id);
+    return {
+      type: v.type === 'language' ? 'language' : 'image',
+      id: v.id,
+      name: v.name || v.id,
+      pricing: pricedImage(imagePriceFromListing(v) ?? {}, markup),
+      input_modalities: v.modalities?.input?.filter((m): m is string => typeof m === 'string') ?? ['text'],
+      output_modalities: v.modalities?.output?.filter((m): m is string => typeof m === 'string') ?? ['image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: edits !== null,
+      edits,
+    };
+  });
 }
 
 let cache: { at: number; data: VercelModel[] } | null = null;
@@ -212,12 +302,25 @@ export async function imageGenerationModelPrice(id: string): Promise<ImagePrice 
   return v ? imagePriceFromListing(v) : null;
 }
 
+/** The base pricing of a model POST /api/images/edits may call. null for any other model. */
+export async function imageEditModelPrice(id: string): Promise<ImagePrice | null> {
+  if (typeof id !== 'string' || !isTulzoImageEditModel(id)) return null;
+  const models = imageEditModels(await fetchVercelListing());
+  const v = models.find((m) => m.id === id);
+  return v ? imagePriceFromListing(v) : null;
+}
+
 /** The /api/chat 400 body for a model that isn't on the allowlist. */
 export function modelNotAllowedBody(model: string): { error: string; code: 'model_not_allowed'; model: string; models_url: string } {
+  return modelNotAllowedBodyFor(model, MODELS_URL);
+}
+
+/** The 400 body for a model that isn't on a route's allowlist, pointing at that route's discovery URL. */
+export function modelNotAllowedBodyFor(model: string, modelsUrl: string): { error: string; code: 'model_not_allowed'; model: string; models_url: string } {
   return {
-    error: `Model "${model}" is not offered by the Tulzo gateway. GET ${MODELS_URL} lists the models you can use.`,
+    error: `Model "${model}" is not offered by the Tulzo gateway. GET ${modelsUrl} lists the models you can use.`,
     code: 'model_not_allowed',
     model,
-    models_url: MODELS_URL,
+    models_url: modelsUrl,
   };
 }

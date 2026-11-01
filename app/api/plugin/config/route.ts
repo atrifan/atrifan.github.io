@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serviceSupabase } from '@/src/lib/service-supabase';
 import { authenticatePluginKey } from '@/src/lib/plugin-auth';
-import { MODELS_URL } from '@/src/lib/models/catalog';
+import { IMAGE_MODELS_URL, MODELS_URL } from '@/src/lib/models/catalog';
 
 /**
- * Returns the user's full config: plan, quotas, guardrails, and any
- * RAG-stored rules/knowledge that the native-host needs to operate.
+ * Returns the user's full config: plan, quotas, guardrails, model-discovery URLs,
+ * and any RAG-stored rules/knowledge that the native-host needs to operate.
  *
  * Called by native-host after initial auth verify, and periodically to refresh.
  *
@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
     plan: auth.plan,
     quotas: quotas[plan],
     models_url: MODELS_URL,
+    image_models_url: IMAGE_MODELS_URL,
     guardrails,
     custom_rules: customRules,
     user_id: keyRecord.user_id,
