@@ -2,7 +2,7 @@
 
 Tulzo exposes a separate image surface from chat.
 
-- `GET /api/models/images` lists the image models Tulzo currently offers, with the price Tulzo bills.
+- `GET /api/models/images` lists the public image-capable models Tulzo discovers from the gateway, with the price Tulzo bills.
 - `POST /api/images/generations` executes one **prompt-only** image-generation request.
 - `POST /api/images/edits` executes one **JSON-only** image edit request.
 
@@ -100,9 +100,29 @@ Auth works like `GET /api/plugin/config` and `GET /api/models`:
 Notes:
 
 - discovery pricing is always listing-derived: Vercel's model listing plus Tulzo's markup
-- Tulzo does **not** infer image-route support loosely from `type` or `input_modalities`
-- generation and edit support are explicit exact-id Tulzo allowlists
-- image model discovery may intentionally omit public AI Gateway image models that are not usable on Tulzo's current gateway key
+- Tulzo does **not** infer edit support loosely from `type` or `input_modalities`
+- `supports_edits` and `edits` are explicit Tulzo route metadata for `POST /api/images/edits`
+- a model appearing in discovery does not guarantee Tulzo's current gateway key can use it; upstream free-tier restrictions may still return an exact upstream error at execution time
+
+### Proven on Tulzo's current free-tier gateway key
+
+The following models are the ones Tulzo has directly verified on the current shared free-tier gateway key:
+
+- generation via the image endpoint:
+  - `bfl/flux-kontext-pro`
+  - `microsoft/mai-image-2.6-flash`
+  - `openai/gpt-image-1-mini`
+  - `recraft/recraft-v4.1-flash`
+  - `spacexai/grok-imagine-image`
+- generation via the chat-completions image path:
+  - `quiverai/arrow-2`
+- edits:
+  - `bfl/flux-kontext-pro`
+  - `microsoft/mai-image-2.6-flash`
+  - `openai/gpt-image-1-mini`
+  - `spacexai/grok-imagine-image`
+
+Examples of public image-capable models that may still be listed but are currently blocked by the shared free-tier key include `google/gemini-3.1-flash-image-preview` and `openai/gpt-image-2`.
 
 Entries are sorted by `id`. The response may be cached by the client for 5 minutes (`Cache-Control: private, max-age=300`).
 
@@ -270,7 +290,7 @@ Common responses:
 | `file_id` anywhere in the request | edits | 400 | `file_id is not supported...` |
 | `mask` provided | edits | 400 | `mask is not supported...` |
 | non-JSON content type | edits | 415 | `Unsupported media type...` |
-| model not in `GET /api/models/images` for that route | generations, edits | 400 | `model_not_allowed` body |
+| model not in `GET /api/models/images` | generations, edits | 400 | `model_not_allowed` body |
 | upstream image provider denies the model on Tulzo's current gateway key | generations, edits | exact upstream status | exact upstream JSON body |
 
 `model_not_allowed` points at `/api/models/images`, not `/api/models`.

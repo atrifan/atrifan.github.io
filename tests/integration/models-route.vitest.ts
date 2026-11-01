@@ -778,8 +778,10 @@ describe('GET /api/models/images', () => {
     expect(body.object).toBe('list');
     expect(body.data.map((m: ImageModel) => m.id)).toEqual([
       SECOND_EDIT_IMAGE_MODEL,
+      BLOCKED_LANGUAGE_IMAGE_MODEL,
       THIRD_EDIT_IMAGE_MODEL,
       EDIT_MODEL,
+      BLOCKED_EDIT_MODEL,
       LANGUAGE_IMAGE_MODEL,
       GENERATION_ONLY_IMAGE_MODEL,
       IMAGE_MODEL,
@@ -824,6 +826,22 @@ describe('GET /api/models/images', () => {
         multipart: false,
       },
     });
+    expect(models.find((m) => m.id === BLOCKED_LANGUAGE_IMAGE_MODEL)).toMatchObject({
+      type: 'language',
+      id: BLOCKED_LANGUAGE_IMAGE_MODEL,
+      name: 'Gemini 3.1 Flash Image Preview',
+      pricing: {
+        input_per_1m: 0.52,
+        output_per_1m: 1.56,
+        cached_input_per_1m: 0.13,
+      },
+      input_modalities: ['text', 'image'],
+      output_modalities: ['text', 'image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: false,
+      edits: null,
+    });
     expect(models.find((m) => m.id === EDIT_MODEL)).toMatchObject({
       type: 'image',
       id: EDIT_MODEL,
@@ -845,6 +863,22 @@ describe('GET /api/models/images', () => {
         mask: false,
         multipart: false,
       },
+    });
+    expect(models.find((m) => m.id === BLOCKED_EDIT_MODEL)).toMatchObject({
+      type: 'image',
+      id: BLOCKED_EDIT_MODEL,
+      name: 'GPT Image 2',
+      pricing: {
+        input_per_1m: 6.5,
+        output_per_1m: 39,
+        cached_input_per_1m: 1.625,
+      },
+      input_modalities: ['text'],
+      output_modalities: ['image'],
+      response_formats: ['b64_json', 'url'],
+      supports_stream: false,
+      supports_edits: false,
+      edits: null,
     });
     expect(models.find((m) => m.id === LANGUAGE_IMAGE_MODEL)).toMatchObject({
       type: 'language',
@@ -898,6 +932,7 @@ describe('GET /api/models/images', () => {
     expect(chatIds).not.toContain(EDIT_MODEL);
     expect(chatIds).not.toContain(GENERATION_ONLY_IMAGE_MODEL);
     expect(chatIds).toContain(LANGUAGE_IMAGE_MODEL);
+    expect(chatIds).toContain(BLOCKED_LANGUAGE_IMAGE_MODEL);
   });
 
   it('shows pricing from the listing plus Tulzo markup, not from generation responses', async () => {
@@ -905,7 +940,9 @@ describe('GET /api/models/images', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     const arrow = (body.data as ImageModel[]).find((m) => m.id === LANGUAGE_IMAGE_MODEL)!;
+    const blockedLanguage = (body.data as ImageModel[]).find((m) => m.id === BLOCKED_LANGUAGE_IMAGE_MODEL)!;
     const edit = (body.data as ImageModel[]).find((m) => m.id === EDIT_MODEL)!;
+    const blockedImage = (body.data as ImageModel[]).find((m) => m.id === BLOCKED_EDIT_MODEL)!;
     const recraft = (body.data as ImageModel[]).find((m) => m.id === GENERATION_ONLY_IMAGE_MODEL)!;
     const grok = (body.data as ImageModel[]).find((m) => m.id === IMAGE_MODEL)!;
     expect(arrow.pricing).toEqual({
@@ -913,17 +950,25 @@ describe('GET /api/models/images', () => {
       output_per_1m: 26,
       cached_input_per_1m: 0.52,
     });
+    expect(blockedLanguage.pricing).toEqual({
+      input_per_1m: 0.52,
+      output_per_1m: 1.56,
+      cached_input_per_1m: 0.13,
+    });
     expect(edit.pricing).toEqual({ input_per_1m: 2.6, output_per_1m: 10.4, cached_input_per_1m: 0.26 });
+    expect(blockedImage.pricing).toEqual({ input_per_1m: 6.5, output_per_1m: 39, cached_input_per_1m: 1.625 });
     expect(recraft.pricing).toEqual({ image_per_image: 0.0091 });
     expect(grok.pricing).toEqual({ image_per_image: 0.026 });
   });
 
-  it('omits blocked-but-public Gemini and GPT Image 2 entries from the Tulzo image catalog', async () => {
+  it('keeps blocked-but-public Gemini and GPT Image 2 entries in the image catalog with truthful route metadata', async () => {
     const res = await listImageModels(bearer(KEYS.plus));
     expect(res.status).toBe(200);
-    const ids = (await res.json()).data.map((m: ImageModel) => m.id);
-    expect(ids).not.toContain(BLOCKED_LANGUAGE_IMAGE_MODEL);
-    expect(ids).not.toContain(BLOCKED_EDIT_MODEL);
+    const models = (await res.json()).data as ImageModel[];
+    expect(models.map((m) => m.id)).toContain(BLOCKED_LANGUAGE_IMAGE_MODEL);
+    expect(models.map((m) => m.id)).toContain(BLOCKED_EDIT_MODEL);
+    expect(models.find((m) => m.id === BLOCKED_LANGUAGE_IMAGE_MODEL)?.supports_edits).toBe(false);
+    expect(models.find((m) => m.id === BLOCKED_EDIT_MODEL)?.supports_edits).toBe(false);
   });
 });
 
@@ -1046,15 +1091,15 @@ describe('POST /api/images/generations', () => {
       status: 403,
       body: {
         ...RESTRICTED_MODEL_ERROR,
-        providerMetadata: { gateway: { routing: { originalModelId: GENERATION_ONLY_IMAGE_MODEL } } },
+        providerMetadata: { gateway: { routing: { originalModelId: BLOCKED_EDIT_MODEL } } },
       },
     };
 
-    const res = await images({ model: GENERATION_ONLY_IMAGE_MODEL, prompt: 'a red fox in snow' });
+    const res = await images({ model: BLOCKED_EDIT_MODEL, prompt: 'a red fox in snow' });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
       ...RESTRICTED_MODEL_ERROR,
-      providerMetadata: { gateway: { routing: { originalModelId: GENERATION_ONLY_IMAGE_MODEL } } },
+      providerMetadata: { gateway: { routing: { originalModelId: BLOCKED_EDIT_MODEL } } },
     });
   });
 
@@ -1063,15 +1108,15 @@ describe('POST /api/images/generations', () => {
       status: 403,
       body: {
         ...RESTRICTED_MODEL_ERROR,
-        providerMetadata: { gateway: { routing: { originalModelId: LANGUAGE_IMAGE_MODEL } } },
+        providerMetadata: { gateway: { routing: { originalModelId: BLOCKED_LANGUAGE_IMAGE_MODEL } } },
       },
     };
 
-    const res = await images({ model: LANGUAGE_IMAGE_MODEL, prompt: 'a watercolor fox in snow' });
+    const res = await images({ model: BLOCKED_LANGUAGE_IMAGE_MODEL, prompt: 'a watercolor fox in snow' });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
       ...RESTRICTED_MODEL_ERROR,
-      providerMetadata: { gateway: { routing: { originalModelId: LANGUAGE_IMAGE_MODEL } } },
+      providerMetadata: { gateway: { routing: { originalModelId: BLOCKED_LANGUAGE_IMAGE_MODEL } } },
     });
   });
 
@@ -1173,15 +1218,13 @@ describe('POST /api/images/generations', () => {
     expect(imageChatCalls()).toHaveLength(0);
   });
 
-  it('400 model_not_allowed for blocked public image models that Tulzo does not expose on this free-tier key', async () => {
-    for (const model of [BLOCKED_LANGUAGE_IMAGE_MODEL, BLOCKED_EDIT_MODEL, 'openai/definitely-not-real']) {
-      const res = await images({ model, prompt: 'a lighthouse at dusk' });
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.code).toBe('model_not_allowed');
-      expect(body.model).toBe(model);
-      expect(body.models_url).toBe('/api/models/images');
-    }
+  it('400 model_not_allowed for a made-up id that is not in /api/models/images', async () => {
+    const res = await images({ model: 'openai/definitely-not-real', prompt: 'a lighthouse at dusk' });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe('model_not_allowed');
+    expect(body.model).toBe('openai/definitely-not-real');
+    expect(body.models_url).toBe('/api/models/images');
     expect(imageCalls()).toHaveLength(0);
     expect(imageChatCalls()).toHaveLength(0);
   });
