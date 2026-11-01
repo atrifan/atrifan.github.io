@@ -104,9 +104,9 @@ Notes:
 - `supports_edits` and `edits` are explicit Tulzo route metadata for `POST /api/images/edits`
 - a model appearing in discovery does not guarantee Tulzo's current gateway key can use it; upstream free-tier restrictions may still return an exact upstream error at execution time
 
-### Proven on Tulzo's current free-tier gateway key
+### Proven on Tulzo's current free-tier gateway key for image generation
 
-The following models are the ones Tulzo has directly verified on the current shared free-tier gateway key:
+The following models are the ones Tulzo has directly verified on the current shared free-tier gateway key for image generation:
 
 - generation via the image endpoint:
   - `bfl/flux-kontext-pro`
@@ -116,13 +116,8 @@ The following models are the ones Tulzo has directly verified on the current sha
   - `spacexai/grok-imagine-image`
 - generation via the chat-completions image path:
   - `quiverai/arrow-2`
-- edits:
-  - `bfl/flux-kontext-pro`
-  - `microsoft/mai-image-2.6-flash`
-  - `openai/gpt-image-1-mini`
-  - `spacexai/grok-imagine-image`
 
-Examples of public image-capable models that may still be listed but are currently blocked by the shared free-tier key include `google/gemini-3.1-flash-image-preview` and `openai/gpt-image-2`.
+Discovery still stays broader than this proven free-tier subset. A model can appear in `GET /api/models/images` even if Tulzo's current shared free-tier key cannot execute it.
 
 Entries are sorted by `id`. The response may be cached by the client for 5 minutes (`Cache-Control: private, max-age=300`).
 

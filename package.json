@@ -10,7 +10,7 @@
     "build": "NODE_ENV=production next build",
     "start": "NODE_ENV=production next start",
     "lint": "next lint --dir app --dir src --dir tests --dir scripts --file middleware.ts --file playwright.config.ts --file vitest.config.ts --file vitest.int.config.ts",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit --incremental false",
     "automation": "npx tsx scripts/run-workflow.ts",
     "publish:dmg": "npx tsx scripts/publish-dmg.ts",
     "test": "playwright test",
