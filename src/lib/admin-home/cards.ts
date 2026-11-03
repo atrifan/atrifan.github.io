@@ -4,7 +4,16 @@
  */
 import { formatMoney } from '../activity/format';
 
-export type AdminArea = 'qa' | 'disputes' | 'inbox' | 'moderation' | 'activity';
+export type AdminArea = 'qa' | 'disputes' | 'inbox' | 'moderation' | 'activity' | 'relay';
+
+/** The chat relay's health: whether any secret is missing, and whole days until the broker JWT expires (null if unknown). */
+export interface RelayHealth {
+  secretsMissing: boolean;
+  daysLeft: number | null;
+}
+
+/** The broker JWT must have more than this many days left for the relay to read OK. */
+export const RELAY_MIN_DAYS = 30;
 
 /** The key numbers; null when that area's read failed. */
 export interface AdminHomeNumbers {
@@ -13,6 +22,8 @@ export interface AdminHomeNumbers {
   openThreads: number | null;
   pendingPackages: number | null;
   commissionCents30d: number | null;
+  /** null when the relay read failed. */
+  relay: RelayHealth | null;
 }
 
 export interface AdminCard {
@@ -40,6 +51,19 @@ function countCard(area: AdminArea, title: string, href: string, n: number | nul
   return { area, title, href, value: String(n), caption: caption(n), attention: n > 0 };
 }
 
+function relayCard(health: RelayHealth | null, href: string): AdminCard {
+  if (health === null) return { area: 'relay', title: 'Chat relay', href, value: UNAVAILABLE, caption: 'Couldn’t load', attention: false };
+  const ok = !health.secretsMissing && health.daysLeft !== null && health.daysLeft > RELAY_MIN_DAYS;
+  const caption = health.secretsMissing
+    ? 'secrets missing'
+    : health.daysLeft === null
+      ? 'expiry unknown'
+      : health.daysLeft <= 0
+        ? 'expired'
+        : `expires in ${health.daysLeft} ${plural(health.daysLeft, 'day', 'days')}`;
+  return { area: 'relay', title: 'Chat relay', href, value: ok ? 'OK' : 'Set up', caption, attention: !ok };
+}
+
 export function adminHomeCards(numbers: AdminHomeNumbers, links: Record<AdminArea, string>): AdminCard[] {
   const commission = numbers.commissionCents30d;
   return [
@@ -57,5 +81,6 @@ export function adminHomeCards(numbers: AdminHomeNumbers, links: Record<AdminAre
       caption: commission === null ? 'Couldn’t load' : 'commission, last 30 days',
       attention: false,
     },
+    relayCard(numbers.relay, links.relay),
   ];
 }

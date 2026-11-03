@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // `ws` must stay a plain Node module: bundled by webpack its frame masking breaks and Supabase Realtime drops the
+  // chat relay's broker socket right after it opens (close 1006).
+  experimental: { serverComponentsExternalPackages: ['ws'] },
   // Lets the Playwright surface and host-routing servers run beside the main dev server.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   // Where cross-surface links point (path | host, src/lib/surface-url.ts), inlined so client code sees it too.

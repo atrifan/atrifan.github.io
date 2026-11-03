@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { viewerAuth, deviceAuth, ownedDevice, currentSession, type Principal, type Viewer } from './auth';
 import { brokerConfig, connectBroker, type Broker } from './broker';
+import { loadRelaySettings } from './relay-settings';
 import { bodyObject, issueToken, parsePart, parseRequest, tokenSecret, uuid, verifyToken, type ViewerClaims } from './protocol';
 import { checkOrigin, errorResponse, invalid, readBody, RelayError, securityHeaders, unauthorized } from './http';
 
@@ -58,8 +59,9 @@ async function stream(
   startupCheck?: CheckStart,
 ): Promise<Response> {
   if (request.headers.get('last-event-id')) throw new RelayError(409, 'resync_required');
-  const secret = tokenSecret();
-  const config = brokerConfig();
+  const settings = await loadRelaySettings();
+  const secret = tokenSecret(settings);
+  const config = brokerConfig(settings);
   const streamId = randomUUID();
   const channel = viewer ? `tc2:v:${streamId}` : `tc2:d:${principal.deviceId}`;
   let broker: Broker | undefined;
@@ -234,14 +236,15 @@ async function handle(kind: Kind, request: Request, signal: AbortSignal): Promis
     const connection = validateUuid(body.connectionId);
     return stream(request, null, principal!, connection, connection, signal, startupCheck!);
   }
-  const secret = tokenSecret();
+  const settings = await loadRelaySettings();
+  const secret = tokenSecret(settings);
   if (kind === 'viewerRequests') {
     const body = bodyObject(raw, ['protocol', 'viewerToken', 'request']);
     const token = verifyToken(body.viewerToken, 'viewer', secret);
     matchesViewer(token, viewer!);
     const operation = parseRequest(body.request);
     const owner = await deadline(signal, ownedDevice(token.userId, token.deviceId));
-    const broker = await deadline(signal, connectBroker(brokerConfig(), `tc2:d:${owner.deviceId}`, signal, () => {}, () => {}));
+    const broker = await deadline(signal, connectBroker(brokerConfig(settings), `tc2:d:${owner.deviceId}`, signal, () => {}, () => {}));
     try {
       const lease = await freshCheck(viewer, owner, request, token.exp * 1000, signal);
       parseRequest(operation); live(signal);
@@ -256,7 +259,7 @@ async function handle(kind: Kind, request: Request, signal: AbortSignal): Promis
   if (deviceToken.userId !== principal!.userId || deviceToken.deviceId !== principal!.deviceId || viewerToken.userId !== principal!.userId || viewerToken.deviceId !== principal!.deviceId) unauthorized();
   const part = parsePart(body.part);
   await deadline(signal, currentSession(viewerToken.userId, viewerToken.viewerSessionId));
-  const broker = await deadline(signal, connectBroker(brokerConfig(), `tc2:v:${viewerToken.streamId}`, signal, () => {}, () => {}));
+  const broker = await deadline(signal, connectBroker(brokerConfig(settings), `tc2:v:${viewerToken.streamId}`, signal, () => {}, () => {}));
   try {
     const lease = await freshCheck(null, principal!, request, Math.min(deviceToken.exp, viewerToken.exp) * 1000, signal);
     await deadline(signal, currentSession(viewerToken.userId, viewerToken.viewerSessionId));

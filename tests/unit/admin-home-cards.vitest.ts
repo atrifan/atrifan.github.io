@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { adminHomeCards, settledNumber, UNAVAILABLE, type AdminHomeNumbers } from '@/src/lib/admin-home/cards';
 
-const LINKS = { qa: '/q', disputes: '/d', inbox: '/i', moderation: '/m', activity: '/a' };
-const NUMBERS: AdminHomeNumbers = { awaitingQa: 2, openDisputes: 0, openThreads: 3, pendingPackages: 1, commissionCents30d: 9000 };
+const LINKS = { qa: '/q', disputes: '/d', inbox: '/i', moderation: '/m', activity: '/a', relay: '/r' };
+const NUMBERS: AdminHomeNumbers = {
+  awaitingQa: 2,
+  openDisputes: 0,
+  openThreads: 3,
+  pendingPackages: 1,
+  commissionCents30d: 9000,
+  relay: { secretsMissing: false, daysLeft: 90 },
+};
 
 const byArea = (numbers: AdminHomeNumbers) => Object.fromEntries(adminHomeCards(numbers, LINKS).map((c) => [c.area, c]));
 
@@ -14,6 +21,7 @@ describe('adminHomeCards', () => {
       ['inbox', 'Inbox', '/i'],
       ['moderation', 'Marketplace moderation', '/m'],
       ['activity', 'Activity', '/a'],
+      ['relay', 'Chat relay', '/r'],
     ]);
   });
 
@@ -24,6 +32,17 @@ describe('adminHomeCards', () => {
     expect([c.inbox.value, c.inbox.caption]).toEqual(['3', 'open threads']);
     expect([c.moderation.value, c.moderation.caption]).toEqual(['1', 'pending package']);
     expect([c.activity.value, c.activity.caption]).toEqual(['€90.00', 'commission, last 30 days']);
+  });
+
+  it('shows the chat relay as OK with its days left, Set up when the JWT is near expiry, and secrets missing', () => {
+    const ok = byArea(NUMBERS).relay;
+    expect([ok.value, ok.caption, ok.attention]).toEqual(['OK', 'expires in 90 days', false]);
+    const soon = byArea({ ...NUMBERS, relay: { secretsMissing: false, daysLeft: 30 } }).relay;
+    expect([soon.value, soon.caption, soon.attention]).toEqual(['Set up', 'expires in 30 days', true]);
+    const missing = byArea({ ...NUMBERS, relay: { secretsMissing: true, daysLeft: 90 } }).relay;
+    expect([missing.value, missing.caption, missing.attention]).toEqual(['Set up', 'secrets missing', true]);
+    const unavailable = byArea({ ...NUMBERS, relay: null }).relay;
+    expect([unavailable.value, unavailable.caption, unavailable.attention]).toEqual([UNAVAILABLE, 'Couldn’t load', false]);
   });
 
   it('uses the singular for exactly one and the plural otherwise', () => {
@@ -37,17 +56,18 @@ describe('adminHomeCards', () => {
 
   it('flags waiting work on non-zero queues only, never on activity', () => {
     const c = byArea(NUMBERS);
-    expect([c.qa.attention, c.disputes.attention, c.inbox.attention, c.moderation.attention, c.activity.attention]).toEqual([
+    expect([c.qa.attention, c.disputes.attention, c.inbox.attention, c.moderation.attention, c.activity.attention, c.relay.attention]).toEqual([
       true,
       false,
       true,
       true,
+      false,
       false,
     ]);
   });
 
   it('shows a dash and no flag when a number could not be read', () => {
-    const c = byArea({ awaitingQa: null, openDisputes: null, openThreads: null, pendingPackages: null, commissionCents30d: null });
+    const c = byArea({ awaitingQa: null, openDisputes: null, openThreads: null, pendingPackages: null, commissionCents30d: null, relay: null });
     for (const card of Object.values(c)) {
       expect([card.value, card.caption, card.attention]).toEqual([UNAVAILABLE, 'Couldn’t load', false]);
     }

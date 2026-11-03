@@ -59,14 +59,29 @@ export async function readBody(req: Request, signal: AbortSignal = req.signal): 
   }
 }
 
-export function checkOrigin(req: Request): void {
-  const configured = process.env.NEXT_PUBLIC_APP_URL;
-  if (!configured) throw new RelayError(500, 'server_misconfigured');
-  let origin: string;
+function originOf(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
   try {
-    const url = new URL(configured);
-    if (url.protocol !== 'https:' || url.username || url.password || url.origin === 'null') throw new Error();
-    origin = url.origin;
-  } catch { throw new RelayError(500, 'server_misconfigured'); }
-  if (req.headers.get('origin') !== origin) throw new RelayError(403, 'forbidden_origin');
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (url.protocol !== 'https:' || url.username || url.password || url.origin === 'null') return null;
+    return url.origin;
+  } catch { return null; }
+}
+
+/** The extra origins allowed to use the viewer routes: NEXT_PUBLIC_APP_URL plus the comma list CHAT_ALLOWED_ORIGINS (origins or bare hosts). */
+export function configuredViewerOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+  const values = [env.NEXT_PUBLIC_APP_URL ?? '', ...(env.CHAT_ALLOWED_ORIGINS ?? '').split(',')];
+  return [...new Set(values.map(originOf).filter((o): o is string => !!o))];
+}
+
+/**
+ * A viewer request must come from the site that served it (its Origin equals the host the request reached) or from an
+ * origin the operator listed. A new domain pointed at the app therefore works with no configuration.
+ */
+export function checkOrigin(req: Request): void {
+  const origin = req.headers.get('origin');
+  const own = originOf(new URL(req.url).origin);
+  const allowed = origin !== null && (origin === own || configuredViewerOrigins().includes(origin));
+  if (!allowed) throw new RelayError(403, 'forbidden_origin');
 }

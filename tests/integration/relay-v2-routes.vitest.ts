@@ -57,13 +57,16 @@ beforeEach(async () => {
     ws.on('message', (raw) => {
       const frame = JSON.parse(raw.toString()) as Record<string, unknown>;
       received.push(frame);
-      if (frame.event === 'phx_join') subscriptions.set(ws, frame.topic as string);
+      if (frame.event === 'phx_join') {
+        subscriptions.set(ws, frame.topic as string);
+        ws.send(JSON.stringify({ topic: frame.topic, event: 'system', ref: null, payload: { extension: 'system', status: 'ok', message: 'Subscribed to PostgreSQL' } }));
+      }
       if (frame.event === 'broadcast') {
         for (const [peer, topic] of subscriptions) {
           if (peer !== ws && topic === frame.topic) peer.send(JSON.stringify({ topic, event: 'broadcast', payload: frame.payload }));
         }
       }
-      ws.send(JSON.stringify({ topic: frame.topic, event: 'phx_reply', ref: frame.ref, join_ref: '1', payload: { status: 'ok', response: {} } }));
+      ws.send(JSON.stringify({ topic: frame.topic, event: 'phx_reply', ref: frame.ref, payload: { status: 'ok', response: {} } }));
     });
   });
 });

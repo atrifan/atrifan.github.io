@@ -1,25 +1,17 @@
 import WebSocket from 'ws';
 import { RelayError } from './http';
+import { jwtPayload, relaySettingsFromEnv, type RelaySettings } from './relay-settings';
 
 type BrokerConfig = { url: string; jwt: string };
 export type Broker = { publish(payload: unknown): Promise<void>; close(): void };
 const unavailable = () => new RelayError(503, 'broker_unavailable');
 
-function jwtPayload(value: string): Record<string, unknown> | null {
-  const parts = value.split('.');
-  if (parts.length !== 3 || !parts.every((p) => /^[A-Za-z0-9_-]+$/.test(p))) return null;
-  try {
-    const data: unknown = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : null;
-  } catch { return null; }
-}
-
 /** Local claim checks are not JWT signature verification or hosted RLS proof. */
-export function brokerConfig(): BrokerConfig {
+export function brokerConfig(settings: RelaySettings = relaySettingsFromEnv()): BrokerConfig {
   const base = process.env.STORAGE_SUPABASE_URL;
-  const key = process.env.CHAT_REALTIME_ANON_KEY;
-  const jwt = process.env.CHAT_BROKER_JWT;
-  const secret = process.env.CHAT_RELAY_TOKEN_SECRET;
+  const key = settings.realtimeAnonKey;
+  const jwt = settings.brokerJwt;
+  const secret = settings.tokenSecret;
   if (!base || !key || !jwt || !secret || !/^[A-Za-z0-9_-]+$/.test(secret)) throw new RelayError(500, 'server_misconfigured');
   const secretBytes = Buffer.from(secret, 'base64url');
   if (secretBytes.length !== 32 || secretBytes.toString('base64url') !== secret) throw new RelayError(500, 'server_misconfigured');
@@ -95,7 +87,8 @@ export function connectBroker(config: BrokerConfig, channel: string, signal: Abo
           if (heartbeatTimer) clearTimeout(heartbeatTimer);
           return;
         }
-        if (frame.topic !== topic || frame.join_ref !== '1') return;
+        // Supabase Realtime (vsn 1.0.0) leaves join_ref out of its replies; a join_ref that is present must still be ours.
+        if (frame.topic !== topic || (frame.join_ref != null && frame.join_ref !== '1')) return;
         if (!joined && frame.ref === '1') {
           if (payload?.status !== 'ok') { stop(); return; }
           joined = true; clearTimeout(joinTimer);
@@ -134,6 +127,11 @@ export function connectBroker(config: BrokerConfig, channel: string, signal: Abo
         const payload = frame.payload as { type?: unknown; event?: unknown; payload?: unknown } | null;
         if (payload?.type !== 'broadcast' || payload.event !== 'relay' || !('payload' in payload)) { stop(); return; }
         try { receive(payload.payload); } catch { stop(); }
+        return;
+      }
+      // Realtime also announces its own progress on our topic ("system", presence); only a system error ends the join.
+      if (frame.topic === topic && (frame.event === 'system' || frame.event === 'presence_state' || frame.event === 'presence_diff')) {
+        if ((frame.payload as { status?: unknown } | null)?.status === 'error') stop();
         return;
       }
       stop();

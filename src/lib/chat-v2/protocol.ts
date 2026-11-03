@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { invalid, RelayError, unauthorized } from './http';
+import { relaySettingsFromEnv, type RelaySettings } from './relay-settings';
 
 export const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 const iso = z.string().refine((value) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value);
@@ -10,8 +11,8 @@ const deviceClaims = z.object({ ...common, aud: z.literal('device'), connectionI
 export type ViewerClaims = z.infer<typeof viewerClaims>;
 export type DeviceClaims = z.infer<typeof deviceClaims>;
 
-export function tokenSecret(): string {
-  const secret = process.env.CHAT_RELAY_TOKEN_SECRET;
+export function tokenSecret(settings: RelaySettings = relaySettingsFromEnv()): string {
+  const secret = settings.tokenSecret;
   if (!secret || Buffer.byteLength(secret) < 32 || !/^[A-Za-z0-9_-]+$/.test(secret)) throw new RelayError(500, 'server_misconfigured');
   return secret;
 }
