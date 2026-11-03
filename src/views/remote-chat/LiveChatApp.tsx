@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatDevice } from './ChatApp';
 import { getJsonRetrying } from './get-json-retrying';
 import { LiveRelayClient } from './live-relay-client';
+import { connectRelay } from './live-relay-connector';
 import { LiveConversation } from './LiveConversation';
 import type { SessionRow } from './live-relay-contract';
 import { SessionsDrawer } from './SessionsDrawer';
@@ -61,7 +62,6 @@ export function LiveChatApp() {
   const createBusy = useRef(false);
   const historyPaged = useRef(false);
   const selection = useRef(0);
-  const clientId = useRef<string | null>(null);
   const requestedDevice = useRef<string | null>(null);
   const device = devices?.find((item) => item.id === deviceId) ?? null;
 
@@ -92,28 +92,17 @@ export function LiveChatApp() {
 
   useEffect(() => {
     if (!deviceId) return;
-    let running = true;
-    let current: LiveRelayClient | null = null;
-    clientId.current = crypto.randomUUID();
+    const clientKey = crypto.randomUUID();
     setConnectionError(null);
-    const connect = () => {
-      if (!running || !clientId.current) return;
-      const instance = new LiveRelayClient(deviceId, clientId.current, (reason) => {
-        if (!running || current !== instance) return;
-        clientRef.current = null; setClient(null);
-        if (reason === 'rotation') { setConnectionError('Reconnecting to your assistant…'); connect(); }
-        else setConnectionError('Assistant unavailable. Retry to connect.');
-      });
-      current = instance;
-      void instance.start().then(() => {
-        if (!running || current !== instance || !instance.authorized()) return;
-        clientRef.current = instance; setClient(instance); setConnectionError(null);
-      }).catch(() => {
-        if (running && current === instance) { instance.close('unavailable', false); setConnectionError('Assistant offline or unavailable.'); }
-      });
-    };
-    connect();
-    return () => { running = false; clientRef.current = null; setClient(null); current?.close('unavailable', false); };
+    const connection = connectRelay({
+      create: (onClose) => new LiveRelayClient(deviceId, clientKey, onClose),
+      onClient: (next) => {
+        clientRef.current = next; setClient(next);
+        if (!next) { historyPaged.current = false; setHistory([]); setActive([]); }
+      },
+      onStatus: setConnectionError,
+    });
+    return () => connection.stop();
   }, [deviceId, attempt]);
 
   const load = useCallback(async (scope: 'active' | 'history', cursor: string | null = null) => {
