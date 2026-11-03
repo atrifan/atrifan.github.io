@@ -24,6 +24,7 @@ export default async function AdminHome() {
     inbox: surfaceUrl('hub', '/admin/inbox'),
     moderation: surfaceUrl('marketplace', '/admin'),
     activity: surfaceUrl('hub', '/admin/activity'),
+    relay: surfaceUrl('hub', '/admin/relay'),
   });
   return <AdminHomeView cards={cards} mcpUrl={adminQaMcpUrl()} mcpDocsUrl={surfaceUrl('gigs', '/docs/admin-qa')} />;
 }

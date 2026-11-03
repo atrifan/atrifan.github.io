@@ -10,3 +10,6 @@ if (!hasSupabaseEnv()) {
       '(copy .env.local into the repo root). Database-backed integration specs are SKIPPED.',
   );
 }
+
+// The chat relay reads its settings from the database in production; integration specs stub them through CHAT_* variables.
+process.env.CHAT_RELAY_SETTINGS_SOURCE = 'env';

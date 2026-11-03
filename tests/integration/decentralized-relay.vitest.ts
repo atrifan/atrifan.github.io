@@ -14,6 +14,7 @@ const boundary = vi.hoisted(() => {
   const allowedTables = new Set([
     'api_keys', 'users', 'profiles', 'user_profiles', 'subscriptions',
     'user_subscriptions', 'devices', 'device_presence', 'user_presence', 'device_heartbeats',
+    'chat_relay_settings',
   ]);
   const keyRecords = [
     {
