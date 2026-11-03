@@ -18,4 +18,9 @@ describe('live conversation retry row', () => {
     expect(html).not.toContain('Retry to connect');
     expect(html).not.toContain('>Retry</button>');
   });
+
+  it('draws no empty banner row for a connected client with nothing to say', () => {
+    const html = render({ authorized: () => true } as unknown as LiveRelayClient);
+    expect(html).not.toContain('chat-banner');
+  });
 });

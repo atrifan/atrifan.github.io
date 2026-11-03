@@ -207,8 +207,12 @@ export function LiveConversation({ row, client, retry, creating }: Props) {
   const current = projection?.snapshot;
   const canSend = allowed(current?.state === 'waiting' ? 'answer' : 'reply') && current?.pending?.kind !== 'approval';
 
+  // The banner row is only drawn when it has something to say: with a client, no status text, no idle mark and no
+  // Reattach button it was an empty grey bar.
+  const showBanner = !client || !!status || (current?.state === 'idle' && !!watchRef.current) || (!!row && !watchRef.current);
+
   return <div className="chat-view native-session-chat">
-    <div className="chat-banner" role="status">{client ? status : 'Assistant unavailable. Retry to connect.'}{current?.state === 'idle' && watchRef.current && <> · <span>Idle</span></>}{!client && <button type="button" className="btn btn-secondary" onClick={retry}>Retry</button>}{client && row && !watchRef.current && status !== 'Attaching to conversation…' && <button type="button" className="btn btn-secondary" onClick={() => setWatchAttempt((value) => value + 1)}>Reattach</button>}</div>
+    {showBanner && <div className="chat-banner" role="status">{client ? status : 'Assistant unavailable. Retry to connect.'}{current?.state === 'idle' && watchRef.current && <> · <span>Idle</span></>}{!client && <button type="button" className="btn btn-secondary" onClick={retry}>Retry</button>}{client && row && !watchRef.current && status !== 'Attaching to conversation…' && <button type="button" className="btn btn-secondary" onClick={() => setWatchAttempt((value) => value + 1)}>Reattach</button>}</div>}
     <div className="message-list chat-log" role="log" aria-label="Conversation" aria-live="polite" ref={logRef} onScroll={(event) => {
       const element = event.currentTarget;
       if (scrollTarget.current !== null && Math.abs(element.scrollTop - scrollTarget.current) <= 1) { scrollTarget.current = null; return; }
