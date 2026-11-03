@@ -14,7 +14,7 @@ const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)
 export function LiveConversation({ row, client, retry, creating }: Props) {
   const [projection, setProjection] = useState<Projection | null>(null);
   const projectionRef = useRef<Projection | null>(null);
-  const [status, setStatus] = useState('Assistant unavailable. Retry to connect.');
+  const [status, setStatus] = useState('');
   const [draft, setDraft] = useState('');
   const draftRef = useRef('');
   const [pending, setPending] = useState<Command['kind'] | null>(null);
@@ -36,7 +36,9 @@ export function LiveConversation({ row, client, retry, creating }: Props) {
   }, [row?.sessionId]);
 
   useEffect(() => {
-    if (!client || !row || !row.capabilities.watch) { setStatus('Assistant unavailable. Retry to connect.'); return; }
+    if (!client) return;
+    if (!row) { setStatus(''); return; }
+    if (!row.capabilities.watch) { setStatus('Live view is unavailable for this conversation.'); return; }
     let active = true;
     let watchRequest = '';
     const watchId = crypto.randomUUID();
@@ -206,7 +208,7 @@ export function LiveConversation({ row, client, retry, creating }: Props) {
   const canSend = allowed(current?.state === 'waiting' ? 'answer' : 'reply') && current?.pending?.kind !== 'approval';
 
   return <div className="chat-view native-session-chat">
-    <div className="chat-banner" role="status">{status}{current?.state === 'idle' && watchRef.current && <> · <span>Idle</span></>}{!client && <button type="button" className="btn btn-secondary" onClick={retry}>Retry</button>}{client && row && !watchRef.current && status !== 'Attaching to conversation…' && <button type="button" className="btn btn-secondary" onClick={() => setWatchAttempt((value) => value + 1)}>Reattach</button>}</div>
+    <div className="chat-banner" role="status">{client ? status : 'Assistant unavailable. Retry to connect.'}{current?.state === 'idle' && watchRef.current && <> · <span>Idle</span></>}{!client && <button type="button" className="btn btn-secondary" onClick={retry}>Retry</button>}{client && row && !watchRef.current && status !== 'Attaching to conversation…' && <button type="button" className="btn btn-secondary" onClick={() => setWatchAttempt((value) => value + 1)}>Reattach</button>}</div>
     <div className="message-list chat-log" role="log" aria-label="Conversation" aria-live="polite" ref={logRef} onScroll={(event) => {
       const element = event.currentTarget;
       if (scrollTarget.current !== null && Math.abs(element.scrollTop - scrollTarget.current) <= 1) { scrollTarget.current = null; return; }
