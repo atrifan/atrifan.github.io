@@ -9,7 +9,11 @@ import { countThreads } from '../support/support-service';
 import { countPackagesByVisibility } from '../marketplace-service';
 import { loadAdminActivity } from '../activity/admin-activity-service';
 import { parseRange } from '../activity/totals';
-import { settledNumber, type AdminHomeNumbers } from './cards';
+import { relayStatus } from '../chat-v2/relay-settings';
+import { configuredViewerOrigins } from '../chat-v2/http';
+import { settledNumber, type AdminHomeNumbers, type RelayHealth } from './cards';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAdminHomeNumbers(now: Date = new Date()): Promise<AdminHomeNumbers> {
   const range = parseRange(null, null, now);
@@ -20,9 +24,16 @@ export async function loadAdminHomeNumbers(now: Date = new Date()): Promise<Admi
     countPackagesByVisibility().then((c) => c.pending),
     range.ok ? loadAdminActivity(range.range).then((a) => a.totals.commissionCents) : Promise.reject(new Error(range.error)),
   ]);
-  for (const r of reads) {
+  const relayRead = await Promise.allSettled([
+    relayStatus(configuredViewerOrigins()).then((s): RelayHealth => ({
+      secretsMissing: [s.tokenSecret, s.realtimeAnonKey, s.brokerJwt].includes('missing'),
+      daysLeft: s.brokerJwtExpiresAt === null ? null : Math.floor((Date.parse(s.brokerJwtExpiresAt) - now.getTime()) / DAY_MS),
+    })),
+  ]);
+  for (const r of [...reads, ...relayRead]) {
     if (r.status === 'rejected') console.error('[admin-home] read failed:', r.reason instanceof Error ? r.reason.message : 'error');
   }
   const [awaitingQa, openDisputes, openThreads, pendingPackages, commissionCents30d] = reads.map(settledNumber);
-  return { awaitingQa, openDisputes, openThreads, pendingPackages, commissionCents30d };
+  const relay = relayRead[0].status === 'fulfilled' ? relayRead[0].value : null;
+  return { awaitingQa, openDisputes, openThreads, pendingPackages, commissionCents30d, relay };
 }
